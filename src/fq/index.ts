@@ -1,5 +1,6 @@
 // HMOS f(Q) — ENGINE_LOGIC.md PHASE 2 인식 파이프라인
-// 질문 Q → 논리스위치 → 색매칭 → 문맥파악 → 7형식 → 핵심 5색 → G → K
+// 질문 Q → 논리스위치 → 색매칭 → 문맥파악 → 7형식 → 핵심 5색 → G → K·T
+// 출력 경계: 경로·형식·K·T 인식까지. θ* 최종값은 계산하지 않는다
 
 import {
   analyzeContext,
@@ -10,7 +11,7 @@ import {
   matchColors,
   normalize,
 } from './pipeline.ts';
-import { estimateTheta, regress, validateGraph } from './pivot.ts';
+import { findTraps, regress, validateGraph } from './pivot.ts';
 import type { FQError, FQOptions, FQResult } from './types.ts';
 
 export function fQ(question: string, options: FQOptions = {}): FQResult | FQError {
@@ -54,9 +55,9 @@ export function fQ(question: string, options: FQOptions = {}): FQResult | FQErro
     form,
     detail: core.detail,
     K: methods[0].K,
+    T: findTraps(core),
     path: methods[0].path,
     methods,
-    theta: estimateTheta(core),
   };
 }
 

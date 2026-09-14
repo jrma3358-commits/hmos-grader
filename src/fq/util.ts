@@ -8,23 +8,6 @@ export function subjectParticle(word: string): '이' | '가' {
   return '가';
 }
 
-export function factorial(n: number): number {
-  let r = 1;
-  for (let i = 2; i <= n; i++) r *= i;
-  return r;
-}
-
-/** 같은 것이 있는 순열의 수: n! / (c1! c2! ...) */
-export function multisetPermutations(counts: Iterable<number>): number {
-  let n = 0;
-  let denom = 1;
-  for (const c of counts) {
-    n += c;
-    denom *= factorial(c);
-  }
-  return factorial(n) / denom;
-}
-
 export function countItems(items: string[]): Map<string, number> {
   const counts = new Map<string, number>();
   for (const x of items) counts.set(x, (counts.get(x) ?? 0) + 1);

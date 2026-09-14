@@ -2,8 +2,8 @@
 // θ°(질문) → 1패스 역추적 → K(최심) → 2패스 순방향 → θ*(답)
 // K는 G에 조건부다(방법 상대적) — 풀이법 M마다 G_M에서 K_M과 경로를 따로 계산한다
 // 연산요소(B·C): 양 날개 대칭 / 확정요소(D·P): 인바운드에만, 아웃바운드에서 생략될 수 있음(단축)
+// 이 층은 경로·K·T 인식까지 — θ* 값은 계산하지 않는다
 
-import { CATEGORIES, OPERATION_VERB, SLOT_WORDS } from './lexicon.ts';
 import type {
   ColorElement,
   CoreColors,
@@ -14,9 +14,9 @@ import type {
   NodeColor,
   PivotNode,
   RegressionPath,
-  ThetaEstimate,
+  Trap,
 } from './types.ts';
-import { countItems, multisetPermutations } from './util.ts';
+import { countItems } from './util.ts';
 
 const CONFIRMING: NodeColor[] = ['P', 'D'];
 const NODE_COLORS: NodeColor[] = ['B', 'C', 'P', 'D'];
@@ -136,45 +136,16 @@ export function regress(core: CoreColors, methods?: MethodInput[]): MethodResult
   return inputs.map(({ name, G, estimated }) => ({ name, estimated, G, ...encode(G, core.colors.Q) }));
 }
 
-/** 예상 θ* — 원소·자리·범주가 모두 읽힌 경우에만 수치를 확정한다. 풀이법과 무관(목적지 불변) */
-export function estimateTheta({ detail, elements }: CoreColors): ThetaEstimate {
-  const theta: ThetaEstimate = { formats: detail.answerFormats };
-  const { items, category, slots } = detail;
-  if (!items) return theta;
-
-  const cs = elements.filter((e) => e.color === 'C');
-  const restricts = (e: ColorElement) =>
-    CATEGORIES.some((k) => e.content.includes(k.name)) || SLOT_WORDS.some((s) => s.pattern.test(e.content));
-  // 가능성을 좁히지 않는 C("나열할 때")만 남기고, 읽지 못한 제약이 있으면 수치를 내지 않는다
-  if (cs.some((c) => !restricts(c) && !OPERATION_VERB.test(c.content))) return theta;
-
-  if (!cs.some(restricts)) {
-    theta.value = multisetPermutations(countItems(items).values());
-    return theta;
-  }
-  if (!category || !slots || slots.positions.length > items.length) return theta;
-
-  const avail = countItems(items);
-  const members = [...avail.keys()].filter((x) => category.members.includes(x));
-  const cases: { slots: string; count: number }[] = [];
-
-  const walk = (tuple: string[]) => {
-    if (tuple.length === slots.positions.length) {
-      cases.push({ slots: `(${tuple.join(',')})`, count: multisetPermutations(avail.values()) });
-      return;
-    }
-    for (const m of members) {
-      const n = avail.get(m)!;
-      if (n === 0) continue;
-      avail.set(m, n - 1);
-      walk([...tuple, m]);
-      avail.set(m, n);
-    }
-  };
-  walk([]);
-
-  theta.cases = cases;
-  theta.value = cases.reduce((s, c) => s + c.count, 0);
-  theta.derivation = `${cases.map((c) => `${c.slots} ${c.count}`).join(' + ')} = ${theta.value}`;
-  return theta;
+/**
+ * T(함정) — K가 아니다. 같은 원소가 여럿이면 경우를 셀 때 보정이 필요하다 (카드 문제: "a 2개").
+ * detail.duplicates를 그대로 T로 라벨링한다
+ */
+export function findTraps({ detail }: CoreColors): Trap[] {
+  return detail.duplicates.map(({ item, count }) => ({
+    label: `${item} ${count}개`,
+    kind: 'count 보정',
+    source: 'detail.duplicates',
+    item,
+    count,
+  }));
 }

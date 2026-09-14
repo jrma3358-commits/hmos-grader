@@ -72,9 +72,6 @@ export const ADVERB_RULE: SwitchRule = {
 export const CLAUSE_BOUNDARY =
   /(때|대하여|대해|하자|이면|하면|되면|되도록|구하고|서술하고|쓰고|고르고|설명하고)(?=[\s,]|$)|(?<=[가-힣]),|[.!?](?=\s|$)/g;
 
-/** 대상을 늘어놓기만 하는 동사 — 이 C는 가능성을 좁히지 않으므로 θ* 추정에서 제약 없이 센다 (색 판정에는 쓰지 않는다) */
-export const OPERATION_VERB = /(나열|배열|세우|세울|뽑|선택|택하|택할|나누|나눌|만들|만드|늘어놓|배치|분배)/;
-
 /** Q 목적어 안에서 C를 품는 관형 수식어 끝 */
 export const MODIFIER_END = /(는|인|된|때의)$/;
 

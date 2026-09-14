@@ -49,9 +49,15 @@ describe('ENGINE_LOGIC 테스트 케이스: a,a,b,c,d,e 카드', () => {
     assert.equal(r.methods[0].estimated, true);
   });
 
-  it('예상 θ*: (a,a)+(a,e)+(e,a) = 72', () => {
-    assert.equal(r.theta.value, 72);
-    assert.deepEqual(r.theta.formats, ['수치', '서술']);
+  it('T = "a 2개" (count 보정 함정) — K가 아니다', () => {
+    assert.deepEqual(r.T, [{ label: 'a 2개', kind: 'count 보정', source: 'detail.duplicates', item: 'a', count: 2 }]);
+    assert.deepEqual(r.detail.duplicates, [{ item: 'a', count: 2 }]);
+    assert.notEqual(r.K.content, r.T[0].label);
+  });
+
+  it('출력 경계: 경로·형식·K·T까지, θ* 값은 계산하지 않는다', () => {
+    assert.equal('theta' in r, false);
+    assert.deepEqual(r.detail.answerFormats, ['수치', '서술']);
   });
 });
 
@@ -62,7 +68,10 @@ describe('같은 문제의 CLAUDE.md §7.1 표기', () => {
     assert.equal(r.form.id, 5);
     assert.equal(r.K.content, '양 끝에 모음');
     assert.equal(r.path.notation, 'θ°→B→C₁→[C₂]→C₁→B→θ*');
-    assert.equal(r.theta.value, 72);
+    assert.deepEqual(
+      r.T.map((t) => t.label),
+      ['a 2개'],
+    );
   });
 });
 
@@ -98,7 +107,6 @@ describe('B 스위치 ~가(이)·~의·~를 (CORE_SPEC §3.1)', () => {
     assert.equal(r.B, 'a,b,c');
     assert.equal(r.C, '나열하는');
     assert.equal(r.form.id, 5);
-    assert.equal(r.theta.value, 6);
   });
 
   it('~의: 수식 뒤의 ~의 값 → B', () => {
@@ -145,14 +153,13 @@ describe('원소 목록', () => {
     const r = run('10, 20, 30을 나열할 때, 경우의 수를 구하시오.');
     assert.deepEqual(r.detail.items, ['10', '20', '30']);
     assert.equal(r.B, '10,20,30');
-    assert.equal(r.theta.value, 6);
   });
 
   it('두 자리 수 + 범주 + 자리', () => {
     const r = run('11, 12, 13, 14가 적힌 카드를 일렬로 나열할 때, 양 끝에 짝수가 오는 경우의 수를 구하시오.');
     assert.equal(r.B, '11,12,13,14 (짝수 12,14)');
+    assert.deepEqual(r.detail.slots?.positions, ['first', 'last']);
     assert.equal(r.form.id, 5);
-    assert.equal(r.theta.value, 4); // (12,14) 2 + (14,12) 2
   });
 });
 
@@ -287,7 +294,7 @@ describe('논문4 — 풀이법 G', () => {
     assert.deepEqual(r.path.shortened, ['P', 'D', 'C₁']);
   });
 
-  it('명제4: 급소는 방법 상대적, θ*는 공통', () => {
+  it('명제4: 급소는 방법 상대적, T는 풀이법과 무관', () => {
     const q = 'a,a,b,c,d,e 카드를 나열할 때 양 끝에 모음이 오는 경우의 수를 구하시오';
     const r = run(q, {
       methods: [
@@ -303,7 +310,10 @@ describe('논문4 — 풀이법 G', () => {
       ],
     );
     assert.equal(r.K, r.methods[0].K);
-    assert.equal(r.theta.value, 72);
+    assert.deepEqual(
+      r.T.map((t) => t.label),
+      ['a 2개'],
+    );
   });
 
   it('명제3 §5.3 8번: 독립 가지는 묶고 병합점이 급소, 연산요소는 양 날개에', () => {
