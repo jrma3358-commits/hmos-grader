@@ -1,5 +1,5 @@
 // HMOS f(Q) — ENGINE_LOGIC.md PHASE 2 인식 파이프라인
-// 질문 Q → 논리스위치 → 색매칭 → 문맥파악 → 7형식 → 핵심 5색 → K
+// 질문 Q → 논리스위치 → 색매칭 → 문맥파악 → 7형식 → 핵심 5색 → G → K
 
 import {
   analyzeContext,
@@ -10,10 +10,20 @@ import {
   matchColors,
   normalize,
 } from './pipeline.ts';
-import { extractPivot } from './pivot.ts';
-import type { FQError, FQResult } from './types.ts';
+import { estimateTheta, regress, validateGraph } from './pivot.ts';
+import type { FQError, FQOptions, FQResult } from './types.ts';
 
-export function fQ(question: string): FQResult | FQError {
+export function fQ(question: string, options: FQOptions = {}): FQResult | FQError {
+  for (const m of options.methods ?? []) {
+    const problem = validateGraph(m.G);
+    if (problem) {
+      return {
+        ok: false,
+        error: { type: 'INVALID_GRAPH', stage: 'PHASE 2 / STEP 6 풀이법 G', message: `${m.name}: ${problem}`, recoverable: true },
+      };
+    }
+  }
+
   const q = normalize(question);
   const scanned = detectLogicSwitches(q); // STEP 1: 논리스위치 파악
 
@@ -33,7 +43,7 @@ export function fQ(question: string): FQResult | FQError {
   const context = analyzeContext(colorsTmp); // STEP 3: 문맥파악
   const { form, elements, notes } = classify7Form(context); // STEP 4: 7형식 결정
   const core = extractCoreColors(elements, context); // STEP 5: 핵심 5색 추출
-  const { K, path, theta } = extractPivot(core); // STEP 6: K 추출
+  const methods = regress(core, options.methods); // STEP 6: 풀이법별 G → K·경로
 
   return {
     ok: true,
@@ -43,9 +53,10 @@ export function fQ(question: string): FQResult | FQError {
     ...core.colors,
     form,
     detail: core.detail,
-    K,
-    path,
-    theta,
+    K: methods[0].K,
+    path: methods[0].path,
+    methods,
+    theta: estimateTheta(core),
   };
 }
 

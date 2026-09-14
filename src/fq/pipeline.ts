@@ -6,7 +6,6 @@ import {
   CLAUSE_BOUNDARY,
   END_RULES,
   MODIFIER_END,
-  OPERATION_VERB,
   Q_PROCESS_MODIFIER,
   Q_VERB_BASE,
   SLOT_WORDS,
@@ -85,7 +84,8 @@ export function splitClauses(text: string): Clause[] {
 }
 
 // ─────────────────────────────────────────────────────────────
-// STEP 1. 논리스위치 파악
+// STEP 1·2. 논리스위치 파악 → 색매칭
+// 스위치 하나가 요소 하나를 부른다 — 한 절에 B 스위치와 C 스위치가 함께 있으면 두 요소로 가른다 (CORE_SPEC §2 결정성)
 // ─────────────────────────────────────────────────────────────
 
 function toSwitch(
@@ -105,28 +105,14 @@ function toSwitch(
 }
 
 /** Q 목적어를 [관형 수식어(C) | 머리말(Q)]로 가른다 */
-function splitQObject(object: string): { modifierWords?: string[]; head: string; modifierIndex?: number } {
+function splitQObject(object: string): { modifierWords?: string[]; head: string } {
   const words = object.split(' ');
   for (let i = words.length - 2; i >= 0; i--) {
     if (MODIFIER_END.test(words[i])) {
-      return { modifierWords: words.slice(0, i + 1), head: words.slice(i + 1).join(' '), modifierIndex: i };
+      return { modifierWords: words.slice(0, i + 1), head: words.slice(i + 1).join(' ') };
     }
   }
   return { head: object };
-}
-
-/** 관형 수식어 안의 목적어 "a, b, c를 나열하는" → { object: "a, b, c", predicate: "나열하는" } */
-function modifierObject(words: string[]): { object: string; predicate: string } | undefined {
-  for (let i = words.length - 2; i >= 0; i--) {
-    const m = words[i].match(/^(.+)(을|를)$/);
-    if (m) {
-      return {
-        object: [...words.slice(0, i), m[1]].join(' '),
-        predicate: words.slice(i + 1).join(' '),
-      };
-    }
-  }
-  return undefined;
 }
 
 function qObject(clauseText: string, start: RegExpMatchArray | undefined, end: RegExpMatchArray): string {
@@ -138,75 +124,58 @@ function qObject(clauseText: string, start: RegExpMatchArray | undefined, end: R
     .trim();
 }
 
-export function detectLogicSwitches(question: string): ScannedClause[] {
-  return splitClauses(question).map((clause) => {
-    const switches: LogicSwitch[] = [];
-    const start = matchRule(START_RULES, clause.text);
-    const end = matchRule(END_RULES, clause.text);
+const HANGUL = /[가-힣]/;
+/** 한 글자 함수 기호: f(x), g(3) — cos( 같은 이름은 제외 */
+const FN_SYMBOL = /(?<![a-zA-Z])([a-zA-Z])\(/;
 
-    if (start) switches.push(toSwitch(start.rule, start.m, clause, 'start'));
+/** 수식 대상인가 — 한글이 없고 단일 문자 미지수가 아니다 (f(x), sinθ/(1−cos²θ), a, a, b ...) */
+function isMathObject(s: string): boolean {
+  const t = s.trim();
+  return t !== '' && !HANGUL.test(t) && !/^[a-zA-Z]$/.test(t);
+}
 
-    const adverb = clause.text.match(ADVERB_RULE.pattern);
-    if (adverb) switches.push(toSwitch(ADVERB_RULE, adverb, clause, 'inner'));
+type BRule = 'B.주격' | 'B.관형격' | 'B.목적격';
+const B_RULE: Record<string, BRule> = { 이: 'B.주격', 가: 'B.주격', 의: 'B.관형격', 을: 'B.목적격', 를: 'B.목적격' };
 
-    if (end?.rule.id === 'Q.명령') {
-      // "양 끝에 모음이 오는 경우의 수" — 관형 수식어 끝이 C 스위치
-      const object = qObject(clause.text, start?.m, end.m);
-      const { modifierWords } = splitQObject(object);
-      const last = modifierWords?.at(-1);
-      if (last && !Q_PROCESS_MODIFIER.test(last)) {
-        const obj = modifierObject(modifierWords!);
-        if (obj) {
-          // "a, b, c를 나열하는 경우의 수": 수식어 속 목적격 조사가 B를 부른다 → B/C 애매
-          const at = clause.text.indexOf(obj.object) + obj.object.length;
-          switches.push({
-            surface: clause.text[at],
-            kind: '조사·어미',
-            index: clause.index + at,
-            candidates: ['B'],
-            rule: 'B.목적격',
-            position: 'inner',
-          });
-        }
-        switches.push({
-          surface: last,
-          kind: '조사·어미',
-          index: clause.index + clause.text.indexOf(last),
-          candidates: ['C'],
-          rule: 'C.관형',
-          position: 'inner',
-        });
-      }
-    }
+interface ObjectSplit {
+  object: string;
+  particle: string;
+  at: number;
+  rule: BRule;
+  rest: string;
+}
 
-    if (end?.rule.id === 'C.조건') {
-      // "~을/를 ... 할 때": 목적격 조사가 B를 부른다 → B/C 애매
-      const obj = clause.text.match(/(을|를)\s/);
-      if (obj) {
-        switches.push({
-          surface: obj[1],
-          kind: '조사·어미',
-          index: clause.index + (obj.index ?? 0),
-          candidates: ['B'],
-          rule: 'B.목적격',
-          position: 'inner',
-        });
-      }
-    }
-
-    if (end) switches.push(toSwitch(end.rule, end.m, clause, 'end'));
-    return { clause, switches };
+/**
+ * B를 부르는 조사로 [대상 | 나머지]를 가른다 — CORE_SPEC §3.1 B: ~가(이)·~의·~를
+ *   수식 뒤의 ~가·~의: "f(x)가 최댓값을 가질 때", "f(x)=…의 극댓값이", "sinθ/(1−cos²θ)의 값"
+ *   ~을·~를 ('all'일 때): "a,a,b,c,d,e 카드를 나열할 때"
+ * 한글 명사 뒤의 ~가·~의("모음이 오는", "경우의 수")는 대상 소환이 아니라 C·Q 내용의 일부로 둔다
+ */
+function splitObject(text: string, particles: 'all' | '의'): ObjectSplit | undefined {
+  const make = (m: RegExpMatchArray): ObjectSplit => ({
+    object: text.slice(0, m.index).trim(),
+    particle: m[1],
+    at: m.index!,
+    rule: B_RULE[m[1]],
+    rest: text.slice(m.index! + 1).trim(),
   });
+  const math = text.match(particles === '의' ? /(의)\s/ : /(가|이|의)\s/);
+  if (math && isMathObject(text.slice(0, math.index))) return make(math);
+  if (particles === 'all') {
+    const obj = text.match(/(을|를)\s/);
+    if (obj && obj.index! > 0) return make(obj);
+  }
+  return undefined;
 }
 
-/** 질문 무결 게이트: 목적지(Q)가 없으면 질문이 성립하지 않는다 */
-export function isValidQuestion(scanned: ScannedClause[]): boolean {
-  return scanned.some((s) => s.switches.some((sw) => sw.position === 'end' && sw.candidates.includes('Q')));
-}
+/** 구간이 붙은 조각: "5x+a (x<−2)" */
+const PIECE = /\([^()]*[<>≤≥][^()]*\)$/;
 
-// ─────────────────────────────────────────────────────────────
-// STEP 2. 색매칭 (1차)
-// ─────────────────────────────────────────────────────────────
+/** 조각별로 정의된 대상은 조각마다 B — "f(x)=5x+a (x<−2), x²−a (x≥−2)" → B₁, B₂ (논문1 §4 4번) */
+function pieces(object: string): string[] {
+  const ps = object.split(/(?<=\))\s*,\s*/);
+  return ps.length > 1 && ps.every((p) => PIECE.test(p)) ? ps : [object];
+}
 
 function qVerbBase(surface: string): string {
   for (const [re, base] of Q_VERB_BASE) if (re.test(surface)) return base;
@@ -232,78 +201,116 @@ function conditionFromModifier(words: string[]): string {
   return ws.join(' ');
 }
 
-export function matchColors(scanned: ScannedClause[]): ColorElement[] {
-  const elements: ColorElement[] = [];
+type Part = Omit<ColorElement, 'clause'>;
 
-  for (const { clause, switches } of scanned) {
-    const end = switches.find((s) => s.position === 'end');
-    if (!end) continue;
-    const start = switches.find((s) => s.position === 'start');
-    const startMatch = start ? clause.text.match(START_RULES.find((r) => r.id === start.rule)!.pattern) ?? undefined : undefined;
-    const body = startMatch ? clause.text.slice(startMatch[0].length).trim() : clause.text;
+/** 절 하나를 읽어 스위치(STEP 1)와 그 스위치가 부른 요소(STEP 2)를 함께 낸다 */
+function readClause(clause: Clause): { switches: LogicSwitch[]; parts: Part[] } {
+  const { text } = clause;
+  const switches: LogicSwitch[] = [];
+  const parts: Part[] = [];
 
-    if (end.rule === 'Q.명령') {
-      const endMatch = clause.text.match(END_RULES.find((r) => r.id === end.rule)!.pattern)!;
-      const object = qObject(clause.text, startMatch, endMatch);
+  const start = matchRule(START_RULES, text);
+  const end = matchRule(END_RULES, text);
+  const startSw = start && toSwitch(start.rule, start.m, clause, 'start');
+  const adverb = text.match(ADVERB_RULE.pattern);
+  const adverbSw = adverb && toSwitch(ADVERB_RULE, adverb, clause, 'inner');
+  if (startSw) switches.push(startSw);
+  if (adverbSw) switches.push(adverbSw);
+  if (!end) return { switches, parts };
+
+  const endSw = toSwitch(end.rule, end.m, clause, 'end');
+  const body = start ? text.slice(start.m[0].length).trim() : text;
+
+  const pushObject = (host: string, split: ObjectSplit) => {
+    const sw: LogicSwitch = {
+      surface: split.particle,
+      kind: '조사·어미',
+      index: clause.index + text.indexOf(host) + split.at,
+      candidates: ['B'],
+      rule: split.rule,
+      position: 'inner',
+    };
+    switches.push(sw);
+    for (const piece of pieces(split.object)) parts.push({ candidates: ['B'], content: piece, switches: [sw] });
+  };
+
+  if (end.rule.id === 'Q.명령' || end.rule.id === 'Q.의문') {
+    let qContent: string;
+    if (end.rule.id === 'Q.명령') {
+      const object = qObject(text, start?.m, end.m);
       const { modifierWords, head } = splitQObject(object);
-      const modifier = switches.find((s) => s.rule === 'C.관형');
-      if (modifier && modifierWords) {
-        const objectMarker = switches.find((s) => s.rule === 'B.목적격');
-        const obj = objectMarker ? modifierObject(modifierWords) : undefined;
-        elements.push({
-          candidates: obj ? ['C', 'B'] : ['C'],
-          content: conditionFromModifier(modifierWords),
-          clause,
-          switches: objectMarker ? [objectMarker, modifier] : [modifier],
-          ...obj,
-        });
-        elements.push({ candidates: ['Q'], content: head, clause, switches: [end], qVerb: qVerbBase(end.surface) });
+      const last = modifierWords?.at(-1);
+      if (last && !Q_PROCESS_MODIFIER.test(last)) {
+        // "양 끝에 모음이 오는 경우의 수" — 관형 수식어 끝이 C 스위치
+        const modifier = modifierWords!.join(' ');
+        const split = splitObject(modifier, 'all');
+        if (split) pushObject(modifier, split);
+        const sw: LogicSwitch = {
+          surface: last,
+          kind: '조사·어미',
+          index: clause.index + text.indexOf(last),
+          candidates: ['C'],
+          rule: 'C.관형',
+          position: 'inner',
+        };
+        switches.push(sw);
+        parts.push({ candidates: ['C'], content: conditionFromModifier((split?.rest ?? modifier).split(' ')), switches: [sw] });
+        qContent = head;
       } else {
-        elements.push({ candidates: ['Q'], content: object, clause, switches: [end], qVerb: qVerbBase(end.surface) });
+        qContent = object;
       }
-      continue;
+    } else {
+      qContent = body.replace(/(인가|은|는)\?$/, '').trim();
     }
-
-    if (end.rule === 'Q.의문') {
-      elements.push({
-        candidates: ['Q'],
-        content: body.replace(/(인가|은|는)\?$/, '').trim(),
-        clause,
-        switches: [end],
-        qVerb: '?',
-      });
-      continue;
-    }
-
-    let candidates = end.candidates;
-    const used: LogicSwitch[] = [end];
-    if (start && !start.candidates.includes('Q')) {
-      if (start.candidates.length === 1 || candidates.length > 1) candidates = start.candidates;
-      used.unshift(start);
-    }
-    const adverb = switches.find((s) => s.rule === 'C.부사');
-    if (adverb && candidates.length > 1 && candidates.includes('C')) {
-      candidates = ['C'];
-      used.push(adverb);
-    }
-
-    let content = body;
-    let object: string | undefined;
-    if (end.rule === 'B.대하여') content = body.replace(/\s*에\s*(대하여|대해)$/, '');
-    let predicate: string | undefined;
-    const objectMarker = switches.find((s) => s.rule === 'B.목적격');
-    if (objectMarker && candidates.length === 1 && candidates[0] === 'C') {
-      candidates = ['C', 'B'];
-      const at = body.search(/(을|를)\s/);
-      object = body.slice(0, at).trim();
-      predicate = body.slice(at + 1).trim();
-      used.push(objectMarker);
-    }
-
-    elements.push({ candidates, content, clause, switches: used, object, predicate });
+    const split = splitObject(qContent, '의');
+    if (split) pushObject(qContent, split);
+    switches.push(endSw);
+    parts.push({
+      candidates: ['Q'],
+      content: qContent,
+      switches: [endSw],
+      qVerb: end.rule.id === 'Q.명령' ? qVerbBase(endSw.surface) : '?',
+    });
+    return { switches, parts };
   }
 
-  return elements;
+  let candidates = endSw.candidates;
+  const used: LogicSwitch[] = [endSw];
+  if (startSw && !startSw.candidates.includes('Q')) {
+    if (startSw.candidates.length === 1 || candidates.length > 1) candidates = startSw.candidates;
+    used.unshift(startSw);
+  }
+  if (adverbSw && candidates.length > 1 && candidates.includes('C')) {
+    candidates = ['C'];
+    used.push(adverbSw);
+  }
+
+  let content = body;
+  if (end.rule.id === 'B.대하여' || end.rule.id === 'D.매개변수') content = body.replace(/\s*에\s*(대하여|대해)$/, '');
+  if (end.rule.id === 'C.조건' && candidates.length === 1 && candidates[0] === 'C') {
+    // "카드를 나열할 때" → B(카드) + C(나열할 때)
+    const split = splitObject(body, 'all');
+    if (split) {
+      pushObject(body, split);
+      content = split.rest;
+    }
+  }
+  switches.push(endSw);
+  parts.push({ candidates, content, switches: used });
+  return { switches, parts };
+}
+
+export function detectLogicSwitches(question: string): ScannedClause[] {
+  return splitClauses(question).map((clause) => ({ clause, switches: readClause(clause).switches }));
+}
+
+/** 질문 무결 게이트: 목적지(Q)가 없으면 질문이 성립하지 않는다 */
+export function isValidQuestion(scanned: ScannedClause[]): boolean {
+  return scanned.some((s) => s.switches.some((sw) => sw.position === 'end' && sw.candidates.includes('Q')));
+}
+
+export function matchColors(scanned: ScannedClause[]): ColorElement[] {
+  return scanned.flatMap(({ clause }) => readClause(clause).parts.map((p) => ({ ...p, clause })));
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -316,17 +323,34 @@ export function analyzeContext(tmp: ColorElement[]): ContextAnalysis {
   const notes: string[] = [];
   const relations: Relation[] = [];
 
-  const elements = tmp.map((e): ColorElement => {
-    if (!e.object) return e.candidates.length === 1 ? { ...e, color: e.candidates[0] } : e;
-    // "B를 나열할 때": 가능성을 좁히지 않고 대상과 그 조작을 소환한다 → B
-    if (OPERATION_VERB.test(e.predicate ?? '')) {
-      notes.push(`"${e.clause.text}" — 조작 동사의 목적어이므로 C가 아니라 B(대상 소환)`);
-      relations.push({ from: 'B', to: 'Q', type: '조작 소환', evidence: e.clause.text });
-      return { ...e, candidates: ['B'], color: 'B', content: e.object };
-    }
-    notes.push(`"${e.clause.text}" — 조작 동사가 아니므로 C(조건)`);
-    return { ...e, candidates: ['C'], color: 'C' };
-  });
+  // D가 정의한 함수 기호: "g(x) = f(x+4)라 하자"
+  const defined = new Map<string, ColorElement>();
+  for (const d of tmp.filter((e) => colorOf(e) === 'D')) {
+    const m = d.content.match(/^\s*([a-zA-Z])\([a-z]\)\s*=/);
+    if (m) defined.set(m[1], d);
+  }
+
+  const firstBySymbol = new Map<string, ColorElement>();
+  const elements = tmp
+    .filter((e) => {
+      if (colorOf(e) !== 'B') return true;
+      const symbol = e.content.match(FN_SYMBOL)?.[1];
+      if (!symbol) return true;
+      const d = defined.get(symbol);
+      if (d) {
+        notes.push(`"${e.content}" — D "${d.content}"가 정의한 기호이므로 D에 흡수`);
+        relations.push({ from: 'D', to: 'B', type: '재규정', evidence: d.content });
+        return false;
+      }
+      const first = firstBySymbol.get(symbol);
+      if (first) {
+        notes.push(`"${e.content}" — "${first.content}"와 같은 대상(${symbol})이므로 하나로 본다`);
+        return false;
+      }
+      firstBySymbol.set(symbol, e);
+      return true;
+    })
+    .map((e): ColorElement => (e.candidates.length === 1 ? { ...e, color: e.candidates[0] } : e));
 
   const byColor = (c: Color) => elements.filter((e) => colorOf(e) === c);
   const bs = byColor('B');
@@ -460,14 +484,17 @@ export function extractCoreColors(elements: ColorElement[], context: ContextAnal
   }
 
   const qs = of('Q');
+  const C = join('C');
+  const P = join('P');
+  const D = join('D');
   const colors: FiveColors = {
+    ...(B ? { B } : {}),
+    ...(C ? { C } : {}),
+    ...(P ? { P } : {}),
+    ...(D ? { D } : {}),
     Q: qs.map(qDisplay).join('+'),
     qVerbs: unique(qs.map((q) => q.qVerb!).filter(Boolean)),
   };
-  if (B) colors.B = B;
-  if (join('C')) colors.C = join('C');
-  if (join('P')) colors.P = join('P');
-  if (join('D')) colors.D = join('D');
 
   const present = unique(elements.map((e) => e.color!));
   const detail: CoreDetail = {
