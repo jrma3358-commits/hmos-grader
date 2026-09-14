@@ -1,0 +1,19 @@
+{
+  "name": "hmos-grader",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "HMOS f(Q) 엔진 — ENGINE_LOGIC.md PHASE 2 (5색 → 7형식 → K 추출)",
+  "engines": {
+    "node": ">=23.6"
+  },
+  "scripts": {
+    "test": "node --test tests/fq.test.ts",
+    "fq": "node src/cli.ts",
+    "typecheck": "tsc --noEmit -p ."
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.4",
+    "typescript": "5.9"
+  }
+}
