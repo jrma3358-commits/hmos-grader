@@ -49,8 +49,10 @@ export function defaultGraph(elements: ColorElement[]): DependencyGraph {
 /** 풀이법 G 검사 — 문제가 없으면 undefined */
 export function validateGraph(G: DependencyGraph): string | undefined {
   if (!G || !Array.isArray(G.nodes)) return 'G.nodes 배열이 없습니다';
-  if (G.branches) {
-    if (!Array.isArray(G.branches) || G.branches.length < 2) return '분기는 가지가 둘 이상이어야 합니다';
+  if (G.branches !== undefined && !Array.isArray(G.branches)) return 'branches는 배열이어야 합니다';
+  // 빈 branches는 분기가 없는 사슬이다. 가지가 하나라도 있으면 명제3 조건을 모두 검사한다
+  if (G.branches?.length) {
+    if (G.branches.length < 2) return '분기는 가지가 둘 이상이어야 합니다';
     if (G.branches.some((b) => !Array.isArray(b) || b.length === 0)) return '빈 가지가 있습니다';
     if (!G.merge) return '분기에는 병합점(merge)이 있어야 합니다';
   } else if (G.merge) {
@@ -79,7 +81,7 @@ const outboundOf = (ns: GNode[]) => ns.filter((n) => !skipsOutbound(n)).reverse(
  * 어느 쪽이든 생략 요소(기본 D·P)는 아웃바운드에서 뺀다
  */
 export function encode(G: DependencyGraph, q: string): { K: PivotNode; path: RegressionPath } {
-  if (G.branches && G.merge) {
+  if (G.branches?.length && G.merge) {
     const K = G.merge;
     const prefixOut = outboundOf(G.nodes);
     const branchOut = G.branches.map(outboundOf).filter((b) => b.length);

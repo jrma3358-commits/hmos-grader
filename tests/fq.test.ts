@@ -361,6 +361,41 @@ describe('논문4 — 풀이법 G', () => {
     assert.equal(noMerge.ok, false);
   });
 
+  describe('branches 검사 경계', () => {
+    const B = { id: 'B', color: 'B', content: 'b' } as const;
+    const C = { id: 'C', color: 'C', content: 'c' } as const;
+    const q = 'f(x)가 최댓값을 가질 때, x의 값을 구하시오.';
+
+    it('(1) branches: [] 빈 배열은 사슬 → valid', () => {
+      const r = run(q, { methods: [{ name: 'M', G: { nodes: [B, C], branches: [] } }] });
+      assert.equal(r.path.kind, 'chain');
+      assert.equal(r.path.notation, 'θ°→B→[C]→B→θ*');
+    });
+
+    it('(2) 가지가 하나라도 있으면 명제3 검사 유지 — 가지 1개·merge 없음 → INVALID', () => {
+      const r = fQ(q, { methods: [{ name: 'M', G: { nodes: [B], branches: [[C]] } }] });
+      assert.equal(r.ok, false);
+      if (!r.ok) assert.equal(r.error.type, 'INVALID_GRAPH');
+    });
+
+    it('(3) 가지 둘 + merge → valid', () => {
+      const r = run(q, {
+        methods: [
+          {
+            name: 'M',
+            G: {
+              nodes: [B],
+              branches: [[C], [{ id: 'C₂', color: 'C', content: 'c₂' }]],
+              merge: { id: '×', color: 'B', content: '병합' },
+            },
+          },
+        ],
+      });
+      assert.equal(r.path.kind, 'branch');
+      assert.equal(r.path.notation, 'θ°→B→(C | C₂)→[×]→(C | C₂)→B→θ*');
+    });
+  });
+
   it('잘못된 G는 INVALID_GRAPH', () => {
     const r = fQ('x의 값은?', {
       methods: [{ name: 'M', G: { nodes: [{ id: 'Q', color: 'Q' as never, content: '값' }] } }],
