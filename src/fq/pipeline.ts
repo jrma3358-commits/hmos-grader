@@ -125,8 +125,6 @@ function qObject(clauseText: string, start: RegExpMatchArray | undefined, end: R
 }
 
 const HANGUL = /[가-힣]/;
-/** 한 글자 함수 기호: f(x), g(3) — cos( 같은 이름은 제외 */
-const FN_SYMBOL = /(?<![a-zA-Z])([a-zA-Z])\(/;
 
 /** 수식 대상인가 — 한글이 없고 단일 문자 미지수가 아니다 (f(x), sinθ/(1−cos²θ), a, a, b ...) */
 function isMathObject(s: string): boolean {
@@ -262,8 +260,7 @@ function readClause(clause: Clause): { switches: LogicSwitch[]; parts: Part[] } 
     } else {
       qContent = body.replace(/(인가|은|는)\?$/, '').trim();
     }
-    const split = splitObject(qContent, '의');
-    if (split) pushObject(qContent, split);
+    // "f(3)의 값"의 f(3)은 질문의 실체 — Q절 안에서는 ~의 앞을 B로 떼지 않는다
     switches.push(endSw);
     parts.push({
       candidates: ['Q'],
@@ -330,26 +327,7 @@ export function analyzeContext(tmp: ColorElement[]): ContextAnalysis {
     if (m) defined.set(m[1], d);
   }
 
-  const firstBySymbol = new Map<string, ColorElement>();
   const elements = tmp
-    .filter((e) => {
-      if (colorOf(e) !== 'B') return true;
-      const symbol = e.content.match(FN_SYMBOL)?.[1];
-      if (!symbol) return true;
-      const d = defined.get(symbol);
-      if (d) {
-        notes.push(`"${e.content}" — D "${d.content}"가 정의한 기호이므로 D에 흡수`);
-        relations.push({ from: 'D', to: 'B', type: '재규정', evidence: d.content });
-        return false;
-      }
-      const first = firstBySymbol.get(symbol);
-      if (first) {
-        notes.push(`"${e.content}" — "${first.content}"와 같은 대상(${symbol})이므로 하나로 본다`);
-        return false;
-      }
-      firstBySymbol.set(symbol, e);
-      return true;
-    })
     .map((e): ColorElement => (e.candidates.length === 1 ? { ...e, color: e.candidates[0] } : e));
 
   const byColor = (c: Color) => elements.filter((e) => colorOf(e) === c);

@@ -109,9 +109,10 @@ describe('B 스위치 ~가(이)·~의·~를 (CORE_SPEC §3.1)', () => {
     assert.equal(r.form.id, 5);
   });
 
-  it('~의: 수식 뒤의 ~의 값 → B', () => {
+  it('Q절의 "X의 값"은 X를 B로 떼지 않고 Q의 실체로 둔다', () => {
     const r = run('cos(π/2+θ)=−1/5일 때, sinθ/(1−cos²θ)의 값은?');
-    assert.equal(r.B, 'sinθ/(1−cos²θ)');
+    assert.equal(r.B, undefined);
+    assert.equal(r.Q, 'sinθ/(1−cos²θ)의 값');
   });
 
   it('단일 문자 미지수·한글 명사 뒤의 조사는 B를 부르지 않는다', () => {
@@ -119,9 +120,9 @@ describe('B 스위치 ~가(이)·~의·~를 (CORE_SPEC §3.1)', () => {
     assert.equal(run('양 끝에 모음이 오는 경우의 수를 구하시오.').B, undefined);
   });
 
-  it('같은 함수 기호의 B는 하나, D가 정의한 기호는 D에 흡수', () => {
+  it('D가 정의한 기호의 B도 D에 흡수하지 않는다 (B·D 병합 없음)', () => {
     const r = run('함수 f(x)에 대하여 g(x) = f(x+4)라 하자. g(x)가 x=a에서 연속일 때, a의 값을 구하시오.');
-    assert.equal(r.B, '함수 f(x)');
+    assert.equal(r.B, '함수 f(x), g(x)');
     assert.equal(r.D, 'g(x) = f(x+4)라 하자');
   });
 });
@@ -185,9 +186,9 @@ describe('애매한 색은 7형식으로 확정', () => {
 
 // 논문4 §5 예시 — 문장에서 기본 G를 추정한 결과
 describe('논문4 §5 — 기본 G(추정)', () => {
-  it('§5.2 6번: θ B C B θ, 급소 C', () => {
+  it('§5.2 6번: 질문 실체는 B가 아니므로 θ°→[C]→θ*, 급소 C', () => {
     const r = run('cos(π/2+θ)=−1/5일 때, sinθ/(1−cos²θ)의 값은?');
-    assert.equal(r.path.notation, 'θ°→B→[C]→B→θ*');
+    assert.equal(r.path.notation, 'θ°→[C]→θ*');
     assert.equal(r.K.color, 'C');
   });
 
@@ -204,8 +205,9 @@ describe('논문4 §5 — 기본 G(추정)', () => {
   it('§3.4: 정의를 먼저 거쳐도 최심이 C면 급소는 C', () => {
     const r = run('함수 f(x)에 대하여 g(x) = f(x+4)라 하자. g(x)가 x=a에서 연속일 때, a의 값을 구하시오.');
     assert.equal(r.form.logicSwitch, 'ON');
-    assert.equal(r.path.notation, 'θ°→B→D→[C]→B→θ*');
+    assert.equal(r.path.notation, 'θ°→B₁→B₂→D→[C]→B₂→B₁→θ*');
     assert.equal(r.K.color, 'C');
+    assert.equal(r.K.content, 'x=a에서 연속일 때');
   });
 
   it('확정요소 P도 인바운드에만', () => {
