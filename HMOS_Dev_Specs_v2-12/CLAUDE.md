@@ -334,9 +334,9 @@ a, a, b, c, d, e가 적힌 6장의 카드를 일렬로 나열할 때,
   "T": ["a 2개 (count 보정 함정): 같은 모음 a가 2장이라 (a,a) 경우가 생긴다", "누락형: a를 1개로 보고 2가지만 열거", "순열혼용형: 3P2 직접 적용", "독립사건형: 2×2=4 계산"],
   "rubric": [
     {"axis_id": 1, "axis_name": "개념", "criteria": "a가 2개임을 인식하고 풀이에 반영", "score": 1},
-    {"axis_id": 2, "axis_name": "조건", "criteria": "3가지 조합(a,a)/(a,e)/(e,a) 완전 열거", "score": 2},
+    {"axis_id": 2, "axis_name": "조건", "criteria": "양 끝 모음 조건(C₂)의 경우를 T(a 2개)를 반영해 빠짐없이 나눔", "score": 2},
     {"axis_id": 3, "axis_name": "논리", "criteria": "분리 계산 후 합산 구조가 드러남", "score": 1},
-    {"axis_id": 4, "axis_name": "연산", "criteria": "4!=24 및 최종값 72 정확", "score": 1}
+    {"axis_id": 4, "axis_name": "연산", "criteria": "경우별 계산과 합산이 정확", "score": 1}
   ]
 }
 ```
@@ -364,7 +364,7 @@ hmos-grader/
 │   └── prompts.ts         ← 섹션 3,4의 시스템 프롬프트 상수
 ├── tests/
 │   ├── rubric_extraction.test.ts   ← 섹션 7.2 기준 검증
-│   └── scoring.test.ts             ← 섹션 7.3 기준 검증
+│   └── scoring.test.ts             ← 기준 미정 (§7.3 채점표 폐기, 새 기준 확정 후 작성)
 └── examples/
     └── math_permutation/  ← 섹션 7 테스트 케이스 전체
 ```

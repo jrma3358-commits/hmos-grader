@@ -9,8 +9,8 @@
 
 ```
 PHASE 1: 입력 처리    (질문 + 데이터 전처리)
-PHASE 2: 인식 파이프라인 (5색 → 7형식 → 매트릭스 → 예상답변)
-PHASE 3: 검증·출력   (조건확인 → HMOS 로직 → 정답 대조 → 출력)
+PHASE 2: 인식 파이프라인 (5색 → 7형식 → 매트릭스 → 경로·K·T)
+PHASE 3: 검증·출력   (조건확인 → HMOS 로직 → 출력)
 ```
 
 ---
@@ -249,7 +249,7 @@ Q 빨강 (질문·Question):
   회귀 경로
 ```
 
-### 2-4. 예상 답변 설정
+### 2-4. 답 형식 인식
 
 ```
 매트릭스 실행 결과로 답의 형식을 인식한다
@@ -259,7 +259,7 @@ Q 빨강 (질문·Question):
   (수치 확정: 기호 26 / 구버전 24)
 
 출력:
-  예상 답변 형식 (수치/식/서술)
+  답 형식 (수치/식/서술)
   alt 경로 후보 목록
 ```
 
@@ -293,28 +293,14 @@ Q 빨강 (질문·Question):
 
   No  → 오류 인지 → END
 
-  Yes → 3-4 기존 정답 확인
-```
-
-### 3-4. 기존 정답 확인
-
-```
-이 질문에 대한 기존 정답(레퍼런스)이 있는가?
-
-  Yes → 3-5 정답 대조
-  No  → 3-6 답 인쇄 (직접 출력)
-```
-
-### 3-5. 정답 대조
-
-```
-도출한 θ*를 기존 정답과 대조한다
-
-일치? (단순 일치가 아니라 다경로 동치 확인)
-
   Yes → 3-6 답 인쇄
-  No  → 오류 인지 → END
-         (단, alt경로 동치 검토 후 판정)
+```
+
+### 3-4·3-5. (폐기) 기존 정답 확인·정답 대조
+
+```
+PHASE 2가 θ* 값을 반환하지 않으므로 대조할 θ*가 없다.
+두 게이트는 삭제한다 (3-3 통과 → 3-6 직행).
 ```
 
 ### 3-6. 답 인쇄
@@ -322,9 +308,10 @@ Q 빨강 (질문·Question):
 ```
 최종 출력:
 
-  θ* (도출된 답)
+  답 형식 (수치/식/서술)
   K (급소)
-  회귀 경로 (어떤 경로로 도달했는가)
+  T (함정)
+  회귀 경로 (어떤 경로로 도달했는가, 풀이법별)
   오류 진단 (절단·비약·정상단축 여부)
   피드백 (어디서 어떻게 도달했는가)
 
@@ -347,9 +334,6 @@ Q 빨강 (질문·Question):
 3. 훈민정음 logic 실패
    → TSR 진단 후 절단·비약 확인
 
-4. 정답 대조 불일치
-   → alt경로 동치 미해당
-
 오류 출력:
   오류 유형
   발생 지점 (어느 게이트에서 실패했는가)
@@ -361,7 +345,7 @@ Q 빨강 (질문·Question):
 ## 전체 플로우 요약 (코드 구현 기준)
 
 ```
-function runHMOS(question, imageData?) {
+function runHMOS(question, imageData?, options = {}) {
 
   // PHASE 1: 입력 처리
   if (imageData) {
@@ -382,7 +366,10 @@ function runHMOS(question, imageData?) {
   const context = analyzeContext(colorsTmp)         // STEP 3: 문맥파악
   const form = classify7Form(colorsTmp, context)    // STEP 4: 7형식 결정
   const colors = extractCoreColors(colorsTmp, form) // STEP 5: 핵심5색 추출
-  const {K, path, theta} = extractPivot(colors)    // STEP 6: K 추출
+  const methods = regress(colors, options.methods)  // STEP 6: 풀이법별 G → K·경로
+  const {K, path} = methods[0]
+  const T = findTraps(colors)                        //         T(함정) 라벨링
+  // PHASE 2 출력 경계: 경로·형식·K·T까지. θ* 값은 반환하지 않는다
 
   // PHASE 3: 검증
   if (!checkConditions(colors.C))
@@ -392,11 +379,7 @@ function runHMOS(question, imageData?) {
   if (!checkHMOSLogic(path, K))
     return errorDetect('LOGIC_FAILED')
 
-  const existing = getExistingAnswer(question)
-  if (existing && !isMatch(theta, existing))
-    return errorDetect('ANSWER_MISMATCH')
-
-  return printAnswer({ answer: theta, pivot: K, path, feedback: generateFeedback(path, K) })
+  return printAnswer({ form, pivot: K, traps: T, path, methods, feedback: generateFeedback(path, K) })
 }
 ```
 
@@ -496,7 +479,7 @@ HMOS_CORE_SPEC.md와 ENGINE_LOGIC.md를 읽어라.
 
 오늘 구현 목표:
   runHMOS() 함수의 PHASE 2 구현
-  5색 활성화 → 7형식 분류 → 매트릭스23 → 예상답변
+  5색 활성화 → 7형식 분류 → 매트릭스23 → 경로·K·T 인식
 
 테스트 입력:
   "a,a,b,c,d,e 카드를 나열할 때
@@ -504,9 +487,11 @@ HMOS_CORE_SPEC.md와 ENGINE_LOGIC.md를 읽어라.
    풀이 과정을 서술하시오"
 
 기대 출력:
-  colors: {B: "a,a,b,c,d,e (모음 a,a,e, a가 중복)", C: "양 끝에 모음", Q: "경우의 수+서술"}
+  colors: {B: "a,a,b,c,d,e (모음 a,a,e, a가 중복)", C: "나열할 때, 양 끝에 모음", Q: "경우의 수+서술"}
   form: 5형식 (B+C+Q, 준킬러형)  ← 4형식이 아님. B(대상)이 있으므로
-  K: "a가 2개 — (a,a) 경우가 존재"
-  path: θ°→B→C→K→C→B→θ*
-        (B는 연산요소라 양 날개 대칭)
+  K: C₂ "양 끝에 모음"  (G: θ—B—C₁—C₂의 최심 요소)
+  T: "a 2개"  (count 보정 함정 — K가 아니다)
+  path: θ°→B→C₁→[C₂]→C₁→B→θ*
+        (B·C는 연산요소라 양 날개 대칭)
+  θ* 값은 출력하지 않는다 (인식층 경계)
 ```
