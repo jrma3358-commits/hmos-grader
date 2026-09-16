@@ -2,7 +2,7 @@
 // θ°(질문) → 1패스 역추적 → K(최심) → 2패스 순방향 → θ*(답)
 // K는 G에 조건부다(방법 상대적) — 풀이법 M마다 G_M에서 K_M과 경로를 따로 계산한다
 // 연산요소(B·C): 양 날개 대칭 / 확정요소(D·P): 인바운드에만, 아웃바운드에서 생략될 수 있음(단축)
-// 이 층은 경로·K·T 인식까지 — θ* 값은 계산하지 않는다
+// 이 층은 경로·K 인식까지 — θ* 값은 계산하지 않는다
 
 import type {
   ColorElement,
@@ -14,7 +14,6 @@ import type {
   NodeColor,
   PivotNode,
   RegressionPath,
-  Trap,
 } from './types.ts';
 import { countItems } from './util.ts';
 
@@ -134,18 +133,4 @@ export function regress(core: CoreColors, methods?: MethodInput[]): MethodResult
     ? methods.map((m) => ({ ...m, estimated: false }))
     : [{ name: '기본', G: defaultGraph(core.elements), estimated: true }];
   return inputs.map(({ name, G, estimated }) => ({ name, estimated, G, ...encode(G, core.colors.Q) }));
-}
-
-/**
- * T(함정) — K가 아니다. 같은 원소가 여럿이면 경우를 셀 때 보정이 필요하다 (카드 문제: "a 2개").
- * detail.duplicates를 그대로 T로 라벨링한다
- */
-export function findTraps({ detail }: CoreColors): Trap[] {
-  return detail.duplicates.map(({ item, count }) => ({
-    label: `${item} ${count}개`,
-    kind: 'count 보정',
-    source: 'detail.duplicates',
-    item,
-    count,
-  }));
 }

@@ -98,7 +98,7 @@ interface RecognizedToken {
   // clear   = 이미지에서 명확히 읽힘
   // context = 앞뒤 문법 맥락으로 추정
   // domain  = 교과 도메인 지식으로 추정
-  // rubric  = 루브릭(K·T)에서 예상 단어로 추정
+  // rubric  = 루브릭의 실체(K·C·P)에서 예상 단어로 추정
   alternatives?: string[];    // 다른 후보들
 }
 
@@ -134,7 +134,7 @@ interface TeacherFlag {
       ▼
 ┌──────────────┐
 │  PASS 3      │  도메인·루브릭 필터
-│  HMOS 필터   │  루브릭의 M,C,R,K,T로 최종 후보 좁힘
+│  HMOS 필터   │  루브릭의 M,C,R,K로 최종 후보 좁힘
 └──────────────┘
       │ final_tokens
       ▼
@@ -228,15 +228,16 @@ SYSTEM:
 
 입력:
 - PASS 2 토큰 목록 (여전히 [UNCLEAR] 있을 수 있음)
-- RubricPackage (M, C, R, K, T 포함)
+- RubricPackage (M, C, R, K 포함)
 
 작동 원리:
-루브릭의 K(급소)와 T(함정)가 학생 풀이에 나올 수 있는 표현의 범위를 정의합니다.
+루브릭의 실체(K=급소 B·조건 C·무대 P)가 학생 풀이에 나올 수 있는 표현의 범위를 정의합니다.
 이 범위 안에서 [UNCLEAR]의 후보를 좁힙니다.
 
 예시:
 K = "a가 2개다, (a,a)가 존재한다 (B₂)"
-T = ["누락형", "순열혼용형", "독립사건형"]   ← "a 2개"를 놓친 오류들
+C = "양 끝에 모음"
+B = "모음 a,a,e"
 
 [UNCLEAR] 자리에 올 수 있는 후보:
 - "(a, [UNCLEAR])" → "e" 또는 "a" (루브릭에서 양 끝 조합으로)

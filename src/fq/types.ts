@@ -165,17 +165,6 @@ export interface FQOptions {
   methods?: MethodInput[];
 }
 
-/** T(함정) — K와 별개로, 놓치면 θ*에서 어긋나는 지점 */
-export interface Trap {
-  /** "a 2개" */
-  label: string;
-  kind: 'count 보정';
-  /** 어느 인식 결과를 T로 라벨링했는가 */
-  source: 'detail.duplicates';
-  item: string;
-  count: number;
-}
-
 export type FQErrorType = 'INVALID_QUESTION' | 'INVALID_GRAPH';
 
 export interface FQError {
@@ -184,8 +173,8 @@ export interface FQError {
 }
 
 /**
- * f(Q) 출력: { B, C, P, D, Q, form, K, T, path } + 풀이법별 결과 + 추적 정보
- * 경계: θ°→…→K→…→θ*의 경로·형식·K·T 인식까지. θ* 최종값 계산은 이 층의 책임이 아니다
+ * f(Q) 출력: { B, C, P, D, Q, form, K, path } + 풀이법별 결과 + 추적 정보
+ * 경계: θ°→…→K→…→θ*의 경로·형식·K 인식까지. θ* 최종값 계산은 이 층의 책임이 아니다
  */
 export interface FQResult extends FiveColors {
   ok: true;
@@ -196,7 +185,6 @@ export interface FQResult extends FiveColors {
   detail: CoreDetail;
   /** methods[0]의 K */
   K: PivotNode;
-  T: Trap[];
   /** methods[0]의 경로 */
   path: RegressionPath;
   methods: MethodResult[];

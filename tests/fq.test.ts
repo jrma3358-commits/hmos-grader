@@ -49,13 +49,12 @@ describe('ENGINE_LOGIC 테스트 케이스: a,a,b,c,d,e 카드', () => {
     assert.equal(r.methods[0].estimated, true);
   });
 
-  it('T = "a 2개" (count 보정 함정) — K가 아니다', () => {
-    assert.deepEqual(r.T, [{ label: 'a 2개', kind: 'count 보정', source: 'detail.duplicates', item: 'a', count: 2 }]);
+  it('"a 2개"는 B의 속성 관찰로 남는다 (함정 범주 없음)', () => {
     assert.deepEqual(r.detail.duplicates, [{ item: 'a', count: 2 }]);
-    assert.notEqual(r.K.content, r.T[0].label);
+    assert.equal('T' in r, false);
   });
 
-  it('출력 경계: 경로·형식·K·T까지, θ* 값은 계산하지 않는다', () => {
+  it('출력 경계: 경로·형식·K까지, θ* 값은 계산하지 않는다', () => {
     assert.equal('theta' in r, false);
     assert.deepEqual(r.detail.answerFormats, ['수치', '서술']);
   });
@@ -68,10 +67,6 @@ describe('같은 문제의 CLAUDE.md §7.1 표기', () => {
     assert.equal(r.form.id, 5);
     assert.equal(r.K.content, '양 끝에 모음');
     assert.equal(r.path.notation, 'θ°→B→C₁→[C₂]→C₁→B→θ*');
-    assert.deepEqual(
-      r.T.map((t) => t.label),
-      ['a 2개'],
-    );
   });
 });
 
@@ -296,7 +291,7 @@ describe('논문4 — 풀이법 G', () => {
     assert.deepEqual(r.path.shortened, ['P', 'D', 'C₁']);
   });
 
-  it('명제4: 급소는 방법 상대적, T는 풀이법과 무관', () => {
+  it('명제4: 급소는 방법 상대적', () => {
     const q = 'a,a,b,c,d,e 카드를 나열할 때 양 끝에 모음이 오는 경우의 수를 구하시오';
     const r = run(q, {
       methods: [
@@ -312,10 +307,6 @@ describe('논문4 — 풀이법 G', () => {
       ],
     );
     assert.equal(r.K, r.methods[0].K);
-    assert.deepEqual(
-      r.T.map((t) => t.label),
-      ['a 2개'],
-    );
   });
 
   it('명제3 §5.3 8번: 독립 가지는 묶고 병합점이 급소, 연산요소는 양 날개에', () => {

@@ -139,7 +139,6 @@ tool: fq_five_colors
     Q_verb: string, // 요구 동사
     K: string,      // 급소
     K_color: string,// 어느 색에서
-    T: TrapType[],  // 함정들
     detected_type: string
   }
 
@@ -149,7 +148,6 @@ tool: extract_rubric
   input: {
     five_colors: FiveColors,
     K: string,
-    T: TrapType[],
     question_type: string
   }
   output: {

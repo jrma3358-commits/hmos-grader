@@ -233,11 +233,10 @@ Day 2 (목표: STEP 1 언어 읽기)
 Day 3 (목표: STEP 2 급소 추출)
   Claude Code 지시:
     "ENGINE_SPEC.md PHASE 2를 구현하라.
-     같은 문제에서 K와 T가 나와야 한다."
+     같은 문제에서 K가 나와야 한다."
 
   완료 확인:
     K = "a가 2개다"
-    T = ["누락형", "순열혼용형", "독립사건형"]
     K_is_single = true
 
 Day 4 (목표: 루브릭 4축 도출)

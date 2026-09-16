@@ -19,7 +19,7 @@
                     ┌─────────────────┐
                     │  f(Q) ENGINE    │
                     │  질문 인식 엔진  │  ← ENGINE_SPEC.md
-                    │  M, C, R, K, T  │     먼저 만든다
+                    │  M, C, R, K     │     먼저 만든다
                     └────────┬────────┘
                              │
           ┌──────────────────┼──────────────────┐
@@ -56,7 +56,7 @@
 | `ENGINE_SPEC.md` | f(Q) 엔진 — 질문 인식 | **심장** — 먼저 개발 |
 | `QUESTION_DESIGN_SPEC.md` | 출제 단계 문제 검증 | 엔진의 weight_center 사용 |
 | `QUESTION_TYPE_SPEC.md` | 유형별 f(Q) 분기 규칙 | 엔진의 detected_type 사용 |
-| `IMAGE_RECOGNITION_SPEC.md` | 손글씨 3패스 인식 | 엔진의 K·T를 PASS 3에 주입 |
+| `IMAGE_RECOGNITION_SPEC.md` | 손글씨 3패스 인식 | 엔진의 실체(K·C·P)를 PASS 3에 주입 |
 | `CLAUDE.md` | 채점기 전체 로직·철학 | 엔진 출력이 PHASE A 완료 |
 
 ---
@@ -76,7 +76,7 @@
 [f(Q) ENGINE] ← 핵심 실행
     질문 Q 입력
     ↓
-    M, C, R, K, T 추출
+    M, C, R, K 추출
     ↓
     유형 판별 (TYPE 1/2/3)
     ↓
@@ -90,7 +90,7 @@
 [QUESTION_TYPE_SPEC]   [IMAGE_RECOGNITION_SPEC]
     유형별 분기           PASS 1: 이미지 직독
     배점 비중 적용        PASS 2: 문법 맥락 복원
-                          PASS 3: K·T로 필터
+                          PASS 3: 실체(K·C·P)로 필터
                           신뢰도 판정 (0.85 기준)
     │                      │
     └──────────┬───────────┘

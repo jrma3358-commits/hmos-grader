@@ -9,7 +9,7 @@
 
 ```
 PHASE 1: 입력 처리    (질문 + 데이터 전처리)
-PHASE 2: 인식 파이프라인 (5색 → 7형식 → 매트릭스 → 경로·K·T)
+PHASE 2: 인식 파이프라인 (5색 → 7형식 → 매트릭스 → 경로·K)
 PHASE 3: 검증·출력   (조건확인 → HMOS 로직 → 출력)
 ```
 
@@ -310,7 +310,6 @@ PHASE 2가 θ* 값을 반환하지 않으므로 대조할 θ*가 없다.
 
   답 형식 (수치/식/서술)
   K (급소)
-  T (함정)
   회귀 경로 (어떤 경로로 도달했는가, 풀이법별)
   오류 진단 (절단·비약·정상단축 여부)
   피드백 (어디서 어떻게 도달했는가)
@@ -368,8 +367,7 @@ function runHMOS(question, imageData?, options = {}) {
   const colors = extractCoreColors(colorsTmp, form) // STEP 5: 핵심5색 추출
   const methods = regress(colors, options.methods)  // STEP 6: 풀이법별 G → K·경로
   const {K, path} = methods[0]
-  const T = findTraps(colors)                        //         T(함정) 라벨링
-  // PHASE 2 출력 경계: 경로·형식·K·T까지. θ* 값은 반환하지 않는다
+  // PHASE 2 출력 경계: 경로·형식·K까지. θ* 값은 반환하지 않는다
 
   // PHASE 3: 검증
   if (!checkConditions(colors.C))
@@ -379,7 +377,7 @@ function runHMOS(question, imageData?, options = {}) {
   if (!checkHMOSLogic(path, K))
     return errorDetect('LOGIC_FAILED')
 
-  return printAnswer({ form, pivot: K, traps: T, path, methods, feedback: generateFeedback(path, K) })
+  return printAnswer({ form, pivot: K, path, methods, feedback: generateFeedback(path, K) })
 }
 ```
 
@@ -449,9 +447,9 @@ IMAGE_RECOGNITION PASS 1~3 (학생 손글씨):
     "조사·어미 구조가 바뀌지 않으면 채울 수 있다"
     "경우의 [UNCLEAR]" → "수" (맥락이 채운다)
 
-  PASS 3 K·T 필터
+  PASS 3 실체 필터
   = 논문4·5 원리 적용
-    이 문제의 K(급소)·T(함정)로 후보를 좁힌다
+    이 문제의 실체(K=급소 B·조건 C·무대 P)로 후보를 좁힌다
     "a가 2개인 문제" → [UNCLEAR] 자리에 "e" vs "a" 판별 가능
 
   신뢰도 0.85 미만
@@ -461,7 +459,7 @@ IMAGE_RECOGNITION PASS 1~3 (학생 손글씨):
 공통 원리:
   형태만으로 모르는 것을
   구조(논문1 조사·어미)와
-  경로(논문4·5 K·T)로 채운다
+  경로(논문4·5 K)로 채운다
   채운 것은 추정임을 표시한다
 ```
 
@@ -479,7 +477,7 @@ HMOS_CORE_SPEC.md와 ENGINE_LOGIC.md를 읽어라.
 
 오늘 구현 목표:
   runHMOS() 함수의 PHASE 2 구현
-  5색 활성화 → 7형식 분류 → 매트릭스23 → 경로·K·T 인식
+  5색 활성화 → 7형식 분류 → 매트릭스23 → 경로·K 인식
 
 테스트 입력:
   "a,a,b,c,d,e 카드를 나열할 때
@@ -491,7 +489,6 @@ HMOS_CORE_SPEC.md와 ENGINE_LOGIC.md를 읽어라.
   form: 5형식 (B+C+Q, 준킬러형)  ← 4형식이 아님. B(대상)이 있으므로
   K: B₂ "a가 2개다, (a,a)가 존재한다"  (조건 위에서 추적되는 실체 — 급소는 항상 B 계열)
      C₂ "양 끝에 모음"은 급소가 아니라 조건(축2)
-  T: "a 2개"를 놓친 오류  (누락형·순열혼용형·독립사건형)
   path: θ°→B→C₁→[C₂]→C₁→B→θ*
         (B·C는 연산요소라 양 날개 대칭)
   θ* 값은 출력하지 않는다 (인식층 경계)
