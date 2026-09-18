@@ -86,6 +86,14 @@ export interface SealedApplyRules {
   longestMatchFirst: Undecided<boolean>;
   /** 길이로 갈리지 않는 충돌의 우선순위 (스위치·코드 id 순서). 비어 있으면 미결 */
   precedence: string[];
+  /**
+   * 급소 수렴을 셀 때 간선 종류별 무게. null이면 균등(관계 간선 1, 인접 0).
+   *
+   * 급소 **규칙**은 구조라 코드에 있다(`v2/pivot.ts`, 구현명세 §2-4).
+   * 여기 있는 것은 그 규칙이 쓰는 **값**뿐이다 — 구현명세 §5가 봉인으로 묶은 "가중치".
+   * 키는 간선 종류('연결어'·'부사'·'adjacent').
+   */
+  convergenceWeights?: Undecided<Record<string, number>>;
 }
 
 /** 오종래 판정 대기 표지. color는 판정 전까지 null이어야 한다 */
@@ -117,11 +125,13 @@ export interface SealedTable {
 }
 
 /**
- * 비워 둔 것 — 급소(K) 선정 규칙.
+ * 급소(K) 규칙은 이 파일에 없다 — **구조라서 코드에 있다.**
  *
- * 백서에는 "급소·무게중심·최수렴·회오리"가 한 번도 나오지 않는다. 5색을 켜는 데까지가
- * 원전이 적어 둔 전부다. 규칙이 없는데 칸을 만들면 그 칸이 규칙을 부른다 — 그래서
- * 스키마에 급소 필드를 두지 않았다. 원전이 서면 그때 이 파일에 칸을 연다.
- * (BUILD_PLAN §6-9 판정 7번)
+ * 정본: `HMOS_인식엔진_v2_구현명세.md` §2-4 (2026-09-18 오종래 판정).
+ *   급소 = 간선이 가장 많이 수렴하는 B 노드(회오리 중심). 최심점 ≠ 급소.
+ * 구현: `src/fq/v2/pivot.ts`
+ *
+ * 봉인 파일이 급소에 대해 갖는 것은 `apply.convergenceWeights`(값)뿐이다.
+ * (백서에는 급소 서술이 없다 — 그래서 한때 비워 두었고, 정본이 서면서 채웠다. BUILD_PLAN §6-11)
  */
-export type 급소규칙_미정 = never;
+export type 급소규칙_정본은_구현명세_2_4 = never;

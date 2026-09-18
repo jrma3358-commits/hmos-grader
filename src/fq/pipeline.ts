@@ -14,7 +14,7 @@ import {
   type SwitchRule,
 } from './lexicon.ts';
 import { build_path_graph, describeCombination, type FormCombination, type PathGraph } from './v2/graph.ts';
-import { find_pivot, type Pivot } from './v2/pivot.ts';
+import { analyze_pivot, find_pivot, type Pivot, type PivotAnalysis } from './v2/pivot.ts';
 import type {
   AnswerFormat,
   Clause,
@@ -49,10 +49,11 @@ export function normalize(question: string): string {
 //        ↓
 //   describeCombination() 색 조합에 이름을 붙인다 (이름 없는 조합도 유효)
 //        ↓
-//   find_pivot()         급소 — 규칙이 원전에 없어 지금은 SealedError로 멈춘다
+//   find_pivot()         급소 = 최수렴 B (회오리 중심) — 잡으면 멈춘다
 //
-// v1 `fQ()`는 이 배선을 타지 않는다. 아래 세 자리가 다 서기 전까지는 갈아타지 않는다:
-//   ① 봉인 파일이 채워질 것  ② 판정 6건이 확정될 것  ③ 급소 규칙이 설 것
+// v1 `fQ()`는 이 배선을 타지 않는다. 아래 두 자리가 서기 전까지는 갈아타지 않는다:
+//   ① 봉인 파일이 채워질 것  ② 판정 6건이 확정될 것
+// (③ 급소 규칙은 2026-09-18 구현명세 §2-4로 섰다 — BUILD_PLAN §6-11)
 // ─────────────────────────────────────────────────────────────
 
 export interface V2Recognition {
@@ -63,16 +64,23 @@ export interface V2Recognition {
 }
 
 /**
- * v2 인식 — 표지에서 경로를 그리고 급소까지.
- * @throws SealedError 봉인 파일이 없거나(값 미입력), 급소 규칙이 아직 없을 때
+ * v2 인식 — 표지에서 경로를 그리고 급소까지. **급소를 잡으면 멈춘다** (구현명세 §2-5).
+ * @throws SealedError 봉인 파일이 없을 때
+ * @throws PivotError B가 없거나 급소가 둘로 수렴할 때 (플래그는 `error.flag`)
  */
 export function recognizeV2(question: string): V2Recognition {
   const q = normalize(question);
   const table = markerTable();
   const graph = build_path_graph(q, table);
   const form = describeCombination(graph.combination, table);
-  const pivot = find_pivot(graph);
+  const pivot = find_pivot(graph, table);
   return { question: q, graph, form, pivot };
+}
+
+/** 급소를 던지지 않고 값으로 받는다 — 설계 오류 플래그를 그대로 보고할 때 */
+export function recognizeV2Analysis(question: string): Omit<V2Recognition, 'pivot'> & { pivot: PivotAnalysis } {
+  const path = recognizeV2Path(question);
+  return { ...path, pivot: analyze_pivot(path.graph, markerTable()) };
 }
 
 /** 급소 앞까지만 — 경로 그래프와 조합. 급소 규칙이 서기 전에도 인식 결과를 볼 수 있다 */

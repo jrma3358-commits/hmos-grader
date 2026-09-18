@@ -63,8 +63,17 @@ export function fQ(question: string, options: FQOptions = {}): FQResult | FQErro
 export type * from './types.ts';
 
 // v2 — 봉인 표지표 기반 인식 (구조 골격). 봉인 파일이 없으면 SealedError로 멈춘다
-export { recognizeV2, recognizeV2Path, type V2Recognition } from './pipeline.ts';
+export { recognizeV2, recognizeV2Analysis, recognizeV2Path, type V2Recognition } from './pipeline.ts';
 export { build_path_graph, describeCombination, type FormCombination, type PathGraph } from './v2/graph.ts';
-export { find_pivot, type Pivot } from './v2/pivot.ts';
+export {
+  analyze_pivot,
+  convergenceOf,
+  deepest_node,
+  find_pivot,
+  PivotError,
+  type Pivot,
+  type PivotAnalysis,
+  type PivotFlag,
+} from './v2/pivot.ts';
 export { isSealedAvailable, markerTable, SealedError, sealedPath, undecided } from './lexicon.ts';
 export type { SealedTable } from './sealed/schema.ts';
