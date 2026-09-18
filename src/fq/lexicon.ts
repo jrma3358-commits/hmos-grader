@@ -1,7 +1,13 @@
 // 논리스위치 사전 — ENGINE_LOGIC.md STEP 6 "매핑 원칙" / HMOS_CORE_SPEC.md §3.1
 // 조사·어미에 한정하지 않는다. 연결어·부사도 동등한 5색 신호다.
-// (논리스위치 14 가중치는 봉인 — 여기에는 공개된 표층 패턴만 둔다)
+//
+// ⚠ 아래 규칙들은 **봉인 이전 잔재**다 (2026-09-18 판정).
+//   표지→색 매핑이 소스에 평문으로 박혀 있어 BUILD_PLAN §4 불변원칙 4를 어긴다.
+//   또 원전(`봉인/기술백서초안.hwp` §4-1·§4-2)과 갈리는 자리가 있다 (BUILD_PLAN §6-9 ③).
+//   v2는 이 값들을 봉인 파일로 옮기고, 이 파일은 `markerTable()`로 그것을 **참조**만 한다.
+//   아직 배선하지 않았다 — 봉인 파일이 채워지기 전까지 v1 규칙이 그대로 돈다.
 
+import { loadSealedTable, type SealedTable } from './sealed/index.ts';
 import type { Color, SwitchKind } from './types.ts';
 
 export interface SwitchRule {
@@ -104,3 +110,24 @@ export const SLOT_WORDS: { pattern: RegExp; name: string; positions: ('first' | 
   { pattern: /(맨\s*앞|첫\s*번째|처음)/, name: '맨 앞', positions: ['first'] },
   { pattern: /(맨\s*뒤|마지막)/, name: '맨 뒤', positions: ['last'] },
 ];
+
+// ─────────────────────────────────────────────────────────────
+// v2 진입점 — 표지표는 소스가 아니라 봉인 파일에서 온다
+//
+// 봉인/기술백서초안.hwp §4-1·§4-2·§4-3·§4-5   (원전, 사람이 읽는 것)
+//        └→ 봉인/표지사전.json              (값, 로컬에만 — .gitignore)
+//             └→ src/fq/sealed/schema.ts    (구조만)
+//                  └→ markerTable()         (여기)
+//                       └→ pipeline         (미배선 — 봉인 파일이 채워진 뒤)
+//
+// 이 함수는 판정하지 않는다. 표지가 어떤 색을 켜는지는 봉인 파일이 정한다.
+// 파일이 없으면 색을 추측하지 않고 실패한다 — 위 잔재 규칙으로 되돌아가지 않는다.
+// ─────────────────────────────────────────────────────────────
+
+/** 봉인된 표지표. 없으면 SealedError를 던진다 */
+export function markerTable(): SealedTable {
+  return loadSealedTable();
+}
+
+export { isSealedAvailable, sealedPath, undecided, SealedError } from './sealed/index.ts';
+export type { SealedTable } from './sealed/schema.ts';

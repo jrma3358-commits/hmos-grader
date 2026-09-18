@@ -1,0 +1,72 @@
+{
+  "version": 1,
+  "source": {
+    "document": "기술백서초안.hwp",
+    "sections": ["4-1", "4-2", "4-3", "4-5"]
+  },
+
+  "switches": [
+    {
+      "id": "",
+      "kind": null,
+      "markers": [],
+      "intent": "",
+      "color": null,
+      "action": ""
+    }
+  ],
+
+  "lights": [
+    {
+      "color": "B",
+      "markers": [],
+      "role": ""
+    }
+  ],
+
+  "matrix": [
+    {
+      "code": "",
+      "name": "",
+      "triggers": [],
+      "color": null,
+      "logic": "",
+      "layer": null
+    }
+  ],
+
+  "symbols": [
+    {
+      "flow": "",
+      "color": null,
+      "codes": [],
+      "symbol": "",
+      "markers": []
+    }
+  ],
+
+  "forms": [
+    {
+      "id": "",
+      "colors": [],
+      "name": ""
+    }
+  ],
+
+  "apply": {
+    "longestMatchFirst": null,
+    "precedence": []
+  },
+
+  "pending": [
+    { "marker": "~에 대하여", "color": null, "note": "§4-1 ↔ §4-2 ↔ §4-3·PART1" },
+    { "marker": "~이므로", "color": null, "note": "§4-1 ↔ §4-2 ↔ §4-5" },
+    { "marker": "따라서", "color": null, "note": "§4-1" },
+    { "marker": "~이고 / ~이며 / ~도", "color": null, "note": "§4-1 ↔ §4-2 ↔ §4-5" },
+    { "marker": "~할 때", "color": null, "note": "§4-1 안에서 묶음이 둘" },
+    { "marker": "D 등의 이름", "color": null, "note": "§4-1 ↔ §4-2 ↔ PART4에서 표기가 셋" },
+    { "marker": "은 / 는 (주제)", "color": null, "note": "원전에 없음" },
+    { "marker": "에서 / 에 / 으로", "color": null, "note": "원전에 없음" },
+    { "marker": "단어 끝 음절 (길이·넓이·차이의 '이', 임의의 '의')", "color": null, "note": "표지인가 아닌가" }
+  ]
+}
