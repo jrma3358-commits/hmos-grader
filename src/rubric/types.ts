@@ -21,7 +21,7 @@ export interface 인식결과 {
   nodes: PathNode[];
 }
 
-/** F1 산출. F1(봉인①)이 서기 전까지 null로 넘긴다 */
+/** F1 산출 (f1.ts project_parts) */
 export type 파트별물음 = Record<파트, string>;
 
 /** 조각 (§2) */
