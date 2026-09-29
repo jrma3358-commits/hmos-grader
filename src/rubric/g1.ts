@@ -1,8 +1,9 @@
 // G1 채점 — 조각별 O/X를 모아 파트점수·부분점수·자취로 엮는 구조는 여기,
 // 조각을 대보는 규칙([봉인⑥])과 게이트([봉인④-b])는 sealed/g1.ts에 있다 (구현명세 §3½ G1).
 // 모범답안은 증인이지 심판이 아니다 — 판정에 쓰지 않고 결과 옆에 참고로 세운다.
-import { 봉인4b_게이트, 봉인6_조각대조 } from './sealed/g1.ts';
-import type { 요소, 조각, 파트 } from './types.ts';
+import { recognizeV2Path } from '../fq/pipeline.ts';
+import { 봉인4b_게이트, 봉인6_조각대조, type 조각대조 } from './sealed/g1.ts';
+import type { 계열, 급소K, 요소, 조각, 파트 } from './types.ts';
 
 const 파트순서: 파트[] = ['근거대기', '세우기', '풀기', '답구하기'];
 
@@ -42,12 +43,18 @@ export interface 채점결과 {
 }
 
 /**
- * G1 채점(학생답, 루브릭, 모범답안) → 채점결과
+ * G1 채점(학생답, 루브릭, 모범답안, 질문급소, 계열) → 채점결과
+ * 질문급소·계열은 ④ 답구하기를 GJ로 대보는 데 쓴다. 조각은 파트 순서로 판정한다 — 세우기가 풀기보다 먼저다.
  * @throws SealedError 봉인⑥ 또는 봉인④-b가 비어 있을 때
  */
-export function grade(학생답: string, 루브릭: 조각[], 모범답안: string): 채점결과 {
-  const 조각별: 조각결과[] = 루브릭.map((c) => {
-    const { 결과, 근거 } = 봉인6_조각대조(학생답, c);
+export function grade(학생답: string, 루브릭: 조각[], 모범답안: string, 질문급소: 급소K, 계열: 계열): 채점결과 {
+  const 답노드 = recognizeV2Path(학생답).graph.nodes;
+  const 앞결과 = new Map<string, 조각대조>();
+  const 파트순 = 파트순서.flatMap((p) => 루브릭.filter((c) => c.파트 === p));
+  const 조각별: 조각결과[] = 파트순.map((c) => {
+    const 대조 = 봉인6_조각대조(학생답, c, { 답노드, 질문급소, 계열, 루브릭, 앞결과 });
+    앞결과.set(c.id, 대조);
+    const { 결과, 근거 } = 대조;
     return {
       조각id: c.id,
       파트: c.파트,
