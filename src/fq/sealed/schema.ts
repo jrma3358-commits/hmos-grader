@@ -25,6 +25,14 @@ export interface SealedSwitch {
   kind: Undecided<SwitchKind>;
   /** 이 스위치가 붙잡는 조사·어미 표층형 묶음. 한 음절이 아니라 '묶음'으로 적는다 */
   markers: string[];
+  /**
+   * 어휘형 표지인가 ("최댓값" 등 — 구현명세 §1 어휘 트리거).
+   * 어휘형이면 표지 자신이 실체다: 노드의 entity = 걸린 표층형. 아니면 조사·어미처럼 앞말을 끌고 나온다.
+   *   true       — 이 스위치의 표지 전부가 어휘형
+   *   string[]   — 적힌 표지만 어휘형 (markers에 적힌 모양 그대로, 예: ["항상"])
+   *   없음/false — 어휘형 없음
+   */
+  lexical?: boolean | string[];
   /** 백서 §4-1 '사유의 의지' 칸 */
   intent: string;
   /** 이 스위치가 켜는 유도등. 미결이면 null */

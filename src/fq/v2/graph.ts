@@ -75,7 +75,8 @@ const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 /**
  * 표지 표층형 → 정규식.
  * '~'는 "여기에 실체가 온다"는 자리표시다 — 앞의 '~'는 조건 없음, 가운데 '~'는 사이에 실체가 낀다.
- * 예: "~가 되도록" → /가\s*되도록/ · "모든 ~에 대하여" → /모든\s*[\s\S]*?에\s*대하여/
+ * 가운데 '~'는 캡처한다 — 사이에 낀 실체가 곧 그 노드의 entity다.
+ * 예: "~가 되도록" → /가\s*되도록/ · "모든 ~에 대하여" → /모든\s*([\s\S]*?)에\s*대하여/
  */
 export function markerRegex(surface: string): RegExp {
   const parts = surface
@@ -84,7 +85,7 @@ export function markerRegex(surface: string): RegExp {
     .filter(Boolean)
     .map((p) => escape(p).replace(/\s+/g, '\\s*'));
   if (!parts.length) throw new SealedError(`표지가 비어 있습니다: "${surface}"`);
-  return new RegExp(parts.join('[\\s\\S]*?'));
+  return new RegExp(parts.join('\\s*([\\s\\S]*?)\\s*'));
 }
 
 interface Candidate {
@@ -113,6 +114,11 @@ function candidates(table: SealedTable): Candidate[] {
   return all.sort((a, b) => b.surface.length - a.surface.length);
 }
 
+/** 어휘형 표지인가 — 봉인 파일의 `lexical`이 정한다 (스위치 전부 또는 적힌 표지만) */
+function isLexical(sw: SealedSwitch, marker: string): boolean {
+  return sw.lexical === true || (Array.isArray(sw.lexical) && sw.lexical.includes(marker));
+}
+
 /** 노드가 되는 표지의 종류 — 나머지(연결어·부사)는 간선이 된다 */
 const NODE_KIND = '조사·어미' satisfies SwitchKind;
 
@@ -120,25 +126,28 @@ const NODE_KIND = '조사·어미' satisfies SwitchKind;
  * 표지로 문장을 훑어 경로 그래프를 만든다.
  *
  * 뼈대 한계 (의도적):
- *   - 실체(entity)는 "앞 표지 끝 ~ 이 표지 시작"의 글자 그대로다. 실체를 해석하지 않는다.
+ *   - 실체(entity)는 어휘형 표지(`lexical`)면 표지 자신, 아니면 표지 가운데 '~'가 붙잡은 글자,
+ *     그것도 없으면 "앞 표지 끝 ~ 이 표지 시작"의 글자 그대로다. 실체를 해석하지 않는다.
  *   - 간선은 인접 노드를 잇는 데까지다. 관계의 성격(순접·역접·병렬)은 원전 명세가 서면 붙인다.
  */
 export function build_path_graph(question: string, table: SealedTable): PathGraph {
   const cands = candidates(table);
-  const hits: { at: number; end: number; c: Candidate }[] = [];
+  const hits: { at: number; end: number; c: Candidate; inner: string }[] = [];
 
   for (let i = 0; i < question.length; ) {
     const rest = question.slice(i);
-    let matched: { len: number; c: Candidate } | undefined;
+    let matched: { len: number; c: Candidate; inner: string } | undefined;
     for (const c of cands) {
       const m = rest.match(c.re);
       if (m && m.index === 0) {
-        matched = { len: m[0].length, c };
+        // 가운데 '~'가 붙잡은 실체 (여럿이면 이어 붙인다)
+        const inner = m.slice(1).map((s) => s.trim()).filter(Boolean).join(' ');
+        matched = { len: m[0].length, c, inner };
         break; // 최장 일치 — cands가 이미 긴 것부터다
       }
     }
     if (matched) {
-      hits.push({ at: i, end: i + matched.len, c: matched.c });
+      hits.push({ at: i, end: i + matched.len, c: matched.c, inner: matched.inner });
       i += matched.len;
     } else {
       i += 1;
@@ -176,7 +185,7 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
       switchId: sw.id,
       index: hit.at,
       color: sw.color,
-      entity: question.slice(cursor, hit.at).trim(),
+      entity: isLexical(sw, hit.c.surface) ? surface : hit.inner || question.slice(cursor, hit.at).trim(),
     };
     const prev = nodes.at(-1);
     nodes.push(node);
