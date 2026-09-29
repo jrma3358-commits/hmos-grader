@@ -4,7 +4,7 @@
 import { SealedError } from '../fq/sealed/index.ts';
 import type { PathNode } from '../fq/v2/graph.ts';
 import { 봉인5_모범조각 } from './sealed/f6.ts';
-import type { 급소K, 조각뼈대 } from './types.ts';
+import type { 계열, 급소K, 조각뼈대 } from './types.ts';
 
 /**
  * 파트별로 펴는 재료 (구현명세 §3 F6)
@@ -36,11 +36,11 @@ export function material_of(조각: 조각뼈대, k: 급소K): 재료 {
 }
 
 /**
- * F6 모범조각생성(조각, 급소_k) → string
+ * F6 모범조각생성(조각, 급소_k, 계열) → string
  * @throws SealedError 봉인⑤가 비어 있거나, 봉인⑤가 빈 모범조각을 냈을 때
  */
-export function spread_piece(조각: 조각뼈대, k: 급소K): string {
-  const 모범조각 = 봉인5_모범조각(조각, material_of(조각, k));
+export function spread_piece(조각: 조각뼈대, k: 급소K, 계열: 계열): string {
+  const 모범조각 = 봉인5_모범조각(조각, material_of(조각, k), 계열);
   if (모범조각.trim() === '') {
     throw new SealedError(`[봉인⑤] ${조각.id}: 모범조각이 비어 있습니다.`);
   }
