@@ -385,3 +385,48 @@ describe('자리 규칙 — LS-22·LS-23, 「은/는」의 색은 자리가 정�
     assert.equal(topic('사과@B 끝@T?', false).color, 'B');
   });
 });
+
+describe('약속된 길 — 「→」는 D, 화살표 앞 글자는 B 노드 (오종래 2026-10-01)', () => {
+  // 표지는 봉인 값이 아니라 테스트용 가짜 기호다. 화살표 = SA(@>, 연결어, D)
+  const sw = (id: string, marker: string, color: Color, kind: SealedSwitch['kind'] = '조사·어미') =>
+    ({ id, kind, markers: [marker], intent: '', color }) as SealedSwitch;
+  const table = (on = true): SealedTable => ({
+    version: 1,
+    source: { document: '(테스트)', sections: [] },
+    switches: [sw('SB', '~@B', 'B'), sw('SJ', '~@J', 'C'), sw('SQ', '~@Q', 'Q'), sw('SA', '@>', 'D', '연결어')],
+    lights: [],
+    matrix: [],
+    symbols: [],
+    forms: [],
+    apply: { longestMatchFirst: true, precedence: [], definedPaths: on ? ['SA'] : undefined },
+    pending: [],
+  });
+  const q = '물질@B 분류한 것이다. 메테인 암모니아 @> 기준@J 끝@Q';
+
+  it('화살표 앞, 노드가 끌고 나오지 않은 글자(마지막 문장 끝 뒤부터)가 B 노드가 된다', () => {
+    const g = build_path_graph(q, table());
+    assert.deepEqual(
+      g.nodes.map((n) => [n.color, n.entity]),
+      [
+        ['B', '물질'],
+        ['B', '메테인 암모니아'],
+        ['C', '기준'],
+        ['Q', '끝'],
+      ],
+    );
+  });
+
+  it('화살표 간선은 그 B 노드에서 출발하고, 자기 색 D를 조합에 켠다', () => {
+    const g = build_path_graph(q, table());
+    const arrow = g.edges.find((e) => e.surface === '@>')!;
+    assert.equal(g.nodes.find((n) => n.id === arrow.from)!.entity, '메테인 암모니아');
+    assert.equal(arrow.color, 'D');
+    assert.deepEqual(g.combination, ['B', 'D', 'C', 'Q']);
+  });
+
+  it('지정이 없으면 지금처럼 — 앞 글자는 노드가 되지 않고 간선 색은 조합에 없다', () => {
+    const g = build_path_graph(q, table(false));
+    assert.equal(g.nodes.some((n) => n.entity.includes('메테인')), false);
+    assert.deepEqual(g.combination, ['B', 'C', 'Q']);
+  });
+});

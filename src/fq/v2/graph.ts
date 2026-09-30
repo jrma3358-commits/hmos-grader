@@ -43,6 +43,8 @@ export interface PathEdge {
   /** '접힘' = 판단기준에 걸려 판정되는 노드가 그 판단기준으로 보내는 간선 (Q→B) */
   kind: 'adjacent' | '연결어' | '부사' | '접힘';
   index: number;
+  /** 약속된 길(apply.definedPaths, 예: 「→」)이면 그 간선이 켠 등. 조합에 들어간다. 그 밖의 간선에는 없다 */
+  color?: Color | null;
 }
 
 /** 걸렸으나 자리를 정할 수 없는 표지 — 색이나 종류가 미결이다 */
@@ -198,6 +200,28 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
   const recolorIds = table.apply.recolorTargets ?? [];
   // 연쇄 머리가 넘긴 실체 — 바로 이어 붙은 끝 표지(at)가 받는다
   let carried: { at: number; entity: string } | undefined;
+  const pathIds = table.apply.definedPaths ?? [];
+
+  /** 노드를 세우고 앞 노드와 잇는다 — 걸어 둔 간선이 있으면 그 간선으로, 없으면 인접으로 */
+  const link = (node: PathNode) => {
+    const prev = nodes.at(-1);
+    nodes.push(node);
+    if (prev) {
+      edges.push(
+        pendingEdge
+          ? {
+              from: prev.id,
+              to: node.id,
+              surface: pendingEdge.surface,
+              kind: pendingEdge.kind,
+              index: pendingEdge.index,
+              ...(pathIds.includes(pendingEdge.sw.id) ? { color: pendingEdge.sw.color } : {}),
+            }
+          : { from: prev.id, to: node.id, surface: null, kind: 'adjacent', index: node.index },
+      );
+    }
+    pendingEdge = undefined;
+  };
 
   for (const [n, hit] of hits.entries()) {
     const { sw } = hit.c;
@@ -210,6 +234,24 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
     }
 
     if (sw.kind !== NODE_KIND) {
+      // 약속된 길 [오종래 2026-10-01] — apply.definedPaths 간선(예: 「→」, D)은 앞에서 아무 노드도 끌고 나오지 않은
+      //   글자(마지막 문장 끝 뒤부터)를 B 노드로 세운다 (예: 「메테인(CH₄) 암모니아(NH₃) →」). 간선 자신의 색은 조합에 켜진다.
+      if (pathIds.includes(sw.id)) {
+        const before = question.slice(cursor, hit.at);
+        const ends = [...before.matchAll(/[.?!。](?=\s|$)/g)];
+        const from = ends.length ? ends.at(-1)!.index! + 1 : 0;
+        const text = before.slice(from).trim();
+        if (text) {
+          link({
+            id: `n${n}`,
+            surface,
+            switchId: sw.id,
+            index: cursor + from + before.slice(from).indexOf(text),
+            color: 'B',
+            entity: text,
+          });
+        }
+      }
       // 연결어·부사 → 간선. 다음 노드가 설 때 이어 붙인다
       pendingEdge = { surface, kind: sw.kind, index: hit.at, sw };
       cursor = hit.end;
@@ -254,18 +296,8 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
       node.color = by.color;
     }
 
-    const prev = nodes.at(-1);
-    nodes.push(node);
+    link(node);
     cursor = hit.end;
-
-    if (prev) {
-      edges.push(
-        pendingEdge
-          ? { from: prev.id, to: node.id, surface: pendingEdge.surface, kind: pendingEdge.kind, index: pendingEdge.index }
-          : { from: prev.id, to: node.id, surface: null, kind: 'adjacent', index: node.index },
-      );
-    }
-    pendingEdge = undefined;
   }
 
   // 자리 규칙 [오종래 2026-10-01] — 봉인 파일이 지정한 스위치(apply.contextRules[].targets)의 노드는 자리에 따라 색을 바꾼다.
@@ -307,10 +339,14 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
 
   // 조합은 접기 전 색으로 센다 [오종래 2026-10-01] — 판단기준(Q에 접힌 B)은 급소 판정에서만 B이고,
   //   표면에 켜진 등은 원래 색이다 (예: 수학_문_4 「연속일 때」 = C → 조합 B·C·Q).
+  //   약속된 길 간선의 색(예: 「→」 D)도 켜진 등이다 — 노드와 함께 문장 순서로 센다.
+  const lights = [
+    ...nodes.map((node) => ({ at: node.index, c: node.foldedFrom !== undefined ? node.foldedFrom : node.color })),
+    ...edges.filter((e) => e.color !== undefined).map((e) => ({ at: e.index, c: e.color ?? null })),
+  ].sort((a, b) => a.at - b.at);
   const combination: Color[] = [];
-  for (const node of nodes) {
-    const lit = node.foldedFrom !== undefined ? node.foldedFrom : node.color;
-    if (lit && !combination.includes(lit)) combination.push(lit);
+  for (const { c } of lights) {
+    if (c && !combination.includes(c)) combination.push(c);
   }
 
   return { question, nodes, edges, combination, undecided };
