@@ -101,6 +101,11 @@ export interface SealedApplyRules {
    */
   endOfWord?: Undecided<boolean>;
   /**
+   * 체언 뒤에서만 거는 스위치(id) — 앞 음절이 받침 없는 한글이면 용언 어간(관형형 어미)으로 보고 걸지 않는다.
+   * 간이 규칙이다: 받침 있는 음절·한글 아닌 글자 뒤는 체언으로 본다. 없거나 null이면 적용하지 않는다.
+   */
+  afterNounOnly?: Undecided<string[]>;
+  /**
    * 급소 수렴을 셀 때 간선 종류별 무게. null이면 균등(관계 간선 1, 인접 0).
    *
    * 급소 **규칙**은 구조라 코드에 있다(`v2/pivot.ts`, 구현명세 §2-4).

@@ -148,6 +148,14 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
   const nodeCands = cands.filter((c) => c.sw.kind === NODE_KIND && !isLexical(c.sw, c.surface));
   const chainsToMarker = (after: string) => nodeCands.some((c) => after.match(c.re)?.index === 0);
 
+  // 체언 뒤에서만 [오종래 2026-09-30] — apply.afterNounOnly 스위치는 앞 음절이 체언일 때만 건다.
+  //   간이 규칙: 앞 음절이 받침 없는 한글이면 용언 어간(관형형 어미)으로 보고 걸지 않는다.
+  const afterNounOnly = table.apply.afterNounOnly ?? [];
+  const vowelFinalSyllable = (ch: string | undefined) => {
+    const code = ch === undefined ? -1 : ch.charCodeAt(0) - 0xac00;
+    return code >= 0 && code < 11172 && code % 28 === 0;
+  };
+
   for (let i = 0; i < question.length; ) {
     const rest = question.slice(i);
     let matched: { len: number; c: Candidate; inner: string } | undefined;
@@ -162,6 +170,9 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
           !chainsToMarker(rest.slice(m[0].length))
         ) {
           continue; // 어절 안 — 더 짧은 표지를 마저 본다
+        }
+        if (afterNounOnly.includes(c.sw.id) && vowelFinalSyllable(question[i - 1])) {
+          continue; // 앞이 용언 어간 — 관형형 어미로 본다
         }
         // 가운데 '~'가 붙잡은 실체 (여럿이면 이어 붙인다)
         const inner = m.slice(1).map((s) => s.trim()).filter(Boolean).join(' ');

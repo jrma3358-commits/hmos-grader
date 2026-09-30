@@ -248,6 +248,33 @@ describe('Q→B 추출 — 판단기준은 Q에 접힌 B다 (구현명세 §2-3,
       assert.deepEqual(ents('#L가 끝@Q', true), ['#L', '가 끝']);
     });
 
+    describe('체언 뒤에서만 — 앞 음절이 받침 없는 한글이면 용언으로 보고 스킵 (오종래 2026-09-30)', () => {
+      // 가짜 표지 '뷁'(B)을 체언 뒤 전용으로 지정
+      const t = (on: boolean) => {
+        const x = tbl(true);
+        x.switches.push(sw('SN', '뷁', 'B'));
+        x.apply.afterNounOnly = on ? ['SN'] : undefined;
+        return x;
+      };
+      const ents2 = (q: string, on: boolean) => build_path_graph(q, t(on)).nodes.map((n) => n.entity);
+
+      it('지정이 없으면 어디서나 건다', () => {
+        assert.deepEqual(ents2('사과뷁 끝@Q', false), ['사과', '끝']);
+      });
+
+      it('앞 음절에 받침이 없으면 스킵', () => {
+        assert.deepEqual(ents2('사과뷁 끝@Q', true), ['사과뷁 끝']);
+      });
+
+      it('앞 음절에 받침이 있으면 건다', () => {
+        assert.deepEqual(ents2('책뷁 끝@Q', true), ['책', '끝']);
+      });
+
+      it('앞이 한글이 아니면 체언으로 보고 건다', () => {
+        assert.deepEqual(ents2('x)뷁 끝@Q', true), ['x)', '끝']);
+      });
+    });
+
     describe('조사 연쇄 — 바로 뒤가 등록된 조사·어미 표지면 어절 끝 (오종래 2026-09-30)', () => {
       // 가짜 조사 두 개: qq(C) 다음에 zz(B)가 붙는 연쇄
       const chain = () => {
