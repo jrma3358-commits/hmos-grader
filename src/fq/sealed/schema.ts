@@ -99,9 +99,17 @@ export interface SealedApplyRules {
    *
    * 급소 **규칙**은 구조라 코드에 있다(`v2/pivot.ts`, 구현명세 §2-4).
    * 여기 있는 것은 그 규칙이 쓰는 **값**뿐이다 — 구현명세 §5가 봉인으로 묶은 "가중치".
-   * 키는 간선 종류('연결어'·'부사'·'adjacent').
+   * 키는 간선 종류('연결어'·'부사'·'adjacent'·'접힘').
    */
   convergenceWeights?: Undecided<Record<string, number>>;
+  /**
+   * 판단기준 표지 — 이 스위치(id)가 만든 노드는 «Q에 접힌 B»(판단기준)다 (Q→B 추출, 구현명세 §2-3).
+   * 없거나 null이면 접지 않는다.
+   *
+   * 접는 **규칙**(색을 B로 접고, 뒤 노드가 모두 그리로 수렴)은 구조라 코드에 있다(`v2/graph.ts`).
+   * 여기 있는 것은 «어느 스위치가 판단기준을 켜는가»라는 **값**뿐이다.
+   */
+  foldToB?: Undecided<string[]>;
 }
 
 /** 오종래 판정 대기 표지. color는 판정 전까지 null이어야 한다 */

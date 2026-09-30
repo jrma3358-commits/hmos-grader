@@ -27,14 +27,17 @@ export interface PathNode {
   color: Color | null;
   /** 표지가 끌고 나온 실체(앞말). 표지가 주인이고 실체는 끌려 나온다 (백서 §3-4) */
   entity: string;
+  /** Q→B로 접혀 B가 된 판단기준 노드의 원래 색. 접히지 않은 노드에는 없다 */
+  foldedFrom?: Color | null;
 }
 
 export interface PathEdge {
   from: string;
   to: string;
-  /** 간선을 만든 표지 표층형. 인접만으로 이어졌으면 null */
+  /** 간선을 만든 표지 표층형. 인접·접힘으로 이어졌으면 null */
   surface: string | null;
-  kind: 'adjacent' | '연결어' | '부사';
+  /** '접힘' = 판단기준에 걸려 판정되는 노드가 그 판단기준으로 보내는 간선 (Q→B) */
+  kind: 'adjacent' | '연결어' | '부사' | '접힘';
   index: number;
 }
 
@@ -199,6 +202,19 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
       );
     }
     pendingEdge = undefined;
+  }
+
+  // Q→B 추출 (구현명세 §2-3). [오종래 2026-09-30]
+  //   «옳은 것을 고르시오»는 Q이고, 판단기준(예: «탄소 화합물인가?»)은 그 Q에 접힌 B다.
+  //   (가) 봉인 파일이 판단기준 표지로 지정한 스위치(apply.foldToB)의 노드 → 색을 B로 접는다. 원래 색은 남긴다.
+  //   (나) 그 뒤에 오는 노드(분기 결과·Q·보기)는 모두 그 판단기준으로 판정되므로 '접힘' 간선을 보낸다 → 수렴.
+  const foldIds = table.apply.foldToB ?? [];
+  for (const [i, node] of nodes.entries()) {
+    if (!foldIds.includes(node.switchId)) continue;
+    nodes[i] = { ...node, color: 'B', foldedFrom: node.color };
+    for (const later of nodes.slice(i + 1)) {
+      edges.push({ from: later.id, to: node.id, surface: null, kind: '접힘', index: later.index });
+    }
   }
 
   const combination: Color[] = [];

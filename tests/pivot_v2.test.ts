@@ -4,7 +4,8 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { analyze_pivot, convergenceOf, deepest_node, find_pivot, PivotError } from '../src/fq/index.ts';
+import { analyze_pivot, build_path_graph, convergenceOf, deepest_node, find_pivot, PivotError } from '../src/fq/index.ts';
+import type { SealedSwitch, SealedTable } from '../src/fq/sealed/schema.ts';
 import type { PathEdge, PathGraph, PathNode } from '../src/fq/v2/graph.ts';
 import type { Color } from '../src/fq/types.ts';
 
@@ -106,5 +107,58 @@ describe('급소 = 간선이 가장 많이 수렴하는 B (구현명세 §2-4)',
       apply: { longestMatchFirst: true, precedence: [], convergenceWeights: { adjacent: 5 } },
     } as never;
     assert.equal(find_pivot(g, table).node.id, 'B2', '인접에 무게를 주면 B2(인접 2개 = 10)');
+  });
+});
+
+describe('Q→B 추출 — 판단기준은 Q에 접힌 B다 (구현명세 §2-3, 오종래 2026-09-30)', () => {
+  // 표지는 봉인 값이 아니라 테스트용 가짜 기호다. 판단기준 스위치 = SJ (원래 색 C)
+  const sw = (id: string, marker: string, color: Color) =>
+    ({ id, kind: '조사·어미', markers: [marker], intent: '', color }) as SealedSwitch;
+  const table = (foldToB?: string[]): SealedTable => ({
+    version: 1,
+    source: { document: '(테스트)', sections: [] },
+    switches: [sw('SB', '@B', 'B'), sw('SJ', '@J', 'C'), sw('SQ', '@Q', 'Q')],
+    lights: [],
+    matrix: [],
+    symbols: [],
+    forms: [],
+    apply: { longestMatchFirst: true, precedence: [], foldToB },
+    pending: [],
+  });
+  // 그림 @B  기준 @J  가 @B  나 @B  고르시오 @Q
+  const q = '그림@B 기준@J 가@B 나@B 고르시오@Q';
+
+  it('판단기준 표지가 없으면 접지 않는다 — B끼리 수렴 0 동점', () => {
+    const g = build_path_graph(q, table());
+    assert.equal(g.nodes[1].color, 'C');
+    assert.equal(g.nodes[1].foldedFrom, undefined);
+    const r = analyze_pivot(g);
+    assert.equal(r.ok, false);
+    if (!r.ok) assert.equal(r.flag, 'MULTIPLE_CONVERGENCE');
+  });
+
+  it('(가) 판단기준 노드는 B로 접히고 원래 색을 남긴다', () => {
+    const g = build_path_graph(q, table(['SJ']));
+    assert.equal(g.nodes[1].color, 'B');
+    assert.equal(g.nodes[1].foldedFrom, 'C');
+    assert.ok(g.combination.includes('B'));
+  });
+
+  it('(나) 뒤의 노드(분기 결과·Q)가 모두 판단기준으로 수렴 → 급소', () => {
+    const g = build_path_graph(q, table(['SJ']));
+    const 접힘 = g.edges.filter((e) => e.kind === '접힘');
+    assert.deepEqual(
+      접힘.map((e) => [e.from, e.to]),
+      [['n2', 'n1'], ['n3', 'n1'], ['n4', 'n1']],
+    );
+    const p = find_pivot(g);
+    assert.equal(p.node.id, 'n1');
+    assert.equal(p.node.entity, '기준');
+    assert.equal(p.convergence, 3);
+  });
+
+  it('앞에 있는 노드는 판단기준으로 수렴하지 않는다', () => {
+    const g = build_path_graph(q, table(['SJ']));
+    assert.equal(g.edges.some((e) => e.kind === '접힘' && e.from === 'n0'), false);
   });
 });
