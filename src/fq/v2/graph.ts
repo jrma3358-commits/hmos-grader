@@ -29,6 +29,8 @@ export interface PathNode {
   entity: string;
   /** Q→B로 접혀 B가 된 판단기준 노드의 원래 색. 접히지 않은 노드에는 없다 */
   foldedFrom?: Color | null;
+  /** 재색칠 간선(apply.recolorTargets)이 가리켜 색이 바뀐 노드의 원래 색. 바뀌지 않은 노드에는 없다 */
+  recoloredFrom?: Color | null;
 }
 
 export interface PathEdge {
@@ -161,7 +163,8 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
   const edges: PathEdge[] = [];
   const undecided: UndecidedHit[] = [];
   let cursor = 0;
-  let pendingEdge: { surface: string; kind: '연결어' | '부사'; index: number } | undefined;
+  let pendingEdge: { surface: string; kind: '연결어' | '부사'; index: number; sw: SealedSwitch } | undefined;
+  const recolorIds = table.apply.recolorTargets ?? [];
 
   for (const [n, hit] of hits.entries()) {
     const { sw } = hit.c;
@@ -175,7 +178,7 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
 
     if (sw.kind !== NODE_KIND) {
       // 연결어·부사 → 간선. 다음 노드가 설 때 이어 붙인다
-      pendingEdge = { surface, kind: sw.kind, index: hit.at };
+      pendingEdge = { surface, kind: sw.kind, index: hit.at, sw };
       cursor = hit.end;
       continue;
     }
@@ -190,6 +193,16 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
       color: sw.color,
       entity: isLexical(sw, hit.c.surface) ? surface : hit.inner || question.slice(cursor, hit.at).trim(),
     };
+
+    // 재색칠 간선 [오종래 2026-09-30] — 봉인 파일이 지정한 간선 스위치(apply.recolorTargets, 예: 화살표)가
+    //   가리키는 노드는 그 스위치의 색으로 칠한다. 이미 B로 확정된 노드는 건드리지 않는다. 원래 색은 남긴다.
+    //   판단기준 접기(Q→B, 아래)는 이 뒤에 온다 — 재색칠된 판단기준도 B로 접힌다.
+    const by = pendingEdge?.sw;
+    if (by && recolorIds.includes(by.id) && by.color !== null && node.color !== 'B' && node.color !== by.color) {
+      node.recoloredFrom = node.color;
+      node.color = by.color;
+    }
+
     const prev = nodes.at(-1);
     nodes.push(node);
     cursor = hit.end;

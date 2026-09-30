@@ -110,6 +110,13 @@ export interface SealedApplyRules {
    * 여기 있는 것은 «어느 스위치가 판단기준을 켜는가»라는 **값**뿐이다.
    */
   foldToB?: Undecided<string[]>;
+  /**
+   * 재색칠 간선 표지 — 이 간선 스위치(id)가 가리키는 노드를 그 스위치의 색으로 다시 칠한다 (예: 화살표).
+   * 이미 B인 노드는 건드리지 않는다. 없거나 null이면 칠하지 않는다.
+   *
+   * 칠하는 **규칙**은 구조라 코드에 있다(`v2/graph.ts`). 여기 있는 것은 «어느 간선 스위치인가»(값)뿐이다.
+   */
+  recolorTargets?: Undecided<string[]>;
 }
 
 /** 오종래 판정 대기 표지. color는 판정 전까지 null이어야 한다 */

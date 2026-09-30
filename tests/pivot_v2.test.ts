@@ -157,6 +157,56 @@ describe('Q→B 추출 — 판단기준은 Q에 접힌 B다 (구현명세 §2-3,
     assert.equal(p.convergence, 3);
   });
 
+  describe('재색칠 간선 — 화살표가 가리키는 노드는 C, 이미 B면 그대로 (오종래 2026-09-30)', () => {
+    // 가짜 화살표 간선 스위치 SA(@>, 색 C). 판단기준 SJ는 여기서 원래 색 P로 둔다
+    const tbl = (recolorTargets?: string[], foldToB?: string[]): SealedTable => ({
+      ...table(foldToB),
+      switches: [
+        sw('SB', '@B', 'B'),
+        sw('SD', '@D', 'D'),
+        sw('SJ', '@J', 'P'),
+        sw('SQ', '@Q', 'Q'),
+        { id: 'SA', kind: '연결어', markers: ['@>'], intent: '', color: 'C' } as SealedSwitch,
+      ],
+      apply: { longestMatchFirst: true, precedence: [], foldToB, recolorTargets },
+    });
+    const q2 = '가@B @> 나@D @> 다@B 끝@Q';
+    const byEntity = (g: PathGraph, e: string) => g.nodes.find((n) => n.entity === e)!;
+
+    it('지정이 없으면 칠하지 않는다', () => {
+      const g = build_path_graph(q2, tbl());
+      assert.equal(byEntity(g, '나').color, 'D');
+      assert.equal(byEntity(g, '나').recoloredFrom, undefined);
+    });
+
+    it('화살표가 가리키는 노드는 C로, 원래 색을 남긴다', () => {
+      const g = build_path_graph(q2, tbl(['SA']));
+      assert.equal(byEntity(g, '나').color, 'C');
+      assert.equal(byEntity(g, '나').recoloredFrom, 'D');
+    });
+
+    it('이미 B인 노드는 화살표가 가리켜도 건드리지 않는다', () => {
+      const g = build_path_graph(q2, tbl(['SA']));
+      assert.equal(byEntity(g, '다').color, 'B');
+      assert.equal(byEntity(g, '다').recoloredFrom, undefined);
+    });
+
+    it('화살표가 가리키지 않는 노드는 그대로', () => {
+      const g = build_path_graph(q2, tbl(['SA']));
+      assert.equal(byEntity(g, '가').color, 'B');
+      assert.equal(byEntity(g, '끝').color, 'Q');
+    });
+
+    it('판단기준은 먼저 C로 칠해진 뒤 B로 접힌다', () => {
+      const g = build_path_graph('그림@B @> 기준@J 가@B 끝@Q', tbl(['SA'], ['SJ']));
+      const k = byEntity(g, '기준');
+      assert.equal(k.recoloredFrom, 'P');
+      assert.equal(k.foldedFrom, 'C');
+      assert.equal(k.color, 'B');
+      assert.equal(find_pivot(g).node.id, k.id);
+    });
+  });
+
   it('앞에 있는 노드는 판단기준으로 수렴하지 않는다', () => {
     const g = build_path_graph(q, table(['SJ']));
     assert.equal(g.edges.some((e) => e.kind === '접힘' && e.from === 'n0'), false);
