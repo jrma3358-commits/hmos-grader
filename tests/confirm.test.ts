@@ -1,12 +1,13 @@
 // 선생 확인 창 — 문항분석 명세서-2 §6을 기준으로 한 테스트.
-// 기대값은 명세에서 온다. «①을 골라야만 루브릭창»과, ①은 엔진 판정이 통과일 때만(2026-09-30 구현 결정)을 본다.
+// 기대값은 명세에서 온다. «①을 골라야만 루브릭창»과, 교사가 거르기도 ①로 뒤집을 수 있음(2026-09-30 오종래)을 본다.
 // 봉인⑩~⑬이 비어 있어 엔진이 «통과»를 낼 수 없으므로, 통과 화면은 손으로 세운다.
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { choose, make_screen, render_screen, type 확인화면 } from '../src/filter/confirm.ts';
+import { choose, is_approved, make_screen, render_screen, type 확인화면 } from '../src/filter/confirm.ts';
 import type { 필터입력 } from '../src/filter/judge.ts';
+import { generate_rubric } from '../src/rubric/assemble.ts';
 
 const 급소불명: 필터입력 = { 유형: '단독문제', 텍스트: '' };
 
@@ -21,12 +22,12 @@ const 통과화면 = (): 확인화면 => ({
 });
 
 describe('화면 자료 (§6)', () => {
-  it('거르기 문항 — 급소·요약은 (서지 않음), 선택지에 ① 없음', () => {
+  it('거르기 문항 — 급소·요약은 (서지 않음), 선택지는 ①~④ 전부', () => {
     const s = make_screen(급소불명);
     assert.equal(s.필터판정, '거르기');
     assert.deepEqual(s.급소, ['(서지 않음)']);
     assert.deepEqual(s.실체요약, ['(서지 않음)']);
-    assert.deepEqual(s.선택지, [2, 3, 4]);
+    assert.deepEqual(s.선택지, [1, 2, 3, 4]);
   });
 
   it('다경로 지점은 표시 규칙이 없어 비어 있다', () => {
@@ -47,10 +48,21 @@ describe('교사 선택 — ①을 골라야만 루브릭창 (§6)', () => {
     assert.equal(r.문항.승인, '교사 ①');
     assert.equal(r.문항.입력, s.입력);
     assert.equal(r.문항.판정, s.판정);
+    assert.equal(r.문항.뒤집음, false);
+    assert.equal(is_approved(r.문항), true);
   });
 
-  it('엔진 판정이 거르기면 ①은 고를 수 없다 — 교사가 덮지 않는다', () => {
-    assert.throws(() => choose(make_screen(급소불명), { 번호: 1 }), /«거르기»/);
+  it('엔진 판정이 거르기여도 교사는 ①로 뒤집을 수 있다 — 뒤집음이 남는다', () => {
+    const r = choose(make_screen(급소불명), { 번호: 1 });
+    assert.equal(r.다음, '루브릭창');
+    if (r.다음 !== '루브릭창') return;
+    assert.equal(r.문항.뒤집음, true);
+    assert.equal(is_approved(r.문항), true);
+  });
+
+  it('손으로 만든 같은 모양의 입장권은 승인이 아니다', () => {
+    const s = 통과화면();
+    assert.equal(is_approved({ 승인: '교사 ①', 입력: s.입력, 판정: s.판정, 뒤집음: false }), false);
   });
 
   it('② → 고친 입력으로 재판정해 새 화면', () => {
@@ -83,13 +95,37 @@ describe('화면 그리기 (§6 배치)', () => {
     assert.match(t, /\(표시 규칙 없음\)/);
   });
 
-  it('고를 수 없는 ①은 화면에 나오지 않는다', () => {
-    const t = render_screen(make_screen(급소불명));
-    assert.doesNotMatch(t, /①/);
-    assert.match(t, /②/);
+  it('거르기 화면에도 ①이 나온다', () => {
+    assert.match(render_screen(make_screen(급소불명)), /① 급소가 내 의도와 맞다/);
+  });
+});
+
+describe('루브릭창은 교사 승인만 받는다 (§6 → 구현명세 §4)', () => {
+  it('손으로 만든 입장권은 거절', () => {
+    const s = 통과화면();
+    assert.throws(
+      () => generate_rubric({ 승인: '교사 ①', 입력: s.입력, 판정: s.판정, 뒤집음: false }, '수리', 10),
+      /①로 승인한 문항만/,
+    );
   });
 
-  it('통과 화면에는 ①이 나온다', () => {
-    assert.match(render_screen(통과화면()), /① 급소가 내 의도와 맞다/);
+  it('승인됐어도 계단식·논술형은 아직 루브릭 경로가 없다', () => {
+    for (const 입력 of [
+      { 유형: '계단식 단계형', 텍스트: '' },
+      { 유형: '인문사회논술', 논제: '', 제시문: [] },
+    ] as 필터입력[]) {
+      const r = choose({ ...통과화면(), 입력 }, { 번호: 1 });
+      assert.ok(r.다음 === '루브릭창');
+      assert.throws(() => generate_rubric(r.문항, '수리', 10), /루브릭 경로는 아직 없습니다/);
+    }
+  });
+
+  it('거르기를 ①로 뒤집어도 급소가 서지 않으면 루브릭은 PivotFailure를 돌려준다', () => {
+    const r = choose(make_screen(급소불명), { 번호: 1 });
+    assert.ok(r.다음 === '루브릭창');
+    const g = generate_rubric(r.문항, '수리', 10);
+    assert.equal(g.ok, false);
+    if (g.ok) return;
+    assert.equal(g.flag, 'NO_B');
   });
 });
