@@ -248,22 +248,27 @@ describe('Q→B 추출 — 판단기준은 Q에 접힌 B다 (구현명세 §2-3,
       assert.deepEqual(ents('#L가 끝@Q', true), ['#L', '가 끝']);
     });
 
-    describe('체언 뒤에서만 — 앞 음절이 받침 없는 한글이면 용언으로 보고 스킵 (오종래 2026-09-30)', () => {
-      // 가짜 표지 '뷁'(B)을 체언 뒤 전용으로 지정
+    describe('체언 뒤에서만 — 앞 음절이 용언 어간(verbStems)이면 스킵 (오종래 2026-09-30, 2026-10-01 개정)', () => {
+      // 가짜 표지 '뷁'(B)을 체언 뒤 전용으로 지정, 가짜 용언 어간 '핳'
       const t = (on: boolean) => {
         const x = tbl(true);
         x.switches.push(sw('SN', '뷁', 'B'));
         x.apply.afterNounOnly = on ? ['SN'] : undefined;
+        x.apply.verbStems = ['핳'];
         return x;
       };
       const ents2 = (q: string, on: boolean) => build_path_graph(q, t(on)).nodes.map((n) => n.entity);
 
       it('지정이 없으면 어디서나 건다', () => {
-        assert.deepEqual(ents2('사과뷁 끝@Q', false), ['사과', '끝']);
+        assert.deepEqual(ents2('회전핳뷁 끝@Q', false), ['회전핳', '끝']);
       });
 
-      it('앞 음절에 받침이 없으면 스킵', () => {
-        assert.deepEqual(ents2('사과뷁 끝@Q', true), ['사과뷁 끝']);
+      it('앞 음절이 용언 어간이면 스킵', () => {
+        assert.deepEqual(ents2('회전핳뷁 끝@Q', true), ['회전핳뷁 끝']);
+      });
+
+      it('받침 없는 체언 뒤에서도 건다 — 「철수는」', () => {
+        assert.deepEqual(ents2('철수뷁 끝@Q', true), ['철수', '끝']);
       });
 
       it('앞 음절에 받침이 있으면 건다', () => {
@@ -300,5 +305,69 @@ describe('Q→B 추출 — 판단기준은 Q에 접힌 B다 (구현명세 §2-3,
   it('앞에 있는 노드는 판단기준으로 수렴하지 않는다', () => {
     const g = build_path_graph(q, table(['SJ']));
     assert.equal(g.edges.some((e) => e.kind === '접힘' && e.from === 'n0'), false);
+  });
+});
+
+describe('자리 규칙 — LS-22·LS-23, 「은/는」의 색은 자리가 정한다 (오종래 2026-10-01)', () => {
+  // 표지는 봉인 값이 아니라 테스트용 가짜 기호다. 주제 표지 = ST(@T, 기본 B), 목적격 = SO(@O, B)
+  const sw = (id: string, marker: string, color: Color) =>
+    ({ id, kind: '조사·어미', markers: [marker], intent: '', color }) as SealedSwitch;
+  const table = (on = true): SealedTable => ({
+    version: 1,
+    source: { document: '(테스트)', sections: [] },
+    switches: [sw('ST', '~@T', 'B'), sw('SO', '~@O', 'B'), sw('SB', '~@B', 'B'), sw('SC', '~@C', 'C'), sw('SQ', '~@Q', 'Q')],
+    lights: [],
+    matrix: [],
+    symbols: [],
+    forms: [],
+    apply: {
+      longestMatchFirst: true,
+      precedence: [],
+      contextRules: on
+        ? [
+            { id: 'LS-22', targets: ['ST'], when: 'beforeObject', objectMarkers: ['~@O', '~@C'], color: 'C' },
+            { id: 'LS-23', targets: ['ST'], when: 'sentenceEnd', color: 'Q' },
+          ]
+        : undefined,
+    },
+    pending: [],
+  });
+  const topic = (q: string, on = true) => build_path_graph(q, table(on)).nodes.find((n) => n.switchId === 'ST')!;
+
+  it('LS-22: 뒤에 목적격 표지 + B객체가 오면 C', () => {
+    const t = topic('책@T 사과@O 먹@Q');
+    assert.equal(t.color, 'C');
+    assert.deepEqual(t.contextRule, { id: 'LS-22', from: 'B' });
+  });
+
+  it('LS-22: 다음 노드가 B여도 목적격 표지가 아니면 그대로 B', () => {
+    assert.equal(topic('책@T 사과@B 끝@Q').color, 'B');
+  });
+
+  it('LS-22: 목적격 표지여도 다음 노드가 B가 아니면 그대로 B', () => {
+    assert.equal(topic('책@T 사과@C 끝@Q').color, 'B');
+  });
+
+  it('LS-23: 문장 끝이면 Q', () => {
+    const t = topic('사과@B 끝@T');
+    assert.equal(t.color, 'Q');
+    assert.deepEqual(t.contextRule, { id: 'LS-23', from: 'B' });
+    assert.equal(topic('사과@B 끝@T  ').color, 'Q');
+  });
+
+  it('LS-23: 바로 «?» 앞이면 Q', () => {
+    assert.equal(topic('사과@B 끝@T?').color, 'Q');
+    assert.equal(topic('사과@B 끝@T ?').color, 'Q');
+  });
+
+  it('두 조건 모두 아니면 기본값 B, 규칙 흔적 없음', () => {
+    const t = topic('책@T 끝@Q');
+    assert.equal(t.color, 'B');
+    assert.equal(t.contextRule, undefined);
+  });
+
+  it('규칙이 지정되지 않으면 어디서나 기본값', () => {
+    assert.equal(topic('책@T 사과@O 먹@Q', false).color, 'B');
+    assert.equal(topic('사과@B 끝@T?', false).color, 'B');
   });
 });

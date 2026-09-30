@@ -31,6 +31,8 @@ export interface PathNode {
   foldedFrom?: Color | null;
   /** 재색칠 간선(apply.recolorTargets)이 가리켜 색이 바뀐 노드의 원래 색. 바뀌지 않은 노드에는 없다 */
   recoloredFrom?: Color | null;
+  /** 자리 규칙(apply.contextRules)이 색을 바꾼 노드 — 규칙 id와 원래 색. 바뀌지 않은 노드에는 없다 */
+  contextRule?: { id: string; from: Color | null };
 }
 
 export interface PathEdge {
@@ -149,12 +151,11 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
   const chainsToMarker = (after: string) => nodeCands.some((c) => after.match(c.re)?.index === 0);
 
   // 체언 뒤에서만 [오종래 2026-09-30] — apply.afterNounOnly 스위치는 앞 음절이 체언일 때만 건다.
-  //   간이 규칙: 앞 음절이 받침 없는 한글이면 용언 어간(관형형 어미)으로 보고 걸지 않는다.
+  //   앞 음절이 봉인 파일의 용언 어간(apply.verbStems, 예: 「하」·「되」)이면 관형형 어미로 보고 걸지 않는다.
+  //   [오종래 2026-10-01] 받침 없는 음절을 모두 용언으로 보던 간이 규칙은 폐기 — 「철수는」의 「는」을 놓쳤다.
   const afterNounOnly = table.apply.afterNounOnly ?? [];
-  const vowelFinalSyllable = (ch: string | undefined) => {
-    const code = ch === undefined ? -1 : ch.charCodeAt(0) - 0xac00;
-    return code >= 0 && code < 11172 && code % 28 === 0;
-  };
+  const verbStems = table.apply.verbStems ?? [];
+  const verbStemBefore = (ch: string | undefined) => ch !== undefined && verbStems.includes(ch);
 
   for (let i = 0; i < question.length; ) {
     const rest = question.slice(i);
@@ -171,7 +172,7 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
         ) {
           continue; // 어절 안 — 더 짧은 표지를 마저 본다
         }
-        if (afterNounOnly.includes(c.sw.id) && vowelFinalSyllable(question[i - 1])) {
+        if (afterNounOnly.includes(c.sw.id) && verbStemBefore(question[i - 1])) {
           continue; // 앞이 용언 어간 — 관형형 어미로 본다
         }
         // 가운데 '~'가 붙잡은 실체 (여럿이면 이어 붙인다)
@@ -253,6 +254,30 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
       );
     }
     pendingEdge = undefined;
+  }
+
+  // 자리 규칙 [오종래 2026-10-01] — 봉인 파일이 지정한 스위치(apply.contextRules[].targets)의 노드는 자리에 따라 색을 바꾼다.
+  //   'beforeObject' (LS-22): 바로 다음 노드가 목적격 표지(objectMarkers, 예: 을/를)로 선 B 노드면 → 규칙 색
+  //   'sentenceEnd'  (LS-23): 표지 뒤가 문장 끝이거나 바로 «?»면 → 규칙 색
+  //   어느 조건에도 맞지 않으면 스위치 본래 색(기본값)을 그대로 둔다. 규칙은 적힌 순서대로 보고 처음 맞는 것 하나만 건다.
+  //   판단기준 접기(Q→B, 아래)는 이 뒤에 온다.
+  const bare = (m: string) => m.replace(/~/g, '').replace(/\s+/g, '');
+  const contextRules = table.apply.contextRules ?? [];
+  for (const [i, node] of nodes.entries()) {
+    const next = nodes[i + 1];
+    const after = question.slice(node.index + node.surface.length);
+    const rule = contextRules.find(
+      (r) =>
+        r.targets.includes(node.switchId) &&
+        (r.when === 'beforeObject'
+          ? next !== undefined &&
+            next.color === 'B' &&
+            (r.objectMarkers ?? []).some((m) => bare(m) === next.surface.replace(/\s+/g, ''))
+          : /^\s*([?？]|$)/.test(after)),
+    );
+    if (rule && rule.color !== node.color) {
+      nodes[i] = { ...node, color: rule.color, contextRule: { id: rule.id, from: node.color } };
+    }
   }
 
   // Q→B 추출 (구현명세 §2-3). [오종래 2026-09-30]

@@ -101,10 +101,15 @@ export interface SealedApplyRules {
    */
   endOfWord?: Undecided<boolean>;
   /**
-   * 체언 뒤에서만 거는 스위치(id) — 앞 음절이 받침 없는 한글이면 용언 어간(관형형 어미)으로 보고 걸지 않는다.
-   * 간이 규칙이다: 받침 있는 음절·한글 아닌 글자 뒤는 체언으로 본다. 없거나 null이면 적용하지 않는다.
+   * 체언 뒤에서만 거는 스위치(id) — 앞 음절이 `verbStems`에 있으면 용언 어간(관형형 어미)으로 보고 걸지 않는다.
+   * 그 밖의 글자 뒤(받침 없는 체언 「철수」·「위치」 포함)는 체언으로 본다. 없거나 null이면 적용하지 않는다.
    */
   afterNounOnly?: Undecided<string[]>;
+  /**
+   * `afterNounOnly`가 용언 어간으로 보는 앞 음절 (예: ["하", "되"] — 「회전하는」·「되는」).
+   * 없거나 null이면 어떤 음절도 용언으로 보지 않는다.
+   */
+  verbStems?: Undecided<string[]>;
   /**
    * 급소 수렴을 셀 때 간선 종류별 무게. null이면 균등(관계 간선 1, 인접 0).
    *
@@ -128,6 +133,31 @@ export interface SealedApplyRules {
    * 칠하는 **규칙**은 구조라 코드에 있다(`v2/graph.ts`). 여기 있는 것은 «어느 간선 스위치인가»(값)뿐이다.
    */
   recolorTargets?: Undecided<string[]>;
+  /**
+   * 자리 규칙 — 같은 표지라도 문장 속 자리에 따라 색을 바꾼다 (예: LS-22·LS-23, 「은/는」).
+   * 조건에 맞지 않으면 스위치 본래 색(기본값)을 그대로 둔다. 없거나 null이면 적용하지 않는다.
+   *
+   * 조건(`when`)을 판별하는 **규칙**은 구조라 코드에 있다(`v2/graph.ts`).
+   * 여기 있는 것은 «어느 스위치에, 어떤 조건이면, 무슨 색»(값)뿐이다.
+   */
+  contextRules?: Undecided<SealedContextRule[]>;
+}
+
+/**
+ * 자리 규칙 한 행.
+ *   'beforeObject' — 바로 다음 노드가 `objectMarkers` 표지로 선 B 노드(목적어 B객체)이면 칠한다
+ *   'sentenceEnd'  — 표지가 종결 자리(뒤가 문장 끝, 또는 바로 «?»)이면 칠한다
+ */
+export interface SealedContextRule {
+  /** 규칙 식별자 (예: "LS-22") */
+  id: string;
+  /** 이 규칙이 다시 칠하는 노드의 스위치 id */
+  targets: string[];
+  when: 'beforeObject' | 'sentenceEnd';
+  /** 'beforeObject'일 때 다음 노드를 세운 표지 (예: ["~을", "~를"]) */
+  objectMarkers?: string[];
+  color: Color;
+  intent?: string;
 }
 
 /** 오종래 판정 대기 표지. color는 판정 전까지 null이어야 한다 */
