@@ -139,7 +139,8 @@ const NODE_KIND = '조사·어미' satisfies SwitchKind;
  */
 export function build_path_graph(question: string, table: SealedTable): PathGraph {
   const cands = candidates(table);
-  const hits: { at: number; end: number; c: Candidate; inner: string }[] = [];
+  /** chained = 어절 안이지만 조사 연쇄로 걸린 표지 (예: 「것만을」의 「만」) */
+  const hits: { at: number; end: number; c: Candidate; inner: string; chained: boolean }[] = [];
 
   // 어절 끝 조건 [오종래 2026-09-30] — apply.endOfWord면 조사·어미 표지(어휘형 제외)는
   //   바로 뒤가 한글·영문·숫자·여는 괄호가 아닐 때만 건다. 조사는 어절 끝에 붙기 때문이다.
@@ -163,17 +164,13 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
 
   for (let i = 0; i < question.length; ) {
     const rest = question.slice(i);
-    let matched: { len: number; c: Candidate; inner: string } | undefined;
+    let matched: { len: number; c: Candidate; inner: string; chained: boolean } | undefined;
     for (const c of cands) {
       const m = rest.match(c.re);
       if (m && m.index === 0) {
-        if (
-          endOfWord &&
-          c.sw.kind === NODE_KIND &&
-          !isLexical(c.sw, c.surface) &&
-          insideWord(rest[m[0].length]) &&
-          !chainsToMarker(c.sw, rest.slice(m[0].length))
-        ) {
+        const inside =
+          endOfWord && c.sw.kind === NODE_KIND && !isLexical(c.sw, c.surface) && insideWord(rest[m[0].length]);
+        if (inside && !chainsToMarker(c.sw, rest.slice(m[0].length))) {
           continue; // 어절 안 — 더 짧은 표지를 마저 본다
         }
         if (afterNounOnly.includes(c.sw.id) && verbStemBefore(question[i - 1])) {
@@ -181,12 +178,12 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
         }
         // 가운데 '~'가 붙잡은 실체 (여럿이면 이어 붙인다)
         const inner = m.slice(1).map((s) => s.trim()).filter(Boolean).join(' ');
-        matched = { len: m[0].length, c, inner };
+        matched = { len: m[0].length, c, inner, chained: inside };
         break; // 최장 일치 — cands가 이미 긴 것부터다
       }
     }
     if (matched) {
-      hits.push({ at: i, end: i + matched.len, c: matched.c, inner: matched.inner });
+      hits.push({ at: i, end: i + matched.len, c: matched.c, inner: matched.inner, chained: matched.chained });
       i += matched.len;
     } else {
       i += 1;
@@ -199,6 +196,8 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
   let cursor = 0;
   let pendingEdge: { surface: string; kind: '연결어' | '부사'; index: number; sw: SealedSwitch } | undefined;
   const recolorIds = table.apply.recolorTargets ?? [];
+  // 연쇄 머리가 넘긴 실체 — 바로 이어 붙은 끝 표지(at)가 받는다
+  let carried: { at: number; entity: string } | undefined;
 
   for (const [n, hit] of hits.entries()) {
     const { sw } = hit.c;
@@ -217,7 +216,16 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
       continue;
     }
 
-    const entity = isLexical(sw, hit.c.surface) ? surface : hit.inner || question.slice(cursor, hit.at).trim();
+    let entity = isLexical(sw, hit.c.surface) ? surface : hit.inner || question.slice(cursor, hit.at).trim();
+
+    // 조사 연쇄의 실체 [오종래 2026-10-01] — 「것만을」: 「만」은 선택 기준(자기 색, 실체 = 표층형 「만」),
+    //   「것」은 앞 제약에 걸린 대상이라 연쇄 끝 표지(「을」)의 노드가 끌고 나온다.
+    if (entity === '' && carried?.at === hit.at) entity = carried.entity;
+    carried = undefined;
+    if (hit.chained && entity !== '') {
+      carried = { at: hit.end, entity };
+      entity = surface;
+    }
 
     // 빈 노드 무시 [오종래 2026-09-30] — 끌고 나올 실체가 없는 표지(예: 어휘형 「(가)」 바로 뒤의 「의」)는
     //   노드를 세우지 않는다. 앞 간선은 다음 노드로 넘긴다.
