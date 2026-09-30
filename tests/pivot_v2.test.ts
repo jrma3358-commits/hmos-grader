@@ -218,6 +218,58 @@ describe('Q→B 추출 — 판단기준은 Q에 접힌 B다 (구현명세 §2-3,
     assert.equal(g.nodes.some((n) => n.entity === ''), false);
   });
 
+  describe('어절 끝 조건 — 조사·어미 표지는 어절 끝에서만 (오종래 2026-09-30)', () => {
+    const tbl = (endOfWord?: boolean) => {
+      const t = table();
+      t.apply.endOfWord = endOfWord;
+      t.switches.push({ id: 'SL', kind: '조사·어미', markers: ['#L'], lexical: true, intent: '', color: 'B' } as SealedSwitch);
+      return t;
+    };
+    const ents = (q: string, e?: boolean) => build_path_graph(q, tbl(e)).nodes.map((n) => n.entity);
+
+    it('꺼져 있으면 지금처럼 어절 안에서도 건다', () => {
+      assert.deepEqual(ents('물@B질 책@B 끝@Q'), ['물', '질 책', '끝']);
+    });
+
+    it('뒤가 글자면 걸지 않는다 — 어절 안', () => {
+      assert.deepEqual(ents('물@B질 책@B 끝@Q', true), ['물@B질 책', '끝']);
+    });
+
+    it('뒤가 여는 괄호여도 걸지 않는다', () => {
+      assert.deepEqual(ents('물@B(x) 책@B 끝@Q', true), ['물@B(x) 책', '끝']);
+    });
+
+    it('뒤가 공백·문장부호·끝이면 건다', () => {
+      assert.deepEqual(ents('책@B, 끝@Q', true), ['책', ', 끝']);
+      assert.deepEqual(ents('끝@Q', true), ['끝']);
+    });
+
+    it('어휘형 표지는 이 조건을 받지 않는다', () => {
+      assert.deepEqual(ents('#L가 끝@Q', true), ['#L', '가 끝']);
+    });
+
+    describe('조사 연쇄 — 바로 뒤가 등록된 조사·어미 표지면 어절 끝 (오종래 2026-09-30)', () => {
+      // 가짜 조사 두 개: qq(C) 다음에 zz(B)가 붙는 연쇄
+      const chain = () => {
+        const t = tbl(true);
+        t.switches.push(sw('SX', 'qq', 'C'), sw('SZ', 'zz', 'B'));
+        return t;
+      };
+      const nodes = (q: string) => build_path_graph(q, chain()).nodes.map((n) => [n.color, n.entity]);
+
+      it('첫 조사에서 노드가 서고, 둘째 조사는 실체가 비어 무시된다', () => {
+        assert.deepEqual(nodes('것qqzz 끝@Q'), [
+          ['C', '것'],
+          ['Q', '끝'],
+        ]);
+      });
+
+      it('뒤가 등록되지 않은 글자면 여전히 어절 안', () => {
+        assert.deepEqual(nodes('것qqy 끝@Q'), [['Q', '것qqy 끝']]);
+      });
+    });
+  });
+
   it('앞에 있는 노드는 판단기준으로 수렴하지 않는다', () => {
     const g = build_path_graph(q, table(['SJ']));
     assert.equal(g.edges.some((e) => e.kind === '접힘' && e.from === 'n0'), false);

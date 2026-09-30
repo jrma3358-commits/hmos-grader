@@ -139,12 +139,30 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
   const cands = candidates(table);
   const hits: { at: number; end: number; c: Candidate; inner: string }[] = [];
 
+  // 어절 끝 조건 [오종래 2026-09-30] — apply.endOfWord면 조사·어미 표지(어휘형 제외)는
+  //   바로 뒤가 한글·영문·숫자·여는 괄호가 아닐 때만 건다. 조사는 어절 끝에 붙기 때문이다.
+  //   조사 연쇄 [오종래 2026-09-30] — 바로 뒤가 등록된 조사·어미 표지(어휘형 제외)로 이어지면 어절 끝으로 본다
+  //   (예: 「것만을」의 첫 조사 뒤에 둘째 조사가 붙는 경우).
+  const endOfWord = table.apply.endOfWord === true;
+  const insideWord = (next: string | undefined) => next !== undefined && /[가-힣ㄱ-ㅎㅏ-ㅣA-Za-z0-9([{<]/.test(next);
+  const nodeCands = cands.filter((c) => c.sw.kind === NODE_KIND && !isLexical(c.sw, c.surface));
+  const chainsToMarker = (after: string) => nodeCands.some((c) => after.match(c.re)?.index === 0);
+
   for (let i = 0; i < question.length; ) {
     const rest = question.slice(i);
     let matched: { len: number; c: Candidate; inner: string } | undefined;
     for (const c of cands) {
       const m = rest.match(c.re);
       if (m && m.index === 0) {
+        if (
+          endOfWord &&
+          c.sw.kind === NODE_KIND &&
+          !isLexical(c.sw, c.surface) &&
+          insideWord(rest[m[0].length]) &&
+          !chainsToMarker(rest.slice(m[0].length))
+        ) {
+          continue; // 어절 안 — 더 짧은 표지를 마저 본다
+        }
         // 가운데 '~'가 붙잡은 실체 (여럿이면 이어 붙인다)
         const inner = m.slice(1).map((s) => s.trim()).filter(Boolean).join(' ');
         matched = { len: m[0].length, c, inner };
