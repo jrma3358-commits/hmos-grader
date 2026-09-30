@@ -145,10 +145,14 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
   //   바로 뒤가 한글·영문·숫자·여는 괄호가 아닐 때만 건다. 조사는 어절 끝에 붙기 때문이다.
   //   조사 연쇄 [오종래 2026-09-30] — 바로 뒤가 등록된 조사·어미 표지(어휘형 제외)로 이어지면 어절 끝으로 본다
   //   (예: 「것만을」의 첫 조사 뒤에 둘째 조사가 붙는 경우).
+  //   [오종래 2026-10-01] 연쇄를 여는 표지는 봉인 파일의 apply.chainHeads 스위치로 한정한다 —
+  //   아무 표지나 열면 「사과를」의 「과」가 「를」과 연쇄로 오인되어 노드가 선다.
   const endOfWord = table.apply.endOfWord === true;
   const insideWord = (next: string | undefined) => next !== undefined && /[가-힣ㄱ-ㅎㅏ-ㅣA-Za-z0-9([{<]/.test(next);
   const nodeCands = cands.filter((c) => c.sw.kind === NODE_KIND && !isLexical(c.sw, c.surface));
-  const chainsToMarker = (after: string) => nodeCands.some((c) => after.match(c.re)?.index === 0);
+  const chainHeads = table.apply.chainHeads ?? [];
+  const chainsToMarker = (head: SealedSwitch, after: string) =>
+    chainHeads.includes(head.id) && nodeCands.some((c) => after.match(c.re)?.index === 0);
 
   // 체언 뒤에서만 [오종래 2026-09-30] — apply.afterNounOnly 스위치는 앞 음절이 체언일 때만 건다.
   //   앞 음절이 봉인 파일의 용언 어간(apply.verbStems, 예: 「하」·「되」)이면 관형형 어미로 보고 걸지 않는다.
@@ -168,7 +172,7 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
           c.sw.kind === NODE_KIND &&
           !isLexical(c.sw, c.surface) &&
           insideWord(rest[m[0].length]) &&
-          !chainsToMarker(rest.slice(m[0].length))
+          !chainsToMarker(c.sw, rest.slice(m[0].length))
         ) {
           continue; // 어절 안 — 더 짧은 표지를 마저 본다
         }

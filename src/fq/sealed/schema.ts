@@ -101,6 +101,12 @@ export interface SealedApplyRules {
    */
   endOfWord?: Undecided<boolean>;
   /**
+   * 조사 연쇄를 여는 스위치(id) — `endOfWord`에서, 이 스위치의 표지만 바로 뒤에 다른 조사·어미 표지가 붙어도
+   * 어절 끝으로 본다 (예: 「것만을」의 「만」). 그 밖의 표지는 연쇄로 보지 않는다(「사과를」의 「과」는 어절 안).
+   * 없거나 null이면 어떤 표지도 연쇄를 열지 않는다.
+   */
+  chainHeads?: Undecided<string[]>;
+  /**
    * 체언 뒤에서만 거는 스위치(id) — 앞 음절이 `verbStems`에 있으면 용언 어간(관형형 어미)으로 보고 걸지 않는다.
    * 그 밖의 글자 뒤(받침 없는 체언 「철수」·「위치」 포함)는 체언으로 본다. 없거나 null이면 적용하지 않는다.
    */

@@ -280,15 +280,22 @@ describe('Q→B 추출 — 판단기준은 Q에 접힌 B다 (구현명세 §2-3,
       });
     });
 
-    describe('조사 연쇄 — 바로 뒤가 등록된 조사·어미 표지면 어절 끝 (오종래 2026-09-30)', () => {
-      // 가짜 조사 두 개: qq(C) 다음에 zz(B)가 붙는 연쇄
+    describe('조사 연쇄 — chainHeads 표지 바로 뒤가 등록된 조사·어미 표지면 어절 끝 (오종래 2026-09-30, 2026-10-01 개정)', () => {
+      // 가짜 조사 두 개: qq(C) 다음에 zz(B)가 붙는 연쇄. 연쇄를 여는 것은 SX뿐
       const chain = () => {
         const t = tbl(true);
-        t.switches.push(sw('SX', 'qq', 'C'), sw('SZ', 'zz', 'B'));
+        t.switches.push(sw('SX', 'qq', 'C'), sw('SZ', 'zz', 'B'), sw('SP', 'pp', 'P'));
+        t.apply.chainHeads = ['SX'];
         return t;
       };
       const nodes = (q: string) => build_path_graph(q, chain()).nodes.map((n) => [n.color, n.entity]);
 
+      it('chainHeads가 아닌 표지는 뒤에 조사가 붙어도 어절 안 — 「사과를」의 「과」', () => {
+        assert.deepEqual(nodes('사ppzz 끝@Q'), [
+          ['B', '사pp'],
+          ['Q', '끝'],
+        ]);
+      });
       it('첫 조사에서 노드가 서고, 둘째 조사는 실체가 비어 무시된다', () => {
         assert.deepEqual(nodes('것qqzz 끝@Q'), [
           ['C', '것'],
