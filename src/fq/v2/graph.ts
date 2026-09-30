@@ -297,9 +297,12 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
     }
   }
 
+  // 조합은 접기 전 색으로 센다 [오종래 2026-10-01] — 판단기준(Q에 접힌 B)은 급소 판정에서만 B이고,
+  //   표면에 켜진 등은 원래 색이다 (예: 수학_문_4 「연속일 때」 = C → 조합 B·C·Q).
   const combination: Color[] = [];
   for (const node of nodes) {
-    if (node.color && !combination.includes(node.color)) combination.push(node.color);
+    const lit = node.foldedFrom !== undefined ? node.foldedFrom : node.color;
+    if (lit && !combination.includes(lit)) combination.push(lit);
   }
 
   return { question, nodes, edges, combination, undecided };

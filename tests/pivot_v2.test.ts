@@ -144,6 +144,12 @@ describe('Q→B 추출 — 판단기준은 Q에 접힌 B다 (구현명세 §2-3,
     assert.ok(g.combination.includes('B'));
   });
 
+  it('조합은 접기 전 색으로 센다 — 접힌 판단기준의 C가 조합에 남는다 (오종래 2026-10-01)', () => {
+    const g = build_path_graph('기준@J 끝@Q', table(['SJ']));
+    assert.equal(g.nodes[0].color, 'B');
+    assert.deepEqual(g.combination, ['C', 'Q']);
+  });
+
   it('(나) 뒤의 노드(분기 결과·Q)가 모두 판단기준으로 수렴 → 급소', () => {
     const g = build_path_graph(q, table(['SJ']));
     const 접힘 = g.edges.filter((e) => e.kind === '접힘');
