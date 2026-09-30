@@ -207,6 +207,17 @@ describe('Q→B 추출 — 판단기준은 Q에 접힌 B다 (구현명세 §2-3,
     });
   });
 
+  it('빈 노드 무시 — 어휘형 표지 바로 뒤, 끌고 나올 실체가 없는 표지는 노드가 되지 않는다 (오종래 2026-09-30)', () => {
+    const t = table();
+    t.switches.push({ id: 'SL', kind: '조사·어미', markers: ['#L'], lexical: true, intent: '', color: 'B' } as SealedSwitch);
+    const g = build_path_graph('#L@J 나@B', t);
+    assert.deepEqual(
+      g.nodes.map((n) => n.entity),
+      ['#L', '나'],
+    );
+    assert.equal(g.nodes.some((n) => n.entity === ''), false);
+  });
+
   it('앞에 있는 노드는 판단기준으로 수렴하지 않는다', () => {
     const g = build_path_graph(q, table(['SJ']));
     assert.equal(g.edges.some((e) => e.kind === '접힘' && e.from === 'n0'), false);

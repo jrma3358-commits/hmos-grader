@@ -183,6 +183,15 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
       continue;
     }
 
+    const entity = isLexical(sw, hit.c.surface) ? surface : hit.inner || question.slice(cursor, hit.at).trim();
+
+    // 빈 노드 무시 [오종래 2026-09-30] — 끌고 나올 실체가 없는 표지(예: 어휘형 「(가)」 바로 뒤의 「의」)는
+    //   노드를 세우지 않는다. 앞 간선은 다음 노드로 넘긴다.
+    if (entity === '') {
+      cursor = hit.end;
+      continue;
+    }
+
     if (sw.color === null) undecided.push({ surface, switchId: sw.id, index: hit.at, reason: 'color' });
 
     const node: PathNode = {
@@ -191,7 +200,7 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
       switchId: sw.id,
       index: hit.at,
       color: sw.color,
-      entity: isLexical(sw, hit.c.surface) ? surface : hit.inner || question.slice(cursor, hit.at).trim(),
+      entity,
     };
 
     // 재색칠 간선 [오종래 2026-09-30] — 봉인 파일이 지정한 간선 스위치(apply.recolorTargets, 예: 화살표)가
