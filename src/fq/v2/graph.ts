@@ -33,6 +33,8 @@ export interface PathNode {
   recoloredFrom?: Color | null;
   /** 자리 규칙(apply.contextRules)이 색을 바꾼 노드 — 규칙 id와 원래 색. 바뀌지 않은 노드에는 없다 */
   contextRule?: { id: string; from: Color | null };
+  /** 결과 묶기(apply.foldResult)로 묶인 B 노드 — 그 조건 노드의 id. 묶이지 않은 노드에는 없다 */
+  resultOf?: string;
 }
 
 export interface PathEdge {
@@ -40,8 +42,9 @@ export interface PathEdge {
   to: string;
   /** 간선을 만든 표지 표층형. 인접·접힘으로 이어졌으면 null */
   surface: string | null;
-  /** '접힘' = 판단기준에 걸려 판정되는 노드가 그 판단기준으로 보내는 간선 (Q→B) */
-  kind: 'adjacent' | '연결어' | '부사' | '접힘';
+  /** '접힘' = 판단기준에 걸려 판정되는 노드가 그 판단기준으로 보내는 간선 (Q→B)
+   *  '결과' = 조건(apply.foldResult)의 결과로 묶인 B 노드가 그 조건 노드로 보내는 간선 */
+  kind: 'adjacent' | '연결어' | '부사' | '접힘' | '결과';
   index: number;
   /** 약속된 길(apply.definedPaths, 예: 「→」)이면 그 간선이 켠 등. 조합에 들어간다. 그 밖의 간선에는 없다 */
   color?: Color | null;
@@ -348,6 +351,19 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
     );
     if (rule && rule.color !== node.color) {
       nodes[i] = { ...node, color: rule.color, contextRule: { id: rule.id, from: node.color } };
+    }
+  }
+
+  // 결과 묶기 [오종래 2026-10-01] — 봉인 파일이 지정한 스위치(apply.foldResult, 예: 가정 「ならば」)의 조건 노드 바로 뒤에
+  //   잇따라 선 B 노드들은 그 조건의 결과다 (예: 「a < b ならば, a = [イ], b = [ウ]」). B가 아닌 노드가 나오면 묶음이 끝난다.
+  //   묶인 노드에 resultOf를 적고 조건 노드로 '결과' 간선을 보낸다. 색은 바꾸지 않는다. 판단기준 접기(Q→B, 아래)는 이 뒤에 온다.
+  const resultIds = table.apply.foldResult ?? [];
+  for (const [i, cond] of nodes.entries()) {
+    if (!resultIds.includes(cond.switchId)) continue;
+    for (const [j, later] of nodes.slice(i + 1).entries()) {
+      if (later.color !== 'B') break;
+      nodes[i + 1 + j] = { ...later, resultOf: cond.id };
+      edges.push({ from: later.id, to: cond.id, surface: null, kind: '결과', index: later.index });
     }
   }
 

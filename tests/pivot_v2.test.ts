@@ -430,3 +430,53 @@ describe('약속된 길 — 「→」는 D, 화살표 앞 글자는 B 노드 (�
     assert.deepEqual(g.combination, ['B', 'C', 'Q']);
   });
 });
+
+describe('결과 묶기 — 조건 뒤 잇따른 B는 그 조건의 결과 (오종래 2026-10-01)', () => {
+  // 표지는 봉인 값이 아니라 테스트용 가짜 기호다. 조건 = SC(@C, C), 빈칸 = SX([x]·[y]·[z], 어휘형 B)
+  const sw = (id: string, markers: string[], color: Color, lexical?: boolean) =>
+    ({ id, kind: '조사·어미', markers, intent: '', color, lexical }) as SealedSwitch;
+  const table = (foldResult?: string[]): SealedTable => ({
+    version: 1,
+    source: { document: '(테스트)', sections: [] },
+    switches: [sw('SC', ['~@C'], 'C'), sw('SD', ['~@D'], 'D'), sw('SX', ['[x]', '[y]', '[z]', '[w]'], 'B', true)],
+    lights: [],
+    matrix: [],
+    symbols: [],
+    forms: [],
+    apply: { longestMatchFirst: true, precedence: [], foldResult },
+    pending: [],
+  });
+  // 조건1 @C [x] [y] 끝@D 조건2 @C [z] [w]
+  const q = '조건1 @C, a = [x], b = [y] 이다 끝@D 조건2 @C, a = [z], b = [w]';
+
+  it('지정한 조건 뒤 잇따른 B만 묶고, B 아닌 노드에서 묶음이 끝난다', () => {
+    const g = build_path_graph(q, table(['SC']));
+    assert.deepEqual(
+      g.nodes.map((n) => [n.entity, n.resultOf]),
+      [
+        ['조건1', undefined],
+        ['[x]', 'n0'],
+        ['[y]', 'n0'],
+        ['이다 끝', undefined],
+        ['조건2', undefined],
+        ['[z]', g.nodes[4].id],
+        ['[w]', g.nodes[4].id],
+      ],
+    );
+    assert.equal(g.edges.filter((e) => e.kind === '결과').length, 4);
+  });
+
+  it('색은 바꾸지 않고, 조건 노드로 결과 간선을 보낸다', () => {
+    const g = build_path_graph(q, table(['SC']));
+    assert.deepEqual(g.nodes.map((n) => n.color), ['C', 'B', 'B', 'D', 'C', 'B', 'B']);
+    for (const e of g.edges.filter((e) => e.kind === '결과')) {
+      assert.equal(g.nodes.find((n) => n.id === e.to)!.color, 'C');
+    }
+  });
+
+  it('지정이 없으면 묶지 않는다', () => {
+    const g = build_path_graph(q, table());
+    assert.equal(g.nodes.some((n) => n.resultOf !== undefined), false);
+    assert.equal(g.edges.some((e) => e.kind === '결과'), false);
+  });
+});
