@@ -530,10 +530,18 @@ describe('강한 C — 바로 다음 B가 급소 (오종래 2026-10-01)', () => 
     assert.equal(p.reason, '강한 C 연결 B');
   });
 
-  it('다음 노드가 B·Q가 아니면 연결하지 않는다', () => {
-    const g = build_path_graph('앞 @B @S 기준 @F 끝 @B', table(['SS']));
-    assert.equal(g.nodes.some((n) => n.anchoredBy !== undefined), false);
+  it('강한 C 뒤에 잇따른 C(판단 기준)는 건너뛰고, 그다음 B·Q가 급소 — 범위 → 판단 기준 → 급소', () => {
+    const g = build_path_graph('앞 @B @S 기준 @F 고른 것 @Q', table(['SS']));
     assert.equal(g.nodes.find((n) => n.entity === '기준')!.color, 'C');
+    assert.equal(g.nodes.find((n) => n.entity === '기준')!.anchoredBy, undefined);
+    const p = find_pivot(g);
+    assert.equal(p.node.entity, '고른 것');
+    assert.equal(p.reason, '강한 C 연결 B');
+  });
+
+  it('판단 기준 C 뒤에 B·Q가 없으면 연결하지 않는다', () => {
+    const g = build_path_graph('앞 @B @S 기준 @F', table(['SS']));
+    assert.equal(g.nodes.some((n) => n.anchoredBy !== undefined), false);
   });
 
   it('다음 노드가 Q면 B로 접어 급소로 세운다 — 원래 색은 남고 조합은 Q를 센다', () => {

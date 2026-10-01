@@ -400,13 +400,17 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
   //   [오종래 2026-10-01] 다음 노드가 Q여도 연결한다 — 그 Q를 B로 접고 원래 색을 남긴다 (예: 물리_문_2 「옳은 것만을 <보기>에서 있는 대로 고른 것」).
   //   [오종래 2026-10-01] 판단기준 우선 — 그래프에 판단기준(apply.foldToB) 노드가 있으면 강한 C는 걸지 않는다
   //   (예: 화학_문_1은 같은 「옳은 것만을」이 있어도 급소가 판단기준 「탄소 화합물」이다).
+  //   [오종래 2026-10-01] 강한 C가 급소 앞에서 범위를 먼저 지정한다 — 강한 C 바로 뒤에 잇따른 C 노드는 그 범위 안의 판단 기준이고,
+  //   판단한 결과(그다음 B·Q)가 급소다 (예: 경제_문__4 「자료에 대한 분석으로」(범위) → 「옳은」(판단 기준) → 「것」(급소)).
   const strongIds = table.apply.strongC ?? [];
   const hasCriterion = nodes.some((n) => foldIds.includes(n.switchId));
   for (const [i, node] of nodes.entries()) {
     if (hasCriterion || !strongIds.includes(node.switchId)) continue;
-    const next = nodes[i + 1];
-    if (next?.color === 'B') nodes[i + 1] = { ...next, anchoredBy: node.id };
-    else if (next?.color === 'Q') nodes[i + 1] = { ...next, color: 'B', foldedFrom: next.color, anchoredBy: node.id };
+    let j = i + 1;
+    while (nodes[j]?.color === 'C' && !strongIds.includes(nodes[j].switchId)) j++; // 판단 기준 C를 건너뛴다
+    const next = nodes[j];
+    if (next?.color === 'B') nodes[j] = { ...next, anchoredBy: node.id };
+    else if (next?.color === 'Q') nodes[j] = { ...next, color: 'B', foldedFrom: next.color, anchoredBy: node.id };
   }
 
   // 조합은 접기 전 색으로 센다 [오종래 2026-10-01] — 판단기준(Q에 접힌 B)은 급소 판정에서만 B이고,
