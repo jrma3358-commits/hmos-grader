@@ -356,15 +356,20 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
 
   // 결과 묶기 [오종래 2026-10-01] — 봉인 파일이 지정한 스위치(apply.foldResult, 예: 가정 「ならば」)의 조건 노드 바로 뒤에
   //   잇따라 선 B 노드들은 그 조건의 결과다 (예: 「a < b ならば, a = [イ], b = [ウ]」). B가 아닌 노드가 나오면 묶음이 끝난다.
-  //   묶인 노드에 resultOf를 적고 조건 노드로 '결과' 간선을 보낸다. 색은 바꾸지 않는다. 판단기준 접기(Q→B, 아래)는 이 뒤에 온다.
+  //   묶인 노드에 resultOf를 적고 조건 노드로 '결과' 간선을 보낸다. 결과 노드의 색은 바꾸지 않는다.
+  //   [오종래 2026-10-01] 결과가 하나라도 묶인 조건 노드는 B로 접는다 — 결과들이 수렴하는 자리다. 원래 색은 남긴다(조합은 원래 색으로 센다).
+  //   판단기준 접기(Q→B, 아래)는 이 뒤에 온다.
   const resultIds = table.apply.foldResult ?? [];
   for (const [i, cond] of nodes.entries()) {
     if (!resultIds.includes(cond.switchId)) continue;
+    let bound = 0;
     for (const [j, later] of nodes.slice(i + 1).entries()) {
       if (later.color !== 'B') break;
       nodes[i + 1 + j] = { ...later, resultOf: cond.id };
       edges.push({ from: later.id, to: cond.id, surface: null, kind: '결과', index: later.index });
+      bound++;
     }
+    if (bound && cond.color !== 'B') nodes[i] = { ...cond, color: 'B', foldedFrom: cond.color };
   }
 
   // Q→B 추출 (구현명세 §2-3). [오종래 2026-09-30]

@@ -466,12 +466,31 @@ describe('결과 묶기 — 조건 뒤 잇따른 B는 그 조건의 결과 (오�
     assert.equal(g.edges.filter((e) => e.kind === '결과').length, 4);
   });
 
-  it('색은 바꾸지 않고, 조건 노드로 결과 간선을 보낸다', () => {
+  it('결과가 묶인 조건 노드는 B로 접히고 원래 색을 남긴다 — 결과 노드 색은 그대로', () => {
     const g = build_path_graph(q, table(['SC']));
-    assert.deepEqual(g.nodes.map((n) => n.color), ['C', 'B', 'B', 'D', 'C', 'B', 'B']);
+    assert.deepEqual(g.nodes.map((n) => n.color), ['B', 'B', 'B', 'D', 'B', 'B', 'B']);
+    assert.deepEqual(g.nodes.map((n) => n.foldedFrom), ['C', undefined, undefined, undefined, 'C', undefined, undefined]);
     for (const e of g.edges.filter((e) => e.kind === '결과')) {
-      assert.equal(g.nodes.find((n) => n.id === e.to)!.color, 'C');
+      assert.equal(g.nodes.find((n) => n.id === e.to)!.foldedFrom, 'C');
     }
+  });
+
+  it('조합은 접기 전 색으로 센다 — 접힌 조건의 C가 조합에 남는다', () => {
+    const g = build_path_graph(q, table(['SC']));
+    assert.deepEqual(g.combination, ['C', 'B', 'D']);
+  });
+
+  it('결과가 없는 조건은 접지 않는다', () => {
+    const g = build_path_graph('조건 @C 끝@D', table(['SC']));
+    assert.equal(g.nodes[0].color, 'C');
+    assert.equal(g.nodes[0].foldedFrom, undefined);
+  });
+
+  it('조건 하나에 결과가 묶이면 그 조건이 급소 — 결과 수만큼 수렴', () => {
+    const g = build_path_graph('조건1 @C, a = [x], b = [y] 이다', table(['SC']));
+    const p = find_pivot(g);
+    assert.equal(p.node.entity, '조건1');
+    assert.equal(p.convergence, 2);
   });
 
   it('지정이 없으면 묶지 않는다', () => {
