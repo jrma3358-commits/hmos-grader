@@ -40,6 +40,18 @@ export function normalize(question: string): string {
   return question.replace(/\s+/g, ' ').trim();
 }
 
+/**
+ * v2 정규화 — 문단 경계(빈 줄, 줄바꿈 두 번)는 줄바꿈 하나로 남기고 나머지 공백은 한 칸으로 접는다.
+ * [오종래 2026-10-01] 문단 경계에서 실체를 끊으려면 경계가 정규화에서 살아남아야 한다 (`v2/graph.ts`).
+ */
+export function normalizeV2(question: string): string {
+  return question
+    .split(/\r?\n[ \t\r]*\n\s*/)
+    .map(normalize)
+    .filter(Boolean)
+    .join('\n');
+}
+
 // ─────────────────────────────────────────────────────────────
 // v2 배선 — 봉인 표지표 → 경로 그래프 → 급소
 //
@@ -69,7 +81,7 @@ export interface V2Recognition {
  * @throws PivotError B가 없거나 급소가 둘로 수렴할 때 (플래그는 `error.flag`)
  */
 export function recognizeV2(question: string): V2Recognition {
-  const q = normalize(question);
+  const q = normalizeV2(question);
   const table = markerTable();
   const graph = build_path_graph(q, table);
   const form = describeCombination(graph.combination, table);
@@ -85,7 +97,7 @@ export function recognizeV2Analysis(question: string): Omit<V2Recognition, 'pivo
 
 /** 급소 앞까지만 — 경로 그래프와 조합. 급소 규칙이 서기 전에도 인식 결과를 볼 수 있다 */
 export function recognizeV2Path(question: string): Omit<V2Recognition, 'pivot'> {
-  const q = normalize(question);
+  const q = normalizeV2(question);
   const table = markerTable();
   const graph = build_path_graph(q, table);
   return { question: q, graph, form: describeCombination(graph.combination, table) };

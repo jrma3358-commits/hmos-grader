@@ -203,7 +203,9 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
   //   어절로 홀로 서 있으면, 실체는 마지막 경계 뒤에서부터 잡는다. 경계 앞 글자는 끌고 나오지 않는다.
   const breaks = (table.apply.paragraphBreaks ?? []).map(escape);
   const breakRe = breaks.length ? new RegExp(`(?:^|\\s)(?:${breaks.join('|')})(?=\\s|$)`, 'g') : null;
-  const afterLastBreak = (text: string) => {
+  // 문단 경계 [오종래 2026-10-01] — 빈 줄(정규화 뒤 줄바꿈 하나, `normalizeV2`)을 넘어서는 실체를 끌고 나오지 않는다.
+  const afterLastBreak = (whole: string) => {
+    const text = whole.slice(whole.lastIndexOf('\n') + 1).trim();
     if (!breakRe) return text;
     const ends = [...text.matchAll(breakRe)];
     return ends.length ? text.slice(ends.at(-1)!.index! + ends.at(-1)![0].length).trim() : text;
@@ -248,7 +250,7 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
       //   글자(마지막 문장 끝 뒤부터)를 B 노드로 세운다 (예: 「메테인(CH₄) 암모니아(NH₃) →」). 간선 자신의 색은 조합에 켜진다.
       if (pathIds.includes(sw.id)) {
         const before = question.slice(cursor, hit.at);
-        const ends = [...before.matchAll(/[.?!。](?=\s|$)/g)];
+        const ends = [...before.matchAll(/[.?!。](?=\s|$)|\n/g)]; // 문장 끝 또는 문단 경계
         const from = ends.length ? ends.at(-1)!.index! + 1 : 0;
         const text = before.slice(from).trim();
         if (text) {
