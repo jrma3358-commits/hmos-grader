@@ -17,9 +17,11 @@ const SENTENCE_END = /[.?!。](?=\s|$)|\n/g;
  * 단위로 자른다 — 공통 발문 + 단위 하나씩.
  *
  *   - 단위 시작 = apply.splitUnits 스위치 노드가 든 문장의 시작 (그 노드 앞 마지막 문장 끝·문단 경계 뒤)
+ *   - 한 문장 안에 그 표지가 또 서면 [오종래 2026-10-01], 앞 표지 끝과 이 표지 사이의 마지막 쉼표(「,」「、」「，」) 뒤에서
+ *     새 단위를 연다 (예: 「a < b のときは [コサ] であり, a ≧ b のときは [ス] である。」 → 「a ≧ b のときは …」).
+ *     사이에 쉼표가 없으면 앞 단위에 붙는다
  *   - 단위 끝   = 다음 단위 시작 직전 (마지막 단위는 문장 끝까지)
  *   - 공통 발문 = 첫 단위 시작 앞 글자 전부. 각 단위 앞에 문단 경계(줄바꿈)로 붙인다
- *   - 한 문장에 그 표지가 둘 서면 한 단위다
  *
  * 단위가 둘 미만이면 자르지 않는다 — 빈 배열.
  * 입력은 v2 정규화(`normalizeV2`)를 거친 글이다.
@@ -27,14 +29,21 @@ const SENTENCE_END = /[.?!。](?=\s|$)|\n/g;
 export function split_units(question: string, table: SealedTable): string[] {
   const ids = table.apply.splitUnits ?? [];
   if (!ids.length) return [];
-  const at = build_path_graph(question, table)
+  const hits = build_path_graph(question, table)
     .nodes.filter((n) => ids.includes(n.switchId))
-    .map((n) => n.index);
+    .map((n) => ({ at: n.index, end: n.index + n.surface.length }));
   const startOf = (i: number) => {
     const ends = [...question.slice(0, i).matchAll(SENTENCE_END)];
     return ends.length ? ends.at(-1)!.index! + ends.at(-1)![0].length : 0;
   };
-  const starts = [...new Set(at.map(startOf))];
+  const unitStart = (h: { at: number }, k: number) => {
+    const s = startOf(h.at);
+    const prev = hits[k - 1];
+    if (!prev || prev.end <= s) return s; // 문장 첫 표지
+    const commas = [...question.slice(prev.end, h.at).matchAll(/[,、，]/g)];
+    return commas.length ? prev.end + commas.at(-1)!.index! + 1 : s;
+  };
+  const starts = [...new Set(hits.map(unitStart))];
   if (starts.length < 2) return [];
   const common = question.slice(0, starts[0]).trim();
   return starts.map((s, k) => {

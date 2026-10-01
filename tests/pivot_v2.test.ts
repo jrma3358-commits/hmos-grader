@@ -531,6 +531,17 @@ describe('단위 분리 — 가정 표지마다 공통 발문 + 단위 하나씩
     assert.deepEqual(bs(u2), ['[y]', '[z]']);
   });
 
+  it('한 문장 안에서도 표지마다 — 앞 표지와 사이의 마지막 쉼표 뒤에서 새 단위', () => {
+    assert.deepEqual(split_units('발문\n(3) x は, 조건1 @C [x] 이고, 그리고, 조건2 @C [y] 이다。', table(['SC'])), [
+      '발문\n(3) x は, 조건1 @C [x] 이고, 그리고,',
+      '발문\n조건2 @C [y] 이다。',
+    ]);
+  });
+
+  it('한 문장 안 두 표지 사이에 쉼표가 없으면 한 단위', () => {
+    assert.deepEqual(split_units('발문\n조건1 @C [x] 조건2 @C [y] 이다。', table(['SC'])), []);
+  });
+
   it('단위가 하나뿐이거나 지정이 없으면 자르지 않는다', () => {
     assert.deepEqual(split_units('발문\n조건1 @C, a = [x] 이다。', table(['SC'])), []);
     assert.deepEqual(split_units(q, table()), []);
