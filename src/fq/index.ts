@@ -65,6 +65,7 @@ export type * from './types.ts';
 // v2 — 봉인 표지표 기반 인식 (구조 골격). 봉인 파일이 없으면 SealedError로 멈춘다
 export { recognizeV2, recognizeV2Analysis, recognizeV2Path, type V2Recognition } from './pipeline.ts';
 export { build_path_graph, describeCombination, type FormCombination, type PathGraph } from './v2/graph.ts';
+export { split_units } from './v2/units.ts';
 export {
   analyze_pivot,
   convergenceOf,

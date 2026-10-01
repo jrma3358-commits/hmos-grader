@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { analyze_pivot, build_path_graph, convergenceOf, deepest_node, find_pivot, PivotError } from '../src/fq/index.ts';
+import { analyze_pivot, build_path_graph, convergenceOf, deepest_node, find_pivot, PivotError, split_units } from '../src/fq/index.ts';
 import type { SealedSwitch, SealedTable } from '../src/fq/sealed/schema.ts';
 import type { PathEdge, PathGraph, PathNode } from '../src/fq/v2/graph.ts';
 import type { Color } from '../src/fq/types.ts';
@@ -478,5 +478,42 @@ describe('결과 묶기 — 조건 뒤 잇따른 B는 그 조건의 결과 (오�
     const g = build_path_graph(q, table());
     assert.equal(g.nodes.some((n) => n.resultOf !== undefined), false);
     assert.equal(g.edges.some((e) => e.kind === '결과'), false);
+  });
+});
+
+describe('단위 분리 — 가정 표지마다 공통 발문 + 단위 하나씩 (오종래 2026-10-01)', () => {
+  // 표지는 봉인 값이 아니라 테스트용 가짜 기호다. 가정 = SC(@C, C), 빈칸 = SX(어휘형 B)
+  const sw = (id: string, markers: string[], color: Color, lexical?: boolean) =>
+    ({ id, kind: '조사·어미', markers, intent: '', color, lexical }) as SealedSwitch;
+  const table = (splitUnits?: string[]): SealedTable => ({
+    version: 1,
+    source: { document: '(테스트)', sections: [] },
+    switches: [sw('SC', ['~@C'], 'C'), sw('SD', ['~@D'], 'D'), sw('SX', ['[x]', '[y]', '[z]'], 'B', true)],
+    lights: [],
+    matrix: [],
+    symbols: [],
+    forms: [],
+    apply: { longestMatchFirst: true, precedence: [], splitUnits },
+    pending: [],
+  });
+  const q = '발문 정의@D\n(2) 조건1 @C, a = [x] 이다。 조건2 @C, a = [y], b = [z] 이다。';
+
+  it('가정 표지가 든 문장마다 단위로 자르고, 공통 발문을 각 단위 앞에 붙인다', () => {
+    assert.deepEqual(split_units(q, table(['SC'])), [
+      '발문 정의@D\n(2) 조건1 @C, a = [x] 이다。',
+      '발문 정의@D\n조건2 @C, a = [y], b = [z] 이다。',
+    ]);
+  });
+
+  it('단위마다 독립 그래프 — 다른 단위의 빈칸은 들어오지 않는다', () => {
+    const [u1, u2] = split_units(q, table(['SC']));
+    const bs = (u: string) => build_path_graph(u, table(['SC'])).nodes.filter((n) => n.color === 'B').map((n) => n.entity);
+    assert.deepEqual(bs(u1), ['[x]']);
+    assert.deepEqual(bs(u2), ['[y]', '[z]']);
+  });
+
+  it('단위가 하나뿐이거나 지정이 없으면 자르지 않는다', () => {
+    assert.deepEqual(split_units('발문\n조건1 @C, a = [x] 이다。', table(['SC'])), []);
+    assert.deepEqual(split_units(q, table()), []);
   });
 });

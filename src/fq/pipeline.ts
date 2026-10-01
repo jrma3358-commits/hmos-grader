@@ -15,6 +15,7 @@ import {
 } from './lexicon.ts';
 import { build_path_graph, describeCombination, type FormCombination, type PathGraph } from './v2/graph.ts';
 import { analyze_pivot, find_pivot, type Pivot, type PivotAnalysis } from './v2/pivot.ts';
+import { split_units } from './v2/units.ts';
 import type {
   AnswerFormat,
   Clause,
@@ -89,10 +90,26 @@ export function recognizeV2(question: string): V2Recognition {
   return { question: q, graph, form, pivot };
 }
 
-/** 급소를 던지지 않고 값으로 받는다 — 설계 오류 플래그를 그대로 보고할 때 */
-export function recognizeV2Analysis(question: string): Omit<V2Recognition, 'pivot'> & { pivot: PivotAnalysis } {
+export type V2Analysis = Omit<V2Recognition, 'pivot'> & { pivot: PivotAnalysis };
+
+/**
+ * 급소를 던지지 않고 값으로 받는다 — 설계 오류 플래그를 그대로 보고할 때.
+ * 봉인 파일의 단위 분리(apply.splitUnits)가 둘 이상의 단위를 내면, 전체 결과에 더해
+ * 단위마다(공통 발문 + 단위 하나) 독립으로 인식한 결과를 `units`에 싣는다 (`v2/units.ts`).
+ */
+export function recognizeV2Analysis(question: string): V2Analysis & { units?: V2Analysis[] } {
   const path = recognizeV2Path(question);
-  return { ...path, pivot: analyze_pivot(path.graph, markerTable()) };
+  const table = markerTable();
+  const whole = { ...path, pivot: analyze_pivot(path.graph, table) };
+  const units = split_units(path.question, table);
+  if (!units.length) return whole;
+  return {
+    ...whole,
+    units: units.map((u) => {
+      const graph = build_path_graph(u, table);
+      return { question: u, graph, form: describeCombination(graph.combination, table), pivot: analyze_pivot(graph, table) };
+    }),
+  };
 }
 
 /** 급소 앞까지만 — 경로 그래프와 조합. 급소 규칙이 서기 전에도 인식 결과를 볼 수 있다 */
