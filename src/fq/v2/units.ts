@@ -12,6 +12,8 @@ import { build_path_graph } from './graph.ts';
 
 /** 문장 끝 또는 문단 경계 — 약속된 길(graph.ts)과 같은 경계 */
 const SENTENCE_END = /[.?!。](?=\s|$)|\n/g;
+/** 쉼표 — 한 문장 안 단위 경계와 문장 머리를 가른다 */
+const COMMA = /[,、，]/g;
 
 /**
  * 단위로 자른다 — 공통 발문 + 단위 하나씩.
@@ -22,6 +24,9 @@ const SENTENCE_END = /[.?!。](?=\s|$)|\n/g;
  *     사이에 쉼표가 없으면 앞 단위에 붙는다
  *   - 단위 끝   = 다음 단위 시작 직전 (마지막 단위는 문장 끝까지)
  *   - 공통 발문 = 첫 단위 시작 앞 글자 전부. 각 단위 앞에 문단 경계(줄바꿈)로 붙인다
+ *   - 문장 머리 [오종래 2026-10-01] — 한 문장이 둘 이상의 단위로 갈리면, 그 문장 시작부터 첫 표지 앞 마지막 쉼표까지
+ *     (예: 물음 대상 「… 正の実数 x は,」)는 그 문장의 모든 단위에 공통이다. 첫 단위에서 떼어 내
+ *     그 문장의 각 단위 앞에 문단 경계로 붙인다 — 조건 노드의 실체에 끌려 들어가지 않는다. 사이에 쉼표가 없으면 떼지 않는다
  *
  * 단위가 둘 미만이면 자르지 않는다 — 빈 배열.
  * 입력은 v2 정규화(`normalizeV2`)를 거친 글이다.
@@ -40,14 +45,32 @@ export function split_units(question: string, table: SealedTable): string[] {
     const s = startOf(h.at);
     const prev = hits[k - 1];
     if (!prev || prev.end <= s) return s; // 문장 첫 표지
-    const commas = [...question.slice(prev.end, h.at).matchAll(/[,、，]/g)];
+    const commas = [...question.slice(prev.end, h.at).matchAll(COMMA)];
     return commas.length ? prev.end + commas.at(-1)!.index! + 1 : s;
   };
-  const starts = [...new Set(hits.map(unitStart))];
-  if (starts.length < 2) return [];
-  const common = question.slice(0, starts[0]).trim();
-  return starts.map((s, k) => {
-    const body = question.slice(s, starts[k + 1] ?? question.length).trim();
-    return common ? `${common}\n${body}` : body;
+
+  // cut = 단위 경계(앞 단위가 끝나는 자리), from = 본문 시작(문장 머리를 뗀 뒤), sentence = 단위가 든 문장의 시작
+  const units: { cut: number; from: number; sentence: number; at: number }[] = [];
+  for (const [k, h] of hits.entries()) {
+    const cut = unitStart(h, k);
+    if (!units.some((u) => u.cut === cut)) units.push({ cut, from: cut, sentence: startOf(h.at), at: h.at });
+  }
+  if (units.length < 2) return [];
+
+  const heads = new Map<number, string>();
+  for (const sentence of new Set(units.map((u) => u.sentence))) {
+    const inSentence = units.filter((u) => u.sentence === sentence);
+    if (inSentence.length < 2) continue;
+    const first = inSentence[0];
+    const commas = [...question.slice(first.cut, first.at).matchAll(COMMA)];
+    if (!commas.length) continue;
+    first.from = first.cut + commas.at(-1)!.index! + 1;
+    heads.set(sentence, question.slice(first.cut, first.from).trim());
+  }
+
+  const common = question.slice(0, units[0].cut).trim();
+  return units.map((u, k) => {
+    const body = question.slice(u.from, units[k + 1]?.cut ?? question.length).trim();
+    return [common, heads.get(u.sentence) ?? '', body].filter(Boolean).join('\n');
   });
 }
