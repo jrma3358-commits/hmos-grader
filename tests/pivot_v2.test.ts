@@ -599,6 +599,91 @@ describe('단독 어절 스위치 — 낱말 안에서는 걸지 않는다 (오�
   it('standalone이 없으면 어디서나 건다', () => assert.equal(ps('대표단 지표', table()), 2));
 });
 
+describe('서술 블록 — 보기 하나가 B 객체 하나 (오종래 2026-10-01)', () => {
+  // 표지는 봉인 값이 아니라 테스트용 가짜 기호다. 머리 = SH(#1. #2., B), 안쪽 표지 = SI(@I, C)
+  const sw = (id: string, markers: string[], color: Color) =>
+    ({ id, kind: '조사·어미', markers, intent: '', color }) as SealedSwitch;
+  const table = (statementBlocks?: string[]): SealedTable => ({
+    version: 1,
+    source: { document: '(테스트)', sections: [] },
+    switches: [sw('SH', ['#1.', '#2.'], 'B'), sw('SI', ['~@I'], 'C')],
+    lights: [],
+    matrix: [],
+    symbols: [],
+    forms: [],
+    apply: { longestMatchFirst: true, precedence: [], statementBlocks },
+    pending: [],
+  });
+  const q = '발문 @I\n#1. 가 @I 나는 다. #2. 라 @I 마\n끝 @I';
+
+  it('머리 뒤 서술 전체가 노드 하나 — 다음 머리·문단 경계 앞까지, 안쪽 표지는 걸지 않는다', () => {
+    const g = build_path_graph(q, table(['SH']));
+    assert.deepEqual(
+      g.nodes.map((n) => [n.color, n.entity]),
+      [
+        ['C', '발문'],
+        ['B', '가 @I 나는 다.'],
+        ['B', '라 @I 마'],
+        ['C', '끝'],
+      ],
+    );
+  });
+
+  it('어절 머리가 아니면 블록을 열지 않는다', () => {
+    const g = build_path_graph('가#1. 나 @I', table(['SH']));
+    assert.equal(g.nodes.some((n) => n.switchId === 'SH' && n.entity.includes('나')), false);
+  });
+
+  it('지정이 없으면 안쪽 표지가 따로 걸린다', () => {
+    const g = build_path_graph(q, table());
+    assert.equal(g.nodes.filter((n) => n.switchId === 'SI').length, 4);
+  });
+});
+
+describe('제시문 블록·빈칸 수렴 — 「(가)에 대한 설명으로 옳은 것은?」 (오종래 2026-10-02)', () => {
+  // 표지는 봉인 값이 아니라 테스트용 가짜 기호다. 빈칸 = SL(@L, 어휘형 B), Q = SQ(~@Q, Q), 안쪽 표지 = SI(~@I, B), 보기 머리 = SH(#1. #2., B)
+  const sw = (id: string, markers: string[], color: Color, lexical?: boolean) =>
+    ({ id, kind: '조사·어미', markers, intent: '', color, ...(lexical ? { lexical } : {}) }) as SealedSwitch;
+  const table = (passageBlocks?: string[]): SealedTable => ({
+    version: 1,
+    source: { document: '(테스트)', sections: [] },
+    switches: [sw('SL', ['@L'], 'B', true), sw('SQ', ['~@Q'], 'Q'), sw('SI', ['~@I'], 'B'), sw('SH', ['#1.', '#2.'], 'B')],
+    lights: [],
+    matrix: [],
+    symbols: [],
+    forms: [],
+    apply: { longestMatchFirst: true, precedence: [], statementBlocks: ['SH'], passageBlocks },
+    pending: [],
+  });
+  const q = '@L 설명 @Q\n가 @I 나 @L 다 @I 라\n#1. 마 @I 바 #2. 사 @I 아';
+
+  it('빈칸 표지가 다시 나오는 문단 전체가 B 하나 — 안쪽 표지는 걸지 않는다', () => {
+    const g = build_path_graph(q, table(['SL']));
+    const p = g.nodes.find((n) => n.passageOf !== undefined)!;
+    assert.equal(p.color, 'B');
+    assert.equal(p.entity, '가 @I 나 @L 다 @I 라');
+    assert.equal(g.nodes.filter((n) => n.switchId === 'SI').length, 0);
+  });
+
+  it('제시문과 보기가 발문의 빈칸으로 수렴한다 → 급소 = 빈칸 B', () => {
+    const g = build_path_graph(q, table(['SL']));
+    const r = analyze_pivot(g);
+    assert.ok(r.ok);
+    assert.equal(r.pivot.node.entity, '@L');
+    assert.equal(r.pivot.convergence, 3); // 제시문 1 + 보기 2
+  });
+
+  it('발문(Q 문단)에 빈칸이 없으면 열지 않는다', () => {
+    const g = build_path_graph('설명 @Q\n가 @I 나 @L 다', table(['SL']));
+    assert.equal(g.nodes.some((n) => n.passageOf !== undefined), false);
+  });
+
+  it('지정이 없으면 열지 않는다', () => {
+    const g = build_path_graph(q, table());
+    assert.equal(g.edges.some((e) => e.kind === '빈칸'), false);
+  });
+});
+
 describe('앞말 포함 어휘형 — 앞말까지 B 하나 (오종래 2026-10-01)', () => {
   // 표지는 봉인 값이 아니라 테스트용 가짜 기호다. 어휘형 = SW(@W 구역, B), 앞 표지 = SA(@A, B), 뒤 조사 = SO(@O, B)
   const sw = (id: string, markers: string[], color: Color, lexical?: boolean) =>

@@ -37,6 +37,8 @@ export interface PathNode {
   resultOf?: string;
   /** 강한 C(apply.strongC)에 연결된 B 노드 — 그 강한 C 노드의 id. 급소로 선다. 연결되지 않은 노드에는 없다 */
   anchoredBy?: string;
+  /** 제시문 블록(apply.passageBlocks)으로 문단 전체를 잡은 B 노드 — 그 빈칸 노드의 id. 아닌 노드에는 없다 */
+  passageOf?: string;
 }
 
 export interface PathEdge {
@@ -45,8 +47,9 @@ export interface PathEdge {
   /** 간선을 만든 표지 표층형. 인접·접힘으로 이어졌으면 null */
   surface: string | null;
   /** '접힘' = 판단기준에 걸려 판정되는 노드가 그 판단기준으로 보내는 간선 (Q→B)
-   *  '결과' = 조건(apply.foldResult)의 결과로 묶인 B 노드가 그 조건 노드로 보내는 간선 */
-  kind: 'adjacent' | '연결어' | '부사' | '접힘' | '결과';
+   *  '결과' = 조건(apply.foldResult)의 결과로 묶인 B 노드가 그 조건 노드로 보내는 간선
+   *  '빈칸' = 제시문(apply.passageBlocks)과 보기(apply.statementBlocks) B 노드가 발문의 빈칸 노드로 보내는 간선 */
+  kind: 'adjacent' | '연결어' | '부사' | '접힘' | '결과' | '빈칸';
   index: number;
   /** 약속된 길(apply.definedPaths, 예: 「→」)이면 그 간선이 켠 등. 조합에 들어간다. 그 밖의 간선에는 없다 */
   color?: Color | null;
@@ -147,7 +150,8 @@ const NODE_KIND = '조사·어미' satisfies SwitchKind;
 export function build_path_graph(question: string, table: SealedTable): PathGraph {
   const cands = candidates(table);
   /** chained = 어절 안이지만 조사 연쇄로 걸린 표지 (예: 「것만을」의 「만」) */
-  const hits: { at: number; end: number; c: Candidate; inner: string; chained: boolean }[] = [];
+  /** passage = 제시문 블록이면 발문 빈칸 표지가 걸린 자리 */
+  let hits: { at: number; end: number; c: Candidate; inner: string; chained: boolean; passage?: number }[] = [];
 
   // 어절 끝 조건 [오종래 2026-09-30] — apply.endOfWord면 조사·어미 표지(어휘형 제외)는
   //   바로 뒤가 한글·영문·숫자·여는 괄호가 아닐 때만 건다. 조사는 어절 끝에 붙기 때문이다.
@@ -169,6 +173,17 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
   const verbStems = table.apply.verbStems ?? [];
   const verbStemBefore = (ch: string | undefined) => ch !== undefined && verbStems.includes(ch);
 
+  // 서술 블록 [오종래 2026-10-01] — 봉인 파일이 지정한 스위치(apply.statementBlocks, 예: 보기 머리 「ㄱ.」)의 표지가
+  //   어절로 홀로 서면, 그 뒤 서술 전체(다음 머리·문단 경계·끝 앞까지)를 노드 하나의 실체로 잡는다.
+  //   서술 안의 표지는 따로 걸지 않는다 — 보기 하나가 B 객체 하나다 (예: 생명과학_문_1 보기 ㄱ·ㄴ·ㄷ).
+  const blockIds = table.apply.statementBlocks ?? [];
+  const blockEnd = (sw: SealedSwitch, from: number) => {
+    const heads = sw.markers.map((m) => escape(m.trim())).join('|');
+    const re = new RegExp(`\\n|\\s(?:${heads})(?=\\s|$)`, 'g');
+    re.lastIndex = from;
+    return re.exec(question)?.index ?? question.length;
+  };
+
   for (let i = 0; i < question.length; ) {
     const rest = question.slice(i);
     let matched: { len: number; c: Candidate; inner: string; chained: boolean } | undefined;
@@ -188,6 +203,13 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
         if (c.sw.standalone && /[가-힣ㄱ-ㅎㅏ-ㅣ]/.test(question[i - 1] ?? '')) {
           continue; // 앞에 한글이 붙었다 — 다른 낱말 안
         }
+        if (blockIds.includes(c.sw.id)) {
+          if (i > 0 && !/\s/.test(question[i - 1])) continue; // 어절 머리가 아니다
+          const from = i + m[0].length;
+          const end = blockEnd(c.sw, from);
+          matched = { len: end - i, c, inner: question.slice(from, end).trim(), chained: false };
+          break;
+        }
         // 가운데 '~'가 붙잡은 실체 (여럿이면 이어 붙인다)
         const inner = m.slice(1).map((s) => s.trim()).filter(Boolean).join(' ');
         matched = { len: m[0].length, c, inner, chained: inside };
@@ -200,6 +222,38 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
     } else {
       i += 1;
     }
+  }
+
+  // 제시문 블록 [오종래 2026-10-02] — 봉인 파일이 지정한 스위치(apply.passageBlocks, 예: 빈칸 기호 「(가)」)의 표지가
+  //   Q가 선 문단(발문)에 있고 같은 표지가 다른 문단에도 나오면, 그 문단 전체가 빈칸의 실체를 알려 주는 B 하나다
+  //   (예: 한국사_문_9 「(가)에 대한 설명으로 옳은 것은?」 + 헤이그 특사 호소문). 문단 안의 표지는 따로 걸지 않는다.
+  //   서술 블록(apply.statementBlocks) 머리로 시작하는 문단(보기)은 제시문이 아니다.
+  const passageIds = table.apply.passageBlocks ?? [];
+  if (passageIds.length) {
+    const paras: { start: number; end: number }[] = [];
+    for (let s = 0; s <= question.length; ) {
+      const e = question.indexOf('\n', s);
+      paras.push({ start: s, end: e === -1 ? question.length : e });
+      if (e === -1) break;
+      s = e + 1;
+    }
+    const inPara = (p: { start: number; end: number }) => hits.filter((h) => h.at >= p.start && h.at < p.end);
+    const qParas = paras.filter((p) => inPara(p).some((h) => h.c.sw.color === 'Q'));
+    const labels = qParas.flatMap((p) =>
+      inPara(p)
+        .filter((h) => passageIds.includes(h.c.sw.id))
+        .map((h) => ({ text: question.slice(h.at, h.end), c: h.c, at: h.at })),
+    );
+    for (const p of paras) {
+      if (qParas.includes(p)) continue;
+      const body = question.slice(p.start, p.end);
+      const label = labels.find((l) => body.includes(l.text));
+      const first = inPara(p)[0];
+      if (!label || (first && first.at === p.start && blockIds.includes(first.c.sw.id))) continue;
+      hits = hits.filter((h) => h.at < p.start || h.at >= p.end);
+      hits.push({ at: p.start, end: p.end, c: label.c, inner: body.trim(), chained: false, passage: label.at });
+    }
+    hits.sort((a, b) => a.at - b.at);
   }
 
   const nodes: PathNode[] = [];
@@ -223,6 +277,8 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
   // 연쇄 머리가 넘긴 실체 — 바로 이어 붙은 끝 표지(at)가 받는다
   let carried: { at: number; entity: string } | undefined;
   const pathIds = table.apply.definedPaths ?? [];
+  /** 제시문 노드 id → 발문 빈칸 표지가 걸린 자리 (노드를 다 세운 뒤 빈칸 노드와 잇는다) */
+  const passageLabelAt = new Map<string, number>();
 
   /** 노드를 세우고 앞 노드와 잇는다 — 걸어 둔 간선이 있으면 그 간선으로, 없으면 인접으로 */
   const link = (node: PathNode) => {
@@ -280,7 +336,11 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
       continue;
     }
 
-    let entity = isLexical(sw, hit.c.surface) ? surface : hit.inner || afterLastBreak(question.slice(cursor, hit.at).trim());
+    let entity = hit.passage !== undefined
+      ? hit.inner
+      : isLexical(sw, hit.c.surface)
+        ? surface
+        : hit.inner || afterLastBreak(question.slice(cursor, hit.at).trim());
 
     // 앞말 포함 어휘형 [오종래 2026-10-01] — 봉인 파일이 지정한 어휘형 스위치(apply.withPreceding, 예: 「분포 구역」)는
     //   앞말까지 실체에 넣는다 (예: 「생물 보호종 30개체 이상 분포 구역」 전체가 B 하나). 뒤 조사(「을」)는 끌 실체가 없어 노드가 서지 않는다.
@@ -330,6 +390,7 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
       color: sw.color,
       entity,
     };
+    if (hit.passage !== undefined) passageLabelAt.set(node.id, hit.passage);
 
     // 재색칠 간선 [오종래 2026-09-30] — 봉인 파일이 지정한 간선 스위치(apply.recolorTargets, 예: 화살표)가
     //   가리키는 노드는 그 스위치의 색으로 칠한다. 이미 B로 확정된 노드는 건드리지 않는다. 원래 색은 남긴다.
@@ -342,6 +403,21 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
 
     link(node);
     cursor = hit.end;
+  }
+
+  // 빈칸 수렴 [오종래 2026-10-02] — 제시문 블록이 선 문항(「(가)에 대한 설명으로 옳은 것은?」)에서
+  //   제시문 B는 빈칸의 실체를 알려 주고, 보기 B(apply.statementBlocks)는 각각 그 빈칸에 대해 판별되는 객체다.
+  //   둘 다 발문의 빈칸 노드로 '빈칸' 간선을 보낸다 → 급소가 빈칸 B로 수렴한다 (예: 한국사_문_9 B「(가)」).
+  for (const [id, at] of passageLabelAt) {
+    const label = nodes.find((x) => x.index === at);
+    if (!label) continue;
+    const i = nodes.findIndex((x) => x.id === id);
+    nodes[i] = { ...nodes[i], passageOf: label.id };
+    edges.push({ from: id, to: label.id, surface: null, kind: '빈칸', index: nodes[i].index });
+    if (edges.some((e) => e.kind === '빈칸' && e.to === label.id && e.from !== id)) continue; // 보기는 빈칸마다 한 번만
+    for (const opt of nodes.filter((x) => blockIds.includes(x.switchId))) {
+      edges.push({ from: opt.id, to: label.id, surface: null, kind: '빈칸', index: opt.index });
+    }
   }
 
   // 자리 규칙 [오종래 2026-10-01] — 봉인 파일이 지정한 스위치(apply.contextRules[].targets)의 노드는 자리에 따라 색을 바꾼다.
