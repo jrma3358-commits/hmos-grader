@@ -33,6 +33,11 @@ export interface SealedSwitch {
    *   없음/false — 어휘형 없음
    */
   lexical?: boolean | string[];
+  /**
+   * 단독 어절에서만 거는가. true면 표지 앞에 한글 글자가 붙지 않을 때만 건다
+   * (「대표단」·「지표」 안의 「표」는 걸지 않고, 「표는」·「표가」·「표를」은 건다). 뒤 조건은 없다. 없거나 false면 어디서나 건다.
+   */
+  standalone?: boolean;
   /** 백서 §4-1 '사유의 의지' 칸 */
   intent: string;
   /** 이 스위치가 켜는 유도등. 미결이면 null */

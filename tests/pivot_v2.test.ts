@@ -573,6 +573,32 @@ describe('강한 C — 바로 다음 B가 급소 (오종래 2026-10-01)', () => 
   });
 });
 
+describe('단독 어절 스위치 — 낱말 안에서는 걸지 않는다 (오종래 2026-10-01)', () => {
+  // 표지는 봉인 값이 아니라 테스트용 가짜 기호다. 어휘형 = SW(「표」, P), 조사 = SJ(~는, B)
+  const table = (standalone?: boolean): SealedTable => ({
+    version: 1,
+    source: { document: '(테스트)', sections: [] },
+    switches: [
+      { id: 'SW', kind: '조사·어미', markers: ['표'], intent: '', color: 'P', lexical: true, standalone },
+      { id: 'SJ', kind: '조사·어미', markers: ['~는'], intent: '', color: 'B' },
+    ],
+    lights: [],
+    matrix: [],
+    symbols: [],
+    forms: [],
+    apply: { longestMatchFirst: true, precedence: [] },
+    pending: [],
+  });
+  const ps = (q: string, t: SealedTable) => build_path_graph(q, t).nodes.filter((n) => n.switchId === 'SW').length;
+
+  it('독립 어절이면 건다', () => assert.equal(ps('아래 표 참조', table(true)), 1));
+  it('뒤에 무엇이 붙어도 건다 — 「표는」·「표가」·「표를」 (뒤 조건 없음)', () => {
+    assert.equal(ps('표는 가 표가 나 표를 다', table(true)), 3);
+  });
+  it('앞에 한글이 붙으면 걸지 않는다 — 「대표단」·「지표」', () => assert.equal(ps('대표단 지표', table(true)), 0));
+  it('standalone이 없으면 어디서나 건다', () => assert.equal(ps('대표단 지표', table()), 2));
+});
+
 describe('앞말 포함 어휘형 — 앞말까지 B 하나 (오종래 2026-10-01)', () => {
   // 표지는 봉인 값이 아니라 테스트용 가짜 기호다. 어휘형 = SW(@W 구역, B), 앞 표지 = SA(@A, B), 뒤 조사 = SO(@O, B)
   const sw = (id: string, markers: string[], color: Color, lexical?: boolean) =>

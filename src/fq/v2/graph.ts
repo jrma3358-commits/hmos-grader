@@ -183,6 +183,11 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
         if (afterNounOnly.includes(c.sw.id) && verbStemBefore(question[i - 1])) {
           continue; // 앞이 용언 어간 — 관형형 어미로 본다
         }
+        // 단독 어절 [오종래 2026-10-01] — 스위치의 standalone이면 앞에 한글 글자가 붙지 않을 때만 건다
+        //   (「대표단」·「지표」의 「표」 ✕, 「표는」·「표가」·「표를」 ○). 뒤 조건은 두지 않는다.
+        if (c.sw.standalone && /[가-힣ㄱ-ㅎㅏ-ㅣ]/.test(question[i - 1] ?? '')) {
+          continue; // 앞에 한글이 붙었다 — 다른 낱말 안
+        }
         // 가운데 '~'가 붙잡은 실체 (여럿이면 이어 붙인다)
         const inner = m.slice(1).map((s) => s.trim()).filter(Boolean).join(' ');
         matched = { len: m[0].length, c, inner, chained: inside };
