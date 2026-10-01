@@ -35,6 +35,8 @@ export interface PathNode {
   contextRule?: { id: string; from: Color | null };
   /** 결과 묶기(apply.foldResult)로 묶인 B 노드 — 그 조건 노드의 id. 묶이지 않은 노드에는 없다 */
   resultOf?: string;
+  /** 강한 C(apply.strongC)에 연결된 B 노드 — 그 강한 C 노드의 id. 급소로 선다. 연결되지 않은 노드에는 없다 */
+  anchoredBy?: string;
 }
 
 export interface PathEdge {
@@ -275,6 +277,13 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
 
     let entity = isLexical(sw, hit.c.surface) ? surface : hit.inner || afterLastBreak(question.slice(cursor, hit.at).trim());
 
+    // 앞말 포함 어휘형 [오종래 2026-10-01] — 봉인 파일이 지정한 어휘형 스위치(apply.withPreceding, 예: 「분포 구역」)는
+    //   앞말까지 실체에 넣는다 (예: 「생물 보호종 30개체 이상 분포 구역」 전체가 B 하나). 뒤 조사(「을」)는 끌 실체가 없어 노드가 서지 않는다.
+    if ((table.apply.withPreceding ?? []).includes(sw.id) && isLexical(sw, hit.c.surface)) {
+      const pre = afterLastBreak(question.slice(cursor, hit.at).trim());
+      if (pre) entity = `${pre} ${surface}`;
+    }
+
     // 조사 연쇄의 실체 [오종래 2026-10-01] — 「것만을」: 「만」은 선택 기준(자기 색, 실체 = 표층형 「만」),
     //   「것」은 앞 제약에 걸린 대상이라 연쇄 끝 표지(「을」)의 노드가 끌고 나온다.
     if (entity === '' && carried?.at === hit.at) entity = carried.entity;
@@ -383,6 +392,21 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
     for (const later of nodes.slice(i + 1)) {
       edges.push({ from: later.id, to: node.id, surface: null, kind: '접힘', index: later.index });
     }
+  }
+
+  // 강한 C [오종래 2026-10-01] — 봉인 파일이 지정한 스위치(apply.strongC, 예: 「가장 적합한」)의 노드는 C 그대로 두고,
+  //   바로 다음 노드가 B면 그 B를 강한 C에 연결된 B로 적는다 (예: 「가장 적합한 구역을」 → 「구역」). 그 B가 급소로 선다(`v2/pivot.ts`).
+  //   다음 노드가 B·Q가 아니면 연결하지 않는다. 색 접기가 모두 끝난 뒤에 본다.
+  //   [오종래 2026-10-01] 다음 노드가 Q여도 연결한다 — 그 Q를 B로 접고 원래 색을 남긴다 (예: 물리_문_2 「옳은 것만을 <보기>에서 있는 대로 고른 것」).
+  //   [오종래 2026-10-01] 판단기준 우선 — 그래프에 판단기준(apply.foldToB) 노드가 있으면 강한 C는 걸지 않는다
+  //   (예: 화학_문_1은 같은 「옳은 것만을」이 있어도 급소가 판단기준 「탄소 화합물」이다).
+  const strongIds = table.apply.strongC ?? [];
+  const hasCriterion = nodes.some((n) => foldIds.includes(n.switchId));
+  for (const [i, node] of nodes.entries()) {
+    if (hasCriterion || !strongIds.includes(node.switchId)) continue;
+    const next = nodes[i + 1];
+    if (next?.color === 'B') nodes[i + 1] = { ...next, anchoredBy: node.id };
+    else if (next?.color === 'Q') nodes[i + 1] = { ...next, color: 'B', foldedFrom: next.color, anchoredBy: node.id };
   }
 
   // 조합은 접기 전 색으로 센다 [오종래 2026-10-01] — 판단기준(Q에 접힌 B)은 급소 판정에서만 B이고,

@@ -31,7 +31,8 @@ export const DEFAULT_CONVERGENCE_WEIGHTS: Record<PathEdge['kind'], number> = {
 
 export interface Pivot {
   node: PathNode;
-  reason: '최수렴 B';
+  /** '강한 C 연결 B' = 강한 C(apply.strongC)에 연결된 B라서 급소다 (graph.ts) */
+  reason: '최수렴 B' | '강한 C 연결 B';
   /** 이 노드로 수렴한 간선의 무게 합 */
   convergence: number;
   /** 최심점과 같은 노드인가. 같더라도 '깊어서'가 아니라 '수렴해서' 급소다 */
@@ -100,6 +101,32 @@ export function analyze_pivot(graph: PathGraph, table?: SealedTable): PivotAnaly
         'B 노드가 없습니다 — 급소는 항상 B계열입니다 (구현명세 §0 표 2번).\n' +
         'B가 표면에 없으면 Q를 열어 B를 꺼내야 합니다(Q→B 추출, §2-3). ' +
         '그 추출은 표지 판정에 걸려 있어 아직 서지 않았습니다 — 여기서 추측하지 않습니다.',
+    };
+  }
+
+  // 강한 C 연결 B [오종래 2026-10-01] — 강한 C(apply.strongC)에 연결된 B가 있으면 수렴도보다 먼저 그 B가 급소다.
+  //   둘 이상이면 급소가 둘 — 수렴 동점과 같이 문제 설계 오류로 플래그한다.
+  const anchored = bs.filter((n) => n.anchoredBy !== undefined);
+  if (anchored.length > 1) {
+    return {
+      ok: false,
+      flag: 'MULTIPLE_CONVERGENCE',
+      candidates: anchored,
+      message:
+        `강한 C에 연결된 B가 ${anchored.length}개입니다 — 문제 설계 오류로 플래그합니다.\n` +
+        `급소는 하나여야 합니다 (구현명세 §2-4). 후보: ${anchored.map((n) => `${n.id}("${n.entity}")`).join(', ')}`,
+    };
+  }
+  if (anchored.length === 1) {
+    const node = anchored[0];
+    return {
+      ok: true,
+      pivot: {
+        node,
+        reason: '강한 C 연결 B',
+        convergence: convergenceOf(graph, node, table),
+        sameAsDeepest: deepest_node(graph)?.id === node.id,
+      },
     };
   }
 

@@ -500,6 +500,99 @@ describe('결과 묶기 — 조건 뒤 잇따른 B는 그 조건의 결과 (오�
   });
 });
 
+describe('강한 C — 바로 다음 B가 급소 (오종래 2026-10-01)', () => {
+  // 표지는 봉인 값이 아니라 테스트용 가짜 기호다. 강한 C = SS(@S, 어휘형 C), 대상 = SB(@B, B), 판단기준 = SF(@F, C)
+  const sw = (id: string, markers: string[], color: Color, lexical?: boolean) =>
+    ({ id, kind: '조사·어미', markers, intent: '', color, lexical }) as SealedSwitch;
+  const table = (strongC?: string[], foldToB?: string[]): SealedTable => ({
+    version: 1,
+    source: { document: '(테스트)', sections: [] },
+    switches: [sw('SS', ['@S'], 'C', true), sw('SB', ['~@B'], 'B'), sw('SF', ['~@F'], 'C'), sw('SQ', ['~@Q'], 'Q')],
+    lights: [],
+    matrix: [],
+    symbols: [],
+    forms: [],
+    apply: { longestMatchFirst: true, precedence: [], strongC, foldToB },
+    pending: [],
+  });
+
+  it('강한 C는 C 그대로, 바로 다음 B에 연결을 적는다', () => {
+    const g = build_path_graph('기준 @F 앞 @B @S 구역 @B 고른 것 @Q', table(['SS']));
+    const s = g.nodes.find((n) => n.switchId === 'SS')!;
+    assert.equal(s.color, 'C');
+    assert.deepEqual(g.nodes.filter((n) => n.anchoredBy).map((n) => [n.entity, n.anchoredBy]), [['구역', s.id]]);
+  });
+
+  it('연결된 B가 수렴도와 상관없이 급소다', () => {
+    const g = build_path_graph('앞 @B 더 @B @S 구역 @B 뒤 @B', table(['SS']));
+    const p = find_pivot(g);
+    assert.equal(p.node.entity, '구역');
+    assert.equal(p.reason, '강한 C 연결 B');
+  });
+
+  it('다음 노드가 B·Q가 아니면 연결하지 않는다', () => {
+    const g = build_path_graph('앞 @B @S 기준 @F 끝 @B', table(['SS']));
+    assert.equal(g.nodes.some((n) => n.anchoredBy !== undefined), false);
+    assert.equal(g.nodes.find((n) => n.entity === '기준')!.color, 'C');
+  });
+
+  it('다음 노드가 Q면 B로 접어 급소로 세운다 — 원래 색은 남고 조합은 Q를 센다', () => {
+    const g = build_path_graph('앞 @B @S 고른 것 @Q', table(['SS']));
+    const q = g.nodes.find((n) => n.entity === '고른 것')!;
+    assert.equal(q.color, 'B');
+    assert.equal(q.foldedFrom, 'Q');
+    assert.equal(find_pivot(g).node.entity, '고른 것');
+    assert.deepEqual(g.combination, ['B', 'C', 'Q']);
+  });
+
+  it('판단기준 우선 — 판단기준 노드가 있으면 강한 C는 걸지 않는다', () => {
+    const g = build_path_graph('기준 @F 앞 @B @S 구역 @B 고른 것 @Q', table(['SS'], ['SF']));
+    assert.equal(g.nodes.some((n) => n.anchoredBy !== undefined), false);
+    const p = find_pivot(g);
+    assert.equal(p.node.entity, '기준');
+    assert.equal(p.reason, '최수렴 B');
+  });
+
+  it('연결된 B가 둘이면 문제 설계 오류로 플래그한다', () => {
+    const r = analyze_pivot(build_path_graph('@S 가 @B @S 나 @B', table(['SS'])));
+    assert.equal(r.ok, false);
+    assert.equal(!r.ok && r.flag, 'MULTIPLE_CONVERGENCE');
+  });
+
+  it('지정이 없으면 연결하지 않는다', () => {
+    const g = build_path_graph('@S 구역 @B', table());
+    assert.equal(g.nodes.some((n) => n.anchoredBy !== undefined), false);
+  });
+});
+
+describe('앞말 포함 어휘형 — 앞말까지 B 하나 (오종래 2026-10-01)', () => {
+  // 표지는 봉인 값이 아니라 테스트용 가짜 기호다. 어휘형 = SW(@W 구역, B), 앞 표지 = SA(@A, B), 뒤 조사 = SO(@O, B)
+  const sw = (id: string, markers: string[], color: Color, lexical?: boolean) =>
+    ({ id, kind: '조사·어미', markers, intent: '', color, lexical }) as SealedSwitch;
+  const table = (withPreceding?: string[]): SealedTable => ({
+    version: 1,
+    source: { document: '(테스트)', sections: [] },
+    switches: [sw('SW', ['@W 구역'], 'B', true), sw('SA', ['~@A'], 'B'), sw('SO', ['~@O'], 'B')],
+    lights: [],
+    matrix: [],
+    symbols: [],
+    forms: [],
+    apply: { longestMatchFirst: true, precedence: [], withPreceding },
+    pending: [],
+  });
+  const q = '드론 @A 생물 30개체 이상 @W 구역 @O 비행';
+
+  it('앞말과 표지가 B 하나 — 뒤 조사는 노드가 되지 않는다', () => {
+    const g = build_path_graph(q, table(['SW']));
+    assert.deepEqual(g.nodes.map((n) => n.entity), ['드론', '생물 30개체 이상 @W 구역']);
+  });
+
+  it('지정이 없으면 표지 자신만 실체 — 앞말은 버려진다', () => {
+    const g = build_path_graph(q, table());
+    assert.deepEqual(g.nodes.map((n) => n.entity), ['드론', '@W 구역']);
+  });
+});
+
 describe('단위 분리 — 가정 표지마다 공통 발문 + 단위 하나씩 (오종래 2026-10-01)', () => {
   // 표지는 봉인 값이 아니라 테스트용 가짜 기호다. 가정 = SC(@C, C), 빈칸 = SX(어휘형 B)
   const sw = (id: string, markers: string[], color: Color, lexical?: boolean) =>
