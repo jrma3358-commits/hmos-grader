@@ -29,7 +29,7 @@ export interface PathNode {
   entity: string;
   /** Q→B로 접혀 B가 된 판단기준 노드의 원래 색. 접히지 않은 노드에는 없다 */
   foldedFrom?: Color | null;
-  /** 재색칠 간선(apply.recolorTargets)이 가리켜 색이 바뀐 노드의 원래 색. 바뀌지 않은 노드에는 없다 */
+  /** 재색칠(apply.recolorTargets 간선, apply.recolorPrevious 뒤 표지)로 색이 바뀐 노드의 원래 색. 바뀌지 않은 노드에는 없다 */
   recoloredFrom?: Color | null;
   /** 자리 규칙(apply.contextRules)이 색을 바꾼 노드 — 규칙 id와 원래 색. 바뀌지 않은 노드에는 없다 */
   contextRule?: { id: string; from: Color | null };
@@ -198,6 +198,16 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
   let cursor = 0;
   let pendingEdge: { surface: string; kind: '연결어' | '부사'; index: number; sw: SealedSwitch } | undefined;
   const recolorIds = table.apply.recolorTargets ?? [];
+  const recolorPrevIds = table.apply.recolorPrevious ?? [];
+  // 단락 경계 [오종래 2026-10-01] — 봉인 파일의 단락 경계 기호(apply.paragraphBreaks, 예: 보기 머리 「ㄴ.」)가
+  //   어절로 홀로 서 있으면, 실체는 마지막 경계 뒤에서부터 잡는다. 경계 앞 글자는 끌고 나오지 않는다.
+  const breaks = (table.apply.paragraphBreaks ?? []).map(escape);
+  const breakRe = breaks.length ? new RegExp(`(?:^|\\s)(?:${breaks.join('|')})(?=\\s|$)`, 'g') : null;
+  const afterLastBreak = (text: string) => {
+    if (!breakRe) return text;
+    const ends = [...text.matchAll(breakRe)];
+    return ends.length ? text.slice(ends.at(-1)!.index! + ends.at(-1)![0].length).trim() : text;
+  };
   // 연쇄 머리가 넘긴 실체 — 바로 이어 붙은 끝 표지(at)가 받는다
   let carried: { at: number; entity: string } | undefined;
   const pathIds = table.apply.definedPaths ?? [];
@@ -258,7 +268,7 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
       continue;
     }
 
-    let entity = isLexical(sw, hit.c.surface) ? surface : hit.inner || question.slice(cursor, hit.at).trim();
+    let entity = isLexical(sw, hit.c.surface) ? surface : hit.inner || afterLastBreak(question.slice(cursor, hit.at).trim());
 
     // 조사 연쇄의 실체 [오종래 2026-10-01] — 「것만을」: 「만」은 선택 기준(자기 색, 실체 = 표층형 「만」),
     //   「것」은 앞 제약에 걸린 대상이라 연쇄 끝 표지(「을」)의 노드가 끌고 나온다.
@@ -267,6 +277,21 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
     if (hit.chained && entity !== '') {
       carried = { at: hit.end, entity };
       entity = surface;
+    }
+
+    // 앞 노드 재색칠 [오종래 2026-10-01] — 봉인 파일이 지정한 스위치(apply.recolorPrevious, 예: 비교 「보다」)가
+    //   실체 없이 앞 노드에 바로 붙어 걸리면(예: 「㉢보다」), 그 앞 노드를 이 스위치의 색으로 칠한다. B도 칠한다. 원래 색은 남긴다.
+    const prev = nodes.at(-1);
+    if (
+      entity === '' &&
+      prev &&
+      recolorPrevIds.includes(sw.id) &&
+      sw.color !== null &&
+      question.slice(prev.index + prev.surface.length, hit.at).trim() === '' &&
+      prev.color !== sw.color
+    ) {
+      prev.recoloredFrom = prev.color;
+      prev.color = sw.color;
     }
 
     // 빈 노드 무시 [오종래 2026-09-30] — 끌고 나올 실체가 없는 표지(예: 어휘형 「(가)」 바로 뒤의 「의」)는
