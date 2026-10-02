@@ -35,8 +35,8 @@ export const DEFAULT_CONVERGENCE_WEIGHTS: Record<PathEdge['kind'], number> = {
 
 export interface Pivot {
   node: PathNode;
-  /** '강한 C 연결 B' = 강한 C(apply.strongC)에 연결된 B라서 급소다 (graph.ts) */
-  reason: '최수렴 B' | '강한 C 연결 B';
+  /** '강한 C 연결 B' = 강한 C(apply.strongC)에 연결된 B라서 급소다 (graph.ts) · 'Q 직전 B' = 마지막 Q 바로 앞의 B라서 급소다 */
+  reason: '최수렴 B' | '강한 C 연결 B' | 'Q 직전 B';
   /** 이 노드로 수렴한 간선의 무게 합 */
   convergence: number;
   /** 최심점과 같은 노드인가. 같더라도 '깊어서'가 아니라 '수렴해서' 급소다 */
@@ -131,6 +131,30 @@ export function analyze_pivot(graph: PathGraph, table?: SealedTable): PivotAnaly
         convergence: convergenceOf(graph, node, table),
         sameAsDeepest: deepest_node(graph)?.id === node.id,
       },
+    };
+  }
+
+  // Q 직전 B [오종래 2026-10-02] — 판단기준(apply.foldToB)도 강한 C(apply.strongC)도 없으면, 마지막 Q 바로 앞의 B 노드가 급소다 (수리논술_문_1~4).
+  //   C·D에서 B로 접힌 조건 노드(「할 때」 결과 묶기 등)는 건너뛴다 — 급소가 조건 쪽으로 끌리지 않게. 그 사이의 C·D 노드도 건너뛴다.
+  //   판단기준·강한 C가 있으면 이 규칙을 걸지 않는다 — 판단기준 우선·강한 C 연결 규칙이 먼저다 (화학_문_1·경제_문__4 등).
+  const judgeIds = table?.apply.foldToB ?? [];
+  const strongIds = table?.apply.strongC ?? [];
+  //   표지표 없이 불려도 판단기준을 알아본다 — 판단기준으로 판정되는 노드는 '접힘' 간선을 보낸다 (graph.ts Q→B 추출)
+  const hasJudge = graph.nodes.some((n) => judgeIds.includes(n.switchId)) || graph.edges.some((e) => e.kind === '접힘');
+  const hasStrongC = graph.nodes.some((n) => strongIds.includes(n.switchId));
+  let lastQ = -1;
+  for (let i = hasJudge || hasStrongC ? -1 : graph.nodes.length - 1; i >= 0; i--) {
+    if (graph.nodes[i].color === 'Q') {
+      lastQ = i;
+      break;
+    }
+  }
+  for (let i = lastQ - 1; i >= 0; i--) {
+    const node = graph.nodes[i];
+    if (node.color !== 'B' || node.foldedFrom === 'C' || node.foldedFrom === 'D') continue;
+    return {
+      ok: true,
+      pivot: { node, reason: 'Q 직전 B', convergence: convergenceOf(graph, node, table), sameAsDeepest: deepest_node(graph)?.id === node.id },
     };
   }
 

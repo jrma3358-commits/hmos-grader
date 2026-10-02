@@ -128,13 +128,16 @@ describe('Q→B 추출 — 판단기준은 Q에 접힌 B다 (구현명세 §2-3,
   // 그림 @B  기준 @J  가 @B  나 @B  고르시오 @Q
   const q = '그림@B 기준@J 가@B 나@B 고르시오@Q';
 
-  it('판단기준 표지가 없으면 접지 않는다 — B끼리 수렴 0 동점', () => {
+  it('판단기준 표지가 없으면 접지 않는다 — 강한 C도 없으면 Q 직전 B가 급소 (오종래 2026-10-02)', () => {
     const g = build_path_graph(q, table());
     assert.equal(g.nodes[1].color, 'C');
     assert.equal(g.nodes[1].foldedFrom, undefined);
     const r = analyze_pivot(g);
-    assert.equal(r.ok, false);
-    if (!r.ok) assert.equal(r.flag, 'MULTIPLE_CONVERGENCE');
+    assert.equal(r.ok, true);
+    if (r.ok) {
+      assert.equal(r.pivot.node.entity, '나');
+      assert.equal(r.pivot.reason, 'Q 직전 B');
+    }
   });
 
   it('(가) 판단기준 노드는 B로 접히고 원래 색을 남긴다', () => {
