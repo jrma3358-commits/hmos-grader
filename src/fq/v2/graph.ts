@@ -187,8 +187,19 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
     return re.exec(question)?.index ?? question.length;
   };
 
+  // 발화 구분 [오종래 2026-10-02] — 단락 경계 기호(apply.paragraphBreaks) 가운데 어느 스위치의 표지도 아닌 것(예: 토론 화자 「갑:」·「을:」)은
+  //   어절 머리에 홀로 서면 표지로 걸지 않고 건너뛴다 — 「을:」의 「을」이 목적격 조사로 걸리지 않게 (예: 생윤_문_2).
+  //   실체는 아래 단락 경계 규칙이 경계 뒤에서부터 잡는다.
+  const registered = new Set(table.switches.flatMap((s) => s.markers.map((m) => m.trim())));
+  const speakerBreaks = (table.apply.paragraphBreaks ?? []).filter((m) => !registered.has(m.trim()));
+
   for (let i = 0; i < question.length; ) {
     const rest = question.slice(i);
+    const speaker = (i === 0 || /\s/.test(question[i - 1])) && speakerBreaks.find((m) => rest.startsWith(m) && (rest.length === m.length || /\s/.test(rest[m.length])));
+    if (speaker) {
+      i += speaker.length;
+      continue;
+    }
     let matched: { len: number; c: Candidate; inner: string; chained: boolean } | undefined;
     for (const c of cands) {
       const m = rest.match(c.re);
