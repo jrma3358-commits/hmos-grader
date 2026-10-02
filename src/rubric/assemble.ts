@@ -9,7 +9,7 @@ import { specify_condition } from './f4.ts';
 import { allocate_points } from './f5.ts';
 import { spread_piece } from './f6.ts';
 import { evaluate_item, type 삐걱신호 } from './item_eval.ts';
-import type { 계열, 조각, 파트 } from './types.ts';
+import type { 계열, 급소K, 조각, 파트 } from './types.ts';
 
 /** 파트 순서 (구현명세 §3 F6) — 모범답안을 이 순서로 엮는다. ⑤표현은 파트가 아니다 */
 const 파트순서: 파트[] = ['근거대기', '세우기', '풀기', '답구하기'];
@@ -28,6 +28,9 @@ export interface 루브릭생성결과 {
   부분채점기준: Record<파트, 부분채점기준>;
   모범답안: string;
   문항평가: { 신호: 삐걱신호; 경고: string[] };
+  /** 이 루브릭을 세운 질문 급소 — 모범답안 검증(문항분석 명세서-2 §7)·GJ가 대본다 */
+  급소: 급소K;
+  계열: 계열;
 }
 
 /**
@@ -71,5 +74,7 @@ export function generate_rubric(문항: 승인된문항, 계열: 계열, 총배�
     ) as Record<파트, 부분채점기준>,
     모범답안: 파트순.map((c) => c.모범조각).join('\n'),
     문항평가,
+    급소: k,
+    계열,
   };
 }
