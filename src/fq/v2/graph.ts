@@ -152,7 +152,7 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
   const cands = candidates(table);
   /** chained = 어절 안이지만 조사 연쇄로 걸린 표지 (예: 「것만을」의 「만」) */
   /** passage = 제시문 블록이면 발문 빈칸 표지가 걸린 자리 · caseHead = 케이스 머리 문단(P 머리) */
-  let hits: { at: number; end: number; c: Candidate; inner: string; chained: boolean; passage?: number; caseHead?: true }[] = [];
+  let hits: { at: number; end: number; c: Candidate; inner: string; chained: boolean; passage?: number; caseHead?: true; math?: true }[] = [];
 
   // 어절 끝 조건 [오종래 2026-09-30] — apply.endOfWord면 조사·어미 표지(어휘형 제외)는
   //   바로 뒤가 한글·영문·숫자·여는 괄호가 아닐 때만 건다. 조사는 어절 끝에 붙기 때문이다.
@@ -190,6 +190,19 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
   // 발화 구분 [오종래 2026-10-02] — 단락 경계 기호(apply.paragraphBreaks) 가운데 어느 스위치의 표지도 아닌 것(예: 토론 화자 「갑:」·「을:」)은
   //   어절 머리에 홀로 서면 표지로 걸지 않고 건너뛴다 — 「을:」의 「을」이 목적격 조사로 걸리지 않게 (예: 생윤_문_2).
   //   실체는 아래 단락 경계 규칙이 경계 뒤에서부터 잡는다.
+  // 수식 묶기 [오종래 2026-10-02] — 봉인 파일이 지정한 어휘형 스위치(apply.mathExpressions, 예: 「직선」「삼각형」「△」「선분」「√」「∫」「lim」)의
+  //   표지 뒤에 이어지는 식 전체(첫 한글·문단 경계·문장 끝 앞까지, 끝 공백·쉼표 제외)를 표지와 함께 B 노드 하나로 잡는다
+  //   (예: 「직선 y = 2x + 1과」 → 「직선 y = 2x + 1」, 「lim_{x→0} f(x)/x의」 → 식 안의 「→」는 따로 걸지 않는다).
+  //   영문 표지(「lim」)는 앞에 영문 글자가 붙으면 다른 낱말 안이라 걸지 않는다.
+  const mathIds = table.apply.mathExpressions ?? [];
+  //   식 끝의 공백·쉼표는 소비한다(end) — 다음 노드의 실체로 넘어가지 않는다. 실체(text)에서는 뗀다.
+  const mathEnd = (from: number) => {
+    const tail = question.slice(from).match(/^[^가-힣ㄱ-ㅎㅏ-ㅣ\n]*/)![0];
+    const stop = tail.search(/[.?!。](?=\s|$)|[?？]/);
+    const expr = stop === -1 ? tail : tail.slice(0, stop);
+    return { end: from + expr.length, text: from + expr.replace(/[\s,]+$/, '').length };
+  };
+
   const registered = new Set(table.switches.flatMap((s) => s.markers.map((m) => m.trim())));
   const speakerBreaks = (table.apply.paragraphBreaks ?? []).filter((m) => !registered.has(m.trim()));
 
@@ -200,7 +213,7 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
       i += speaker.length;
       continue;
     }
-    let matched: { len: number; c: Candidate; inner: string; chained: boolean } | undefined;
+    let matched: { len: number; c: Candidate; inner: string; chained: boolean; math?: true } | undefined;
     for (const c of cands) {
       const m = rest.match(c.re);
       if (m && m.index === 0) {
@@ -224,6 +237,12 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
           matched = { len: end - i, c, inner: question.slice(from, end).trim(), chained: false };
           break;
         }
+        if (mathIds.includes(c.sw.id) && isLexical(c.sw, c.surface)) {
+          if (/^[A-Za-z]/.test(c.surface.trim()) && /[A-Za-z]/.test(question[i - 1] ?? '')) continue; // 영문 낱말 안
+          const { end, text } = mathEnd(i + m[0].length);
+          matched = { len: end - i, c, inner: question.slice(i, text), chained: false, math: true };
+          break;
+        }
         // 가운데 '~'가 붙잡은 실체 (여럿이면 이어 붙인다)
         const inner = m.slice(1).map((s) => s.trim()).filter(Boolean).join(' ');
         matched = { len: m[0].length, c, inner, chained: inside };
@@ -231,7 +250,7 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
       }
     }
     if (matched) {
-      hits.push({ at: i, end: i + matched.len, c: matched.c, inner: matched.inner, chained: matched.chained });
+      hits.push({ at: i, end: i + matched.len, c: matched.c, inner: matched.inner, chained: matched.chained, math: matched.math });
       i += matched.len;
     } else {
       i += 1;
@@ -347,7 +366,7 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
 
   for (const [n, hit] of hits.entries()) {
     const { sw } = hit.c;
-    const surface = question.slice(hit.at, hit.end);
+    const surface = hit.math ? hit.inner : question.slice(hit.at, hit.end); // 수식 묶기는 끝 공백·쉼표를 뗀 식
 
     if (sw.kind === null) {
       undecided.push({ surface, switchId: sw.id, index: hit.at, reason: 'kind' });

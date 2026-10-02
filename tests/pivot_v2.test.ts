@@ -833,3 +833,47 @@ describe('단위 분리 — 가정 표지마다 공통 발문 + 단위 하나씩
     assert.deepEqual(split_units(q, table()), []);
   });
 });
+
+describe('수식 묶기 — 수학 어휘 표지 뒤 식 전체가 B 하나 (오종래 2026-10-02)', () => {
+  // 수학 어휘 = SM(어휘형 B), 조사 = SO(~@O, B), 간선 = SE(→, 연결어)
+  const sw = (id: string, kind: SealedSwitch['kind'], markers: string[], color: Color, lexical?: boolean) =>
+    ({ id, kind, markers, intent: '', color, lexical }) as SealedSwitch;
+  const table = (mathExpressions?: string[]): SealedTable => ({
+    version: 1,
+    source: { document: '(테스트)', sections: [] },
+    switches: [
+      sw('SM', '조사·어미', ['직선', '△', '∫', 'lim'], 'B', true),
+      sw('SO', '조사·어미', ['~@O'], 'B'),
+      sw('SE', '연결어', ['→'], 'D'),
+    ],
+    lights: [],
+    matrix: [],
+    symbols: [],
+    forms: [],
+    apply: { longestMatchFirst: true, precedence: [], mathExpressions },
+    pending: [],
+  });
+  const bs = (q: string, ids?: string[]) => build_path_graph(q, table(ids)).nodes.map((n) => n.entity);
+
+  it('표지 뒤 식을 첫 한글 앞까지 묶는다 — 끝 공백·쉼표는 뗀다', () => {
+    assert.deepEqual(bs('직선 y = 2x + 1과 △ABC, 넓이 @O', ['SM']), ['직선 y = 2x + 1', '△ABC', '넓이']);
+  });
+
+  it('식 안의 표지는 따로 걸지 않는다', () => {
+    const g = build_path_graph('lim_{x→0} f(x)/x 값 @O', table(['SM']));
+    assert.deepEqual(g.nodes.map((n) => n.entity), ['lim_{x→0} f(x)/x', '값']);
+    assert.equal(g.edges.filter((e) => e.surface === '→').length, 0);
+  });
+
+  it('문장 끝에서 멈춘다 — 소수점은 문장 끝이 아니다', () => {
+    assert.deepEqual(bs('∫ 0.5x dx. 다음 @O', ['SM']), ['∫ 0.5x dx', '다음']);
+  });
+
+  it('영문 표지는 다른 낱말 안에서 걸지 않는다', () => {
+    assert.deepEqual(bs('preliminary @O', ['SM']), ['preliminary']);
+  });
+
+  it('지정이 없으면 표지 자신만 실체', () => {
+    assert.deepEqual(bs('직선 y = 2x + 1과 @O', []).slice(0, 1), ['직선']);
+  });
+});
