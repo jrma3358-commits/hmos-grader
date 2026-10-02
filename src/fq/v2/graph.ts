@@ -447,6 +447,18 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
 
     link(node);
     cursor = hit.end;
+
+    // 강한 C 안의 참조어 [오종래 2026-10-02] — 어휘형 강한 C(apply.strongC) 표지 안에 어휘형 P 표지(예: 참조자료 「토론」)가
+    //   단독 어절로 들어 있으면, 강한 C 노드는 그대로 두고 그 P를 따로 노드로 세운다 (예: 생윤_문_2 「다음 토론의」 → C + P「토론」).
+    if ((table.apply.strongC ?? []).includes(sw.id) && isLexical(sw, hit.c.surface)) {
+      for (const c of cands) {
+        if (c.sw.kind !== NODE_KIND || c.sw.color !== 'P' || !isLexical(c.sw, c.surface)) continue;
+        const k = surface.indexOf(c.surface);
+        if (k <= 0 || !/\s/.test(surface[k - 1])) continue; // 표지 머리이거나 앞에 글자가 붙었다
+        link({ id: `${node.id}p`, surface: c.surface, switchId: c.sw.id, index: hit.at + k, color: 'P', entity: c.surface });
+        break;
+      }
+    }
   }
 
   // 빈칸 수렴 [오종래 2026-10-02] — 제시문 블록이 선 문항(「(가)에 대한 설명으로 옳은 것은?」)에서
