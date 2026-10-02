@@ -159,6 +159,9 @@ export function analyze_pivot(graph: PathGraph, table?: SealedTable): PivotAnaly
     const node = graph.nodes[i];
     if (node.color !== 'B' || node.foldedFrom === 'C' || node.foldedFrom === 'D') continue;
     if (pointsBack && node.entity.trim() === '이') continue; // 지시어 자체는 급소가 아니다
+    // 형식 명사 「값」 [오종래 2026-10-02] — 「값」은 급소가 될 수 없다. Q 직전 B로 잡히면 그 앞 B가 급소다
+    //   (예: 수리논술_문_4 「lim_{m→1-} f(m)/g(m)의 값을 구하시오」 → 「lim_{m→1-} f(m)/g(m)」).
+    if (node.entity.trim() === '값') continue;
     return {
       ok: true,
       pivot: { node, reason: 'Q 직전 B', convergence: convergenceOf(graph, node, table), sameAsDeepest: deepest_node(graph)?.id === node.id },
