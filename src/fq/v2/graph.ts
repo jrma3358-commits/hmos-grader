@@ -308,8 +308,12 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
   const breaks = (table.apply.paragraphBreaks ?? []).map(escape);
   const breakRe = breaks.length ? new RegExp(`(?:^|\\s)(?:${breaks.join('|')})(?=\\s|$)`, 'g') : null;
   // 문단 경계 [오종래 2026-10-01] — 빈 줄(정규화 뒤 줄바꿈 하나, `normalizeV2`)을 넘어서는 실체를 끌고 나오지 않는다.
+  // 문장 경계 [오종래 2026-10-02] — 문장 끝(«.»«?»«!» 뒤 공백)도 넘어서지 않는다
+  //   (예: 생윤_문_2 「살릴 수 있는 의료 행위입니다. 장기는」 → 「장기」).
   const afterLastBreak = (whole: string) => {
-    const text = whole.slice(whole.lastIndexOf('\n') + 1).trim();
+    const para = whole.slice(whole.lastIndexOf('\n') + 1);
+    const stops = [...para.matchAll(/[.?!。]\s/g)];
+    const text = (stops.length ? para.slice(stops.at(-1)!.index! + 1) : para).trim();
     if (!breakRe) return text;
     const ends = [...text.matchAll(breakRe)];
     return ends.length ? text.slice(ends.at(-1)!.index! + ends.at(-1)![0].length).trim() : text;
