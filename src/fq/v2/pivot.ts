@@ -140,10 +140,16 @@ export function analyze_pivot(graph: PathGraph, table?: SealedTable): PivotAnaly
   const judgeIds = table?.apply.foldToB ?? [];
   const strongIds = table?.apply.strongC ?? [];
   //   표지표 없이 불려도 판단기준을 알아본다 — 판단기준으로 판정되는 노드는 '접힘' 간선을 보낸다 (graph.ts Q→B 추출)
-  const hasJudge = graph.nodes.some((n) => judgeIds.includes(n.switchId)) || graph.edges.some((e) => e.kind === '접힘');
+  const isJudge = (n: PathNode) => judgeIds.includes(n.switchId) || graph.edges.some((e) => e.kind === '접힘' && e.to === n.id);
+  const hasJudge = graph.nodes.some(isJudge);
   const hasStrongC = graph.nodes.some((n) => strongIds.includes(n.switchId));
+  //   지시어 「이」 [오종래 2026-10-02] — 판단기준 뒤에 그 조건을 받는 지시어 B「이」(예: 「이를 만족하는」)가 있으면
+  //   조건은 묻는 대상에 흡수된 것이다 → 판단기준이 있어도 Q 직전 B가 급소다
+  //   (예: 수리논술_문_3 (2) 「4π/3일 때 이를 만족하는 실수 a」 → 「만족하는 실수 a」. 수리논술_문_1은 지시어가 없어 「점 C(0, -1)」 그대로).
+  const judgeAt = graph.nodes.findIndex(isJudge);
+  const pointsBack = judgeAt >= 0 && graph.nodes.slice(judgeAt + 1).some((n) => n.color === 'B' && n.entity.trim() === '이');
   let lastQ = -1;
-  for (let i = hasJudge || hasStrongC ? -1 : graph.nodes.length - 1; i >= 0; i--) {
+  for (let i = (hasJudge && !pointsBack) || hasStrongC ? -1 : graph.nodes.length - 1; i >= 0; i--) {
     if (graph.nodes[i].color === 'Q') {
       lastQ = i;
       break;
@@ -152,6 +158,7 @@ export function analyze_pivot(graph: PathGraph, table?: SealedTable): PivotAnaly
   for (let i = lastQ - 1; i >= 0; i--) {
     const node = graph.nodes[i];
     if (node.color !== 'B' || node.foldedFrom === 'C' || node.foldedFrom === 'D') continue;
+    if (pointsBack && node.entity.trim() === '이') continue; // 지시어 자체는 급소가 아니다
     return {
       ok: true,
       pivot: { node, reason: 'Q 직전 B', convergence: convergenceOf(graph, node, table), sameAsDeepest: deepest_node(graph)?.id === node.id },
