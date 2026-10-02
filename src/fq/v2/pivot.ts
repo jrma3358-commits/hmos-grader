@@ -21,6 +21,7 @@ import type { PathEdge, PathGraph, PathNode } from './graph.ts';
  * `접힘`은 판단기준(Q에 접힌 B)으로 판정되는 노드가 보내는 관계 간선이라 1이다 (graph.ts Q→B 추출).
  * `결과`는 결과 B가 조건 노드로 보내는 관계 간선이라 1이다 (graph.ts 결과 묶기).
  * `빈칸`은 제시문·보기 B가 발문의 빈칸 노드로 보내는 관계 간선이라 1이다 (graph.ts 빈칸 수렴).
+ * `보기`는 보기 B가 발문의 하나뿐인 B로 보내는 관계 간선이라 1이다 (graph.ts 보기 수렴).
  */
 export const DEFAULT_CONVERGENCE_WEIGHTS: Record<PathEdge['kind'], number> = {
   연결어: 1,
@@ -29,6 +30,7 @@ export const DEFAULT_CONVERGENCE_WEIGHTS: Record<PathEdge['kind'], number> = {
   접힘: 1,
   결과: 1,
   빈칸: 1,
+  보기: 1,
 };
 
 export interface Pivot {

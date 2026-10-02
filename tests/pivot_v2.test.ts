@@ -638,6 +638,41 @@ describe('서술 블록 — 보기 하나가 B 객체 하나 (오종래 2026-10-
     const g = build_path_graph(q, table());
     assert.equal(g.nodes.filter((n) => n.switchId === 'SI').length, 4);
   });
+
+  it('노드 색은 머리 스위치의 색 — 케이스별 상황 설정 머리(P)면 케이스 하나가 독립 P 하나 (2026-10-02)', () => {
+    const t = table(['SH', 'SP']);
+    t.switches.push(sw('SP', ['%'], 'P'));
+    const g = build_path_graph('발문 @I\n머리 % 가 @I 나 % 다 @I 라', t);
+    assert.deepEqual(
+      g.nodes.filter((n) => n.switchId === 'SP').map((n) => [n.color, n.entity]),
+      [
+        ['P', '가 @I 나'],
+        ['P', '다 @I 라'],
+      ],
+    );
+  });
+
+  it('P 머리 — 케이스 머리(P)로 시작하는 문단 바로 앞 문단 전체가 P 하나 (2026-10-02)', () => {
+    const t = table(['SH', 'SP']);
+    t.switches.push(sw('SP', ['%'], 'P'));
+    const g = build_path_graph('발문 @I\n본 @I 문 @I 끝\n% 가 @I 나 % 다', t);
+    assert.deepEqual(
+      g.nodes.map((n) => [n.color, n.entity]),
+      [
+        ['C', '발문'],
+        ['P', '본 @I 문 @I 끝'],
+        ['P', '가 @I 나'],
+        ['P', '다'],
+      ],
+    );
+  });
+
+  it('P 머리 — 케이스 머리가 문단 첫머리가 아니면 열지 않는다', () => {
+    const t = table(['SH', 'SP']);
+    t.switches.push(sw('SP', ['%'], 'P'));
+    const g = build_path_graph('발문 @I\n본 @I 끝\n<조건> % 가 @I 나', t);
+    assert.equal(g.nodes.filter((n) => n.switchId === 'SI').length, 2);
+  });
 });
 
 describe('제시문 블록·빈칸 수렴 — 「(가)에 대한 설명으로 옳은 것은?」 (오종래 2026-10-02)', () => {
@@ -681,6 +716,30 @@ describe('제시문 블록·빈칸 수렴 — 「(가)에 대한 설명으로 �
   it('지정이 없으면 열지 않는다', () => {
     const g = build_path_graph(q, table());
     assert.equal(g.edges.some((e) => e.kind === '빈칸'), false);
+  });
+
+  it('보기 수렴 — 발문의 B가 하나뿐이면 보기 B가 그 B로 수렴한다 (2026-10-02)', () => {
+    const g = build_path_graph('@L 설명 @Q\n#1. 마 @I 바 #2. 사 @I 아', table());
+    assert.equal(g.edges.filter((e) => e.kind === '보기').length, 2);
+    const r = analyze_pivot(g);
+    assert.ok(r.ok);
+    assert.equal(r.pivot.node.entity, '@L');
+    assert.equal(r.pivot.convergence, 2);
+  });
+
+  it('보기 수렴 — 보기 머리 글자로만 된 조합 선택지는 보내지 않는다', () => {
+    const g = build_path_graph('@L 설명 @Q\n#1. 마 @I 바 #2. 사 @I 아\n#1. #1, #2 #2. #2', table());
+    assert.equal(g.edges.filter((e) => e.kind === '보기').length, 2);
+  });
+
+  it('보기 수렴 — 발문의 B가 둘이면 걸지 않는다', () => {
+    const g = build_path_graph('@L 가 @I 설명 @Q\n#1. 마 #2. 사', table());
+    assert.equal(g.edges.some((e) => e.kind === '보기'), false);
+  });
+
+  it('보기 수렴 — 빈칸 수렴이 선 그래프에는 걸지 않는다', () => {
+    const g = build_path_graph(q, table(['SL']));
+    assert.equal(g.edges.some((e) => e.kind === '보기'), false);
   });
 });
 

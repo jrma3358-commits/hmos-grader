@@ -48,8 +48,9 @@ export interface PathEdge {
   surface: string | null;
   /** '접힘' = 판단기준에 걸려 판정되는 노드가 그 판단기준으로 보내는 간선 (Q→B)
    *  '결과' = 조건(apply.foldResult)의 결과로 묶인 B 노드가 그 조건 노드로 보내는 간선
-   *  '빈칸' = 제시문(apply.passageBlocks)과 보기(apply.statementBlocks) B 노드가 발문의 빈칸 노드로 보내는 간선 */
-  kind: 'adjacent' | '연결어' | '부사' | '접힘' | '결과' | '빈칸';
+   *  '빈칸' = 제시문(apply.passageBlocks)과 보기(apply.statementBlocks) B 노드가 발문의 빈칸 노드로 보내는 간선
+   *  '보기' = 보기(apply.statementBlocks) B 노드가 발문의 하나뿐인 B 노드로 보내는 간선 */
+  kind: 'adjacent' | '연결어' | '부사' | '접힘' | '결과' | '빈칸' | '보기';
   index: number;
   /** 약속된 길(apply.definedPaths, 예: 「→」)이면 그 간선이 켠 등. 조합에 들어간다. 그 밖의 간선에는 없다 */
   color?: Color | null;
@@ -150,8 +151,8 @@ const NODE_KIND = '조사·어미' satisfies SwitchKind;
 export function build_path_graph(question: string, table: SealedTable): PathGraph {
   const cands = candidates(table);
   /** chained = 어절 안이지만 조사 연쇄로 걸린 표지 (예: 「것만을」의 「만」) */
-  /** passage = 제시문 블록이면 발문 빈칸 표지가 걸린 자리 */
-  let hits: { at: number; end: number; c: Candidate; inner: string; chained: boolean; passage?: number }[] = [];
+  /** passage = 제시문 블록이면 발문 빈칸 표지가 걸린 자리 · caseHead = 케이스 머리 문단(P 머리) */
+  let hits: { at: number; end: number; c: Candidate; inner: string; chained: boolean; passage?: number; caseHead?: true }[] = [];
 
   // 어절 끝 조건 [오종래 2026-09-30] — apply.endOfWord면 조사·어미 표지(어휘형 제외)는
   //   바로 뒤가 한글·영문·숫자·여는 괄호가 아닐 때만 건다. 조사는 어절 끝에 붙기 때문이다.
@@ -176,6 +177,8 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
   // 서술 블록 [오종래 2026-10-01] — 봉인 파일이 지정한 스위치(apply.statementBlocks, 예: 보기 머리 「ㄱ.」)의 표지가
   //   어절로 홀로 서면, 그 뒤 서술 전체(다음 머리·문단 경계·끝 앞까지)를 노드 하나의 실체로 잡는다.
   //   서술 안의 표지는 따로 걸지 않는다 — 보기 하나가 B 객체 하나다 (예: 생명과학_문_1 보기 ㄱ·ㄴ·ㄷ).
+  //   [오종래 2026-10-02] 노드 색은 머리 스위치의 색이다 — 케이스별 상황 설정 머리(P)면 케이스 하나가 독립 P 하나다
+  //   (예: 법_문_9 사례 조각 ○A·○B·○C, 지리_문_4 〈조건〉 ○ 3개).
   const blockIds = table.apply.statementBlocks ?? [];
   const blockEnd = (sw: SealedSwitch, from: number) => {
     const heads = sw.markers.map((m) => escape(m.trim())).join('|');
@@ -252,6 +255,32 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
       if (!label || (first && first.at === p.start && blockIds.includes(first.c.sw.id))) continue;
       hits = hits.filter((h) => h.at < p.start || h.at >= p.end);
       hits.push({ at: p.start, end: p.end, c: label.c, inner: body.trim(), chained: false, passage: label.at });
+    }
+    hits.sort((a, b) => a.at - b.at);
+  }
+
+  // P 머리 [오종래 2026-10-02] — 케이스별 상황 설정 머리(apply.statementBlocks 중 색이 P인 스위치, 예: 「○」)로 시작하는 문단 바로 앞 문단은
+  //   그 케이스들에 공통인 사례 본문이다 → 문단 전체가 P 하나. 문단 안의 표지는 따로 걸지 않는다
+  //   (예: 법_문_9 「A, B, C, D는 … 메시지를 받았다.」 → 뒤 ○A·○B·○C). 머리가 문단 첫머리가 아니면(예: 「<조 건> ○ …」) 열지 않는다.
+  const caseHeads = cands.filter((c) => blockIds.includes(c.sw.id) && c.sw.color === 'P');
+  if (caseHeads.length) {
+    const lines: { start: number; end: number }[] = [];
+    for (let s = 0; s <= question.length; ) {
+      const e = question.indexOf('\n', s);
+      lines.push({ start: s, end: e === -1 ? question.length : e });
+      if (e === -1) break;
+      s = e + 1;
+    }
+    for (const [k, p] of lines.entries()) {
+      const next = lines[k + 1];
+      if (!next) continue;
+      const head = hits.find((h) => h.at === next.start && caseHeads.includes(h.c));
+      if (!head) continue;
+      const body = question.slice(p.start, p.end).trim();
+      const own = hits.filter((h) => h.at >= p.start && h.at < p.end);
+      if (!body || own.some((h) => h.passage !== undefined || h.c.sw.color === 'Q')) continue; // 제시문·발문은 P 머리가 아니다
+      hits = hits.filter((h) => h.at < p.start || h.at >= p.end);
+      hits.push({ at: p.start, end: p.end, c: head.c, inner: body, chained: false, caseHead: true });
     }
     hits.sort((a, b) => a.at - b.at);
   }
@@ -336,7 +365,7 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
       continue;
     }
 
-    let entity = hit.passage !== undefined
+    let entity = hit.passage !== undefined || hit.caseHead
       ? hit.inner
       : isLexical(sw, hit.c.surface)
         ? surface
@@ -492,6 +521,32 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
     const next = nodes[j];
     if (next?.color === 'B') nodes[j] = { ...next, anchoredBy: node.id };
     else if (next?.color === 'Q') nodes[j] = { ...next, color: 'B', foldedFrom: next.color, anchoredBy: node.id };
+  }
+
+  // 보기 수렴 [오종래 2026-10-02] — 발문(Q가 선 문단)에 B 노드가 하나뿐이면, 보기 B 노드(apply.statementBlocks)는 각각
+  //   그 B에 대해 판별되는 객체다 → '보기' 간선을 보낸다 → 급소가 발문의 B로 수렴한다
+  //   (예: 법_문_9 「옳은 법적 판단만을 <보기>에서 고른 것은?」 — 보기 ㄱ~ㄹ → B「법적 판단」).
+  //   판단기준(apply.foldToB)·강한 C 연결·빈칸 수렴이 선 그래프에는 걸지 않는다 — 그 규칙들이 먼저다.
+  const anchoredAny = nodes.some((n) => n.anchoredBy !== undefined);
+  const blankAny = edges.some((e) => e.kind === '빈칸');
+  const qNode = nodes.find((n) => n.color === 'Q');
+  if (qNode && !hasCriterion && !anchoredAny && !blankAny) {
+    const from = question.lastIndexOf('\n', qNode.index) + 1;
+    const nl = question.indexOf('\n', qNode.index);
+    const to = nl === -1 ? question.length : nl;
+    const isOption = (n: PathNode) => blockIds.includes(n.switchId);
+    const asked = nodes.filter((n) => n.color === 'B' && !isOption(n) && n.index >= from && n.index < to);
+    // 보기 조합 선택지(예: 「ㄱ, ㄴ」)는 판별 객체가 아니다 — 실체가 보기 머리 글자(머리 표지에서 끝 «.»를 뗀 것)로만 되어 있으면 보내지 않는다.
+    //   [오종래 2026-10-02] 법_문_9 수렴도 4 = 보기 ㄱ~ㄹ만.
+    const labels = new Set(
+      table.switches.filter((s) => blockIds.includes(s.id)).flatMap((s) => s.markers.map((m) => m.replace(/~/g, '').trim().replace(/\.$/, ''))),
+    );
+    const comboOnly = (n: PathNode) => n.entity.split(/[\s,]+/).filter(Boolean).every((t) => labels.has(t));
+    if (asked.length === 1) {
+      for (const opt of nodes.filter((n) => isOption(n) && n.color === 'B' && !comboOnly(n))) {
+        edges.push({ from: opt.id, to: asked[0].id, surface: null, kind: '보기', index: opt.index });
+      }
+    }
   }
 
   // 조합은 접기 전 색으로 센다 [오종래 2026-10-01] — 판단기준(Q에 접힌 B)은 급소 판정에서만 B이고,
