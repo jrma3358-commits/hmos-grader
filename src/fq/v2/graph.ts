@@ -68,7 +68,7 @@ export interface PathGraph {
   question: string;
   nodes: PathNode[];
   edges: PathEdge[];
-  /** 켜진 색들 (문장 순서, 중복 제거). 7형식은 이 조합에 붙는 이름일 뿐이다 */
+  /** 켜진 색들 (문장 순서. D는 켜질 때마다, 나머지 색은 처음 한 번만). 7형식은 이 조합에 붙는 이름일 뿐이다 */
   combination: Color[];
   undecided: UndecidedHit[];
 }
@@ -602,9 +602,11 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
     ...nodes.map((node) => ({ at: node.index, c: node.foldedFrom !== undefined ? node.foldedFrom : node.color })),
     ...edges.filter((e) => e.color !== undefined).map((e) => ({ at: e.index, c: e.color ?? null })),
   ].sort((a, b) => a.at - b.at);
+  //   [오종래 2026-10-02] D만 반복을 허용한다 — 켜진 D 하나하나가 조합의 한 자리다 (예: 수리논술_문_2 정답지 PDDBQ의 D 둘).
+  //   나머지 색(B·C·P·Q)은 처음 켜진 자리 하나만 센다.
   const combination: Color[] = [];
   for (const { c } of lights) {
-    if (c && !combination.includes(c)) combination.push(c);
+    if (c && (c === 'D' || !combination.includes(c))) combination.push(c);
   }
 
   return { question, nodes, edges, combination, undecided };

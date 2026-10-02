@@ -483,6 +483,11 @@ describe('결과 묶기 — 조건 뒤 잇따른 B는 그 조건의 결과 (오�
     assert.deepEqual(g.combination, ['C', 'B', 'D']);
   });
 
+  it('조합에서 D만 반복을 허용한다 — 나머지 색은 처음 한 번만 (오종래 2026-10-02)', () => {
+    const g = build_path_graph('조건1 @C, a = [x] 첫째@D 둘째@D 조건2 @C, b = [y]', table());
+    assert.deepEqual(g.combination, ['C', 'B', 'D', 'D']);
+  });
+
   it('결과가 없는 조건은 접지 않는다', () => {
     const g = build_path_graph('조건 @C 끝@D', table(['SC']));
     assert.equal(g.nodes[0].color, 'C');
