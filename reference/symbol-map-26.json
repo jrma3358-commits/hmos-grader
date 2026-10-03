@@ -1,0 +1,43 @@
+{
+  "source": ["reference/수학적기호26(1).jpg", "reference/수학적기호26(2).jpg"],
+  "title": "[3-3]-문제 속 조사, 어미가 여는 연산로직-수학 기호의 코드 26",
+  "subtitle": "훈민정음-수학 기호로 문장 속 매트릭스를 읽는다.",
+  "heading": "문장과 코드, 수학적 객체(Object) 매핑: (code-to-symbol Mapping)",
+  "description": "매트릭스 코드가 문장 속에서 작동하는 \"실행 상황\"을 '수학적 코드 기호 26' 안으로 압축, '메트릭스코드 23'을 기호로 전환하여 해석합니다.",
+  "columns": {
+    "flow": "사고의 흐름",
+    "guide": "핵심 유도등",
+    "callingConvention": "연산자 호출 규격 (Calling Convention)",
+    "codes": "매트릭스 code",
+    "symbol": "수학 기호",
+    "particles": "언어 조사"
+  },
+  "symbols": [
+    { "no": 1, "flow": "새로운 대상에 대한 자각", "guide": "D", "guideName": "정의", "callingConvention": "낯선 존재의 인식", "codes": [4], "symbol": "ⁿ√a", "latex": "\\sqrt[n]{a}", "particles": ["~로 나타낼 때."] },
+    { "no": 2, "flow": "새로운 대상에 대한 감각", "guide": "D", "guideName": "정의", "callingConvention": "새로운 페러다임의 정의", "codes": [4], "symbol": "√−1", "latex": "\\sqrt{-1}", "particles": ["~라 하자."] },
+    { "no": 3, "flow": "질문의 인식", "guide": "Q", "guideName": "질문", "callingConvention": "대상의 실체 계산", "codes": [1], "symbol": "f(a)", "latex": "f(a)", "particles": ["~의 값은?"] },
+    { "no": 4, "flow": "역추적의 지시", "guide": "C", "guideName": "제약", "callingConvention": "결과로부터 원인을 규명", "codes": [2, 7], "symbol": "f⁻¹(b)", "latex": "f^{-1}(b)", "particles": ["~인", "~일 때"] },
+    { "no": 5, "flow": "대상전이의 흐름", "guide": "P", "guideName": "상황", "callingConvention": "상태변화의 시뮬레이션", "codes": [12], "symbol": "g(f(a))", "latex": "g(f(a))", "particles": ["~가 ~일 때."] },
+    { "no": 6, "flow": "관계의 원형을 파악", "guide": "D", "guideName": "정의", "callingConvention": "순환구조의 데이터 박제", "codes": [6, 21], "symbol": "sin, cos", "latex": "\\sin, \\cos", "particles": ["처음으로", "다시"] },
+    { "no": 7, "flow": "규칙의 변화 인식", "guide": "P", "guideName": "상황", "callingConvention": "규칙적 흐름의 대상 포착", "codes": [19, 21], "symbol": "aₙ", "latex": "a_n", "particles": ["규칙적으로", "~와 같은 방법으로"] },
+    { "no": 8, "flow": "규칙에 의해 누적된 현상", "guide": "P", "guideName": "상황", "callingConvention": "반복 구조의 에너지 집적", "codes": [19, 15], "symbol": "Σ", "latex": "\\sum", "particles": ["이와 같이 줄어들 때( 늘어날 때)."] },
+    { "no": 9, "flow": "한계점으로의 압축", "guide": "C", "guideName": "제약", "callingConvention": "절대수렴 및 최종결과 도출", "codes": [9, 15], "symbol": "lim", "latex": "\\lim", "particles": ["~일 때,", "~를 만족시키는"] },
+    { "no": 10, "flow": "상태의 순간 변화를 포착", "guide": "C", "guideName": "제약", "callingConvention": "변곡점 추론 및 시선 고정", "codes": [10, 12], "symbol": "f′", "latex": "f'", "particles": ["~인 순간", "최대한의", "가장 작은"] },
+    { "no": 11, "flow": "끝없이 넓어지는 모양", "guide": "P", "guideName": "상황", "callingConvention": "연속된 데이터의 완전한 박제", "codes": [13, 15], "symbol": "∫", "latex": "\\int", "particles": ["한없이"] },
+    { "no": 12, "flow": "조건에 의한 낯선 나열", "guide": "P", "guideName": "상황", "callingConvention": "배치구조의 시뮬레이션", "codes": [5], "symbol": "ₙPᵣ", "latex": "{}_nP_r", "particles": ["나열하여"] },
+    { "no": 13, "flow": "가공되지 않은 추출", "guide": "C", "guideName": "제약", "callingConvention": "핵심 데이터의 발굴 및 고착", "codes": [2, 13], "symbol": "ₙCᵣ", "latex": "{}_nC_r", "particles": ["~개 뽑는"] },
+    { "no": 14, "flow": "가능성의 존재 규명", "guide": "B", "guideName": "배경", "callingConvention": "가능성의 박제 및 시야 확보", "codes": [1, 13], "symbol": "P(A)", "latex": "P(A)", "particles": ["~일 확률"] },
+    { "no": 15, "flow": "미래가치 예측 수치의 선언", "guide": "C", "guideName": "제약", "callingConvention": "최종 수렴 및 의사 결정의 환경", "codes": [9, 15], "symbol": "E(X)", "latex": "E(X)", "particles": ["평균적으로", "기대되는"] },
+    { "no": 16, "flow": "제약기반의 심층추론", "guide": "C", "guideName": "제약", "callingConvention": "사전 조건이 사유에 미치는 영향", "codes": [14], "symbol": "P(B|A)", "latex": "P(B|A)", "particles": ["~일 때", "~인"] },
+    { "no": 17, "flow": "선택의 최적 경로", "guide": "C", "guideName": "제약", "callingConvention": "독립적 반복에 의한 결과 추적", "codes": [10], "symbol": "B(n, p)", "latex": "B(n, p)", "particles": ["~번 반복할 때."] },
+    { "no": 18, "flow": "현상수렴과 예외 포착", "guide": "C", "guideName": "제약", "callingConvention": "현상속의 가능성 추론", "codes": [8], "symbol": "N(m, σ²)", "latex": "N(m, \\sigma^2)", "particles": ["~하지만", "~한"] },
+    { "no": 19, "flow": "두 대상의 다리 놓기", "guide": "C", "guideName": "제약", "callingConvention": "두 대상 사이의 직렬연결", "codes": [1], "symbol": "AB̅", "latex": "\\overline{AB}", "particles": ["~에서~까지"] },
+    { "no": 20, "flow": "사유의 투영과 충돌", "guide": "C", "guideName": "제약", "callingConvention": "사유의 관계를 공간에 투영", "codes": [15], "symbol": "a⃗ • b⃗", "latex": "\\vec{a} \\cdot \\vec{b}", "particles": ["~와 일치하는"] },
+    { "no": 21, "flow": "기하의 이동", "guide": "C", "guideName": "제약", "callingConvention": "방향성 있는 힘", "codes": [14, 15], "symbol": "AB⃗", "latex": "\\overrightarrow{AB}", "particles": ["~에서 ~로"] },
+    { "no": 22, "flow": "무한의 유한화", "guide": "P", "guideName": "상황", "callingConvention": "무한루프의 데이터 박제 및 순환구조의 안정화", "codes": [21], "symbol": "0.aḃ", "latex": "0.a\\dot{b}", "particles": ["한없이 반복할 때", "~와 같은 방법으로", "영원히 반복되는", "한결같은"] },
+    { "no": 23, "flow": "로그 스케일 전환", "guide": "P", "guideName": "상황", "callingConvention": "거인과 소인국의 세계 교감", "codes": [5], "symbol": "logₐb", "latex": "\\log_a b", "particles": ["~와 같이 증가(감소)할 때"] },
+    { "no": 24, "flow": "항등 세계의 헌법", "guide": "C", "guideName": "제약", "callingConvention": "0의 절대 변수 포착 및 상향의 표준화", "codes": [16], "symbol": "∀x", "latex": "\\forall x", "particles": ["항상", "~로 일정", "어디에나 존재하는", "늘 ~인"] },
+    { "no": 25, "flow": "시제의 일치", "guide": "C", "guideName": "제약", "callingConvention": "현 시점으로의 강제 착륙", "codes": [22], "symbol": "Δt", "latex": "\\Delta t", "particles": ["지금", "~정부", "~일"] },
+    { "no": 26, "flow": "환각 및 시스템 중단 봉쇄", "guide": "P", "guideName": "상황", "callingConvention": "안전 모드 전환 및 허상 인식", "codes": [18], "symbol": "0", "latex": "0", "particles": ["허상 인식"] }
+  ]
+}

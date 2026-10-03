@@ -1,5 +1,8 @@
 node_modules/
 
+# 비밀 값 (API 키 등)
+.env
+
 # 봉인 — 표지→색 매핑 값은 로컬에만 둔다 (BUILD_PLAN §4 불변원칙 4)
 # 올리는 것은 README와 템플릿 둘뿐이다
 봉인/*
