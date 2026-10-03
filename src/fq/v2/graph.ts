@@ -203,6 +203,21 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
     return { end: from + expr.length, text: from + expr.replace(/[\s,]+$/, '').length };
   };
 
+  // 어절 예외 [오종래 2026-10-03] — 봉인 파일의 apply.wordExceptions(예: 「불구하고」·「그럼에도」)와 어절 전체가 같으면
+  //   그 어절 안에서는 조사·어미 표지를 걸지 않는다 (「불구하고」의 「구하고」 → Q ✕, 「그럼에도」의 「도」 → P ✕).
+  //   어절 = 공백으로 끊긴 덩어리에서 앞뒤 문장 부호를 뗀 것. 간선 표지(연결어·부사)는 그대로 건다.
+  const wordExceptions = new Set(table.apply.wordExceptions ?? []);
+  const exceptionSpans: { start: number; end: number }[] = [];
+  if (wordExceptions.size) {
+    for (const w of question.matchAll(/\S+/g)) {
+      const [, lead, core] = w[0].match(/^([^가-힣A-Za-z0-9]*)(.*?)[^가-힣A-Za-z0-9]*$/)!;
+      if (!wordExceptions.has(core)) continue;
+      const start = w.index + lead.length;
+      exceptionSpans.push({ start, end: start + core.length });
+    }
+  }
+  const inException = (at: number) => exceptionSpans.some((s) => at >= s.start && at < s.end);
+
   const registered = new Set(table.switches.flatMap((s) => s.markers.map((m) => m.trim())));
   const speakerBreaks = (table.apply.paragraphBreaks ?? []).filter((m) => !registered.has(m.trim()));
 
@@ -217,6 +232,7 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
     for (const c of cands) {
       const m = rest.match(c.re);
       if (m && m.index === 0) {
+        if (c.sw.kind === NODE_KIND && inException(i)) continue; // 어절 예외 — 낱말 안의 조사·어미가 아니다
         const inside =
           endOfWord && c.sw.kind === NODE_KIND && !isLexical(c.sw, c.surface) && insideWord(rest[m[0].length]);
         if (inside && !chainsToMarker(c.sw, rest.slice(m[0].length))) {

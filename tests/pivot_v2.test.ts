@@ -882,3 +882,48 @@ describe('수식 묶기 — 수학 어휘 표지 뒤 식 전체가 B 하나 (오
     assert.deepEqual(bs('직선 y = 2x + 1과 @O', []).slice(0, 1), ['직선']);
   });
 });
+
+describe('어절 예외 — 예외 낱말과 같은 어절 안에서는 조사·어미를 걸지 않는다 (오종래 2026-10-03)', () => {
+  // Q = SQ(어휘형 「~구하고」), P = SP(~도), 간선 = SE(그리고, 연결어)
+  const sw = (id: string, kind: SealedSwitch['kind'], markers: string[], color: Color, lexical?: boolean) =>
+    ({ id, kind, markers, intent: '', color, lexical }) as SealedSwitch;
+  const table = (wordExceptions?: string[]): SealedTable => ({
+    version: 1,
+    source: { document: '(테스트)', sections: [] },
+    switches: [
+      sw('SQ', '조사·어미', ['~구하고'], 'Q', true),
+      sw('SP', '조사·어미', ['~도'], 'P'),
+      sw('SE', '연결어', ['그리고'], 'D'),
+    ],
+    lights: [],
+    matrix: [],
+    symbols: [],
+    forms: [],
+    apply: { longestMatchFirst: true, precedence: [], wordExceptions },
+    pending: [],
+  });
+  const nodes = (q: string, words?: string[]) =>
+    build_path_graph(q, table(words)).nodes.map((n) => `${n.color}:${n.entity}`);
+  const q = '그럼에도, 불구하고 수출도 그리고 값을 구하고';
+
+  it('예외 낱말 어절 안의 표지는 걸지 않는다 — 앞뒤 문장 부호는 떼고 본다', () => {
+    const g = build_path_graph(q, table(['불구하고', '그럼에도']));
+    assert.deepEqual(
+      g.nodes.map((n) => [n.color, n.index]),
+      [
+        ['P', q.indexOf('수출도') + 2],
+        ['Q', q.lastIndexOf('구하고')],
+      ],
+    );
+  });
+
+  it('간선 표지는 그대로 건다', () => {
+    const g = build_path_graph(q, table(['불구하고', '그럼에도']));
+    assert.equal(g.edges.filter((e) => e.surface === '그리고').length, 1);
+  });
+
+  it('어절 일부만 같으면 거르지 않는다 · 지정이 없으면 지금처럼 건다', () => {
+    assert.ok(nodes(q, ['그럼']).includes('P:그럼에'));
+    assert.ok(nodes(q).includes('Q:구하고') && nodes(q).filter((n) => n === 'Q:구하고').length === 2);
+  });
+});

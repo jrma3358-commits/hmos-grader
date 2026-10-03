@@ -231,6 +231,14 @@ export interface SealedApplyRules {
    * 여기 있는 것은 «어느 스위치에, 어떤 조건이면, 무슨 색»(값)뿐이다.
    */
   contextRules?: Undecided<SealedContextRule[]>;
+  /**
+   * 어절 예외 — 어절 전체(앞뒤 문장 부호를 뗀 것)가 이 낱말(예: 「불구하고」·「그럼에도」)과 같으면
+   * 그 어절 안에서는 조사·어미 표지를 걸지 않는다 (「불구하고」의 「구하고」, 「그럼에도」의 「도」). 간선 표지는 그대로 건다.
+   * 없거나 null이면 적용하지 않는다.
+   *
+   * 거르는 **규칙**은 구조라 코드에 있다(`v2/graph.ts`). 여기 있는 것은 «어느 낱말인가»(값)뿐이다.
+   */
+  wordExceptions?: Undecided<string[]>;
 }
 
 /**
