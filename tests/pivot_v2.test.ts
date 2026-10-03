@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 import { analyze_pivot, build_path_graph, convergenceOf, deepest_node, find_pivot, PivotError, split_units } from '../src/fq/index.ts';
+import { markerRegex } from '../src/fq/v2/graph.ts';
 import type { SealedSwitch, SealedTable } from '../src/fq/sealed/schema.ts';
 import type { PathEdge, PathGraph, PathNode } from '../src/fq/v2/graph.ts';
 import type { Color } from '../src/fq/types.ts';
@@ -925,5 +926,24 @@ describe('어절 예외 — 예외 낱말과 같은 어절 안에서는 조사·
   it('어절 일부만 같으면 거르지 않는다 · 지정이 없으면 지금처럼 건다', () => {
     assert.ok(nodes(q, ['그럼']).includes('P:그럼에'));
     assert.ok(nodes(q).includes('Q:구하고') && nodes(q).filter((n) => n === 'Q:구하고').length === 2);
+  });
+});
+
+describe('받침 자모 표지 — 자모 뒤에 음절이 오면 그 받침을 가진 음절 하나 (오종래 2026-10-03)', () => {
+  it('「~ㄴ지」는 받침 ㄴ 음절 + 지, 「~ㄹ지」는 받침 ㄹ 음절 + 지', () => {
+    const n = markerRegex('~ㄴ지');
+    assert.equal('어떤지 쓰시오'.match(n)?.[0], '떤지');
+    assert.equal('있는지'.match(n)?.[0], '는지');
+    assert.equal('어떻지'.match(n), null);
+    assert.equal('할지'.match(markerRegex('~ㄹ지'))?.[0], '할지');
+  });
+
+  it('뒤가 음절이 아닌 자모는 글자 그대로다 (보기 머리 「ㄱ.」)', () => {
+    assert.equal('ㄱ. 서술'.match(markerRegex('ㄱ.'))?.[0], 'ㄱ.');
+    assert.equal('가. 서술'.match(markerRegex('ㄱ.')), null);
+  });
+
+  it('받침이 될 수 없는 자모는 던진다', () => {
+    assert.throws(() => markerRegex('~ㄸ지'));
   });
 });

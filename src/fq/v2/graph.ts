@@ -90,18 +90,37 @@ export interface FormCombination {
 
 const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
+/** 호환 자모 → 받침 순번 (유니코드 한글 음절 = 0xAC00 + (초성·21 + 중성)·28 + 받침) */
+const FINALS = 'ㄱㄲㄳㄴㄵㄶㄷㄹㄺㄻㄼㄽㄾㄿㅀㅁㅂㅄㅅㅆㅇㅈㅊㅋㅌㅍㅎ';
+
+/** 받침이 이 자모인 한글 음절 전부 (받침이 될 수 없는 자모면 던진다 — 표지를 조용히 버리지 않는다) */
+function syllablesWithFinal(jamo: string): string {
+  const jong = FINALS.indexOf(jamo) + 1;
+  if (!jong) throw new SealedError(`받침이 될 수 없는 자모입니다: "${jamo}"`);
+  let out = '';
+  for (let cv = 0; cv < 19 * 21; cv++) out += String.fromCharCode(0xac00 + cv * 28 + jong);
+  return out;
+}
+
 /**
  * 표지 표층형 → 정규식.
  * '~'는 "여기에 실체가 온다"는 자리표시다 — 앞의 '~'는 조건 없음, 가운데 '~'는 사이에 실체가 낀다.
  * 가운데 '~'는 캡처한다 — 사이에 낀 실체가 곧 그 노드의 entity다.
  * 예: "~가 되도록" → /가\s*되도록/ · "모든 ~에 대하여" → /모든\s*([\s\S]*?)에\s*대하여/
+ *
+ * 받침 자모 [오종래 2026-10-03] — 자모 바로 뒤에 한글 음절이 오면 그 자모는 «그 받침을 가진 음절 하나»다
+ * (예: "~ㄴ지" → 「어떤지」의 「떤지」, "~ㄹ지" → 「할지」). 뒤가 음절이 아닌 자모(보기 머리 「ㄱ.」)는 글자 그대로다.
  */
 export function markerRegex(surface: string): RegExp {
   const parts = surface
     .split('~')
     .map((p) => p.trim())
     .filter(Boolean)
-    .map((p) => escape(p).replace(/\s+/g, '\\s*'));
+    .map((p) =>
+      escape(p)
+        .replace(/\s+/g, '\\s*')
+        .replace(/[ㄱ-ㅎ](?=[가-힣])/g, (j) => `[${syllablesWithFinal(j)}]`),
+    );
   if (!parts.length) throw new SealedError(`표지가 비어 있습니다: "${surface}"`);
   return new RegExp(parts.join('\\s*([\\s\\S]*?)\\s*'));
 }
