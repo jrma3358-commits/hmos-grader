@@ -1,0 +1,383 @@
+{
+  "source_text": "14. 두 함수 f(x)=(1/2)x+1, g(x)=-x^2+5가 있다. 모든 실수 x에 대하여 함수 h(x)가 (f∘h)(x)=g(x)를 만족시킬 때, h(3)의 값은?\n[3점][2015년 9월 고2 가06]\n① -10\n② -5\n③ 0\n④ 5\n⑤ 10",
+  "provenance": {
+    "grader": {
+      "model": "claude-opus-5-5",
+      "prompt_sha": "28ec0b3fb2948b6a",
+      "tokens": [
+        11583,
+        2939
+      ]
+    },
+    "v2": {
+      "commit": "6254ec9",
+      "sealed_sha": "5ecc98103b85d32e",
+      "sealed_mtime": "2026-10-03T12:02:16.302Z"
+    }
+  },
+  "direction": {
+    "grammar_no": 2,
+    "grammar_name": "제한독해",
+    "question_direction": "'모든 실수 x에 대하여 (f∘h)(x)=g(x)를 만족시킬 때'라는 제약 상황 안에서만 성립하는 대상 h의 값, 그중에서도 x=3에서의 값 h(3) 하나를 호출하라는 요구이다. h(x)의 식 전체가 아니라 h(3)이라는 한 점의 값이 최종 목적지이다."
+  },
+  "keypoint": {
+    "verdict": "잠정",
+    "b": "h(3): 합성함수의 안쪽 함수 h가 x=3에서 내놓는 값이자, 바깥 함수 f에 들어가는 입력값",
+    "node_id": null,
+    "g_anchor": {
+      "g_text": "h(3): 합성함수의 안쪽 함수 h가 x=3에서 내놓는 값이자, 바깥 함수 f에 들어가는 입력값",
+      "node_id": null,
+      "color": null,
+      "entity": null,
+      "index": null,
+      "match": "none"
+    },
+    "v_pivot": {
+      "node_id": "n4",
+      "entity": "만족시킬 때, h(3)",
+      "reason": "Q 직전 B",
+      "convergence": 0
+    },
+    "substance": "∀x(24번)는 항등식이라는 헌법이므로 x=3을 넣어도 관계가 그대로 성립한다. 따라서 f(h(3)) = g(3) = −9+5 = −4이다. 대상전이(5번)로 보면 3은 h를 거쳐 h(3)이 되고, h(3)은 다시 f를 거쳐 −4가 된다. 그러므로 h(3)은 'f에 넣었을 때 −4가 나오는 입력값', 곧 f⁻¹(−4)이다(4번 역추적). 이를 풀면 (1/2)·h(3)+1 = −4이고, 여기서 h(3) = −10(①)이다. h(x)의 식 전체(−2x²+8)를 구할 필요 없이 결과 g(3)에서 원인 h(3)으로 곧바로 거슬러 오르는 것이 급소이다. 이 h(3)을 바깥 함수의 입력값으로 보지 못하고 f(3)이나 g(h(3)) 같은 엉뚱한 합성 순서로 읽으면 이후 전체가 무너진다.",
+    "lens_symbol_no": 4,
+    "lens_symbol": "f⁻¹(b)",
+    "b_source": "표면"
+  },
+  "combination": [
+    "B",
+    "C",
+    "Q"
+  ],
+  "b_candidates": {
+    "kept": [
+      {
+        "g_text": "h(3)",
+        "node_id": "n4",
+        "color": "B",
+        "entity": "만족시킬 때, h(3)",
+        "index": 90,
+        "match": "contains"
+      },
+      {
+        "g_text": "h(x)",
+        "node_id": "n2",
+        "color": "B",
+        "entity": "함수 h(x)",
+        "index": 61,
+        "match": "contains"
+      }
+    ],
+    "rejected_by_v2": [],
+    "unverified": [
+      {
+        "g_text": "f(h(3)) = g(3)",
+        "node_id": null,
+        "color": null,
+        "entity": null,
+        "index": null,
+        "match": "none"
+      }
+    ]
+  },
+  "color_conflicts": [
+    {
+      "phrase": "함수 h(x)가 (f∘h)(x)=g(x)를 만족시킬 때",
+      "guide": "P",
+      "anchor": {
+        "g_text": "함수 h(x)가 (f∘h)(x)=g(x)를 만족시킬 때",
+        "node_id": "n3",
+        "color": "B",
+        "entity": "(f∘h)(x)=g(x)",
+        "index": 76,
+        "match": "contained"
+      }
+    }
+  ],
+  "flags": [
+    "V_MISSING_NODE"
+  ],
+  "layer3_flow": {
+    "reached": "답안 없음",
+    "broken_at": "답안 없음",
+    "matches_substance": null,
+    "evidence": "학생 답안이 제출되지 않아 흐름을 추적할 수 없음"
+  },
+  "layer4_atomic": [
+    {
+      "unit": "답안 없음",
+      "location": "답안 없음",
+      "feedback": "답안 없음"
+    }
+  ],
+  "stale": false,
+  "raw": {
+    "grader": {
+      "layer1_grammar": {
+        "grammar_no": 2,
+        "grammar_name": "제한독해",
+        "matched_pattern": "~일 때, ~의 값은?",
+        "question_direction": "'모든 실수 x에 대하여 (f∘h)(x)=g(x)를 만족시킬 때'라는 제약 상황 안에서만 성립하는 대상 h의 값, 그중에서도 x=3에서의 값 h(3) 하나를 호출하라는 요구이다. h(x)의 식 전체가 아니라 h(3)이라는 한 점의 값이 최종 목적지이다.",
+        "b_candidates": [
+          "h(3)",
+          "h(x)",
+          "f(h(3)) = g(3)"
+        ],
+        "evidence": "문장 끝 구조가 '…를 만족시킬 때, h(3)의 값은?'으로 닫혀 문법2 패턴 '~일 때, ~의 값은?'과 일치한다. 겹치는 문법도 있다. '모든 실수 x에 대하여'는 문법4(맥락독해, '~에 대하여')로 핵심 관계(합성)를 소환한다. 'g가 되도록 하는 h'를 거꾸로 찾는 구조는 문법5(본질독해, 역추적)의 성격을 띤다. 그러나 질문의 최종 방향은 제약 상황 속 대상 h(3)의 값 호출이므로 주 문법은 2번이다. 주 문법이 세운 연기자는 함수 h이고, 질문이 지목한 주인공은 h(3)이다."
+      },
+      "layer2_symbols": {
+        "mappings": [
+          {
+            "phrase": "모든 실수 x에 대하여",
+            "symbol_no": 24,
+            "symbol": "∀x",
+            "flow": "항등 세계의 헌법",
+            "guide": "C"
+          },
+          {
+            "phrase": "함수 h(x)가 (f∘h)(x)=g(x)를 만족시킬 때",
+            "symbol_no": 5,
+            "symbol": "g(f(a))",
+            "flow": "대상전이의 흐름",
+            "guide": "P"
+          },
+          {
+            "phrase": "~를 만족시킬 때 (결과 g(x)가 먼저 주어지고 원인 h를 찾는 구조)",
+            "symbol_no": 4,
+            "symbol": "f⁻¹(b)",
+            "flow": "역추적의 지시",
+            "guide": "C"
+          },
+          {
+            "phrase": "h(3)의 값은?",
+            "symbol_no": 3,
+            "symbol": "f(a)",
+            "flow": "질문의 인식",
+            "guide": "Q"
+          }
+        ],
+        "keypoint": {
+          "guide": "B",
+          "b": "h(3): 합성함수의 안쪽 함수 h가 x=3에서 내놓는 값이자, 바깥 함수 f에 들어가는 입력값",
+          "b_source": "표면",
+          "lens_symbol_no": 4,
+          "lens_symbol": "f⁻¹(b)",
+          "substance": "∀x(24번)는 항등식이라는 헌법이므로 x=3을 넣어도 관계가 그대로 성립한다. 따라서 f(h(3)) = g(3) = −9+5 = −4이다. 대상전이(5번)로 보면 3은 h를 거쳐 h(3)이 되고, h(3)은 다시 f를 거쳐 −4가 된다. 그러므로 h(3)은 'f에 넣었을 때 −4가 나오는 입력값', 곧 f⁻¹(−4)이다(4번 역추적). 이를 풀면 (1/2)·h(3)+1 = −4이고, 여기서 h(3) = −10(①)이다. h(x)의 식 전체(−2x²+8)를 구할 필요 없이 결과 g(3)에서 원인 h(3)으로 곧바로 거슬러 오르는 것이 급소이다. 이 h(3)을 바깥 함수의 입력값으로 보지 못하고 f(3)이나 g(h(3)) 같은 엉뚱한 합성 순서로 읽으면 이후 전체가 무너진다."
+        }
+      },
+      "layer3_flow": {
+        "reached": "답안 없음",
+        "broken_at": "답안 없음",
+        "matches_substance": null,
+        "evidence": "학생 답안이 제출되지 않아 흐름을 추적할 수 없음"
+      },
+      "layer4_atomic": [
+        {
+          "unit": "답안 없음",
+          "location": "답안 없음",
+          "feedback": "답안 없음"
+        }
+      ],
+      "blocked_layer": "답안 없음"
+    },
+    "v2": {
+      "question": "14. 두 함수 f(x)=(1/2)x+1, g(x)=-x^2+5가 있다. 모든 실수 x에 대하여 함수 h(x)가 (f∘h)(x)=g(x)를 만족시킬 때, h(3)의 값은?\n[3점][2015년 9월 고2 가06]\n① -10\n② -5\n③ 0\n④ 5\n⑤ 10",
+      "graph": {
+        "question": "14. 두 함수 f(x)=(1/2)x+1, g(x)=-x^2+5가 있다. 모든 실수 x에 대하여 함수 h(x)가 (f∘h)(x)=g(x)를 만족시킬 때, h(3)의 값은?\n[3점][2015년 9월 고2 가06]\n① -10\n② -5\n③ 0\n④ 5\n⑤ 10",
+        "nodes": [
+          {
+            "id": "n0",
+            "surface": "가",
+            "switchId": "1",
+            "index": 35,
+            "color": "B",
+            "entity": "두 함수 f(x)=(1/2)x+1, g(x)=-x^2+5"
+          },
+          {
+            "id": "n1",
+            "surface": "모든 실수 x에 대하여",
+            "switchId": "14",
+            "index": 41,
+            "color": "C",
+            "entity": "실수 x"
+          },
+          {
+            "id": "n2",
+            "surface": "가",
+            "switchId": "1",
+            "index": 61,
+            "color": "B",
+            "entity": "함수 h(x)"
+          },
+          {
+            "id": "n3",
+            "surface": "를",
+            "switchId": "1",
+            "index": 76,
+            "color": "B",
+            "entity": "(f∘h)(x)=g(x)"
+          },
+          {
+            "id": "n4",
+            "surface": "의",
+            "switchId": "1",
+            "index": 90,
+            "color": "B",
+            "entity": "만족시킬 때, h(3)"
+          },
+          {
+            "id": "n5",
+            "surface": "값은?",
+            "switchId": "2",
+            "index": 92,
+            "color": "Q",
+            "entity": "값은?"
+          },
+          {
+            "id": "n6",
+            "surface": "① -10",
+            "switchId": "LS-32",
+            "index": 118,
+            "color": "B",
+            "entity": "-10"
+          },
+          {
+            "id": "n7",
+            "surface": "② -5",
+            "switchId": "LS-32",
+            "index": 124,
+            "color": "B",
+            "entity": "-5"
+          },
+          {
+            "id": "n8",
+            "surface": "③ 0",
+            "switchId": "LS-32",
+            "index": 129,
+            "color": "B",
+            "entity": "0"
+          },
+          {
+            "id": "n9",
+            "surface": "④ 5",
+            "switchId": "LS-32",
+            "index": 133,
+            "color": "B",
+            "entity": "5"
+          },
+          {
+            "id": "n10",
+            "surface": "⑤ 10",
+            "switchId": "LS-32",
+            "index": 137,
+            "color": "B",
+            "entity": "10"
+          }
+        ],
+        "edges": [
+          {
+            "from": "n0",
+            "to": "n1",
+            "surface": null,
+            "kind": "adjacent",
+            "index": 41
+          },
+          {
+            "from": "n1",
+            "to": "n2",
+            "surface": null,
+            "kind": "adjacent",
+            "index": 61
+          },
+          {
+            "from": "n2",
+            "to": "n3",
+            "surface": null,
+            "kind": "adjacent",
+            "index": 76
+          },
+          {
+            "from": "n3",
+            "to": "n4",
+            "surface": null,
+            "kind": "adjacent",
+            "index": 90
+          },
+          {
+            "from": "n4",
+            "to": "n5",
+            "surface": null,
+            "kind": "adjacent",
+            "index": 92
+          },
+          {
+            "from": "n5",
+            "to": "n6",
+            "surface": null,
+            "kind": "adjacent",
+            "index": 118
+          },
+          {
+            "from": "n6",
+            "to": "n7",
+            "surface": null,
+            "kind": "adjacent",
+            "index": 124
+          },
+          {
+            "from": "n7",
+            "to": "n8",
+            "surface": null,
+            "kind": "adjacent",
+            "index": 129
+          },
+          {
+            "from": "n8",
+            "to": "n9",
+            "surface": null,
+            "kind": "adjacent",
+            "index": 133
+          },
+          {
+            "from": "n9",
+            "to": "n10",
+            "surface": null,
+            "kind": "adjacent",
+            "index": 137
+          }
+        ],
+        "combination": [
+          "B",
+          "C",
+          "Q"
+        ],
+        "undecided": []
+      },
+      "form": {
+        "id": null,
+        "name": null,
+        "colors": [
+          "B",
+          "C",
+          "Q"
+        ],
+        "known": false
+      },
+      "pivot": {
+        "ok": true,
+        "pivot": {
+          "node": {
+            "id": "n4",
+            "surface": "의",
+            "switchId": "1",
+            "index": 90,
+            "color": "B",
+            "entity": "만족시킬 때, h(3)"
+          },
+          "reason": "Q 직전 B",
+          "convergence": 0,
+          "sameAsDeepest": false
+        }
+      }
+    }
+  }
+}
