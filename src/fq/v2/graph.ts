@@ -172,6 +172,8 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
   /** chained = 어절 안이지만 조사 연쇄로 걸린 표지 (예: 「것만을」의 「만」) */
   /** passage = 제시문 블록이면 발문 빈칸 표지가 걸린 자리 · caseHead = 케이스 머리 문단(P 머리) */
   let hits: { at: number; end: number; c: Candidate; inner: string; chained: boolean; passage?: number; caseHead?: true; math?: true }[] = [];
+  /** 문장 종결 표지가 걸린 자리 (apply.sentenceEnds) — 노드·간선이 아니라 절 경계다 */
+  const sentenceBreaks: { at: number; end: number }[] = [];
 
   // 어절 끝 조건 [오종래 2026-09-30] — apply.endOfWord면 조사·어미 표지(어휘형 제외)는
   //   바로 뒤가 한글·영문·숫자·여는 괄호가 아닐 때만 건다. 조사는 어절 끝에 붙기 때문이다.
@@ -192,6 +194,18 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
   const afterNounOnly = table.apply.afterNounOnly ?? [];
   const verbStems = table.apply.verbStems ?? [];
   const verbStemBefore = (ch: string | undefined) => ch !== undefined && verbStems.includes(ch);
+
+  // 수식 뒤에서만 [오종래 2026-10-04] — apply.afterMathOnly 스위치는 바로 앞 어절(사이 공백 허용, 줄바꿈 제외)이
+  //   한글 없는 식일 때만 건다 (예: 주격 「이」「가」 — 「{b_n}이」·「(x > 0) 이」 ○, 「이차함수」·「길이가」 ✕).
+  const afterMathOnly = table.apply.afterMathOnly ?? [];
+  const afterMath = (at: number) => {
+    const word = question.slice(0, at).match(/(\S+)[ \t]*$/)?.[1];
+    return word !== undefined && !/[가-힣ㄱ-ㅎㅏ-ㅣ]/.test(word);
+  };
+
+  // 문장 종결 [오종래 2026-10-04] — apply.sentenceEnds(예: 「이다.」「만족시킨다.」「~하다.」)가 걸리면 절 경계다.
+  //   다른 표지보다 먼저 본다 — 종결 표지 안의 글자(「이다」의 「이」)를 조사로 걸지 않는다.
+  const sentenceEnds = (table.apply.sentenceEnds ?? []).map(markerRegex);
 
   // 서술 블록 [오종래 2026-10-01] — 봉인 파일이 지정한 스위치(apply.statementBlocks, 예: 보기 머리 「ㄱ.」)의 표지가
   //   어절로 홀로 서면, 그 뒤 서술 전체(다음 머리·문단 경계·끝 앞까지)를 노드 하나의 실체로 잡는다.
@@ -247,6 +261,12 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
       i += speaker.length;
       continue;
     }
+    const ending = sentenceEnds.map((re) => rest.match(re)).find((m) => m?.index === 0);
+    if (ending) {
+      sentenceBreaks.push({ at: i, end: i + ending[0].length });
+      i += ending[0].length;
+      continue;
+    }
     let matched: { len: number; c: Candidate; inner: string; chained: boolean; math?: true } | undefined;
     for (const c of cands) {
       const m = rest.match(c.re);
@@ -259,6 +279,9 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
         }
         if (afterNounOnly.includes(c.sw.id) && verbStemBefore(question[i - 1])) {
           continue; // 앞이 용언 어간 — 관형형 어미로 본다
+        }
+        if (afterMathOnly.includes(c.sw.id) && !afterMath(i)) {
+          continue; // 바로 앞이 수식이 아니다
         }
         // 단독 어절 [오종래 2026-10-01] — 스위치의 standalone이면 앞에 한글 글자가 붙지 않을 때만 건다
         //   (「대표단」·「지표」의 「표」 ✕, 「표는」·「표가」·「표를」 ○). 뒤 조건은 두지 않는다.
@@ -401,6 +424,12 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
 
   for (const [n, hit] of hits.entries()) {
     const { sw } = hit.c;
+    // 문장 종결 경계를 넘었으면 실체는 경계 뒤에서부터, 걸어 둔 간선은 버린다
+    const crossed = sentenceBreaks.filter((b) => b.at >= cursor && b.end <= hit.at).at(-1);
+    if (crossed) {
+      cursor = crossed.end;
+      pendingEdge = undefined;
+    }
     const surface = hit.math ? hit.inner : question.slice(hit.at, hit.end); // 수식 묶기는 끝 공백·쉼표를 뗀 식
 
     if (sw.kind === null) {

@@ -929,6 +929,55 @@ describe('어절 예외 — 예외 낱말과 같은 어절 안에서는 조사·
   });
 });
 
+describe('수식 뒤에서만 · 문장 종결 경계 (오종래 2026-10-04)', () => {
+  // 수식 = SM(어휘형 「선분」, 수식 묶기), 주격 = SS(~이·~가, 수식 뒤에서만), B = SB(~의), 간선 = SE(그리고)
+  const sw = (id: string, kind: SealedSwitch['kind'], markers: string[], color: Color, lexical?: boolean) =>
+    ({ id, kind, markers, intent: '', color, lexical }) as SealedSwitch;
+  const table = (apply: Partial<SealedTable['apply']> = {}): SealedTable => ({
+    version: 1,
+    source: { document: '(테스트)', sections: [] },
+    switches: [
+      sw('SM', '조사·어미', ['선분'], 'B', true),
+      sw('SS', '조사·어미', ['~이', '~가'], 'C'),
+      sw('SB', '조사·어미', ['~의'], 'B'),
+      sw('SE', '연결어', ['그리고'], 'D'),
+    ],
+    lights: [],
+    matrix: [],
+    symbols: [],
+    forms: [],
+    apply: { longestMatchFirst: true, precedence: [], endOfWord: true, mathExpressions: ['SM'], ...apply },
+    pending: [],
+  });
+  const surfaces = (q: string, apply?: Partial<SealedTable['apply']>) => build_path_graph(q, table(apply)).nodes.map((n) => n.surface);
+
+  it('afterMathOnly 스위치는 한글 없는 식 바로 뒤에서만 건다', () => {
+    const q = '사과 이 선분 AB 이 길이가 크다';
+    assert.deepEqual(surfaces(q), ['이', '선분 AB', '가']);
+    // 수식 묶기 뒤 「이」는 끌 실체가 없어 노드가 서지 않는다 (식은 이미 수식 노드)
+    assert.deepEqual(surfaces(q, { afterMathOnly: ['SS'] }), ['선분 AB']);
+  });
+
+  it('수식 묶기가 아닌 식 뒤의 주격도 건다 — 붙어 있든 한 칸 띄었든', () => {
+    const entities = (q: string) => build_path_graph(q, table({ afterMathOnly: ['SS'] })).nodes.map((n) => n.entity);
+    assert.deepEqual(entities('등차수열 {b_n}이 크다'), ['등차수열 {b_n}']);
+    assert.deepEqual(entities('함수 g(x) (x > 0) 이 크다'), ['함수 g(x) (x > 0)']);
+  });
+
+  it('문장 종결 표지는 노드 없이 경계가 되어 실체·간선을 끊는다', () => {
+    const q = '점 A의 그리고 4이다. 넓이의 값';
+    const g = build_path_graph(q, table({ sentenceEnds: ['이다.'] }));
+    assert.deepEqual(g.nodes.map((n) => n.entity), ['점 A', '넓이']);
+    assert.equal(g.edges.filter((e) => e.kind === '연결어').length, 0); // 경계 앞에 걸어 둔 간선은 넘기지 않는다
+    assert.equal(build_path_graph(q, table()).edges.filter((e) => e.kind === '연결어').length, 1);
+  });
+
+  it('종결 표지 안의 글자는 다른 표지로 걸지 않는다', () => {
+    assert.deepEqual(surfaces('값은 4이다. 끝', { endOfWord: false, sentenceEnds: ['이다.'] }), []);
+    assert.deepEqual(surfaces('값은 4이다. 끝', { endOfWord: false }), ['이']);
+  });
+});
+
 describe('받침 자모 표지 — 자모 뒤에 음절이 오면 그 받침을 가진 음절 하나 (오종래 2026-10-03)', () => {
   it('「~ㄴ지」는 받침 ㄴ 음절 + 지, 「~ㄹ지」는 받침 ㄹ 음절 + 지', () => {
     const n = markerRegex('~ㄴ지');
