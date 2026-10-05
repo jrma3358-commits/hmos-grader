@@ -996,3 +996,62 @@ describe('받침 자모 표지 — 자모 뒤에 음절이 오면 그 받침을 
     assert.throws(() => markerRegex('~ㄸ지'));
   });
 });
+
+describe('서술형태 급소 — C-F 노드 안의 핵심어 (오종래 2026-10-05)', () => {
+  // 표지는 봉인 값이 아니라 테스트용 가짜 기호다. 서술형태 = SF(어휘형 「논박@M」 + 틀 「~@M」, 앞말 끌기 「~@V」), 대상 = SB(@B), 질문 = SQ(@Q)
+  const sw = (id: string, markers: string[], color: Color, lexical?: string[]) =>
+    ({ id, kind: '조사·어미', markers, intent: '', color, lexical }) as SealedSwitch;
+  const table = (formPivot?: string[]): SealedTable => ({
+    version: 1,
+    source: { document: '(테스트)', sections: [] },
+    switches: [sw('SF', ['~@M', '논박@M', '~@V'], 'C', ['논박@M']), sw('SB', ['~@B'], 'B'), sw('SQ', ['~@Q'], 'Q'), sw('SP', ['~와'], 'P')],
+    lights: [],
+    matrix: [],
+    symbols: [],
+    forms: [],
+    apply: { longestMatchFirst: true, precedence: [], formPivot },
+    pending: [],
+  });
+
+  it('어휘형 C-F 노드면 틀을 떼고 남은 말이 핵심어 — Q 직전 B보다 먼저다', () => {
+    const t = table(['SF']);
+    const g = build_path_graph('형태 @B 논박@M 설명 @Q', t);
+    const r = analyze_pivot(g, t);
+    assert.equal(r.ok, true);
+    if (!r.ok) return;
+    assert.equal(r.pivot.reason, '서술형태');
+    assert.equal(r.pivot.node.switchId, 'SF');
+    assert.equal(r.pivot.node.color, 'C');
+    assert.equal(r.pivot.keyword, '논박');
+  });
+
+  it('앞말을 끄는 C-F 노드면 끌어온 앞말이 핵심어', () => {
+    const t = table(['SF']);
+    const g = build_path_graph('형태 @B 관점 @V 설명 @Q', t);
+    const r = analyze_pivot(g, t);
+    assert.equal(r.ok && r.pivot.keyword, '관점');
+  });
+
+  it('핵심어가 지시어면 앞 명사구가 핵심어 — 병렬 P(와)는 함께 묶는다', () => {
+    const t = table(['SF']);
+    const g = build_path_graph('갑와 을 @B 각각 @V 설명 @Q', t);
+    const r = analyze_pivot(g, t);
+    assert.equal(r.ok && r.pivot.keyword, '갑와 을');
+  });
+
+  it('C-F 노드가 둘이면 문제 설계 오류로 플래그', () => {
+    const t = table(['SF']);
+    const g = build_path_graph('형태 @B 논박@M 관점 @V 설명 @Q', t);
+    const r = analyze_pivot(g, t);
+    assert.equal(r.ok, false);
+    assert.equal(!r.ok && r.flag, 'MULTIPLE_CONVERGENCE');
+  });
+
+  it('지정이 없으면 기존 규칙 그대로 — Q 직전 B', () => {
+    const t = table();
+    const g = build_path_graph('형태 @B 논박@M 설명 @Q', t);
+    const r = analyze_pivot(g, t);
+    assert.equal(r.ok && r.pivot.reason, 'Q 직전 B');
+    assert.equal(r.ok && r.pivot.keyword, undefined);
+  });
+});

@@ -35,8 +35,11 @@ export const DEFAULT_CONVERGENCE_WEIGHTS: Record<PathEdge['kind'], number> = {
 
 export interface Pivot {
   node: PathNode;
-  /** '강한 C 연결 B' = 강한 C(apply.strongC)에 연결된 B라서 급소다 (graph.ts) · 'Q 직전 B' = 마지막 Q 바로 앞의 B라서 급소다 */
-  reason: '최수렴 B' | '강한 C 연결 B' | 'Q 직전 B';
+  /** '강한 C 연결 B' = 강한 C(apply.strongC)에 연결된 B라서 급소다 (graph.ts) · 'Q 직전 B' = 마지막 Q 바로 앞의 B라서 급소다
+   *  · '서술형태' = 서술형태 제약(apply.formPivot, C-F) 노드라서 급소다 — 이때만 급소가 B가 아니다 */
+  reason: '최수렴 B' | '강한 C 연결 B' | 'Q 직전 B' | '서술형태';
+  /** 서술형태 급소의 핵심어 — 표지에서 서술 틀을 떼고 남은 말 (예: 「논박하는 방식으로」 → 「논박」). 그 밖의 급소에는 없다 */
+  keyword?: string;
   /** 이 노드로 수렴한 간선의 무게 합 */
   convergence: number;
   /** 최심점과 같은 노드인가. 같더라도 '깊어서'가 아니라 '수렴해서' 급소다 */
@@ -91,10 +94,76 @@ export function deepest_node(graph: PathGraph): PathNode | undefined {
 }
 
 /**
+ * 서술형태 급소의 핵심어 — 표지에서 서술 틀을 떼고 남은 말.
+ * 앞말을 끄는 표지(「~의 관점에서」)는 실체가 이미 틀 밖의 앞말이다. 어휘형 표지(「논박하는 방식으로」)는
+ * 같은 스위치의 틀 표지(앞에 '~'가 붙은 표지, 예: 「~하는 방식으로」) 중 가장 긴 것을 끝에서 뗀다.
+ */
+function formKeyword(graph: PathGraph, node: PathNode, table: SealedTable): string {
+  let keyword: string;
+  if (node.entity !== node.surface) keyword = node.entity.trim();
+  else {
+    const sw = table.switches.find((s) => s.id === node.switchId);
+    const frame = (sw?.markers ?? [])
+      .filter((m) => m.startsWith('~'))
+      .map((m) => m.slice(1).trim())
+      .filter((f) => f && node.surface.endsWith(f) && node.surface.length > f.length)
+      .sort((a, b) => b.length - a.length)[0];
+    keyword = frame ? node.surface.slice(0, -frame.length).trim() : node.surface.trim();
+  }
+  // 지시어 핵심어 [오종래 2026-10-05] — 핵심어가 지시어(「각각」 등)면 그것이 가리키는 앞 명사구가 핵심어다.
+  //   앞 명사구 = C-F 노드 앞의 가장 가까운 B 노드 실체. 그 바로 앞에 병렬 P 노드(「와」·「과」)가 잇따르면 함께 묶는다
+  //   (예: 윤리12 「응보주의와 공리주의가 있다. 각각의 관점에서」 → 「응보주의와 공리주의」).
+  if (!DEICTICS.includes(keyword)) return keyword;
+  const at = graph.nodes.indexOf(node);
+  let b = at - 1;
+  while (b >= 0 && graph.nodes[b].color !== 'B') b--;
+  if (b < 0) return keyword;
+  let phrase = graph.nodes[b].entity.trim();
+  for (let i = b - 1; i >= 0 && graph.nodes[i].color === 'P' && PARALLEL.includes(graph.nodes[i].surface); i--) {
+    phrase = `${graph.nodes[i].entity.trim()}${graph.nodes[i].surface} ${phrase}`;
+  }
+  return phrase;
+}
+
+/** 서술형태 핵심어에서 앞 명사구로 넘기는 지시어 */
+const DEICTICS = ['각각', '각', '이', '그', '이것', '그것', '이들', '그들', '이러한', '그러한'];
+/** 앞 명사구를 이어 붙이는 병렬 표지 */
+const PARALLEL = ['와', '과'];
+
+/**
  * 급소를 산출한다 — 결정론 (구현명세 §2-4).
  * 실패도 값으로 돌려준다: B가 없거나(NO_B) 둘로 수렴하면(MULTIPLE_CONVERGENCE) 플래그.
  */
 export function analyze_pivot(graph: PathGraph, table?: SealedTable): PivotAnalysis {
+  // 서술형태 급소 [오종래 2026-10-05] — 서술형태 제약(apply.formPivot, C-F) 노드가 있으면 다른 급소 규칙보다 먼저
+  //   그 노드가 급소이고, 실체는 그 안의 핵심어다 (예: 인문논술_문1 「논박하는 방식으로」 → 「논박」).
+  //   「급소는 B」의 예외다 — 이 규칙에서만 급소가 C 노드다. 둘 이상이면 급소가 둘 — 문제 설계 오류로 플래그한다.
+  const formIds = table?.apply.formPivot ?? [];
+  const forms = graph.nodes.filter((n) => formIds.includes(n.switchId));
+  if (forms.length > 1) {
+    return {
+      ok: false,
+      flag: 'MULTIPLE_CONVERGENCE',
+      candidates: forms,
+      message:
+        `서술형태 제약 노드가 ${forms.length}개입니다 — 문제 설계 오류로 플래그합니다.\n` +
+        `급소는 하나여야 합니다 (구현명세 §2-4). 후보: ${forms.map((n) => `${n.id}("${n.entity}")`).join(', ')}`,
+    };
+  }
+  if (forms.length === 1 && table) {
+    const node = forms[0];
+    return {
+      ok: true,
+      pivot: {
+        node,
+        reason: '서술형태',
+        keyword: formKeyword(graph, node, table),
+        convergence: convergenceOf(graph, node, table),
+        sameAsDeepest: deepest_node(graph)?.id === node.id,
+      },
+    };
+  }
+
   const bs = graph.nodes.filter((n) => n.color === 'B');
   if (!bs.length) {
     return {
