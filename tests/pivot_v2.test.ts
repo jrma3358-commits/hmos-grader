@@ -1052,7 +1052,7 @@ describe('서술형태 급소 — C-F 노드 안의 핵심어 (오종래 2026-10
     const g = build_path_graph('형태 @B 논박@M 설명 @Q', t);
     const r = analyze_pivot(g, t);
     assert.equal(r.ok && r.pivot.reason, 'Q 직전 B');
-    assert.equal(r.ok && r.pivot.keyword, undefined);
+    assert.equal(r.ok && r.pivot.keyword, '형태', 'B 급소의 실체값 — 서술형태 핵심어가 아니다');
   });
 });
 
@@ -1186,5 +1186,24 @@ describe('참조 제시문 — 「다음 글」 뒤 문단을 P 하나로 (오�
   it('발문(Q 문단)이 아니면 묶지 않는다', () => {
     const g = build_path_graph('다음@R 의미@B\n가@B 나@B', table(['SR']));
     assert.equal(g.nodes.some((n) => n.color === 'P'), false);
+  });
+});
+
+describe('B 급소의 실체값 — 이름이 아니라 B가 묻는 실체 (오종래 2026-10-05)', () => {
+  const pick = (entity: string) => {
+    const g = graph([node('B1', 'B', entity), node('Q1', 'Q')], []);
+    const p = find_pivot(g);
+    return { keyword: p.keyword, name: p.name };
+  };
+
+  it('「이름 + 식·기호」면 실체값은 식·기호, 이름은 따로', () => {
+    assert.deepEqual(pick('일반항 a_n'), { keyword: 'a_n', name: '일반항' });
+    assert.deepEqual(pick('점 C(0, -1)'), { keyword: 'C(0, -1)', name: '점' });
+  });
+
+  it('식·기호가 따로 없으면 실체 그대로, 이름 없음', () => {
+    assert.deepEqual(pick('거리'), { keyword: '거리', name: undefined });
+    assert.deepEqual(pick('X = 1일 확률'), { keyword: 'X = 1일 확률', name: undefined });
+    assert.deepEqual(pick('a = 3, b = 5, c = 7'), { keyword: 'a = 3, b = 5, c = 7', name: undefined });
   });
 });

@@ -38,8 +38,11 @@ export interface Pivot {
   /** '강한 C 연결 B' = 강한 C(apply.strongC)에 연결된 B라서 급소다 (graph.ts) · 'Q 직전 B' = 마지막 Q 바로 앞의 B라서 급소다
    *  · '서술형태' = 서술형태 제약(apply.formPivot, C-F) 노드라서 급소다 — 이때만 급소가 B가 아니다 */
   reason: '최수렴 B' | '강한 C 연결 B' | 'Q 직전 B' | '서술형태';
-  /** 서술형태 급소의 핵심어 — 표지에서 서술 틀을 떼고 남은 말 (예: 「논박하는 방식으로」 → 「논박」). 그 밖의 급소에는 없다 */
+  /** 급소의 실체값 — B 급소는 B가 묻는 실체(이름 뒤의 식·기호, 예: 「일반항 a_n」 → 「a_n」, 없으면 실체 그대로),
+   *  서술형태 급소는 표지에서 서술 틀을 떼고 남은 말 (예: 「논박하는 방식으로」 → 「논박」) */
   keyword?: string;
+  /** B 급소 실체에서 식·기호 앞의 이름 (예: 「일반항 a_n」 → 「일반항」). 식·기호가 따로 없으면 없다 */
+  name?: string;
   /** 이 노드로 수렴한 간선의 무게 합 */
   convergence: number;
   /** 최심점과 같은 노드인가. 같더라도 '깊어서'가 아니라 '수렴해서' 급소다 */
@@ -139,6 +142,17 @@ function isWritingForm(graph: PathGraph, node: PathNode): boolean {
   return !!prev && prev.color === 'P' && /풀이\s*과정$/.test(prev.entity.trim()) && ['과', '와'].includes(prev.surface.trim());
 }
 
+/**
+ * B 급소의 실체값 [오종래 2026-10-05] — 급소는 B 노드 이름이 아니라 B가 묻는 실체를 낸다.
+ * 실체가 「한글 이름 + 식·기호」(예: 「일반항 a_n」 「점 C(0, -1)」)면 실체값 = 식·기호, 이름은 따로 둔다. 아니면 실체 그대로.
+ */
+function bValue(node: PathNode): Pick<Pivot, 'keyword' | 'name'> {
+  const entity = node.entity.trim();
+  const m = entity.match(/^(.*[가-힣ㄱ-ㅎㅏ-ㅣ])\s+([^가-힣ㄱ-ㅎㅏ-ㅣ\s][^가-힣ㄱ-ㅎㅏ-ㅣ]*)$/);
+  const symbol = m?.[2].replace(/[\s,]+$/, '');
+  return m && symbol ? { keyword: symbol, name: m[1].trim() } : { keyword: entity };
+}
+
 /** 서술어 Q — 바로 뒤에 「있」이 오는 「~고 있는/있다」 (예: 「설명하고 있는 현상」) */
 function isProgressive(question: string, node: PathNode): boolean {
   return /^\s*있/.test(question.slice(node.index + node.surface.length));
@@ -225,6 +239,7 @@ export function analyze_pivot(graph: PathGraph, table?: SealedTable): PivotAnaly
       pivot: {
         node,
         reason: '강한 C 연결 B',
+        ...bValue(node),
         convergence: convergenceOf(graph, node, table),
         sameAsDeepest: deepest_node(graph)?.id === node.id,
       },
@@ -265,6 +280,7 @@ export function analyze_pivot(graph: PathGraph, table?: SealedTable): PivotAnaly
   const atQ = (node: PathNode): Pivot => ({
     node,
     reason: 'Q 직전 B',
+    ...bValue(node),
     convergence: convergenceOf(graph, node, table),
     sameAsDeepest: deepest_node(graph)?.id === node.id,
   });
@@ -314,7 +330,7 @@ export function analyze_pivot(graph: PathGraph, table?: SealedTable): PivotAnaly
   const { node, convergence } = winners[0];
   return {
     ok: true,
-    pivot: { node, reason: '최수렴 B', convergence, sameAsDeepest: deepest_node(graph)?.id === node.id },
+    pivot: { node, reason: '최수렴 B', ...bValue(node), convergence, sameAsDeepest: deepest_node(graph)?.id === node.id },
   };
 }
 
