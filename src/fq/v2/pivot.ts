@@ -132,6 +132,20 @@ function isIndirectQ(node: PathNode): boolean {
   return s.length <= 2 && s.endsWith('지');
 }
 
+/** 서술어 Q — 바로 뒤에 「있」이 오는 「~고 있는/있다」 (예: 「설명하고 있는 현상」) */
+function isProgressive(question: string, node: PathNode): boolean {
+  return /^\s*있/.test(question.slice(node.index + node.surface.length));
+}
+
+/** 공통 발문 Q — 소문항 전체에 거는 지시 (예: 「물음에 답하시오」) */
+const COMMON_Q = ['답하시오', '답하여라', '답하라'];
+
+/** 작성 지시 블록의 시작 — 한 줄로 선 <작성 방법>·<작성 조건>·<조건> 머리. 없으면 끝 */
+function writingBlockStart(question: string): number {
+  const m = /(^|\n)[^\S\n]*<\s*(작성\s*방법|작성\s*조건|조\s*건)\s*>[^\S\n]*(?=\n|$)/.exec(question);
+  return m ? m.index + m[1].length : Infinity;
+}
+
 /** 서술형태 핵심어에서 앞 명사구로 넘기는 지시어 */
 const DEICTICS = ['각각', '각', '이', '그', '이것', '그것', '이들', '그들', '이러한', '그러한'];
 /** 앞 명사구를 이어 붙이는 병렬 표지 */
@@ -253,10 +267,14 @@ export function analyze_pivot(graph: PathGraph, table?: SealedTable): PivotAnaly
     //   `pivot`은 마지막 Q의 급소 그대로다.
     //   세는 Q는 발문·물음 문단의 직접 Q뿐이다 [오종래 2026-10-05] — 간접의문(「~인지」「~는지」 등)은 Q로 세지 않는다
     //   (제시문 속 「왜 저러는지」·<작성 조건>의 「얼마인지」가 급소를 늘리지 않게).
+    //   작성 지시·서술어·공통 발문도 직접 Q가 아니다 [오종래 2026-10-05] — <작성 방법>·<작성 조건>·<조건> 블록 안의 Q(물리13 「서술하시오」 반복),
+    //   「~고 있는」 서술어(윤리13 「설명하고 있는」), 공통 발문 「답하시오」(논서술형1)는 세지 않는다.
+    const blockAt = writingBlockStart(graph.question);
+    const counted = (n: PathNode) => n.color === 'Q' && !isIndirectQ(n) && !isProgressive(graph.question, n) && !COMMON_Q.includes(n.surface.trim()) && n.index < blockAt;
     const pivots: Pivot[] = [];
     let from = 0;
     for (let q = 0; q <= lastQ; q++) {
-      if (graph.nodes[q].color !== 'Q' || isIndirectQ(graph.nodes[q])) continue;
+      if (!counted(graph.nodes[q])) continue;
       for (let j = q - 1; j >= from; j--) {
         if (eligible(graph.nodes[j])) {
           pivots.push(atQ(graph.nodes[j]));

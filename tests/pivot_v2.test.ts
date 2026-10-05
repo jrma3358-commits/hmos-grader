@@ -1090,6 +1090,43 @@ describe('급소 복수 — Q마다 Q 직전 B (오종래 2026-10-05)', () => {
     assert.deepEqual(r.ok && r.pivots?.map((p) => p.node.id), ['B1', 'B2']);
   });
 
+  // 문장을 주고 노드 자리를 그 문장에서 찾는다 — 작성 지시·서술어 판정은 문장을 본다
+  const at = (q: string, id: string, color: Color, surface: string, from = 0): PathNode => ({ ...node(id, color), surface, index: q.indexOf(surface, from) });
+  const inText = (q: string, nodes: PathNode[]): PathGraph => ({ ...graph(nodes, []), question: q });
+
+  it('「~고 있는」 서술어는 Q로 세지 않는다 — 윤리13 「설명하고 있는」', () => {
+    const q = '글에서 설명하고 있는 의미 서술하시오';
+    const g = inText(q, [at(q, 'B1', 'B', '글'), at(q, 'Q1', 'Q', '설명하고'), at(q, 'B2', 'B', '의미'), at(q, 'Q2', 'Q', '서술하시오')]);
+    const r = analyze_pivot(g);
+    assert.equal(r.ok && r.pivots, undefined);
+    assert.equal(r.ok && r.pivot.node.id, 'B2');
+  });
+
+  it('공통 발문 「답하시오」는 Q로 세지 않는다 — 논서술형1', () => {
+    const q = '내용 답하시오 구성 서술하시오';
+    const g = inText(q, [at(q, 'B1', 'B', '내용'), at(q, 'Q1', 'Q', '답하시오'), at(q, 'B2', 'B', '구성'), at(q, 'Q2', 'Q', '서술하시오')]);
+    assert.equal(analyze_pivot(g).ok && (analyze_pivot(g) as { pivots?: unknown }).pivots, undefined);
+  });
+
+  it('<작성 방법> 블록 안의 Q는 작성 지시라 세지 않는다 — 물리13 「서술하시오」 반복', () => {
+    const q = '이유 서술하시오\n<작성 방법>\n윗글 서술하고 내용 서술하시오';
+    const s2 = q.indexOf('서술하시오') + 1;
+    const g = inText(q, [
+      at(q, 'B1', 'B', '이유'), at(q, 'Q1', 'Q', '서술하시오'),
+      at(q, 'B2', 'B', '윗글'), at(q, 'Q2', 'Q', '서술하고'),
+      at(q, 'B3', 'B', '내용'), at(q, 'Q3', 'Q', '서술하시오', s2),
+    ]);
+    const r = analyze_pivot(g);
+    assert.equal(r.ok && r.pivots, undefined);
+  });
+
+  it('발문 안에 섞인 「<작성 방법>에 따라」는 블록 머리가 아니다', () => {
+    const q = '조건 <작성 방법>에 따라 구하고 넓이 서술하시오';
+    const g = inText(q, [at(q, 'B1', 'B', '조건'), at(q, 'Q1', 'Q', '구하고'), at(q, 'B2', 'B', '넓이'), at(q, 'Q2', 'Q', '서술하시오')]);
+    const r = analyze_pivot(g);
+    assert.equal(r.ok && r.pivots?.length, 2);
+  });
+
   it('Q가 하나면 pivots는 없다', () => {
     const g = graph([node('B1', 'B'), node('C1', 'C'), node('B2', 'B'), node('Q1', 'Q')], []);
     const r = analyze_pivot(g);
