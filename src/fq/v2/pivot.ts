@@ -132,6 +132,13 @@ function isIndirectQ(node: PathNode): boolean {
   return s.length <= 2 && s.endsWith('지');
 }
 
+/** 작성 형식 블록의 「답」 — 바로 앞 노드가 「~풀이 과정」+「과·와」 P인 B「답」 (「풀이 과정과 답을」) */
+function isWritingForm(graph: PathGraph, node: PathNode): boolean {
+  if (node.entity.trim() !== '답') return false;
+  const prev = graph.nodes[graph.nodes.indexOf(node) - 1];
+  return !!prev && prev.color === 'P' && /풀이\s*과정$/.test(prev.entity.trim()) && ['과', '와'].includes(prev.surface.trim());
+}
+
 /** 서술어 Q — 바로 뒤에 「있」이 오는 「~고 있는/있다」 (예: 「설명하고 있는 현상」) */
 function isProgressive(question: string, node: PathNode): boolean {
   return /^\s*있/.test(question.slice(node.index + node.surface.length));
@@ -250,7 +257,10 @@ export function analyze_pivot(graph: PathGraph, table?: SealedTable): PivotAnaly
     if (pointsBack && node.entity.trim() === '이') return false; // 지시어 자체는 급소가 아니다
     // 형식 명사 「값」 [오종래 2026-10-02] — 「값」은 급소가 될 수 없다. Q 직전 B로 잡히면 그 앞 B가 급소다
     //   (예: 수리논술_문_4 「lim_{m→1-} f(m)/g(m)의 값을 구하시오」 → 「lim_{m→1-} f(m)/g(m)」).
-    return node.entity.trim() !== '값';
+    if (node.entity.trim() === '값') return false;
+    // 작성 형식 블록 [오종래 2026-10-05] — 「풀이 과정과 답을 서술하시오」의 「풀이 과정」(P)과 「답」(B)은 한 묶음의 작성 형식이라
+    //   급소가 될 수 없다. 그 앞 B가 급소다 (예: 수학서술형 12 「일반항 a_n을 구하는 풀이 과정과 답을」 → 「일반항 a_n」).
+    return !isWritingForm(graph, node);
   };
   const atQ = (node: PathNode): Pivot => ({
     node,

@@ -1134,3 +1134,16 @@ describe('급소 복수 — Q마다 Q 직전 B (오종래 2026-10-05)', () => {
     assert.equal(r.ok && r.pivot.node.id, 'B2');
   });
 });
+
+describe('작성 형식 블록 — 「풀이 과정과 답을」은 급소가 아니다 (오종래 2026-10-05)', () => {
+  it('「풀이 과정」(과)+「답」이 Q 앞에 서면 그 앞 B가 급소다', () => {
+    const g = graph([node('B1', 'B', '일반항 a_n'), { ...node('P1', 'P', '구하는 풀이 과정'), surface: '과' }, node('B2', 'B', '답'), node('Q1', 'Q')], []);
+    const r = analyze_pivot(g);
+    assert.equal(r.ok && r.pivot.node.id, 'B1');
+  });
+
+  it('「풀이 과정」 없이 홀로 선 「답」은 그대로 급소 후보다', () => {
+    const g = graph([node('B1', 'B', '조건'), node('C1', 'C'), node('B2', 'B', '답'), node('Q1', 'Q')], []);
+    assert.equal(find_pivot(g).node.id, 'B2');
+  });
+});
