@@ -59,7 +59,8 @@ export interface PivotFailure {
   message: string;
 }
 
-export type PivotAnalysis = { ok: true; pivot: Pivot } | PivotFailure;
+/** `pivots` = 급소 복수 — Q가 둘 이상인 물음에서 Q마다의 급소(Q 직전 B), 앞에서부터. 하나뿐이면 없다 */
+export type PivotAnalysis = { ok: true; pivot: Pivot; pivots?: Pivot[] } | PivotFailure;
 
 export class PivotError extends Error {
   readonly flag: PivotFlag;
@@ -123,6 +124,12 @@ function formKeyword(graph: PathGraph, node: PathNode, table: SealedTable): stri
     phrase = `${graph.nodes[i].entity.trim()}${graph.nodes[i].surface} ${phrase}`;
   }
   return phrase;
+}
+
+/** 간접의문 Q — 간접의문형 표지(인지·는지·은지·을지·ㄴ지·ㄹ지)가 건 노드. 표층이 「~지」 두 글자 이하다 */
+function isIndirectQ(node: PathNode): boolean {
+  const s = node.surface.trim();
+  return s.length <= 2 && s.endsWith('지');
 }
 
 /** 서술형태 핵심어에서 앞 명사구로 넘기는 지시어 */
@@ -224,17 +231,41 @@ export function analyze_pivot(graph: PathGraph, table?: SealedTable): PivotAnaly
       break;
     }
   }
-  for (let i = lastQ - 1; i >= 0; i--) {
-    const node = graph.nodes[i];
-    if (node.color !== 'B' || node.foldedFrom === 'C' || node.foldedFrom === 'D') continue;
-    if (pointsBack && node.entity.trim() === '이') continue; // 지시어 자체는 급소가 아니다
+  const eligible = (node: PathNode) => {
+    if (node.color !== 'B' || node.foldedFrom === 'C' || node.foldedFrom === 'D') return false;
+    if (pointsBack && node.entity.trim() === '이') return false; // 지시어 자체는 급소가 아니다
     // 형식 명사 「값」 [오종래 2026-10-02] — 「값」은 급소가 될 수 없다. Q 직전 B로 잡히면 그 앞 B가 급소다
     //   (예: 수리논술_문_4 「lim_{m→1-} f(m)/g(m)의 값을 구하시오」 → 「lim_{m→1-} f(m)/g(m)」).
-    if (node.entity.trim() === '값') continue;
-    return {
-      ok: true,
-      pivot: { node, reason: 'Q 직전 B', convergence: convergenceOf(graph, node, table), sameAsDeepest: deepest_node(graph)?.id === node.id },
-    };
+    return node.entity.trim() !== '값';
+  };
+  const atQ = (node: PathNode): Pivot => ({
+    node,
+    reason: 'Q 직전 B',
+    convergence: convergenceOf(graph, node, table),
+    sameAsDeepest: deepest_node(graph)?.id === node.id,
+  });
+  for (let i = lastQ - 1; i >= 0; i--) {
+    const node = graph.nodes[i];
+    if (!eligible(node)) continue;
+    // 급소 복수 [오종래 2026-10-05] — Q가 둘 이상이면 Q마다 그 Q 직전 B가 급소다 (서논술형 직렬 물음,
+    //   예: 홍익자연논술 (2) 「…을 이용하여 …이 성립함을 보이고, 이를 이용하여 …이 성립함을 보이시오」).
+    //   찾는 범위는 앞 Q 뒤부터 그 Q 앞까지 — 사이에 B가 없는 Q(「몇 개인지 구하시오」의 「구하시오」)는 앞 Q와 한 물음이다.
+    //   `pivot`은 마지막 Q의 급소 그대로다.
+    //   세는 Q는 발문·물음 문단의 직접 Q뿐이다 [오종래 2026-10-05] — 간접의문(「~인지」「~는지」 등)은 Q로 세지 않는다
+    //   (제시문 속 「왜 저러는지」·<작성 조건>의 「얼마인지」가 급소를 늘리지 않게).
+    const pivots: Pivot[] = [];
+    let from = 0;
+    for (let q = 0; q <= lastQ; q++) {
+      if (graph.nodes[q].color !== 'Q' || isIndirectQ(graph.nodes[q])) continue;
+      for (let j = q - 1; j >= from; j--) {
+        if (eligible(graph.nodes[j])) {
+          pivots.push(atQ(graph.nodes[j]));
+          break;
+        }
+      }
+      from = q + 1;
+    }
+    return pivots.length > 1 ? { ok: true, pivot: atQ(node), pivots } : { ok: true, pivot: atQ(node) };
   }
 
   const scored = bs.map((node) => ({ node, convergence: convergenceOf(graph, node, table) }));

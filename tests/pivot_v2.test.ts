@@ -1055,3 +1055,45 @@ describe('서술형태 급소 — C-F 노드 안의 핵심어 (오종래 2026-10
     assert.equal(r.ok && r.pivot.keyword, undefined);
   });
 });
+
+describe('급소 복수 — Q마다 Q 직전 B (오종래 2026-10-05)', () => {
+  it('C→Q→C→Q 직렬 물음이면 두 Q 각각의 직전 B가 급소다 — pivot은 마지막 Q의 급소', () => {
+    // 덧셈정리 C(이용하여) 등식 Q(보이고) 이 C(이용하여) 문항 Q(보이시오)
+    const g = graph(
+      [node('B1', 'B', '덧셈정리'), node('C1', 'C'), node('B2', 'B', '등식'), node('Q1', 'Q'), node('B3', 'B', '이'), node('C2', 'C'), node('B4', 'B', '문항'), node('Q2', 'Q')],
+      [],
+    );
+    const r = analyze_pivot(g);
+    assert.equal(r.ok, true);
+    if (!r.ok) return;
+    assert.deepEqual(r.pivots?.map((p) => p.node.id), ['B2', 'B4']);
+    assert.equal(r.pivot.node.id, 'B4');
+    assert.ok(r.pivots?.every((p) => p.reason === 'Q 직전 B'));
+  });
+
+  it('사이에 B가 없는 Q는 앞 Q와 한 물음이다 — 「몇 개인지 구하시오」', () => {
+    const g = graph([node('B1', 'B'), node('Q1', 'Q'), node('B2', 'B'), node('Q2', 'Q'), node('Q3', 'Q')], []);
+    const r = analyze_pivot(g);
+    assert.deepEqual(r.ok && r.pivots?.map((p) => p.node.id), ['B1', 'B2']);
+  });
+
+  it('간접의문 Q(「~인지」)는 세지 않는다 — 직접 Q만 급소 복수', () => {
+    const g = graph([node('B1', 'B'), { ...node('Q1', 'Q'), surface: '인지' }, node('B2', 'B'), { ...node('Q2', 'Q'), surface: '서술하시오' }], []);
+    const r = analyze_pivot(g);
+    assert.equal(r.ok && r.pivots, undefined);
+    assert.equal(r.ok && r.pivot.node.id, 'B2');
+  });
+
+  it('직접 Q 사이의 간접의문 Q는 건너뛴다 — 「구하고 … 몇 개인지 구하시오」', () => {
+    const g = graph([node('B1', 'B'), { ...node('Q1', 'Q'), surface: '구하고' }, node('B2', 'B'), { ...node('Q2', 'Q'), surface: '인지' }, { ...node('Q3', 'Q'), surface: '구하시오' }], []);
+    const r = analyze_pivot(g);
+    assert.deepEqual(r.ok && r.pivots?.map((p) => p.node.id), ['B1', 'B2']);
+  });
+
+  it('Q가 하나면 pivots는 없다', () => {
+    const g = graph([node('B1', 'B'), node('C1', 'C'), node('B2', 'B'), node('Q1', 'Q')], []);
+    const r = analyze_pivot(g);
+    assert.equal(r.ok && r.pivots, undefined);
+    assert.equal(r.ok && r.pivot.node.id, 'B2');
+  });
+});
