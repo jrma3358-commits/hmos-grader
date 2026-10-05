@@ -364,17 +364,21 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
     for (const [k, p] of lines.entries()) {
       const anchor = own(p).find((h) => refIds.includes(h.c.sw.id));
       if (!anchor || !isQPara(p)) continue;
-      let last = k;
-      for (let j = k + 1; j < lines.length; j++) {
+      //   닻 표지 자신이 한 줄로 선 머리(「<보기>」)면 그 줄은 건너뛰고 그 뒤부터 묶는다 (예: 국어서술형 11 「<보기>는 … 일부이다」 + 「<보기>」 줄)
+      const anchors = new Set(anchor.c.sw.markers.map((m) => m.trim()));
+      let open = k + 1;
+      while (open < lines.length && anchors.has(question.slice(lines[open].start, lines[open].end).trim())) open++;
+      let last = open - 1;
+      for (let j = open; j < lines.length; j++) {
         const body = question.slice(lines[j].start, lines[j].end).trim();
         const first = own(lines[j])[0];
         if (!body || body.startsWith('<') || isQPara(lines[j]) || (first?.at === lines[j].start && blockIds.includes(first.c.sw.id))) break;
         last = j;
       }
-      if (last === k) continue;
-      const start = lines[k + 1].start;
+      if (last < open) continue;
+      const start = lines[open].start;
       const end = lines[last].end;
-      hits = hits.filter((h) => h.at < start || h.at >= end);
+      hits = hits.filter((h) => h.at < lines[k + 1].start || h.at >= end);
       hits.push({ at: start, end, c: anchor.c, inner: question.slice(start, end).trim(), chained: false, caseHead: true });
     }
     hits = hits.filter((h) => !refIds.includes(h.c.sw.id) || h.caseHead);

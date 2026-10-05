@@ -1178,6 +1178,11 @@ describe('참조 제시문 — 「다음 글」 뒤 문단을 P 하나로 (오�
     assert.deepEqual(on.nodes.filter((n) => n.index < q.indexOf('\n')).map((n) => [n.color, n.entity]), [['B', '다음@R 의미'], ['Q', '서술']]);
   });
 
+  it('닻 표지가 한 줄 머리(「<보기>」)로 서면 그 줄을 건너뛰고 뒤를 묶는다', () => {
+    const g = build_path_graph('@R는 의미@B 서술@Q\n@R\n가@B 나@B\n<조건>\n다@B', table(['SR']));
+    assert.deepEqual(g.nodes.filter((n) => n.color === 'P').map((n) => n.entity), ['가@B 나@B']);
+  });
+
   it('발문(Q 문단)이 아니면 묶지 않는다', () => {
     const g = build_path_graph('다음@R 의미@B\n가@B 나@B', table(['SR']));
     assert.equal(g.nodes.some((n) => n.color === 'P'), false);
