@@ -1147,3 +1147,39 @@ describe('작성 형식 블록 — 「풀이 과정과 답을」은 급소가 �
     assert.equal(find_pivot(g).node.id, 'B2');
   });
 });
+
+describe('참조 제시문 — 「다음 글」 뒤 문단을 P 하나로 (오종래 2026-10-05)', () => {
+  // 표지는 봉인 값이 아니라 테스트용 가짜 기호다. 닻 = SR(어휘형 P @R), 대상 = SB(@B), 질문 = SQ(@Q)
+  const sw = (id: string, markers: string[], color: Color, lexical?: boolean) =>
+    ({ id, kind: '조사·어미', markers, intent: '', color, lexical }) as SealedSwitch;
+  const table = (referencedPassages?: string[]): SealedTable => ({
+    version: 1,
+    source: { document: '(테스트)', sections: [] },
+    switches: [sw('SR', ['@R'], 'P', true), sw('SB', ['~@B'], 'B'), sw('SQ', ['~@Q'], 'Q')],
+    lights: [],
+    matrix: [],
+    symbols: [],
+    forms: [],
+    apply: { longestMatchFirst: true, precedence: [], referencedPassages },
+    pending: [],
+  });
+  const q = '다음@R 의미@B 서술@Q\n가@B 나@B\n라@B\n<조건>\n다@B';
+
+  it('발문 뒤 문단들이 <…> 머리 앞까지 P 하나 — 안의 표지는 걸지 않는다', () => {
+    const g = build_path_graph(q, table(['SR']));
+    const ps = g.nodes.filter((n) => n.color === 'P');
+    assert.deepEqual(ps.map((n) => n.entity), ['가@B 나@B\n라@B']);
+    assert.equal(g.nodes.some((n) => n.entity === '가' || n.entity === '나'), false);
+    assert.ok(g.nodes.some((n) => n.entity === '다'), '<조건> 뒤는 그대로');
+  });
+
+  it('닻 표지는 노드가 되지 않는다 — 발문은 그대로', () => {
+    const on = build_path_graph(q, table(['SR']));
+    assert.deepEqual(on.nodes.filter((n) => n.index < q.indexOf('\n')).map((n) => [n.color, n.entity]), [['B', '다음@R 의미'], ['Q', '서술']]);
+  });
+
+  it('발문(Q 문단)이 아니면 묶지 않는다', () => {
+    const g = build_path_graph('다음@R 의미@B\n가@B 나@B', table(['SR']));
+    assert.equal(g.nodes.some((n) => n.color === 'P'), false);
+  });
+});

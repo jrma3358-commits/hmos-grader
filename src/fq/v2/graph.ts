@@ -347,6 +347,40 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
     hits.sort((a, b) => a.at - b.at);
   }
 
+  // 참조 제시문 [오종래 2026-10-05] — 발문(Q가 선 문단)에 「다음 글」「다음 제시문」「다음 자료」(apply.referencedPassages)가 있으면
+  //   발문 바로 뒤 문단들을 P 하나로 묶는다 — <…> 머리 줄(「<조 건>」)·Q 문단·서술 블록 머리 앞까지 (예: 윤리서술형 13 「만약 우리가 … 소멸할 것이다.」).
+  //   문단 안의 표지는 따로 걸지 않는다. 닻 표지 자신은 노드가 되지 않는다 — 발문은 그대로다.
+  const refIds = table.apply.referencedPassages ?? [];
+  if (refIds.length) {
+    const lines: { start: number; end: number }[] = [];
+    for (let s = 0; s <= question.length; ) {
+      const e = question.indexOf('\n', s);
+      lines.push({ start: s, end: e === -1 ? question.length : e });
+      if (e === -1) break;
+      s = e + 1;
+    }
+    const own = (p: { start: number; end: number }) => hits.filter((h) => h.at >= p.start && h.at < p.end);
+    const isQPara = (p: { start: number; end: number }) => own(p).some((h) => h.c.sw.color === 'Q');
+    for (const [k, p] of lines.entries()) {
+      const anchor = own(p).find((h) => refIds.includes(h.c.sw.id));
+      if (!anchor || !isQPara(p)) continue;
+      let last = k;
+      for (let j = k + 1; j < lines.length; j++) {
+        const body = question.slice(lines[j].start, lines[j].end).trim();
+        const first = own(lines[j])[0];
+        if (!body || body.startsWith('<') || isQPara(lines[j]) || (first?.at === lines[j].start && blockIds.includes(first.c.sw.id))) break;
+        last = j;
+      }
+      if (last === k) continue;
+      const start = lines[k + 1].start;
+      const end = lines[last].end;
+      hits = hits.filter((h) => h.at < start || h.at >= end);
+      hits.push({ at: start, end, c: anchor.c, inner: question.slice(start, end).trim(), chained: false, caseHead: true });
+    }
+    hits = hits.filter((h) => !refIds.includes(h.c.sw.id) || h.caseHead);
+    hits.sort((a, b) => a.at - b.at);
+  }
+
   // P 머리 [오종래 2026-10-02] — 케이스별 상황 설정 머리(apply.statementBlocks 중 색이 P인 스위치, 예: 「○」)로 시작하는 문단 바로 앞 문단은
   //   그 케이스들에 공통인 사례 본문이다 → 문단 전체가 P 하나. 문단 안의 표지는 따로 걸지 않는다
   //   (예: 법_문_9 「A, B, C, D는 … 메시지를 받았다.」 → 뒤 ○A·○B·○C). 머리가 문단 첫머리가 아니면(예: 「<조 건> ○ …」) 열지 않는다.
