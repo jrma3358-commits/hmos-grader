@@ -182,13 +182,20 @@ function narrowForms(forms: PathNode[], perspectives: string[]): PathNode[] {
   return rest.length === 1 ? rest : forms;
 }
 
+/** 복합 Q 절을 나누는 Q 끝 — 이 말로 끝나는 Q 바로 뒤에 쉼표가 오면 절 경계다
+ *  [오종래 2026-10-06] 「하고」에 「나타내고」「고르고」「쓰고」 추가 */
+const CLAUSE_ENDS = ['하고', '나타내고', '고르고', '쓰고'];
+
 /**
- * 복합 Q 절 나누기 — 「~하고,」 Q(바로 뒤 쉼표)에서 물음을 절로 자른다. 절마다 서술형태 노드가 꼭 하나씩이고
- * 마지막 절에도 Q가 있으면 절 순서대로 그 노드들을, 아니면 undefined.
+ * 복합 Q 절 나누기 — 「~하고,」「~나타내고,」「~고르고,」「~쓰고,」 Q(바로 뒤 쉼표)에서 물음을 절로 자른다.
+ * 절마다 서술형태 노드가 꼭 하나씩이고 마지막 절에도 Q가 있으면 절 순서대로 그 노드들을, 아니면 undefined.
  */
 function formClauses(graph: PathGraph, forms: PathNode[], perspectives: string[]): PathNode[] | undefined {
   const cuts = graph.nodes.filter(
-    (n) => n.color === 'Q' && /하고$/.test(n.surface.trim()) && /^\s*,/.test(graph.question.slice(n.index + n.surface.length)),
+    (n) =>
+      n.color === 'Q' &&
+      CLAUSE_ENDS.some((e) => n.surface.trim().endsWith(e)) &&
+      /^\s*,/.test(graph.question.slice(n.index + n.surface.length)),
   );
   if (!cuts.length) return undefined;
   const picked: PathNode[] = [];
@@ -227,7 +234,7 @@ export function analyze_pivot(graph: PathGraph, table?: SealedTable): PivotAnaly
     convergence: convergenceOf(graph, node, t),
     sameAsDeepest: deepest_node(graph)?.id === node.id,
   });
-  // 복합 Q 분리 [오종래 2026-10-06] — 서술형태 노드가 둘 이상이어도 「~하고,」 Q로 절이 나뉘고 절마다 하나씩이면
+  // 복합 Q 분리 [오종래 2026-10-06] — 서술형태 노드가 둘 이상이어도 「~하고,」 등 Q(CLAUSE_ENDS)로 절이 나뉘고 절마다 하나씩이면
   //   각 절이 독립 물음이다 → 절마다 그 서술형태 노드가 급소 (급소 복수). `pivot`은 마지막 절의 급소.
   //   (예: 과학 논제K 「(조건)에 맞추어 설명하고, 이를 연관지어 … 제안하시오」 → 「맞추어」 / 「연관지어」)
   if (forms.length > 1 && table) {

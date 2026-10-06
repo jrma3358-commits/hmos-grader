@@ -1100,6 +1100,16 @@ describe('서술형태 급소 — C-F 노드 안의 핵심어 (오종래 2026-10
     assert.equal(r.pivot.keyword, '관점');
   });
 
+  it('「~나타내고,」「~고르고,」「~쓰고,」도 절을 나눈다', () => {
+    for (const end of ['나타내고', '고르고', '쓰고']) {
+      const base = table(['SF']);
+      const t: SealedTable = { ...base, switches: base.switches.map((s) => (s.id === 'SQ' ? { ...s, markers: [...s.markers, `~${end}`] } : s)) };
+      const g = build_path_graph(`형태 @B 논박@M 답 ${end}, 내용 @B 관점 @V 제안 @Q`, t);
+      const r = analyze_pivot(g, t);
+      assert.deepEqual(r.ok && r.pivots?.map((p) => p.keyword), ['논박', '관점'], end);
+    }
+  });
+
   it('「~하고」 뒤에 쉼표가 없으면 나누지 않는다 — 플래그 그대로', () => {
     const t = withHago();
     const g = build_path_graph('형태 @B 논박@M 설명하고 내용 @B 관점 @V 제안 @Q', t);
