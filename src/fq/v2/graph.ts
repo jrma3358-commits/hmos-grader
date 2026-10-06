@@ -350,8 +350,13 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
   // 참조 제시문 [오종래 2026-10-05] — 발문(Q가 선 문단)에 「다음 글」「다음 제시문」「다음 자료」(apply.referencedPassages)가 있으면
   //   발문 바로 뒤 문단들을 P 하나로 묶는다 — <…> 머리 줄(「<조 건>」)·Q 문단·서술 블록 머리 앞까지 (예: 윤리서술형 13 「만약 우리가 … 소멸할 것이다.」).
   //   문단 안의 표지는 따로 걸지 않는다. 닻 표지 자신은 노드가 되지 않는다 — 발문은 그대로다.
+  //   상자 블록 [오종래 2026-10-06] — 입력 규약: 상자(대화·학생 설명·명제 등)는 앞뒤 빈 줄로 떼어 넣는다.
+  //   닻 표지가 없어도 발문 바로 뒤의 Q 없는 문단들을 같은 범위 규칙으로 P 하나로 묶는다 (apply.boxPassages = P를 켤 스위치).
+  //   이미 제시문으로 묶인 문단 앞에서 멈춘다 (예: 서술형2차 수학4 학생 설명 · 수학5 명제 · 수학7 민권·은재 대화).
   const refIds = table.apply.referencedPassages ?? [];
-  if (refIds.length) {
+  const boxId = table.apply.boxPassages?.[0];
+  const boxC = boxId ? cands.find((c) => c.sw.id === boxId) : undefined;
+  if (refIds.length || boxC) {
     const lines: { start: number; end: number }[] = [];
     for (let s = 0; s <= question.length; ) {
       const e = question.indexOf('\n', s);
@@ -362,8 +367,14 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
     const own = (p: { start: number; end: number }) => hits.filter((h) => h.at >= p.start && h.at < p.end);
     const isQPara = (p: { start: number; end: number }) => own(p).some((h) => h.c.sw.color === 'Q');
     for (const [k, p] of lines.entries()) {
-      const anchor = own(p).find((h) => refIds.includes(h.c.sw.id));
+      const ref = own(p).find((h) => refIds.includes(h.c.sw.id));
+      const anchor = ref ?? (boxC && { c: boxC });
       if (!anchor || !isQPara(p)) continue;
+      //   상자 블록에서는 연결형 Q(「~고」)만 선 문단을 물음 문단으로 보지 않는다 — 대화 속 「기울기를 구하고」는 물음이 아니다 (서술형2차 수학7)
+      //   [오종래 2026-10-06] 줄머리 「▶」 상자(학생 주장 목록)는 묶지 않는다 — 각 주장이 독립 B다 (서술형2차 수학4)
+      const stopsAt = ref ? isQPara : (l: { start: number; end: number }) =>
+        question.slice(l.start, l.end).trim().startsWith('▶')
+        || own(l).some((h) => h.c.sw.color === 'Q' && !question.slice(h.at, h.end).trim().endsWith('고'));
       //   닻 표지 자신이 한 줄로 선 머리(「<보기>」)면 그 줄은 건너뛰고 그 뒤부터 묶는다 (예: 국어서술형 11 「<보기>는 … 일부이다」 + 「<보기>」 줄)
       const anchors = new Set(anchor.c.sw.markers.map((m) => m.trim()));
       let open = k + 1;
@@ -372,7 +383,8 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
       for (let j = open; j < lines.length; j++) {
         const body = question.slice(lines[j].start, lines[j].end).trim();
         const first = own(lines[j])[0];
-        if (!body || body.startsWith('<') || isQPara(lines[j]) || (first?.at === lines[j].start && blockIds.includes(first.c.sw.id))) break;
+        if (!body || body.startsWith('<') || stopsAt(lines[j]) || own(lines[j]).some((h) => h.passage !== undefined || h.caseHead)
+          || (first?.at === lines[j].start && blockIds.includes(first.c.sw.id))) break;
         last = j;
       }
       if (last < open) continue;

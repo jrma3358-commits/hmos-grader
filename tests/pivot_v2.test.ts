@@ -1189,6 +1189,45 @@ describe('참조 제시문 — 「다음 글」 뒤 문단을 P 하나로 (오�
   });
 });
 
+describe('상자 블록 — 빈 줄로 뗀 상자를 닻 없이 P 하나로 (오종래 2026-10-06)', () => {
+  // 표지는 봉인 값이 아니라 테스트용 가짜 기호다. P = SR(@R), 대상 = SB(@B), 질문 = SQ(~@Q · ~@고)
+  const sw = (id: string, markers: string[], color: Color, lexical?: boolean) =>
+    ({ id, kind: '조사·어미', markers, intent: '', color, lexical }) as SealedSwitch;
+  const table = (boxPassages?: string[]): SealedTable => ({
+    version: 1,
+    source: { document: '(테스트)', sections: [] },
+    switches: [sw('SR', ['@R'], 'P', true), sw('SB', ['~@B'], 'B'), sw('SQ', ['~@Q', '~@고'], 'Q')],
+    lights: [],
+    matrix: [],
+    symbols: [],
+    forms: [],
+    apply: { longestMatchFirst: true, precedence: [], boxPassages },
+    pending: [],
+  });
+
+  it('발문 뒤 Q 없는 문단이 다음 물음 문단 앞까지 P 하나 — 닻 표지 없이', () => {
+    const g = build_path_graph('의미@B 서술@Q\n가@B 나@B\n(1) 다@B 서술@Q', table(['SR']));
+    assert.deepEqual(g.nodes.filter((n) => n.color === 'P').map((n) => n.entity), ['가@B 나@B']);
+    assert.ok(g.nodes.some((n) => n.entity === '(1) 다'), '물음 문단은 그대로');
+  });
+
+  it('연결형 Q(「~고」)만 선 문단은 상자다 — 대화 속 「구하고」', () => {
+    const g = build_path_graph('의미@B 서술@Q\n가@B 구하@고 나@B\n(1) 다@B 서술@Q', table(['SR']));
+    assert.deepEqual(g.nodes.filter((n) => n.color === 'P').map((n) => n.entity), ['가@B 구하@고 나@B']);
+  });
+
+  it('줄머리 「▶」 상자(학생 주장 목록)는 묶지 않는다 — 각 주장이 독립 B', () => {
+    const g = build_path_graph('의미@B 서술@Q\n▶ 가@B ▶ 나@B', table(['SR']));
+    assert.equal(g.nodes.some((n) => n.color === 'P'), false);
+    assert.equal(g.nodes.filter((n) => n.color === 'B').length, 3);
+  });
+
+  it('boxPassages가 없으면 묶지 않는다', () => {
+    const g = build_path_graph('의미@B 서술@Q\n가@B 나@B', table());
+    assert.equal(g.nodes.some((n) => n.color === 'P'), false);
+  });
+});
+
 describe('B 급소의 실체값 — 이름이 아니라 B가 묻는 실체 (오종래 2026-10-05)', () => {
   const pick = (entity: string) => {
     const g = graph([node('B1', 'B', entity), node('Q1', 'Q')], []);
