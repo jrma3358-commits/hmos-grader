@@ -1601,3 +1601,41 @@ describe('제시문 지정 — 「제시문」이 붙은 괄호 기호·범위�
     assert.equal(entities('@P (마)의 설명을').includes('P:(마)'), false);
   });
 });
+
+describe('접속사 Q절 — 문장 머리 접속사로 이어진 Q절은 절마다 단위 (오종래 2026-10-07)', () => {
+  // B = SB(~을·~를), Q = SQ(어휘형 「제시하시오」「설명하시오」), 접속사 = 「@C」(테스트용 가짜 낱말)
+  const sw = (id: string, markers: string[], color: Color, lexical?: boolean) =>
+    ({ id, kind: '조사·어미', markers, intent: '', color, lexical }) as SealedSwitch;
+  const table = (conjunctionClauses?: string[]): SealedTable => ({
+    version: 1,
+    source: { document: '(테스트)', sections: [] },
+    switches: [sw('SB', ['~을', '~를'], 'B'), sw('SQ', ['제시하시오', '설명하시오'], 'Q', true)],
+    lights: [],
+    matrix: [],
+    symbols: [],
+    forms: [],
+    apply: { longestMatchFirst: true, precedence: [], endOfWord: true, conjunctionClauses },
+    pending: [],
+  });
+  const q = '근거를 제시하시오. @C 노력을 설명하시오.';
+
+  it('접속사는 실체 머리에 붙지 않는다', () => {
+    const g = build_path_graph(q, table(['@C']));
+    assert.deepEqual(g.nodes.map((n) => `${n.color}:${n.entity}`), ['B:근거', 'Q:제시하시오', 'B:노력', 'Q:설명하시오']);
+  });
+
+  it('앞뒤 절에 Q가 모두 있으면 Q절마다 단위 — 접속사는 빠진다', () => {
+    assert.deepEqual(split_units(q, table(['@C'])), ['근거를 제시하시오.', '노력을 설명하시오.']);
+  });
+
+  it('쉼표가 붙은 접속사·셋 이상 열거도 자른다', () => {
+    const three = '근거를 제시하시오. @C, 노력을 설명하시오. @C 방안을 제시하시오.';
+    assert.deepEqual(split_units(three, table(['@C'])), ['근거를 제시하시오.', '노력을 설명하시오.', '방안을 제시하시오.']);
+  });
+
+  it('한쪽 절에 Q가 없거나 문장 머리가 아니면 자르지 않는다 · 지정이 없으면 적용하지 않는다', () => {
+    assert.deepEqual(split_units('근거를 @C 노력을 설명하시오.', table(['@C'])), []);
+    assert.deepEqual(split_units('근거를 제시하시오. @C 노력을', table(['@C'])), []);
+    assert.deepEqual(split_units(q, table()), []);
+  });
+});

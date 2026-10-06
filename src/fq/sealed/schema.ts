@@ -338,6 +338,13 @@ export interface SealedApplyRules {
    * 잡는 **규칙**은 구조라 코드에 있다(`v2/graph.ts`). 여기 있는 것은 «어느 스위치인가»(값)뿐이다.
    */
   designatedPassages?: Undecided<string[]>;
+  /**
+   * 접속사 절 — 이 낱말(예: 「그리고」「또한」)이 문장 머리에 어절로 홀로 서면 절 경계다. 색도 노드도 없고, 뒤 실체 머리에 붙지 않는다.
+   * 경계 앞뒤 절에 Q가 모두 있으면 Q절마다 단위로 나눠 독립 인식한다 (`v2/units.ts`). 없거나 null이면 적용하지 않는다.
+   *
+   * 나누는 **규칙**은 구조라 코드에 있다(`v2/graph.ts`·`v2/units.ts`). 여기 있는 것은 «어느 낱말인가»(값)뿐이다.
+   */
+  conjunctionClauses?: Undecided<string[]>;
 }
 
 /**

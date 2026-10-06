@@ -151,6 +151,19 @@ function candidates(table: SealedTable): Candidate[] {
   return all.sort((a, b) => b.surface.length - a.surface.length);
 }
 
+/**
+ * 문장 머리 접속사 [오종래 2026-10-07] — apply.conjunctionClauses(예: 「그리고」「또한」)의 낱말이 문장 머리(글 처음·문장 끝 뒤·문단 경계 뒤)에
+ * 어절로 홀로 서면 그 자리. `end`는 뒤 쉼표·공백까지 — 뒤 절은 거기서 시작한다. 색도 노드도 없다.
+ */
+export function conjunctionHeads(question: string, table: SealedTable): { at: number; end: number }[] {
+  const out: { at: number; end: number }[] = [];
+  for (const w of table.apply.conjunctionClauses ?? []) {
+    const re = new RegExp(`(?<=^|[.?!。]\\s+|\\n\\s*)${escape(w)}(?=[\\s,]|$)[\\s,]*`, 'g');
+    for (const m of question.matchAll(re)) out.push({ at: m.index, end: m.index + m[0].length });
+  }
+  return out.sort((a, b) => a.at - b.at);
+}
+
 /** 어휘형 표지인가 — 봉인 파일의 `lexical`이 정한다 (스위치 전부 또는 적힌 표지만) */
 function isLexical(sw: SealedSwitch, marker: string): boolean {
   return sw.lexical === true || (Array.isArray(sw.lexical) && sw.lexical.includes(marker));
@@ -345,6 +358,9 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
       i += 1;
     }
   }
+  // 접속사 절 경계 [오종래 2026-10-07] — 문장 머리 접속사(apply.conjunctionClauses)는 절 경계다 — 뒤 실체 머리에 붙지 않는다
+  sentenceBreaks.push(...conjunctionHeads(question, table));
+  sentenceBreaks.sort((a, b) => a.at - b.at);
 
   // 인용 명제 [오종래 2026-10-06] — apply.quotedPropositions: 따옴표 안이 「…다.」로 끝나는 명제면 인용 전체가 노드 하나다.
   //   안의 표지는 따로 걸지 않는다 — 명제가 잘게 잘려 Q 직전 B가 조각으로 서지 않게 (서술형2차 수학6).

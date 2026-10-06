@@ -8,7 +8,7 @@
 //   - 단위끼리의 급소를 비교하거나 합치는 일 (단위마다 독립이다)
 
 import type { SealedTable } from '../sealed/schema.ts';
-import { build_path_graph } from './graph.ts';
+import { build_path_graph, conjunctionHeads } from './graph.ts';
 
 /** 문장 끝 또는 문단 경계 — 약속된 길(graph.ts)과 같은 경계 */
 const SENTENCE_END = /[.?!。](?=\s|$)|\n/g;
@@ -33,7 +33,7 @@ const COMMA = /[,、，]/g;
  */
 export function split_units(question: string, table: SealedTable): string[] {
   const ids = table.apply.splitUnits ?? [];
-  if (!ids.length) return [];
+  if (!ids.length) return conjunction_units(question, table);
   const hits = build_path_graph(question, table)
     .nodes.filter((n) => ids.includes(n.switchId))
     .map((n) => ({ at: n.index, end: n.index + n.surface.length }));
@@ -55,7 +55,7 @@ export function split_units(question: string, table: SealedTable): string[] {
     const cut = unitStart(h, k);
     if (!units.some((u) => u.cut === cut)) units.push({ cut, from: cut, sentence: startOf(h.at), at: h.at });
   }
-  if (units.length < 2) return [];
+  if (units.length < 2) return conjunction_units(question, table);
 
   const heads = new Map<number, string>();
   for (const sentence of new Set(units.map((u) => u.sentence))) {
@@ -73,4 +73,30 @@ export function split_units(question: string, table: SealedTable): string[] {
     const body = question.slice(u.from, units[k + 1]?.cut ?? question.length).trim();
     return [common, heads.get(u.sentence) ?? '', body].filter(Boolean).join('\n');
   });
+}
+
+/**
+ * 접속사 Q절 나누기 [오종래 2026-10-07] — 문장 머리 접속사(apply.conjunctionClauses, 「그리고」「또한」 등)로 이어진 Q절을
+ * 절마다 단위 하나로 자른다 (예: 「근거를 제시하시오. 그리고 노력을 설명하시오.」 → 「근거를 제시하시오.」 · 「노력을 설명하시오.」).
+ *   - 접속사 앞 절과 뒤 절(다음 접속사 앞까지)에 Q 노드가 모두 있을 때만 자른다 — 아니면 앞 절에 붙는다
+ *   - 접속사 자신은 어느 단위에도 넣지 않는다. 공통 발문은 없다
+ * 단위가 둘 미만이면 빈 배열.
+ */
+function conjunction_units(question: string, table: SealedTable): string[] {
+  const heads = conjunctionHeads(question, table);
+  if (!heads.length) return [];
+  const qs = build_path_graph(question, table).nodes.filter((n) => n.color === 'Q').map((n) => n.index);
+  const hasQ = (from: number, to: number) => qs.some((i) => i >= from && i < to);
+  const cuts: { at: number; end: number }[] = [];
+  let from = 0;
+  for (const [k, h] of heads.entries()) {
+    const next = heads[k + 1]?.at ?? question.length;
+    if (!hasQ(from, h.at) || !hasQ(h.end, next)) continue;
+    cuts.push(h);
+    from = h.end;
+  }
+  if (!cuts.length) return [];
+  const starts = [0, ...cuts.map((c) => c.end)];
+  const ends = [...cuts.map((c) => c.at), question.length];
+  return starts.map((s, k) => question.slice(s, ends[k]).trim());
 }
