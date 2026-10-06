@@ -448,6 +448,32 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
   // 연쇄 머리가 넘긴 실체 — 바로 이어 붙은 끝 표지(at)가 받는다
   let carried: { at: number; entity: string } | undefined;
   const pathIds = table.apply.definedPaths ?? [];
+  // 명사구 연결 [오종래 2026-10-06] — 봉인 파일의 apply.nounChainMarkers(예: 「의」·「에서의」)로 끝나는 조사·어미 표지는
+  //   B 경계가 아니다. 노드를 세우지 않고 cursor도 그대로 둬서, 다음 노드가 「찬성 이유의 문제점」 전체를 끌고 나온다.
+  //   수식 노드 바로 뒤의 「의」는 다음 B 노드의 실체를 수식 노드에 이어 붙인다 (「lim_{m→1-} f(m)/g(m)의 값」).
+  //   어휘형 표지·블록 노드는 해당하지 않는다.
+  const nounChain = (table.apply.nounChainMarkers ?? []).map((m) => m.replace(/^~/, '').trim()).filter(Boolean);
+  const chainsNoun = (hit: (typeof hits)[number]) =>
+    hit.c.sw.kind === NODE_KIND && !isLexical(hit.c.sw, hit.c.surface) && !hit.math && hit.passage === undefined && !hit.caseHead
+    && nounChain.some((m) => question.slice(0, hit.end).endsWith(m));
+  /** 걸린 자리의 색 — 아래 자리 규칙(apply.contextRules)과 같은 조건으로 미리 본다 */
+  const colorAfterRules = (k: number) => {
+    const h = hits[k];
+    const after = question.slice(h.end);
+    const then = hits[k + 1];
+    const rule = (table.apply.contextRules ?? []).find(
+      (r) =>
+        r.targets.includes(h.c.sw.id) &&
+        (r.when === 'beforeObject'
+          ? then !== undefined && then.c.sw.color === 'B'
+            && (r.objectMarkers ?? []).some((m) => m.replace(/~/g, '').replace(/\s+/g, '') === question.slice(then.at, then.end).replace(/\s+/g, ''))
+          : /^\s*([?？]|$)/.test(after)),
+    );
+    return rule ? rule.color : h.c.sw.color;
+  };
+  const mathNodes = new Set<PathNode>();
+  /** 수식 노드 바로 뒤에 붙은 명사구 연결 조사 — 다음 B 노드의 실체를 이 수식 노드에 이어 붙인다 */
+  let attachTo: { node: PathNode; at: number } | undefined;
   /** 제시문 노드 id → 발문 빈칸 표지가 걸린 자리 (노드를 다 세운 뒤 빈칸 노드와 잇는다) */
   const passageLabelAt = new Map<string, number>();
 
@@ -474,6 +500,8 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
 
   for (const [n, hit] of hits.entries()) {
     const { sw } = hit.c;
+    const attach = attachTo;
+    attachTo = undefined;
     // 문장 종결 경계를 넘었으면 실체는 경계 뒤에서부터, 걸어 둔 간선은 버린다
     const crossed = sentenceBreaks.filter((b) => b.at >= cursor && b.end <= hit.at).at(-1);
     if (crossed) {
@@ -518,6 +546,26 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
       : isLexical(sw, hit.c.surface)
         ? surface
         : hit.inner || afterLastBreak(question.slice(cursor, hit.at).trim());
+
+    // 명사구 연결 — 실체가 있으면 경계를 두지 않고 다음 어절로 잇는다. 수식 노드 바로 뒤면 그 노드에 이어 붙일 자리를 남긴다
+    //   다음 노드가 B가 아니면(예: 「k의 값은?」의 Q) 잇지 않는다 — 「의」 B가 그대로 그 Q의 대상이다.
+    //   자리 규칙(아래 apply.contextRules)이 바꿀 색까지 본다 (예: 「x^6의 계수는?」의 「는」 → Q)
+    const next = hits[n + 1];
+    const nextIsB = next !== undefined && next.c.sw.kind === NODE_KIND && !isLexical(next.c.sw, next.c.surface)
+      && next.passage === undefined && !next.caseHead && colorAfterRules(n + 1) === 'B';
+    if (chainsNoun(hit) && nextIsB) {
+      if (entity !== '') continue;
+      const prev = nodes.at(-1);
+      if (prev && mathNodes.has(prev)) attachTo = { node: prev, at: hit.at };
+      cursor = hit.end;
+      continue;
+    }
+    if (attach && sw.color === 'B' && !hit.chained && !isLexical(sw, hit.c.surface) && hit.passage === undefined && !hit.caseHead
+      && entity !== '' && entity === question.slice(cursor, hit.at).trim()) {
+      attach.node.entity += question.slice(attach.at, hit.at).trimEnd();
+      cursor = hit.end;
+      continue;
+    }
 
     // 앞말 포함 어휘형 [오종래 2026-10-01] — 봉인 파일이 지정한 어휘형 스위치(apply.withPreceding, 예: 「분포 구역」)는
     //   앞말까지 실체에 넣는다 (예: 「생물 보호종 30개체 이상 분포 구역」 전체가 B 하나). 뒤 조사(「을」)는 끌 실체가 없어 노드가 서지 않는다.
@@ -579,6 +627,7 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
     }
 
     link(node);
+    if (hit.math) mathNodes.add(node);
     cursor = hit.end;
 
     // 강한 C 안의 참조어 [오종래 2026-10-02] — 어휘형 강한 C(apply.strongC) 표지 안에 어휘형 P 표지(예: 참조자료 「토론」)가

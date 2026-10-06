@@ -1246,3 +1246,49 @@ describe('B 급소의 실체값 — 이름이 아니라 B가 묻는 실체 (오�
     assert.deepEqual(pick('a = 3, b = 5, c = 7'), { keyword: 'a = 3, b = 5, c = 7', name: undefined });
   });
 });
+
+describe('명사구 연결 — 「의」는 B 경계가 아니라 실체 확장 (오종래 2026-10-06)', () => {
+  // 수식 = SM(어휘형 「선분」, 수식 묶기), B = SB(~의·~을·~를), 주제 = ST(~은·~는, 종결 자리면 Q), Q = SQ(어휘형 「구하시오」)
+  const sw = (id: string, markers: string[], color: Color, lexical?: boolean) =>
+    ({ id, kind: '조사·어미', markers, intent: '', color, lexical }) as SealedSwitch;
+  const table = (nounChainMarkers?: string[]): SealedTable => ({
+    version: 1,
+    source: { document: '(테스트)', sections: [] },
+    switches: [sw('SM', ['선분'], 'B', true), sw('SB', ['~의', '~을', '~를'], 'B'), sw('ST', ['~은', '~는'], 'B'), sw('SQ', ['구하시오'], 'Q', true)],
+    lights: [],
+    matrix: [],
+    symbols: [],
+    forms: [],
+    apply: {
+      longestMatchFirst: true,
+      precedence: [],
+      endOfWord: true,
+      mathExpressions: ['SM'],
+      contextRules: [{ id: 'CR', targets: ['ST'], when: 'sentenceEnd', color: 'Q' }],
+      nounChainMarkers,
+    },
+    pending: [],
+  });
+  const entities = (q: string, list?: string[]) =>
+    build_path_graph(q, table(list)).nodes.map((n) => `${n.color}:${n.entity}`);
+
+  it('「의」가 걸려도 노드를 세우지 않고 다음 B가 명사구 전체를 끌고 나온다', () => {
+    assert.deepEqual(entities('찬성 이유의 문제점을 구하시오', ['의']), ['B:찬성 이유의 문제점', 'Q:구하시오']);
+    assert.deepEqual(entities('찬성 이유의 문제점을 구하시오'), ['B:찬성 이유', 'B:문제점', 'Q:구하시오']);
+  });
+
+  it('여러 글자 조사는 끝이 같아야 잇는다 — 「에서의」', () => {
+    assert.deepEqual(entities('점 A에서의 접선을 구하시오', ['에서의']), ['B:점 A에서의 접선', 'Q:구하시오']);
+    assert.deepEqual(entities('점 A에서의 접선을 구하시오', ['와의']), ['B:점 A에서', 'B:접선', 'Q:구하시오']);
+  });
+
+  it('수식 노드 바로 뒤의 「의」는 다음 B를 수식 노드에 이어 붙인다', () => {
+    assert.deepEqual(entities('선분 AB의 길이를 구하시오', ['의']), ['B:선분 AB의 길이', 'Q:구하시오']);
+    assert.deepEqual(entities('선분 AB의 길이를 구하시오'), ['B:선분 AB', 'B:길이', 'Q:구하시오']);
+  });
+
+  it('다음 노드가 B가 아니면 잇지 않는다 — 자리 규칙으로 Q가 되는 「값은?」', () => {
+    assert.deepEqual(entities('실수 k의 값은?', ['의']), ['B:실수 k', 'Q:값']);
+    assert.deepEqual(entities('선분 AB의 값은?', ['의']), ['B:선분 AB', 'Q:값']);
+  });
+});
