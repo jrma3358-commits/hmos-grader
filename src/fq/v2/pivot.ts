@@ -187,6 +187,8 @@ export function analyze_pivot(graph: PathGraph, table?: SealedTable): PivotAnaly
   // 서술 형태 우선 [오종래 2026-10-06] — 서술형태 노드가 둘 이상이면 입장·관점 표지(apply.formPerspective, 「입장에서」 등)가
   //   세운 노드를 뺀다. 서술 형태 표지(「비판적으로」 등)가 급소다 (논제1 「(나)의 입장에서 비판적으로 성찰하되」 → 「비판적으로」).
   //   빼고 하나가 남지 않으면 플래그 그대로.
+  //   [오종래 2026-10-06] 참고 표지(「참고하여」)도 같이 뒤로 민다 — 수단 표지(「활용하여」「이용하여」)가 「참고하여」「관점에서」
+  //   「입장에서」보다 먼저 급소다 (과학 G 「(가)의 개념을 활용하여 … (라)를 참고하여」 → 「활용하여」).
   const perspectives = (table?.apply.formPerspective ?? []).map((m) => m.replace(/^~/, '').trim());
   if (forms.length > 1) {
     const rest = forms.filter((n) => !perspectives.includes(n.surface.trim()));

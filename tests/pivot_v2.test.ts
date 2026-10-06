@@ -1071,6 +1071,18 @@ describe('서술형태 급소 — C-F 노드 안의 핵심어 (오종래 2026-10
     assert.equal(r.pivot.keyword, '논박');
   });
 
+  it('뒤로 미는 표지가 여럿이어도 모두 빼고 남은 하나가 급소 — 수단 표지가 참고·관점 표지보다 먼저', () => {
+    // 테스트용: 수단 「논박@M」, 참고 「참고@R」, 관점 「~@V」
+    const base = withPerspective(['~@V', '참고@R']);
+    const t: SealedTable = {
+      ...base,
+      switches: base.switches.map((s) => (s.id === 'SF' ? { ...s, markers: [...s.markers, '참고@R'], lexical: [...(s.lexical as string[]), '참고@R'] } : s)),
+    };
+    const g = build_path_graph('형태 @B 관점 @V 논박@M 자료 @B 참고@R 설명 @Q', t);
+    const r = analyze_pivot(g, t);
+    assert.equal(r.ok && r.pivot.keyword, '논박');
+  });
+
   it('입장·관점 표지 노드만 둘이면 플래그 그대로', () => {
     const t = withPerspective(['~@V']);
     const g = build_path_graph('형태 @B 관점 @V 입장 @V 설명 @Q', t);
