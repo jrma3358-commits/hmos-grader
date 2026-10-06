@@ -1328,3 +1328,34 @@ describe('목적절 경계 — 「~기 위해」 뒤부터 실체를 잡는다 (
     assert.deepEqual(entities('줄이기 위해서 쓴 식을', list), ['B:줄이기 위해서 쓴 식']);
   });
 });
+
+describe('부등호 조건은 판단기준이 아니라 C · 「의 값」은 실체값에서 뗀다 (오종래 2026-10-06)', () => {
+  // 조건 = SC(~일 때, 판단기준), B = SB(~을), Q = SQ(어휘형 「구하시오」)
+  const sw = (id: string, markers: string[], color: Color, lexical?: boolean) =>
+    ({ id, kind: '조사·어미', markers, intent: '', color, lexical }) as SealedSwitch;
+  const table: SealedTable = {
+    version: 1,
+    source: { document: '(테스트)', sections: [] },
+    switches: [sw('SC', ['~일 때'], 'C'), sw('SB', ['~을'], 'B'), sw('SQ', ['구하시오'], 'Q', true)],
+    lights: [],
+    matrix: [],
+    symbols: [],
+    forms: [],
+    apply: { longestMatchFirst: true, precedence: [], foldToB: ['SC'] },
+    pending: [],
+  };
+
+  it('실체 끝 식에 부등호가 있으면 접지 않는다 — Q 직전 B가 급소', () => {
+    const g = build_path_graph('a>0, b>0일 때 상수 a, b의 값을 구하시오', table);
+    assert.equal(g.nodes[0].color, 'C');
+    assert.equal(g.edges.some((e) => e.kind === '접힘'), false);
+    const p = find_pivot(g, table);
+    assert.deepEqual([p.reason, p.keyword, p.name], ['Q 직전 B', 'a, b', '상수']);
+  });
+
+  it('부등호가 없으면 지금처럼 판단기준으로 접는다', () => {
+    const g = build_path_graph('점 C(0, -1)일 때 넓이를 구하시오', table);
+    assert.equal(g.nodes[0].color, 'B');
+    assert.equal(find_pivot(g, table).node.id, g.nodes[0].id);
+  });
+});

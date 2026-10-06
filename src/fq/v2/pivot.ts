@@ -146,9 +146,10 @@ function isWritingForm(graph: PathGraph, node: PathNode): boolean {
  * B 급소의 실체값 [오종래 2026-10-05] — 급소는 B 노드 이름이 아니라 B가 묻는 실체를 낸다.
  * 실체가 「한글 이름 + 식·기호」(예: 「일반항 a_n」 「점 C(0, -1)」)면 실체값 = 식·기호, 이름은 따로 둔다. 아니면 실체 그대로.
  * [오종래 2026-10-06] 실체 머리의 쉼표·공백은 뗀다 — 앞 조각에서 끌려온 것이다 (수능_3 「, k」 → 「k」). 노드 실체는 그대로다.
+ * [오종래 2026-10-06] 끝의 형식 명사 「의 값」도 뗀다 — 실체값은 값을 가진 쪽이다 (서술형2차 수학1 「상수 a, b, c의 값」 → 「a, b, c」).
  */
 function bValue(node: PathNode): Pick<Pivot, 'keyword' | 'name'> {
-  const entity = node.entity.trim().replace(/^[\s,]+/, '');
+  const entity = node.entity.trim().replace(/^[\s,]+/, '').replace(/\s*의\s*값$/, '');
   const m = entity.match(/^(.*[가-힣ㄱ-ㅎㅏ-ㅣ])\s+([^가-힣ㄱ-ㅎㅏ-ㅣ\s][^가-힣ㄱ-ㅎㅏ-ㅣ]*)$/);
   const symbol = m?.[2].replace(/[\s,]+$/, '');
   return m && symbol ? { keyword: symbol, name: m[1].trim() } : { keyword: entity };
@@ -253,7 +254,8 @@ export function analyze_pivot(graph: PathGraph, table?: SealedTable): PivotAnaly
   const judgeIds = table?.apply.foldToB ?? [];
   const strongIds = table?.apply.strongC ?? [];
   //   표지표 없이 불려도 판단기준을 알아본다 — 판단기준으로 판정되는 노드는 '접힘' 간선을 보낸다 (graph.ts Q→B 추출)
-  const isJudge = (n: PathNode) => judgeIds.includes(n.switchId) || graph.edges.some((e) => e.kind === '접힘' && e.to === n.id);
+  //   접히지 않고 C로 남은 판단기준 스위치 노드(부등호 조건, graph.ts)는 판단기준이 아니다
+  const isJudge = (n: PathNode) => (judgeIds.includes(n.switchId) && n.color === 'B') || graph.edges.some((e) => e.kind === '접힘' && e.to === n.id);
   const hasJudge = graph.nodes.some(isJudge);
   const hasStrongC = graph.nodes.some((n) => strongIds.includes(n.switchId));
   //   지시어 「이」 [오종래 2026-10-02] — 판단기준 뒤에 그 조건을 받는 지시어 B「이」(예: 「이를 만족하는」)가 있으면

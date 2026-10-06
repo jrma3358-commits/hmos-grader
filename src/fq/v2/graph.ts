@@ -715,9 +715,12 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
   //   «옳은 것을 고르시오»는 Q이고, 판단기준(예: «탄소 화합물인가?»)은 그 Q에 접힌 B다.
   //   (가) 봉인 파일이 판단기준 표지로 지정한 스위치(apply.foldToB)의 노드 → 색을 B로 접는다. 원래 색은 남긴다.
   //   (나) 그 뒤에 오는 노드(분기 결과·Q·보기)는 모두 그 판단기준으로 판정되므로 '접힘' 간선을 보낸다 → 수렴.
+  //   [오종래 2026-10-06] 부등호 조건(실체 끝 식 — 마지막 한글 뒤 — 에 >·<·≥·≤가 든 것, 예: 「a>0, b>0, 0≤c≤π/2일 때」)은
+  //   판단기준이 아니라 범위 제약 C다 — 접지 않고 C 그대로 둔다 (서술형2차 수학1·6).
   const foldIds = table.apply.foldToB ?? [];
+  const inequality = (n: PathNode) => /[<>≤≥≦≧]/.test(n.entity.match(/[^가-힣ㄱ-ㅎㅏ-ㅣ]*$/)![0]);
   for (const [i, node] of nodes.entries()) {
-    if (!foldIds.includes(node.switchId)) continue;
+    if (!foldIds.includes(node.switchId) || inequality(node)) continue;
     nodes[i] = { ...node, color: 'B', foldedFrom: node.color };
     for (const later of nodes.slice(i + 1)) {
       edges.push({ from: later.id, to: node.id, surface: null, kind: '접힘', index: later.index });
@@ -733,7 +736,7 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
   //   [오종래 2026-10-01] 강한 C가 급소 앞에서 범위를 먼저 지정한다 — 강한 C 바로 뒤에 잇따른 C 노드는 그 범위 안의 판단 기준이고,
   //   판단한 결과(그다음 B·Q)가 급소다 (예: 경제_문__4 「자료에 대한 분석으로」(범위) → 「옳은」(판단 기준) → 「것」(급소)).
   const strongIds = table.apply.strongC ?? [];
-  const hasCriterion = nodes.some((n) => foldIds.includes(n.switchId));
+  const hasCriterion = nodes.some((n) => foldIds.includes(n.switchId) && n.foldedFrom !== undefined);
   for (const [i, node] of nodes.entries()) {
     if (hasCriterion || !strongIds.includes(node.switchId)) continue;
     let j = i + 1;
