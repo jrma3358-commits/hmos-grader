@@ -243,14 +243,21 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
   // 어절 예외 [오종래 2026-10-03] — 봉인 파일의 apply.wordExceptions(예: 「불구하고」·「그럼에도」)와 어절 전체가 같으면
   //   그 어절 안에서는 조사·어미 표지를 걸지 않는다 (「불구하고」의 「구하고」 → Q ✕, 「그럼에도」의 「도」 → P ✕).
   //   어절 = 공백으로 끊긴 덩어리에서 앞뒤 문장 부호를 뗀 것. 간선 표지(연결어·부사)는 그대로 건다.
+  //   [오종래 2026-10-06] 예외 낱말 뒤에 등록된 조사·어미 표지 하나만 붙은 어절(「표본의」「표본과」)도 예외 낱말 부분은 걸지 않는다.
+  //   붙은 조사는 그대로 건다. 어절 전체가 같은 예외(「결과로」 등)가 먼저다 (서술형2차 수학9 「표본」의 「표」 → LS-20 P ✕).
   const wordExceptions = new Set(table.apply.wordExceptions ?? []);
   const exceptionSpans: { start: number; end: number }[] = [];
+  const josaOnly = (tail: string) =>
+    cands.some((c) => c.sw.kind === NODE_KIND && !isLexical(c.sw, c.surface) && tail.match(c.re)?.[0] === tail);
   if (wordExceptions.size) {
     for (const w of question.matchAll(/\S+/g)) {
       const [, lead, core] = w[0].match(/^([^가-힣A-Za-z0-9]*)(.*?)[^가-힣A-Za-z0-9]*$/)!;
-      if (!wordExceptions.has(core)) continue;
+      const word = wordExceptions.has(core)
+        ? core
+        : [...wordExceptions].find((x) => core.length > x.length && core.startsWith(x) && josaOnly(core.slice(x.length)));
+      if (!word) continue;
       const start = w.index + lead.length;
-      exceptionSpans.push({ start, end: start + core.length });
+      exceptionSpans.push({ start, end: start + word.length });
     }
   }
   const inException = (at: number) => exceptionSpans.some((s) => at >= s.start && at < s.end);

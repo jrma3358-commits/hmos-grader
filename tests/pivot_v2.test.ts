@@ -923,6 +923,14 @@ describe('어절 예외 — 예외 낱말과 같은 어절 안에서는 조사·
     assert.equal(g.edges.filter((e) => e.surface === '그리고').length, 1);
   });
 
+  it('예외 낱말 + 조사 하나인 어절은 예외 낱말 부분만 거른다 — 붙은 조사는 건다 (오종래 2026-10-06)', () => {
+    // 「불구하고도」 = 예외 낱말 「불구하고」 + 조사 「도」
+    assert.deepEqual(nodes('불구하고도', ['불구하고']), ['P:불구하고']);
+    assert.deepEqual(nodes('불구하고도'), ['Q:구하고']);
+    // 뒤가 조사 하나가 아니면 거르지 않는다
+    assert.ok(nodes('불구하고말고', ['불구하고']).includes('Q:구하고'));
+  });
+
   it('어절 일부만 같으면 거르지 않는다 · 지정이 없으면 지금처럼 건다', () => {
     assert.ok(nodes(q, ['그럼']).includes('P:그럼에'));
     assert.ok(nodes(q).includes('Q:구하고') && nodes(q).filter((n) => n === 'Q:구하고').length === 2);
