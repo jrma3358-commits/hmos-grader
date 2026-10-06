@@ -352,7 +352,7 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
   // 단서절 [오종래 2026-10-06] — apply.provisoClauses: 이 스위치의 표지(「단,」)가 어절 머리(앞이 공백·문두·여는 괄호)에 서면
   //   그 뒤 문장 끝까지가 D 노드 하나다. 안의 표지는 걸지 않는다 — 단서의 Q·B·C가 급소 산정에 들지 않게
   //   (국어·과학 논제5 「단, 화학 반응식에 각 물질의 상태도 표시하시오.」). 어절 머리가 아니면(「판단,」) 걸지 않는다.
-  //   문장 끝 = 뒤에 공백·닫는 괄호·끝이 오는 「.」「?」「!」, 또는 줄바꿈. 「(단, …)」면 닫는 괄호까지.
+  //   문장 끝 = 뒤에 공백·닫는 괄호·끝이 오는 「.」「?」「!」, 또는 줄바꿈. 「(단, …)」면 짝이 맞는 닫는 괄호까지.
   const provisoIds = table.apply.provisoClauses ?? [];
   if (provisoIds.length) {
     for (const h of hits.filter((x) => provisoIds.includes(x.c.sw.id))) {
@@ -361,10 +361,27 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
         hits = hits.filter((x) => x !== h);
         continue;
       }
-      const m = /[.?!](?=[\s)]|$)|\n/.exec(question.slice(h.end));
-      let end = m ? h.end + m.index + (m[0] === '\n' ? 0 : 1) : question.length;
-      h.inner = question.slice(h.at, end).trim();
-      if (question[h.at - 1] === '(' && question[end] === ')') end += 1;
+      //   괄호 단서 [오종래 2026-10-06] — 「(단, …)」는 짝이 맞는 닫는 괄호까지가 절 전체다 (안의 괄호 「P(|Z|≤1.96)」는 건너뜀,
+      //   마침표 없는 「(단, AB < AC)」도). 닫는 괄호가 없으면 문장 끝 규칙.
+      let close = -1;
+      if (question[h.at - 1] === '(') {
+        for (let k = h.end, depth = 1; k < question.length; k++) {
+          if (question[k] === '(') depth++;
+          else if (question[k] === ')' && --depth === 0) {
+            close = k;
+            break;
+          }
+        }
+      }
+      let end: number;
+      if (close >= 0) {
+        h.inner = question.slice(h.at, close).trim();
+        end = close + 1;
+      } else {
+        const m = /[.?!](?=[\s)]|$)|\n/.exec(question.slice(h.end));
+        end = m ? h.end + m.index + (m[0] === '\n' ? 0 : 1) : question.length;
+        h.inner = question.slice(h.at, end).trim();
+      }
       hits = hits.filter((x) => x === h || x.end <= h.at || x.at >= end);
       h.end = end;
       h.proviso = true;
