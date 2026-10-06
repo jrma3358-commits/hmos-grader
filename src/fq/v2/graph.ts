@@ -172,7 +172,8 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
   /** chained = 어절 안이지만 조사 연쇄로 걸린 표지 (예: 「것만을」의 「만」) */
   /** passage = 제시문 블록이면 발문 빈칸 표지가 걸린 자리 · caseHead = 케이스 머리 문단(P 머리) */
   /** quote = 인용 명제(apply.quotedPropositions) · proviso = 단서절(apply.provisoClauses) */
-  let hits: { at: number; end: number; c: Candidate; inner: string; chained: boolean; passage?: number; caseHead?: true; math?: true; quote?: true; proviso?: true }[] = [];
+  /** designated = 제시문 지정(apply.designatedPassages) — 실체는 기호(범위) */
+  let hits: { at: number; end: number; c: Candidate; inner: string; chained: boolean; passage?: number; caseHead?: true; math?: true; quote?: true; proviso?: true; designated?: true }[] = [];
   /** 문장 종결 표지가 걸린 자리 (apply.sentenceEnds) — 노드·간선이 아니라 절 경계다 */
   const sentenceBreaks: { at: number; end: number }[] = [];
 
@@ -232,6 +233,11 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
   //   (예: 「직선 y = 2x + 1과」 → 「직선 y = 2x + 1」, 「lim_{x→0} f(x)/x의」 → 식 안의 「→」는 따로 걸지 않는다).
   //   영문 표지(「lim」)는 앞에 영문 글자가 붙으면 다른 낱말 안이라 걸지 않는다.
   const mathIds = table.apply.mathExpressions ?? [];
+  // 제시문 지정 [오종래 2026-10-07] — apply.designatedPassages(예: 「제시문」)의 표지 바로 뒤에 괄호 기호 「(마)」 또는
+  //   범위 「(나)~(라)」가 오면 표지+기호가 노드 하나, 실체는 기호(범위 전체)다. 기호가 없으면 걸지 않는다.
+  //   단독 기호(「(가)」 보기 기호)는 여기 들지 않는다 — 제 스위치 그대로다.
+  const designatedIds = table.apply.designatedPassages ?? [];
+  const PASSAGE_LABEL = /^\s*(\([가-힣]\)(?:\s*[~∼～-]\s*\([가-힣]\))?)/;
   //   식 끝의 공백·쉼표는 소비한다(end) — 다음 노드의 실체로 넘어가지 않는다. 실체(text)에서는 뗀다.
   const mathEnd = (from: number) => {
     const tail = question.slice(from).match(/^[^가-힣ㄱ-ㅎㅏ-ㅣ\n]*/)![0];
@@ -278,7 +284,7 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
       i += ending[0].length;
       continue;
     }
-    let matched: { len: number; c: Candidate; inner: string; chained: boolean; math?: true } | undefined;
+    let matched: { len: number; c: Candidate; inner: string; chained: boolean; math?: true; designated?: true } | undefined;
     for (const c of cands) {
       const m = rest.match(c.re);
       if (m && m.index === 0) {
@@ -306,6 +312,12 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
           matched = { len: end - i, c, inner: question.slice(from, end).trim(), chained: false };
           break;
         }
+        if (designatedIds.includes(c.sw.id)) {
+          const label = rest.slice(m[0].length).match(PASSAGE_LABEL);
+          if (!label) continue; // 뒤에 기호가 없다 — 제시문 지정이 아니다
+          matched = { len: m[0].length + label[0].length, c, inner: label[1], chained: false, designated: true };
+          break;
+        }
         if (mathIds.includes(c.sw.id) && isLexical(c.sw, c.surface)) {
           if (/^[A-Za-z]/.test(c.surface.trim()) && /[A-Za-z]/.test(question[i - 1] ?? '')) continue; // 영문 낱말 안
           const { end, text } = mathEnd(i + m[0].length);
@@ -319,7 +331,7 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
       }
     }
     if (matched) {
-      hits.push({ at: i, end: i + matched.len, c: matched.c, inner: matched.inner, chained: matched.chained, math: matched.math });
+      hits.push({ at: i, end: i + matched.len, c: matched.c, inner: matched.inner, chained: matched.chained, math: matched.math, designated: matched.designated });
       i += matched.len;
     } else {
       //   어절 끝에서만 — 「위해서」처럼 뒤에 글자가 이어지면 끊지 않는다
@@ -614,7 +626,7 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
       continue;
     }
 
-    let entity = hit.passage !== undefined || hit.caseHead || hit.quote || hit.proviso
+    let entity = hit.passage !== undefined || hit.caseHead || hit.quote || hit.proviso || hit.designated
       ? hit.inner
       : isLexical(sw, hit.c.surface)
         ? surface

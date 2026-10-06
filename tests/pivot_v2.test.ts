@@ -1565,3 +1565,39 @@ describe('수량 값 B — 「몇 ~」 Q에 접힌 값 B가 급소 (오종래 20
     assert.equal(r.ok && r.pivot.reason, 'Q 직전 B');
   });
 });
+
+describe('제시문 지정 — 「제시문」이 붙은 괄호 기호·범위만 P (오종래 2026-10-07)', () => {
+  // B = SB(~을·~의·~에), 단독 기호 = SL(어휘형 「(가)」「(나)」 B), 지정 = SP(어휘형 「@P」 P)
+  const sw = (id: string, markers: string[], color: Color, lexical?: boolean) =>
+    ({ id, kind: '조사·어미', markers, intent: '', color, lexical }) as SealedSwitch;
+  const table = (designatedPassages?: string[]): SealedTable => ({
+    version: 1,
+    source: { document: '(테스트)', sections: [] },
+    switches: [sw('SB', ['~을', '~의', '~에'], 'B'), sw('SL', ['(가)', '(나)'], 'B', true), sw('SP', ['@P'], 'P', true)],
+    lights: [],
+    matrix: [],
+    symbols: [],
+    forms: [],
+    apply: { longestMatchFirst: true, precedence: [], endOfWord: true, designatedPassages },
+    pending: [],
+  });
+  const entities = (q: string, list?: string[]) =>
+    build_path_graph(q, table(list)).nodes.map((n) => `${n.color}:${n.entity}`);
+
+  it('범위 「(나)~(라)」는 P 하나 — 뒤 B에 묻히지 않는다', () => {
+    assert.deepEqual(entities('@P (나)~(라)에 나타난 영향을', ['SP']), ['P:(나)~(라)', 'B:나타난 영향']);
+  });
+
+  it('단독 지정 「(마)」도 P', () => {
+    assert.deepEqual(entities('@P (마)의 설명을', ['SP']), ['P:(마)', 'B:설명']);
+  });
+
+  it('「@P」 없는 단독 기호는 제 스위치 그대로 (B)', () => {
+    assert.deepEqual(entities('(가)의 설명을', ['SP']), ['B:(가)', 'B:설명']);
+  });
+
+  it('뒤에 기호가 없으면 걸지 않는다 · 지정이 없으면 적용하지 않는다', () => {
+    assert.equal(entities('@P 내용을', ['SP']).some((e) => e.startsWith('P:')), false);
+    assert.equal(entities('@P (마)의 설명을').includes('P:(마)'), false);
+  });
+});
