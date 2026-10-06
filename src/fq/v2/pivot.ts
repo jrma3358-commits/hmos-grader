@@ -36,8 +36,9 @@ export const DEFAULT_CONVERGENCE_WEIGHTS: Record<PathEdge['kind'], number> = {
 export interface Pivot {
   node: PathNode;
   /** '강한 C 연결 B' = 강한 C(apply.strongC)에 연결된 B라서 급소다 (graph.ts) · 'Q 직전 B' = 마지막 Q 바로 앞의 B라서 급소다
-   *  · '서술형태' = 서술형태 제약(apply.formPivot, C-F) 노드라서 급소다 — 이때만 급소가 B가 아니다 */
-  reason: '최수렴 B' | '강한 C 연결 B' | 'Q 직전 B' | '서술형태';
+   *  · '서술형태' = 서술형태 제약(apply.formPivot, C-F) 노드라서 급소다 — 이때만 급소가 B가 아니다
+   *  · '수량 값 B' = 「몇 ~」 수량 물음(apply.quantityHeads)이라 Q에 접힌 값 B가 급소다 — 노드는 그 Q, 실체는 「몇 ~」 */
+  reason: '최수렴 B' | '강한 C 연결 B' | 'Q 직전 B' | '서술형태' | '수량 값 B';
   /** 급소의 실체값 — B 급소는 B가 묻는 실체(이름 뒤의 식·기호, 예: 「일반항 a_n」 → 「a_n」, 없으면 실체 그대로),
    *  서술형태 급소는 표지에서 서술 틀을 떼고 남은 말 (예: 「논박하는 방식으로」 → 「논박」) */
   keyword?: string;
@@ -255,6 +256,27 @@ export function analyze_pivot(graph: PathGraph, table?: SealedTable): PivotAnaly
     };
   }
   if (forms.length === 1 && table) return { ok: true, pivot: atForm(forms[0], table) };
+
+  // 수량 값 B [오종래 2026-10-06] — 실체가 「몇」(apply.quantityHeads)으로 시작하는 Q(「몇 N인가?」·「몇 g 넣어야 하는지」)는
+  //   Q에 접힌 값 B가 묻는 대상이다. 대상 B(Q 직전 B)보다 먼저 그 값 B가 급소다. 실체 = 「몇」과 바로 뒤 어절
+  //   (국어·과학 논제4 「몇 N」 · 논제6 「몇 g」). 여럿이면 Q마다 급소 (급소 복수), `pivot`은 마지막.
+  const quantityHeads = table?.apply.quantityHeads ?? [];
+  const quantities = graph.nodes.filter((n) => n.color === 'Q' && quantityHeads.some((h) => n.entity.trim().startsWith(h)));
+  if (quantities.length) {
+    const atQuantity = (node: PathNode): Pivot => {
+      const head = quantityHeads.find((h) => node.entity.trim().startsWith(h))!;
+      const rest = node.entity.trim().slice(head.length).trim().split(/\s+/)[0] ?? '';
+      return {
+        node,
+        reason: '수량 값 B',
+        keyword: `${head} ${rest.replace(/(인가|인지)?[?？]?$/, '')}`.trim(),
+        convergence: convergenceOf(graph, node, table),
+        sameAsDeepest: deepest_node(graph)?.id === node.id,
+      };
+    };
+    const pivots = quantities.map(atQuantity);
+    return pivots.length > 1 ? { ok: true, pivot: pivots[pivots.length - 1], pivots } : { ok: true, pivot: pivots[0] };
+  }
 
   const bs = graph.nodes.filter((n) => n.color === 'B');
   if (!bs.length) {

@@ -322,6 +322,14 @@ export interface SealedApplyRules {
    * 묶는 **규칙**은 구조라 코드에 있다(`v2/graph.ts`). 여기 있는 것은 «어느 스위치인가»(값)뿐이다.
    */
   provisoClauses?: Undecided<string[]>;
+  /**
+   * 수량 물음 머리 — Q 노드의 실체가 이 말(예: 「몇」)로 시작하면 Q에 접힌 값 B가 묻는 대상이라, 대상 B(Q 직전 B)보다 먼저
+   * 그 Q 노드가 급소다(reason '수량 값 B'). 급소 실체 = 머리 + 바로 뒤 어절 (「몇 N인가?」 → 「몇 N」). 서술형태 급소 다음 순서.
+   * 없거나 null이면 적용하지 않는다.
+   *
+   * 세우는 **규칙**은 구조라 코드에 있다(`v2/pivot.ts`). 여기 있는 것은 «어느 말인가»(값)뿐이다.
+   */
+  quantityHeads?: Undecided<string[]>;
 }
 
 /**

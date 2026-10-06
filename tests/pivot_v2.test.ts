@@ -1529,3 +1529,39 @@ describe('단서절 — 「단,」 뒤 문장 끝까지 D 노드 하나 (오종�
     assert.ok(entities(q).includes('Q:표시하시오'), '지정이 없으면 단서절로 묶지 않는다');
   });
 });
+
+describe('수량 값 B — 「몇 ~」 Q에 접힌 값 B가 급소 (오종래 2026-10-06)', () => {
+  const table = (quantityHeads?: string[]): SealedTable => ({
+    version: 1,
+    source: { document: '(테스트)', sections: [] },
+    switches: [],
+    lights: [],
+    matrix: [],
+    symbols: [],
+    forms: [],
+    apply: { longestMatchFirst: true, precedence: [], quantityHeads },
+    pending: [],
+  });
+
+  it('「몇 N인가?」 Q가 있으면 대상 B보다 먼저 그 Q가 급소 — 실체 「몇 N」', () => {
+    const g = graph([node('B1', 'B', '평균 힘의 크기'), node('Q1', 'Q', '몇 N인가?')], []);
+    const r = analyze_pivot(g, table(['몇']));
+    assert.equal(r.ok, true);
+    if (!r.ok) return;
+    assert.equal(r.pivot.reason, '수량 값 B');
+    assert.equal(r.pivot.node.id, 'Q1');
+    assert.equal(r.pivot.keyword, '몇 N');
+  });
+
+  it('간접의문 「몇 g 넣어야 하」(는지)도 — 실체는 「몇」과 바로 뒤 어절', () => {
+    const g = graph([node('B1', 'B', '아자이드화 나트륨'), node('Q1', 'Q', '몇 g 넣어야 하'), node('Q2', 'Q', '계산하시오')], []);
+    const r = analyze_pivot(g, table(['몇']));
+    assert.equal(r.ok && r.pivot.keyword, '몇 g');
+  });
+
+  it('지정이 없으면 기존 규칙 그대로 — Q 직전 B', () => {
+    const g = graph([node('B1', 'B', '평균 힘의 크기'), node('Q1', 'Q', '몇 N인가?')], []);
+    const r = analyze_pivot(g, table());
+    assert.equal(r.ok && r.pivot.reason, 'Q 직전 B');
+  });
+});
