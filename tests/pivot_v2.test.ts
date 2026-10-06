@@ -1292,3 +1292,34 @@ describe('명사구 연결 — 「의」는 B 경계가 아니라 실체 확장 
     assert.deepEqual(entities('선분 AB의 값은?', ['의']), ['B:선분 AB', 'Q:값']);
   });
 });
+
+describe('목적절 경계 — 「~기 위해」 뒤부터 실체를 잡는다 (오종래 2026-10-06)', () => {
+  // B = SB(~를·~을), C = SC(~하기 위해, 스위치 표지)
+  const sw = (id: string, markers: string[], color: Color) =>
+    ({ id, kind: '조사·어미', markers, intent: '', color }) as SealedSwitch;
+  const table = (purposeClauses?: string[]): SealedTable => ({
+    version: 1,
+    source: { document: '(테스트)', sections: [] },
+    switches: [sw('SB', ['~를', '~을'], 'B'), sw('SC', ['~하기 위해'], 'C')],
+    lights: [],
+    matrix: [],
+    symbols: [],
+    forms: [],
+    apply: { longestMatchFirst: true, precedence: [], endOfWord: true, purposeClauses },
+    pending: [],
+  });
+  const entities = (q: string, list?: string[]) =>
+    build_path_graph(q, table(list)).nodes.map((n) => `${n.color}:${n.entity}`);
+  const list = ['~기 위해', '~함으로써'];
+
+  it('목적절 뒤 쉼표·공백 다음부터 B 실체다 — 목적절은 노드가 아니다', () => {
+    assert.deepEqual(entities('물가를 줄이기 위해, B국이 시행한 대응조치를', list), ['B:물가', 'B:B국이 시행한 대응조치']);
+    assert.deepEqual(entities('세금을 걷음으로써 정부가 쓴 돈을', ['~음으로써']), ['B:세금', 'B:정부가 쓴 돈']);
+    assert.deepEqual(entities('물가를 줄이기 위해, B국이 시행한 대응조치를'), ['B:물가', 'B:줄이기 위해, B국이 시행한 대응조치']);
+  });
+
+  it('같은 자리의 스위치 표지가 먼저다 · 어절 안이면 끊지 않는다', () => {
+    assert.deepEqual(entities('계산하기 위해 쓴 식을', list), ['C:계산', 'B:쓴 식']);
+    assert.deepEqual(entities('줄이기 위해서 쓴 식을', list), ['B:줄이기 위해서 쓴 식']);
+  });
+});

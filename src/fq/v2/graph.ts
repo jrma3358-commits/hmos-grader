@@ -206,6 +206,9 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
   // 문장 종결 [오종래 2026-10-04] — apply.sentenceEnds(예: 「이다.」「만족시킨다.」「~하다.」)가 걸리면 절 경계다.
   //   다른 표지보다 먼저 본다 — 종결 표지 안의 글자(「이다」의 「이」)를 조사로 걸지 않는다.
   const sentenceEnds = (table.apply.sentenceEnds ?? []).map(markerRegex);
+  // 목적절 경계 [오종래 2026-10-06] — apply.purposeClauses(예: 「~기 위해」·「~함으로써」)가 걸리면 절 경계다.
+  //   스위치 표지가 같은 자리에서 걸리지 않을 때만 본다. 경계 뒤 쉼표·공백까지 넘긴다 — 뒤 실체 머리에 「, 」가 붙지 않게.
+  const purposeClauses = (table.apply.purposeClauses ?? []).map(markerRegex);
 
   // 서술 블록 [오종래 2026-10-01] — 봉인 파일이 지정한 스위치(apply.statementBlocks, 예: 보기 머리 「ㄱ.」)의 표지가
   //   어절로 홀로 서면, 그 뒤 서술 전체(다음 머리·문단 경계·끝 앞까지)를 노드 하나의 실체로 잡는다.
@@ -311,6 +314,14 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
       hits.push({ at: i, end: i + matched.len, c: matched.c, inner: matched.inner, chained: matched.chained, math: matched.math });
       i += matched.len;
     } else {
+      //   어절 끝에서만 — 「위해서」처럼 뒤에 글자가 이어지면 끊지 않는다
+      const purpose = purposeClauses.map((re) => rest.match(re)).find((m) => m?.index === 0 && !insideWord(rest[m[0].length]));
+      if (purpose) {
+        const end = i + purpose[0].length + rest.slice(purpose[0].length).match(/^[\s,]*/)![0].length;
+        sentenceBreaks.push({ at: i, end });
+        i = end;
+        continue;
+      }
       i += 1;
     }
   }
