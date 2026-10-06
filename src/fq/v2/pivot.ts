@@ -145,9 +145,10 @@ function isWritingForm(graph: PathGraph, node: PathNode): boolean {
 /**
  * B 급소의 실체값 [오종래 2026-10-05] — 급소는 B 노드 이름이 아니라 B가 묻는 실체를 낸다.
  * 실체가 「한글 이름 + 식·기호」(예: 「일반항 a_n」 「점 C(0, -1)」)면 실체값 = 식·기호, 이름은 따로 둔다. 아니면 실체 그대로.
+ * [오종래 2026-10-06] 실체 머리의 쉼표·공백은 뗀다 — 앞 조각에서 끌려온 것이다 (수능_3 「, k」 → 「k」). 노드 실체는 그대로다.
  */
 function bValue(node: PathNode): Pick<Pivot, 'keyword' | 'name'> {
-  const entity = node.entity.trim();
+  const entity = node.entity.trim().replace(/^[\s,]+/, '');
   const m = entity.match(/^(.*[가-힣ㄱ-ㅎㅏ-ㅣ])\s+([^가-힣ㄱ-ㅎㅏ-ㅣ\s][^가-힣ㄱ-ㅎㅏ-ㅣ]*)$/);
   const symbol = m?.[2].replace(/[\s,]+$/, '');
   return m && symbol ? { keyword: symbol, name: m[1].trim() } : { keyword: entity };

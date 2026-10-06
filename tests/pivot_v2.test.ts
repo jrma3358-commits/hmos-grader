@@ -1245,6 +1245,11 @@ describe('B 급소의 실체값 — 이름이 아니라 B가 묻는 실체 (오�
     assert.deepEqual(pick('X = 1일 확률'), { keyword: 'X = 1일 확률', name: undefined });
     assert.deepEqual(pick('a = 3, b = 5, c = 7'), { keyword: 'a = 3, b = 5, c = 7', name: undefined });
   });
+
+  it('실체 머리의 쉼표·공백은 뗀다 — 이름에도 남기지 않는다 (오종래 2026-10-06)', () => {
+    assert.deepEqual(pick(', k'), { keyword: 'k', name: undefined });
+    assert.deepEqual(pick(', 양수 a'), { keyword: 'a', name: '양수' });
+  });
 });
 
 describe('명사구 연결 — 「의」는 B 경계가 아니라 실체 확장 (오종래 2026-10-06)', () => {
