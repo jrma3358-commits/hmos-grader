@@ -1055,6 +1055,36 @@ describe('서술형태 급소 — C-F 노드 안의 핵심어 (오종래 2026-10
     assert.equal(!r.ok && r.flag, 'MULTIPLE_CONVERGENCE');
   });
 
+  // 서술 형태 우선 (오종래 2026-10-06) — 입장·관점 표지(apply.formPerspective)는 테스트용 「~@V」
+  const withPerspective = (perspective: string[]): SealedTable => {
+    const t = table(['SF']);
+    return { ...t, apply: { ...t.apply, formPerspective: perspective } };
+  };
+
+  it('C-F 노드가 둘이면 입장·관점 표지 노드를 빼고 서술 형태 표지가 급소다', () => {
+    const t = withPerspective(['~@V']);
+    const g = build_path_graph('형태 @B 관점 @V 논박@M 설명 @Q', t);
+    const r = analyze_pivot(g, t);
+    assert.equal(r.ok, true);
+    if (!r.ok) return;
+    assert.equal(r.pivot.reason, '서술형태');
+    assert.equal(r.pivot.keyword, '논박');
+  });
+
+  it('입장·관점 표지 노드만 둘이면 플래그 그대로', () => {
+    const t = withPerspective(['~@V']);
+    const g = build_path_graph('형태 @B 관점 @V 입장 @V 설명 @Q', t);
+    const r = analyze_pivot(g, t);
+    assert.equal(!r.ok && r.flag, 'MULTIPLE_CONVERGENCE');
+  });
+
+  it('입장·관점 표지 노드 하나뿐이면 그것이 급소 — 빼지 않는다', () => {
+    const t = withPerspective(['~@V']);
+    const g = build_path_graph('형태 @B 관점 @V 설명 @Q', t);
+    const r = analyze_pivot(g, t);
+    assert.equal(r.ok && r.pivot.keyword, '관점');
+  });
+
   it('지정이 없으면 기존 규칙 그대로 — Q 직전 B', () => {
     const t = table();
     const g = build_path_graph('형태 @B 논박@M 설명 @Q', t);

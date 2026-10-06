@@ -183,7 +183,15 @@ export function analyze_pivot(graph: PathGraph, table?: SealedTable): PivotAnaly
   //   그 노드가 급소이고, 실체는 그 안의 핵심어다 (예: 인문논술_문1 「논박하는 방식으로」 → 「논박」).
   //   「급소는 B」의 예외다 — 이 규칙에서만 급소가 C 노드다. 둘 이상이면 급소가 둘 — 문제 설계 오류로 플래그한다.
   const formIds = table?.apply.formPivot ?? [];
-  const forms = graph.nodes.filter((n) => formIds.includes(n.switchId));
+  let forms = graph.nodes.filter((n) => formIds.includes(n.switchId));
+  // 서술 형태 우선 [오종래 2026-10-06] — 서술형태 노드가 둘 이상이면 입장·관점 표지(apply.formPerspective, 「입장에서」 등)가
+  //   세운 노드를 뺀다. 서술 형태 표지(「비판적으로」 등)가 급소다 (논제1 「(나)의 입장에서 비판적으로 성찰하되」 → 「비판적으로」).
+  //   빼고 하나가 남지 않으면 플래그 그대로.
+  const perspectives = (table?.apply.formPerspective ?? []).map((m) => m.replace(/^~/, '').trim());
+  if (forms.length > 1) {
+    const rest = forms.filter((n) => !perspectives.includes(n.surface.trim()));
+    if (rest.length === 1) forms = rest;
+  }
   if (forms.length > 1) {
     return {
       ok: false,
