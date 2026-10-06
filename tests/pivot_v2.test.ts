@@ -1639,3 +1639,45 @@ describe('접속사 Q절 — 문장 머리 접속사로 이어진 Q절은 절마
     assert.deepEqual(split_units(q, table()), []);
   });
 });
+
+describe('조건부확률 조건절 — 뒤에 「~확률」 B가 오면 「~일 때」는 접지 않고 C (오종래 2026-10-07)', () => {
+  // B = SB(~가·~을), 판단기준 = SJ(~일 때 C, foldToB), Q = SQ(어휘형 「구하시오」), 대상 = 「@확률」(테스트용 가짜 말)
+  const sw = (id: string, markers: string[], color: Color, lexical?: boolean) =>
+    ({ id, kind: '조사·어미', markers, intent: '', color, lexical }) as SealedSwitch;
+  const table = (conditionalTargets?: string[]): SealedTable => ({
+    version: 1,
+    source: { document: '(테스트)', sections: [] },
+    switches: [sw('SB', ['~가', '~을'], 'B'), sw('SJ', ['~일 때'], 'C'), sw('SQ', ['구하시오'], 'Q', true)],
+    lights: [],
+    matrix: [],
+    symbols: [],
+    forms: [],
+    apply: { longestMatchFirst: true, precedence: [], endOfWord: true, foldToB: ['SJ'], conditionalTargets },
+    pending: [],
+  });
+  const q = '공이 빨간색일 때, 주머니가 A일 @확률을 구하시오.';
+
+  it('조건절은 C 그대로, 급소는 Q 직전 B 「~확률」', () => {
+    const t = table(['@확률']);
+    const g = build_path_graph(q, t);
+    const cond = g.nodes.find((n) => n.switchId === 'SJ')!;
+    assert.equal(cond.color, 'C');
+    assert.equal(cond.foldedFrom, undefined);
+    const r = analyze_pivot(g, t);
+    assert.equal(r.ok && r.pivot.node.entity, 'A일 @확률');
+    assert.equal(r.ok && r.pivot.reason, 'Q 직전 B');
+  });
+
+  it('「~확률」 B가 없으면 판단기준 그대로 B로 접힌다 · 지정이 없으면 적용하지 않는다', () => {
+    const plain = build_path_graph('f(x)가 연속일 때, 상수 a를 구하시오.', table(['@확률']));
+    assert.equal(plain.nodes.find((n) => n.switchId === 'SJ')!.color, 'B');
+    assert.equal(build_path_graph(q, table()).nodes.find((n) => n.switchId === 'SJ')!.color, 'B');
+  });
+
+  it('상태가 식·기호(「k일 때」)이거나 「~확률」 B가 다른 문장이면 판단기준 그대로', () => {
+    const t = table(['@확률']);
+    const sj = (s: string) => build_path_graph(s, t).nodes.find((n) => n.switchId === 'SJ')!.color;
+    assert.equal(sj('눈의 수가 k일 때, 주머니가 A일 @확률을 구하시오.'), 'B');
+    assert.equal(sj('공이 빨간색일 때 끝낸다. 주머니가 A일 @확률을 구하시오.'), 'B');
+  });
+});

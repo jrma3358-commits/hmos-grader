@@ -809,8 +809,21 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
   //   판단기준이 아니라 범위 제약 C다 — 접지 않고 C 그대로 둔다 (서술형2차 수학1·6).
   const foldIds = table.apply.foldToB ?? [];
   const inequality = (n: PathNode) => /[<>≤≥≦≧]/.test(n.entity.match(/[^가-힣ㄱ-ㅎㅏ-ㅣ]*$/)![0]);
+  //   [오종래 2026-10-07] 조건부확률 조건절 — 「~(이/가) [색·상태]일 때」 뒤에 실체가 apply.conditionalTargets(예: 「확률」)로 끝나는
+  //   B 노드가 오면 판단기준이 아니라 조건 C다 — 접지 않는다. 묻는 대상은 그 B다 (논제5-2 「공이 빨간색일 때, … A일 확률」).
+  //   상태는 한글 낱말이다 — 실체가 식·기호로 끝나면(「눈의 수가 k일 때」) 판단기준 그대로. 그 B는 같은 문장 안이어야 한다 (수능_수학_30 급소 「k」).
+  const condTargets = table.apply.conditionalTargets ?? [];
+  const conditional = (i: number) => {
+    if (!/[가-힣]$/.test(nodes[i].entity.trim())) return false;
+    return nodes.slice(i + 1).some(
+      (n) =>
+        n.color === 'B' &&
+        condTargets.some((t) => n.entity.trim().endsWith(t)) &&
+        !/[.?!。](?=\s|$)|\n/.test(question.slice(nodes[i].index, n.index)),
+    );
+  };
   for (const [i, node] of nodes.entries()) {
-    if (!foldIds.includes(node.switchId) || inequality(node)) continue;
+    if (!foldIds.includes(node.switchId) || inequality(node) || conditional(i)) continue;
     nodes[i] = { ...node, color: 'B', foldedFrom: node.color };
     for (const later of nodes.slice(i + 1)) {
       edges.push({ from: later.id, to: node.id, surface: null, kind: '접힘', index: later.index });

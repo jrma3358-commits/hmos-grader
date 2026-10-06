@@ -345,6 +345,13 @@ export interface SealedApplyRules {
    * 나누는 **규칙**은 구조라 코드에 있다(`v2/graph.ts`·`v2/units.ts`). 여기 있는 것은 «어느 낱말인가»(값)뿐이다.
    */
   conjunctionClauses?: Undecided<string[]>;
+  /**
+   * 조건부확률 대상 — 판단기준(foldToB) 노드 뒤에 실체가 이 말(예: 「확률」)로 끝나는 B 노드가 오면, 그 판단기준 노드는
+   * 조건 C로 남고 접지 않는다 (「공이 빨간색일 때, … A일 확률」 → C「공이 빨간색」, 급소 B「A일 확률」). 없거나 null이면 적용하지 않는다.
+   *
+   * 거르는 **규칙**은 구조라 코드에 있다(`v2/graph.ts`). 여기 있는 것은 «어느 말인가»(값)뿐이다.
+   */
+  conditionalTargets?: Undecided<string[]>;
 }
 
 /**
