@@ -62,7 +62,8 @@ export interface PivotFailure {
   message: string;
 }
 
-/** `pivots` = 급소 복수 — Q가 둘 이상인 물음에서 Q마다의 급소(Q 직전 B), 앞에서부터. 하나뿐이면 없다 */
+/** `pivots` = 급소 복수 — Q가 둘 이상인 물음에서 Q마다의 급소(Q 직전 B), 앞에서부터. 하나뿐이면 없다.
+ *  복합 Q 절마다 서술형태 노드가 하나씩이면 절마다의 서술형태 급소다 */
 export type PivotAnalysis = { ok: true; pivot: Pivot; pivots?: Pivot[] } | PivotFailure;
 
 export class PivotError extends Error {
@@ -174,6 +175,34 @@ const DEICTICS = ['각각', '각', '이', '그', '이것', '그것', '이들', '
 /** 앞 명사구를 이어 붙이는 병렬 표지 */
 const PARALLEL = ['와', '과'];
 
+/** 서술형태 노드가 둘 이상이면 뒤로 미는 표지(apply.formPerspective)의 노드를 뺀다 — 하나가 남을 때만 */
+function narrowForms(forms: PathNode[], perspectives: string[]): PathNode[] {
+  if (forms.length < 2) return forms;
+  const rest = forms.filter((n) => !perspectives.includes(n.surface.trim()));
+  return rest.length === 1 ? rest : forms;
+}
+
+/**
+ * 복합 Q 절 나누기 — 「~하고,」 Q(바로 뒤 쉼표)에서 물음을 절로 자른다. 절마다 서술형태 노드가 꼭 하나씩이고
+ * 마지막 절에도 Q가 있으면 절 순서대로 그 노드들을, 아니면 undefined.
+ */
+function formClauses(graph: PathGraph, forms: PathNode[], perspectives: string[]): PathNode[] | undefined {
+  const cuts = graph.nodes.filter(
+    (n) => n.color === 'Q' && /하고$/.test(n.surface.trim()) && /^\s*,/.test(graph.question.slice(n.index + n.surface.length)),
+  );
+  if (!cuts.length) return undefined;
+  const picked: PathNode[] = [];
+  let start = -1;
+  for (const end of [...cuts.map((n) => n.index), Infinity]) {
+    const one = narrowForms(forms.filter((n) => n.index > start && n.index < end), perspectives);
+    if (one.length !== 1) return undefined;
+    if (end === Infinity && !graph.nodes.some((n) => n.color === 'Q' && n.index > start)) return undefined;
+    picked.push(one[0]);
+    start = end;
+  }
+  return picked;
+}
+
 /**
  * 급소를 산출한다 — 결정론 (구현명세 §2-4).
  * 실패도 값으로 돌려준다: B가 없거나(NO_B) 둘로 수렴하면(MULTIPLE_CONVERGENCE) 플래그.
@@ -190,9 +219,23 @@ export function analyze_pivot(graph: PathGraph, table?: SealedTable): PivotAnaly
   //   [오종래 2026-10-06] 참고 표지(「참고하여」)도 같이 뒤로 민다 — 수단 표지(「활용하여」「이용하여」)가 「참고하여」「관점에서」
   //   「입장에서」보다 먼저 급소다 (과학 G 「(가)의 개념을 활용하여 … (라)를 참고하여」 → 「활용하여」).
   const perspectives = (table?.apply.formPerspective ?? []).map((m) => m.replace(/^~/, '').trim());
-  if (forms.length > 1) {
-    const rest = forms.filter((n) => !perspectives.includes(n.surface.trim()));
-    if (rest.length === 1) forms = rest;
+  forms = narrowForms(forms, perspectives);
+  const atForm = (node: PathNode, t: SealedTable): Pivot => ({
+    node,
+    reason: '서술형태',
+    keyword: formKeyword(graph, node, t),
+    convergence: convergenceOf(graph, node, t),
+    sameAsDeepest: deepest_node(graph)?.id === node.id,
+  });
+  // 복합 Q 분리 [오종래 2026-10-06] — 서술형태 노드가 둘 이상이어도 「~하고,」 Q로 절이 나뉘고 절마다 하나씩이면
+  //   각 절이 독립 물음이다 → 절마다 그 서술형태 노드가 급소 (급소 복수). `pivot`은 마지막 절의 급소.
+  //   (예: 과학 논제K 「(조건)에 맞추어 설명하고, 이를 연관지어 … 제안하시오」 → 「맞추어」 / 「연관지어」)
+  if (forms.length > 1 && table) {
+    const perClause = formClauses(graph, forms, perspectives);
+    if (perClause) {
+      const pivots = perClause.map((n) => atForm(n, table));
+      return { ok: true, pivot: pivots[pivots.length - 1], pivots };
+    }
   }
   if (forms.length > 1) {
     return {
@@ -204,19 +247,7 @@ export function analyze_pivot(graph: PathGraph, table?: SealedTable): PivotAnaly
         `급소는 하나여야 합니다 (구현명세 §2-4). 후보: ${forms.map((n) => `${n.id}("${n.entity}")`).join(', ')}`,
     };
   }
-  if (forms.length === 1 && table) {
-    const node = forms[0];
-    return {
-      ok: true,
-      pivot: {
-        node,
-        reason: '서술형태',
-        keyword: formKeyword(graph, node, table),
-        convergence: convergenceOf(graph, node, table),
-        sameAsDeepest: deepest_node(graph)?.id === node.id,
-      },
-    };
-  }
+  if (forms.length === 1 && table) return { ok: true, pivot: atForm(forms[0], table) };
 
   const bs = graph.nodes.filter((n) => n.color === 'B');
   if (!bs.length) {

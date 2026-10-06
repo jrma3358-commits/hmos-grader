@@ -1083,6 +1083,35 @@ describe('서술형태 급소 — C-F 노드 안의 핵심어 (오종래 2026-10
     assert.equal(r.ok && r.pivot.keyword, '논박');
   });
 
+  // 복합 Q 분리 (오종래 2026-10-06) — 「~하고,」 Q로 절이 나뉘고 절마다 C-F가 하나씩이면 절마다 급소
+  const withHago = (): SealedTable => {
+    const t = table(['SF']);
+    return { ...t, switches: t.switches.map((s) => (s.id === 'SQ' ? { ...s, markers: [...s.markers, '~하고'] } : s)) };
+  };
+
+  it('「~하고,」로 나뉜 절마다 C-F가 하나씩이면 절마다 급소 — pivot은 마지막 절', () => {
+    const t = withHago();
+    const g = build_path_graph('형태 @B 논박@M 설명하고, 내용 @B 관점 @V 제안 @Q', t);
+    const r = analyze_pivot(g, t);
+    assert.equal(r.ok, true);
+    if (!r.ok) return;
+    assert.deepEqual(r.pivots?.map((p) => p.keyword), ['논박', '관점']);
+    assert.ok(r.pivots?.every((p) => p.reason === '서술형태'));
+    assert.equal(r.pivot.keyword, '관점');
+  });
+
+  it('「~하고」 뒤에 쉼표가 없으면 나누지 않는다 — 플래그 그대로', () => {
+    const t = withHago();
+    const g = build_path_graph('형태 @B 논박@M 설명하고 내용 @B 관점 @V 제안 @Q', t);
+    assert.equal(analyze_pivot(g, t).ok, false);
+  });
+
+  it('한 절에 C-F가 둘이면 나누지 않는다 — 플래그 그대로', () => {
+    const t = withHago();
+    const g = build_path_graph('형태 @B 논박@M 관점 @V 설명하고, 내용 @B 제안 @Q', t);
+    assert.equal(analyze_pivot(g, t).ok, false);
+  });
+
   it('입장·관점 표지 노드만 둘이면 플래그 그대로', () => {
     const t = withPerspective(['~@V']);
     const g = build_path_graph('형태 @B 관점 @V 입장 @V 설명 @Q', t);
