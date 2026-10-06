@@ -171,8 +171,8 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
   const cands = candidates(table);
   /** chained = 어절 안이지만 조사 연쇄로 걸린 표지 (예: 「것만을」의 「만」) */
   /** passage = 제시문 블록이면 발문 빈칸 표지가 걸린 자리 · caseHead = 케이스 머리 문단(P 머리) */
-  /** quote = 인용 명제(apply.quotedPropositions) */
-  let hits: { at: number; end: number; c: Candidate; inner: string; chained: boolean; passage?: number; caseHead?: true; math?: true; quote?: true }[] = [];
+  /** quote = 인용 명제(apply.quotedPropositions) · proviso = 단서절(apply.provisoClauses) */
+  let hits: { at: number; end: number; c: Candidate; inner: string; chained: boolean; passage?: number; caseHead?: true; math?: true; quote?: true; proviso?: true }[] = [];
   /** 문장 종결 표지가 걸린 자리 (apply.sentenceEnds) — 노드·간선이 아니라 절 경계다 */
   const sentenceBreaks: { at: number; end: number }[] = [];
 
@@ -347,6 +347,28 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
       hits.push({ at: start, end, c: quoteC, inner: m[0], chained: false, quote: true });
     }
     hits.sort((a, b) => a.at - b.at);
+  }
+
+  // 단서절 [오종래 2026-10-06] — apply.provisoClauses: 이 스위치의 표지(「단,」)가 어절 머리(앞이 공백·문두·여는 괄호)에 서면
+  //   그 뒤 문장 끝까지가 D 노드 하나다. 안의 표지는 걸지 않는다 — 단서의 Q·B·C가 급소 산정에 들지 않게
+  //   (국어·과학 논제5 「단, 화학 반응식에 각 물질의 상태도 표시하시오.」). 어절 머리가 아니면(「판단,」) 걸지 않는다.
+  //   문장 끝 = 뒤에 공백·닫는 괄호·끝이 오는 「.」「?」「!」, 또는 줄바꿈. 「(단, …)」면 닫는 괄호까지.
+  const provisoIds = table.apply.provisoClauses ?? [];
+  if (provisoIds.length) {
+    for (const h of hits.filter((x) => provisoIds.includes(x.c.sw.id))) {
+      if (!hits.includes(h)) continue; // 앞 단서절에 먹혔다
+      if (h.at > 0 && !/[\s(]/.test(question[h.at - 1])) {
+        hits = hits.filter((x) => x !== h);
+        continue;
+      }
+      const m = /[.?!](?=[\s)]|$)|\n/.exec(question.slice(h.end));
+      let end = m ? h.end + m.index + (m[0] === '\n' ? 0 : 1) : question.length;
+      h.inner = question.slice(h.at, end).trim();
+      if (question[h.at - 1] === '(' && question[end] === ')') end += 1;
+      hits = hits.filter((x) => x === h || x.end <= h.at || x.at >= end);
+      h.end = end;
+      h.proviso = true;
+    }
   }
 
   // 제시문 블록 [오종래 2026-10-02] — 봉인 파일이 지정한 스위치(apply.passageBlocks, 예: 빈칸 기호 「(가)」)의 표지가
@@ -575,7 +597,7 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
       continue;
     }
 
-    let entity = hit.passage !== undefined || hit.caseHead || hit.quote
+    let entity = hit.passage !== undefined || hit.caseHead || hit.quote || hit.proviso
       ? hit.inner
       : isLexical(sw, hit.c.surface)
         ? surface

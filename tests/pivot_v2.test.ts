@@ -1478,3 +1478,40 @@ describe('인용 명제 — 따옴표 안 「…다.」 명제 전체가 노드 
     assert.deepEqual(entities("'정적분'가 있다를 증명하시오", ['SB']), ["B:'정적분'", 'B:있다', 'Q:증명하시오']);
   });
 });
+
+describe('단서절 — 「단,」 뒤 문장 끝까지 D 노드 하나 (오종래 2026-10-06)', () => {
+  // B = SB(~을·~의), Q = SQ(어휘형 「나타내시오」「표시하시오」), 단서 = SD(어휘형 「단,」 D)
+  const sw = (id: string, markers: string[], color: Color, lexical?: boolean) =>
+    ({ id, kind: '조사·어미', markers, intent: '', color, lexical }) as SealedSwitch;
+  const table = (provisoClauses?: string[]): SealedTable => ({
+    version: 1,
+    source: { document: '(테스트)', sections: [] },
+    switches: [sw('SB', ['~을', '~의'], 'B'), sw('SQ', ['나타내시오', '표시하시오'], 'Q', true), sw('SD', ['단,'], 'D', true)],
+    lights: [],
+    matrix: [],
+    symbols: [],
+    forms: [],
+    apply: { longestMatchFirst: true, precedence: [], endOfWord: true, provisoClauses },
+    pending: [],
+  });
+  const entities = (q: string, list?: string[]) =>
+    build_path_graph(q, table(list)).nodes.map((n) => `${n.color}:${n.entity}`);
+  const q = '반응을 식으로 나타내시오. 단, 각 물질의 상태도 표시하시오.';
+
+  it('단서절 전체가 D 하나 — 안의 B·Q는 서지 않고 급소는 앞 물음의 Q 직전 B 하나', () => {
+    assert.deepEqual(entities(q, ['SD']), ['B:반응', 'Q:나타내시오', 'D:단, 각 물질의 상태도 표시하시오.']);
+    const t = table(['SD']);
+    const r = analyze_pivot(build_path_graph(q, t), t);
+    assert.equal(r.ok && r.pivot.keyword, '반응');
+    assert.equal(r.ok && r.pivots, undefined);
+  });
+
+  it('「(단, …)」면 닫는 괄호까지 — 소수점은 문장 끝이 아니다', () => {
+    assert.deepEqual(entities('반응을 나타내시오. (단, 0.95로 계산한다.) 끝', ['SD']), ['B:반응', 'Q:나타내시오', 'D:단, 0.95로 계산한다.']);
+  });
+
+  it('어절 머리가 아니면(「판단,」) 걸지 않는다 · 지정이 없으면 그대로', () => {
+    assert.deepEqual(entities('판단, 반응을 나타내시오', ['SD']), ['B:판단, 반응', 'Q:나타내시오']);
+    assert.ok(entities(q).includes('Q:표시하시오'), '지정이 없으면 단서절로 묶지 않는다');
+  });
+});
