@@ -171,7 +171,8 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
   const cands = candidates(table);
   /** chained = 어절 안이지만 조사 연쇄로 걸린 표지 (예: 「것만을」의 「만」) */
   /** passage = 제시문 블록이면 발문 빈칸 표지가 걸린 자리 · caseHead = 케이스 머리 문단(P 머리) */
-  let hits: { at: number; end: number; c: Candidate; inner: string; chained: boolean; passage?: number; caseHead?: true; math?: true }[] = [];
+  /** quote = 인용 명제(apply.quotedPropositions) */
+  let hits: { at: number; end: number; c: Candidate; inner: string; chained: boolean; passage?: number; caseHead?: true; math?: true; quote?: true }[] = [];
   /** 문장 종결 표지가 걸린 자리 (apply.sentenceEnds) — 노드·간선이 아니라 절 경계다 */
   const sentenceBreaks: { at: number; end: number }[] = [];
 
@@ -326,6 +327,21 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
     }
   }
 
+  // 인용 명제 [오종래 2026-10-06] — apply.quotedPropositions: 따옴표 안이 「…다.」로 끝나는 명제면 인용 전체가 노드 하나다.
+  //   안의 표지는 따로 걸지 않는다 — 명제가 잘게 잘려 Q 직전 B가 조각으로 서지 않게 (서술형2차 수학6).
+  //   여는 따옴표는 어절 머리(앞이 공백·문두·여는 괄호)에서만 본다 — 「f'(x)」의 프라임은 인용이 아니다.
+  const quoteId = table.apply.quotedPropositions?.[0];
+  const quoteC = quoteId ? cands.find((c) => c.sw.id === quoteId) : undefined;
+  if (quoteC) {
+    for (const m of question.matchAll(/(?<=^|[\s(])(['"‘“])([^'"‘’“”\n]*?다\.)(['"’”])/g)) {
+      const start = m.index;
+      const end = start + m[0].length;
+      hits = hits.filter((h) => h.end <= start || h.at >= end);
+      hits.push({ at: start, end, c: quoteC, inner: m[0], chained: false, quote: true });
+    }
+    hits.sort((a, b) => a.at - b.at);
+  }
+
   // 제시문 블록 [오종래 2026-10-02] — 봉인 파일이 지정한 스위치(apply.passageBlocks, 예: 빈칸 기호 「(가)」)의 표지가
   //   Q가 선 문단(발문)에 있고 같은 표지가 다른 문단에도 나오면, 그 문단 전체가 빈칸의 실체를 알려 주는 B 하나다
   //   (예: 한국사_문_9 「(가)에 대한 설명으로 옳은 것은?」 + 헤이그 특사 호소문). 문단 안의 표지는 따로 걸지 않는다.
@@ -465,7 +481,7 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
   //   어휘형 표지·블록 노드는 해당하지 않는다.
   const nounChain = (table.apply.nounChainMarkers ?? []).map((m) => m.replace(/^~/, '').trim()).filter(Boolean);
   const chainsNoun = (hit: (typeof hits)[number]) =>
-    hit.c.sw.kind === NODE_KIND && !isLexical(hit.c.sw, hit.c.surface) && !hit.math && hit.passage === undefined && !hit.caseHead
+    hit.c.sw.kind === NODE_KIND && !isLexical(hit.c.sw, hit.c.surface) && !hit.math && hit.passage === undefined && !hit.caseHead && !hit.quote
     && nounChain.some((m) => question.slice(0, hit.end).endsWith(m));
   /** 걸린 자리의 색 — 아래 자리 규칙(apply.contextRules)과 같은 조건으로 미리 본다 */
   const colorAfterRules = (k: number) => {
@@ -552,7 +568,7 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
       continue;
     }
 
-    let entity = hit.passage !== undefined || hit.caseHead
+    let entity = hit.passage !== undefined || hit.caseHead || hit.quote
       ? hit.inner
       : isLexical(sw, hit.c.surface)
         ? surface
@@ -563,7 +579,7 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
     //   자리 규칙(아래 apply.contextRules)이 바꿀 색까지 본다 (예: 「x^6의 계수는?」의 「는」 → Q)
     const next = hits[n + 1];
     const nextIsB = next !== undefined && next.c.sw.kind === NODE_KIND && !isLexical(next.c.sw, next.c.surface)
-      && next.passage === undefined && !next.caseHead && colorAfterRules(n + 1) === 'B';
+      && next.passage === undefined && !next.caseHead && !next.quote && colorAfterRules(n + 1) === 'B';
     if (chainsNoun(hit) && nextIsB) {
       if (entity !== '') continue;
       const prev = nodes.at(-1);
@@ -571,7 +587,7 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
       cursor = hit.end;
       continue;
     }
-    if (attach && sw.color === 'B' && !hit.chained && !isLexical(sw, hit.c.surface) && hit.passage === undefined && !hit.caseHead
+    if (attach && sw.color === 'B' && !hit.chained && !isLexical(sw, hit.c.surface) && hit.passage === undefined && !hit.caseHead && !hit.quote
       && entity !== '' && entity === question.slice(cursor, hit.at).trim()) {
       attach.node.entity += question.slice(attach.at, hit.at).trimEnd();
       cursor = hit.end;

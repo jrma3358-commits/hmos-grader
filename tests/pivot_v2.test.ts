@@ -1359,3 +1359,33 @@ describe('부등호 조건은 판단기준이 아니라 C · 「의 값」은 �
     assert.equal(find_pivot(g, table).node.id, g.nodes[0].id);
   });
 });
+
+describe('인용 명제 — 따옴표 안 「…다.」 명제 전체가 노드 하나 (오종래 2026-10-06)', () => {
+  // B = SB(~가·~를), Q = SQ(어휘형 「증명하시오」)
+  const sw = (id: string, markers: string[], color: Color, lexical?: boolean) =>
+    ({ id, kind: '조사·어미', markers, intent: '', color, lexical }) as SealedSwitch;
+  const table = (quotedPropositions?: string[]): SealedTable => ({
+    version: 1,
+    source: { document: '(테스트)', sections: [] },
+    switches: [sw('SB', ['~가', '~를'], 'B'), sw('SQ', ['증명하시오'], 'Q', true)],
+    lights: [],
+    matrix: [],
+    symbols: [],
+    forms: [],
+    apply: { longestMatchFirst: true, precedence: [], endOfWord: true, quotedPropositions },
+    pending: [],
+  });
+  const entities = (q: string, list?: string[]) =>
+    build_path_graph(q, table(list)).nodes.map((n) => `${n.color}:${n.entity}`);
+  const q = "'부등식 sinx≥xcosx가 성립한다.'를 증명하시오";
+
+  it('인용 안의 표지는 걸지 않고 인용 전체가 B — 뒤 조사는 끌 실체가 없어 서지 않는다', () => {
+    assert.deepEqual(entities(q, ['SB']), ["B:'부등식 sinx≥xcosx가 성립한다.'", 'Q:증명하시오']);
+    assert.deepEqual(entities(q), ["B:'부등식 sinx≥xcosx", "B:성립한다.'", 'Q:증명하시오']);
+  });
+
+  it('어절 안의 프라임·문장이 아닌 인용은 묶지 않는다', () => {
+    assert.deepEqual(entities("f'(x)가 f'(1)를 증명하시오", ['SB']), ["B:f'(x)", "B:f'(1)", 'Q:증명하시오']);
+    assert.deepEqual(entities("'정적분'가 있다를 증명하시오", ['SB']), ["B:'정적분'", 'B:있다', 'Q:증명하시오']);
+  });
+});
