@@ -242,6 +242,7 @@ export function analyze_pivot(graph: PathGraph, table?: SealedTable): PivotAnaly
   //   빼고 하나가 남지 않으면 플래그 그대로.
   //   [오종래 2026-10-06] 참고 표지(「참고하여」)도 같이 뒤로 민다 — 수단 표지(「활용하여」「이용하여」)가 「참고하여」「관점에서」
   //   「입장에서」보다 먼저 급소다 (과학 G 「(가)의 개념을 활용하여 … (라)를 참고하여」 → 「활용하여」).
+  //   [오종래 2026-10-07] 「활용하여」「이용하여」「토대로」는 C-F에서 빠져 일반 C(LS-43)다 — 서술형태 급소 후보가 아니다.
   const perspectives = (table?.apply.formPerspective ?? []).map((m) => m.replace(/^~/, '').trim());
   forms = narrowForms(forms, perspectives);
   const atForm = (node: PathNode, t: SealedTable): Pivot => ({
