@@ -10,6 +10,10 @@
 //   §4 논제-제시문 연결 — 논제의 기호(㉠·㉡)는 제시문 단락에서 온 B 실체 · 논제의 지정(<가>를 바탕으로)은 그 제시문 급소가 논제의 C가 된 것
 //   §5 검증 기준 — 단락별 급소 · 전체 무게중심 하나로 수렴 · 그 무게중심이 논제 급소와 맞물리는가
 //
+//   [오종래 2026-10-07] 3규칙 — ① 지시어 역추적: 서두·말미 B가 지시어(이러한·그·이·해당 등)면 앞 단락 급소로 대체
+//     ② keyword 특이도: 일반 명사(apply.passageKeyExceptions)는 keyword로 인정하지 않는다
+//     ③ 서술문 B: 단락 첫 문장이 「X이다.」면 X 전체를 서두 B로 세운다 (「~이다.」 스위치와 같은 층)
+//
 // 노드는 논제 인식과 같은 5색 규칙이다 — recognizeV2Analysis와 같은 층(normalizeV2 → build_path_graph)을 단락마다 돌린다.
 // 의미 정합(원칙 ②의 「의미 정합」)은 표지로 잡을 수 없어 여기서 판정하지 않는다 — keyword 포함만 본다.
 // 이 층은 급소를 잡고 연결을 확인하면 멈춘다. 풀지 않는다.
@@ -18,7 +22,7 @@ import { normalizeV2, type V2Analysis } from '../pipeline.ts';
 import type { SealedTable } from '../sealed/schema.ts';
 import type { Color } from '../types.ts';
 import { build_path_graph, type PathGraph, type PathNode } from './graph.ts';
-import { analyze_pivot, type Pivot, type PivotAnalysis } from './pivot.ts';
+import { analyze_pivot, DEICTICS, type Pivot, type PivotAnalysis } from './pivot.ts';
 
 /** 급소가 B 하나로 서지 않은 까닭 — 엔진 플래그(NO_B·MULTIPLE_CONVERGENCE) 그대로, 또는
  *  NOT_B = 급소가 B가 아니다(§2: 급소는 B다) · MULTIPLE = 급소가 둘 이상 */
@@ -47,6 +51,8 @@ export interface PassageRecognition {
   flag?: PassagePivotFlag;
   /** 엔진 급소 결과 그대로 */
   analysis: PivotAnalysis;
+  /** 제시문 열쇠 예외 (apply.passageKeyExceptions) — 연결 때 쓴다 */
+  keyExceptions: string[];
 }
 
 /** 단락 머리 기호 — [가] · <가> · (가) · 단락N: */
@@ -73,6 +79,7 @@ function sentenceSpan(text: string): { headEnd: number; tailStart: number } {
  * 전체는 단락들을 이어 붙인 그래프에 기존 급소 규칙을 건다 (§3-7).
  */
 export function recognizePassage(text: string, table: SealedTable): PassageRecognition {
+  const copula = table.switches.find((s) => s.markers.some((m) => m.trim() === '~이다.'));
   const paragraphs = normalizeV2(text)
     .split('\n')
     .map((raw): PassageParagraph => {
@@ -82,14 +89,16 @@ export function recognizePassage(text: string, table: SealedTable): PassageRecog
       const graph = build_path_graph(body, table);
       const { headEnd, tailStart } = sentenceSpan(body);
       const bs = graph.nodes.filter((n) => n.color === 'B');
-      return {
-        label,
-        text: body,
-        graph,
-        colors: colorsOf(graph.nodes),
-        head: bs.filter((n) => n.index < headEnd),
-        tail: bs.filter((n) => n.index >= tailStart),
-      };
+      const head = bs.filter((n) => n.index < headEnd);
+      const tail = bs.filter((n) => n.index >= tailStart);
+      const colors = colorsOf(graph.nodes);
+      const stated = copula && statementB(body, headEnd, graph.nodes, copula.id);
+      if (stated) {
+        head.push(stated);
+        if (tailStart === 0) tail.push(stated);
+        colors.B.push(stated.entity);
+      }
+      return { label, text: body, graph, colors, head, tail };
     })
     .filter((p) => p.text.trim() !== '');
   const graph = build_path_graph(paragraphs.map((p) => p.text).join('\n'), table);
@@ -101,7 +110,24 @@ export function recognizePassage(text: string, table: SealedTable): PassageRecog
       : analysis.pivot.node.color !== 'B'
         ? { flag: 'NOT_B' }
         : { pivot: analysis.pivot };
-  return { paragraphs, graph, analysis, ...whole };
+  return { paragraphs, graph, analysis, keyExceptions: table.apply.passageKeyExceptions ?? [], ...whole };
+}
+
+/**
+ * 서술문 B [오종래 2026-10-07] — 첫 문장이 「X이다.」면 X 전체가 서두 B다 (「첫 번째 방식은 만장일치에 의한 의사결정이다.」
+ * → B「만장일치에 의한 의사결정」). X = 그 문장에서 마지막 노드 뒤부터 「이다.」 앞까지. 색과 스위치는 「~이다.」 스위치(B)의 것이다.
+ */
+function statementB(body: string, headEnd: number, nodes: PathNode[], switchId: string): PathNode | undefined {
+  const sentence = body.slice(0, headEnd);
+  const m = sentence.match(/이다\.\s*$/);
+  if (!m) return undefined;
+  const at = m.index!;
+  if (nodes.some((n) => n.index === at)) return undefined; // 그래프가 이미 「~이다.」 노드를 세웠다
+  const last = nodes.filter((n) => n.index < at).at(-1);
+  const from = last ? last.index + last.surface.length : 0;
+  const entity = clean(body.slice(from, at));
+  if (!entity) return undefined;
+  return { id: 'stated', surface: '이다.', switchId, index: at, color: 'B', entity };
 }
 
 export type PassageLinkKind =
@@ -124,6 +150,10 @@ export interface PassageLink {
 export interface ParagraphPivot {
   /** 단락 급소 B 노드 */
   node: PathNode;
+  /** 급소의 실체 — 노드 실체, 또는 지시어면 앞 단락 급소의 실체 (지시어 역추적) */
+  entity: string;
+  /** 지시어 역추적으로 대체됐으면 원래 노드 실체 */
+  deixis?: string;
   /** 서두 아니면 말미 (원칙 ③) */
   place: '서두' | '말미';
   /** 닿은 논제 쪽 말 (논제 급소 keyword 또는 관련 정보) */
@@ -179,12 +209,27 @@ function questionKeys(question: V2Analysis): { key: string; node: string }[] {
   return keys;
 }
 
-/** 단락 급소 — 서두·말미의 B 가운데 열쇠를 품은 B (원칙 ①②③). 열쇠 순서가 앞선 것, 같으면 서두가 먼저 */
-function paragraphPivot(p: PassageParagraph, keys: { key: string; node: string }[]): ParagraphPivot | null {
+/** 지시어 — 논제 급소의 지시어(pivot.ts)에 「해당」을 더한다. 실체 첫 어절이 지시어면 지시어 B다 */
+const PASSAGE_DEICTICS = [...DEICTICS, '해당'];
+const isDeictic = (entity: string) => PASSAGE_DEICTICS.includes(clean(entity).split(/\s+/)[0]);
+
+/**
+ * 단락 급소 — 서두·말미의 B 가운데 열쇠를 품은 B (원칙 ①②③). 열쇠 순서가 앞선 것, 같으면 서두가 먼저.
+ * 지시어 B는 앞 단락 급소의 실체로 대체해 본다 (지시어 역추적). 열쇠 예외 낱말 그대로인 실체는 닿지 않는다 (keyword 특이도).
+ */
+function paragraphPivot(
+  p: PassageParagraph,
+  keys: { key: string; node: string }[],
+  prev: ParagraphPivot | null,
+  exceptions: string[],
+): ParagraphPivot | null {
+  const resolve = (n: PathNode) => (isDeictic(n.entity) && prev ? { entity: prev.entity, deixis: clean(n.entity) } : { entity: clean(n.entity) });
   for (const { key, node } of keys) {
     for (const [place, nodes] of [['서두', p.head], ['말미', p.tail]] as const) {
-      const hit = nodes.find((n) => contains(clean(n.entity), key));
-      if (hit) return { node: hit, place, key, questionNode: node };
+      for (const n of nodes) {
+        const r = resolve(n);
+        if (!exceptions.includes(r.entity) && contains(r.entity, key)) return { node: n, ...r, place, key, questionNode: node };
+      }
     }
   }
   return null;
@@ -195,8 +240,10 @@ function paragraphPivot(p: PassageParagraph, keys: { key: string; node: string }
  * 급소가 없는 단락은 배경지식 단락이다. 기호·지정 연결은 급소와 따로 본다.
  */
 export function connectPassage(question: V2Analysis, passage: PassageRecognition): PassageConnection {
-  const keys = questionKeys(question);
-  const pivots = passage.paragraphs.map((p) => paragraphPivot(p, keys));
+  const exceptions = passage.keyExceptions;
+  const keys = questionKeys(question).filter((k) => !exceptions.includes(k.key));
+  const pivots: (ParagraphPivot | null)[] = [];
+  for (const p of passage.paragraphs) pivots.push(paragraphPivot(p, keys, pivots.at(-1) ?? null, exceptions));
 
   const links: PassageLink[] = [];
   const add = (kind: PassageLinkKind, paragraph: number, questionNode: string) => {

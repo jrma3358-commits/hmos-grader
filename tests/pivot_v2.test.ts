@@ -1958,12 +1958,12 @@ describe('주격 「이」 관형절 꾸밈 명사 · 소문항 번호 전처리
   const table: SealedTable = {
     version: 1,
     source: { document: '(테스트)', sections: [] },
-    switches: [sw('SB', ['~의'], 'B'), sw('SI', ['~이'], 'B'), sw('SQ', ['설명하시오'], 'Q', true)],
+    switches: [sw('SB', ['~의'], 'B'), sw('SI', ['~이'], 'B'), sw('SD', ['~이다.'], 'B'), sw('SQ', ['설명하시오'], 'Q', true)],
     lights: [],
     matrix: [],
     symbols: [],
     forms: [],
-    apply: { longestMatchFirst: true, precedence: [], endOfWord: true, afterMathOnly: ['SI'], nounChainMarkers: ['~의'] },
+    apply: { longestMatchFirst: true, precedence: [], endOfWord: true, afterMathOnly: ['SI', 'SD'], nounChainMarkers: ['~의'] },
     pending: [],
   };
   const ents = (q: string) => build_path_graph(q, table).nodes.map((n) => `${n.color}${n.entity}`);
@@ -1984,6 +1984,10 @@ describe('주격 「이」 관형절 꾸밈 명사 · 소문항 번호 전처리
   it('「~의 N에」 C는 Q 직전 B가 아니다 — 앞 B가 급소 (경제 2-2)', () => {
     const r = analyze_pivot(build_path_graph('시행한 정책이 자국의 경제에 도움 설명하시오.', table), table);
     assert.equal(r.ok && r.pivot.keyword, '시행한 정책');
+  });
+
+  it('관형절 꾸밈 규칙은 주격 「이」 표지에만 — 「~이다.」 표지는 그대로 수식 뒤에서만 (「의한 의사결정이다.」 ✕)', () => {
+    assert.deepEqual(ents('만장일치에 의한 의사결정이다. 설명하시오.'), ['Q설명하시오']);
   });
 
   it('줄 머리의 「(1-1)」「(2-2)」는 지우고 · 식 안의 괄호는 그대로', () => {

@@ -180,7 +180,7 @@ function writingBlockStart(question: string): number {
 }
 
 /** 서술형태 핵심어에서 앞 명사구로 넘기는 지시어 */
-const DEICTICS = ['각각', '각', '이', '그', '이것', '그것', '이들', '그들', '이러한', '그러한'];
+export const DEICTICS = ['각각', '각', '이', '그', '이것', '그것', '이들', '그들', '이러한', '그러한'];
 /** 앞 명사구를 이어 붙이는 병렬 표지 */
 const PARALLEL = ['와', '과'];
 

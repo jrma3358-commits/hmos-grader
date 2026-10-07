@@ -323,7 +323,7 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
         if (afterNounOnly.includes(c.sw.id) && verbStemBefore(question[i - 1])) {
           continue; // 앞이 용언 어간 — 관형형 어미로 본다
         }
-        if (afterMathOnly.includes(c.sw.id) && !afterMath(i) && !(m[0].startsWith('이') && afterModifiedNoun(i))) {
+        if (afterMathOnly.includes(c.sw.id) && !afterMath(i) && !(c.surface.replace(/^~/, '').trim() === '이' && afterModifiedNoun(i))) {
           continue; // 바로 앞이 수식이 아니다
         }
         // 단독 어절 [오종래 2026-10-01] — 스위치의 standalone이면 앞에 한글 글자가 붙지 않을 때만 건다

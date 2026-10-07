@@ -79,7 +79,7 @@ describe('단락 급소 — 논제 방향 · 서두·말미 · background (판�
   });
 
   it('keyword가 B 실체를 품어도 닿는다 — 「D국이 시행한 정책」 ↔ 「정책」 · 한 글자는 닿지 않는다', () => {
-    const passage = recognizePassage('정책를 본다.\n\n이를 본다.', table);
+    const passage = recognizePassage('정책를 본다.\n\n차를 본다.', table);
     const c = connectPassage(question('시행한 정책를 설명하시오.'), passage);
     assert.equal(c.pivots[0]?.node.entity, '정책');
     assert.equal(c.pivots[1], null);
@@ -114,5 +114,51 @@ describe('논제-제시문 연결 (§4·§5)', () => {
   it('전체 급소가 서지 않았으면 전체 맞물림은 판정하지 않는다', () => {
     const c = connectPassage(question('다수결를 설명하시오.'), passage);
     assert.equal(c.wholeMatches, undefined);
+  });
+});
+
+describe('제시문 급소 3규칙 — 지시어 역추적 · keyword 특이도 · 서술문 B (오종래 2026-10-07)', () => {
+  const t: SealedTable = {
+    ...table,
+    switches: [...table.switches, sw('SD', ['~이다.'], 'B')],
+    apply: { ...table.apply, afterMathOnly: ['SD'], passageKeyExceptions: ['정책', '영향'] },
+  };
+  const q = (text: string): V2Analysis => {
+    const graph = build_path_graph(text, t);
+    return { question: text, graph, form: describeCombination(graph.combination, t), pivot: analyze_pivot(graph, t) };
+  };
+
+  it('서술문 B — 첫 문장 「X이다.」의 X 전체가 서두 B', () => {
+    const p = recognizePassage('첫째를 만장일치에 의한 의사결정이다. 끝를 본다.', t).paragraphs[0];
+    assert.deepEqual(p.head.map((n) => n.entity), ['첫째', '만장일치에 의한 의사결정']);
+    assert.ok(p.colors.B.includes('만장일치에 의한 의사결정'));
+  });
+
+  it('서술문 B — 첫 문장이 아니면 세우지 않는다', () => {
+    const p = recognizePassage('처음를 본다. 가운데 의사결정이다. 끝를 본다.', t).paragraphs[0];
+    assert.deepEqual(p.head.map((n) => n.entity), ['처음']);
+  });
+
+  it('지시어 역추적 — 서두·말미 B가 지시어면 앞 단락 급소의 실체로 대체', () => {
+    const passage = recognizePassage('위임 방식를 본다.\n\n이러한 방식를 본다.', t);
+    const c = connectPassage(q('위임를 설명하시오.'), passage);
+    assert.equal(c.pivots[1]?.entity, '위임 방식');
+    assert.equal(c.pivots[1]?.deixis, '이러한 방식');
+  });
+
+  it('지시어 역추적 — 앞 단락 급소가 없으면 대체하지 않는다 (background)', () => {
+    const passage = recognizePassage('그냥 본다.\n\n해당 위임를 본다.', t);
+    const c = connectPassage(q('위임를 설명하시오.'), passage);
+    assert.equal(c.pivots[1]?.entity, '해당 위임');
+    assert.equal(c.pivots[1]?.deixis, undefined);
+  });
+
+  it('keyword 특이도 — 예외 낱말 그대로인 B 실체·논제 열쇠는 닿지 않는다', () => {
+    const passage = recognizePassage('정책를 본다.\n\n크게 영향를 본다.\n\n보호무역 정책를 본다.', t);
+    const c = connectPassage(q('시행한 정책를 영향를 설명하시오.'), passage);
+    assert.equal(c.pivots[0], null);
+    assert.equal(c.pivots[1], null);
+    assert.equal(c.pivots[2], null);
+    assert.deepEqual(c.background, [0, 1, 2]);
   });
 });
