@@ -184,7 +184,7 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
   const cands = candidates(table);
   /** chained = 어절 안이지만 조사 연쇄로 걸린 표지 (예: 「것만을」의 「만」) */
   /** passage = 제시문 블록이면 발문 빈칸 표지가 걸린 자리 · caseHead = 케이스 머리 문단(P 머리) */
-  /** quote = 인용 명제(apply.quotedPropositions) · proviso = 단서절(apply.provisoClauses) */
+  /** quote = 인용 명제(apply.quotedPropositions)·대괄호 묶음(apply.bracketLabels)·따옴표 이름(apply.quotedNames) · proviso = 단서절(apply.provisoClauses) */
   /** designated = 제시문 지정(apply.designatedPassages) — 실체는 기호(범위) */
   let hits: { at: number; end: number; c: Candidate; inner: string; chained: boolean; passage?: number; caseHead?: true; math?: true; quote?: true; proviso?: true; designated?: true }[] = [];
   /** 문장 종결 표지가 걸린 자리 (apply.sentenceEnds) — 노드·간선이 아니라 절 경계다 */
@@ -375,6 +375,29 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
       const end = start + m[0].length;
       hits = hits.filter((h) => h.end <= start || h.at >= end);
       hits.push({ at: start, end, c: quoteC, inner: m[0], chained: false, quote: true });
+    }
+    hits.sort((a, b) => a.at - b.at);
+  }
+
+  // 대괄호 묶음 [오종래 2026-10-07] — apply.bracketLabels: 대괄호 안이 한글 낱말로 시작하면(「[그림 1]」「[표 2]」)
+  //   대괄호+내용 전체가 노드 하나다. 안의 표지는 따로 걸지 않는다 — 「[그림 1]」이 「그림」·「1]」로 갈라지지 않게 (논제1-2).
+  //   한글로 시작하지 않는 대괄호(구간 「[0, 2]」, 빈칸 「[イ]」)는 그대로다.
+  // 따옴표 이름 [오종래 2026-10-07] — apply.quotedNames: 작은따옴표 안이 한글·영문 낱말뿐이면(「'장인'」「'마빈 해리스'」「'나'」)
+  //   따옴표+내용 전체가 노드 하나다. 안의 조사·어미(「장인」의 「인」)를 표지로 걸지 않는다 (논제2-2).
+  //   여는 따옴표는 어절 머리(앞이 공백·문두·여는 괄호)에서만 본다 — 「f'(x)」의 프라임은 인용이 아니다.
+  const groupings: [string[] | null | undefined, RegExp][] = [
+    [table.apply.bracketLabels, /\[[가-힣][^[\]\n]*\]/g],
+    [table.apply.quotedNames, /(?<=^|[\s(])(['‘])[가-힣A-Za-z][가-힣A-Za-z ]*['’]/g],
+  ];
+  for (const [ids, re] of groupings) {
+    const groupC = ids?.[0] ? cands.find((c) => c.sw.id === ids[0]) : undefined;
+    if (!groupC) continue;
+    for (const m of question.matchAll(re)) {
+      const start = m.index;
+      const end = start + m[0].length;
+      if (hits.some((h) => h.at < start && start < h.end)) continue; // 앞에서 시작한 묶음(인용 명제·보기 블록) 안이다
+      hits = hits.filter((h) => h.end <= start || h.at >= end);
+      hits.push({ at: start, end, c: groupC, inner: m[0], chained: false, quote: true });
     }
     hits.sort((a, b) => a.at - b.at);
   }

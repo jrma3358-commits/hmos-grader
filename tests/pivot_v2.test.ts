@@ -1794,3 +1794,39 @@ describe('조건부확률 조건절 — 뒤에 「~확률」 B가 오면 「~일
     assert.equal(sj('공이 빨간색일 때 끝낸다. 주머니가 A일 @확률을 구하시오.'), 'B');
   });
 });
+
+describe('대괄호 묶음 · 따옴표 이름 — 묶음 전체가 노드 하나 (오종래 2026-10-07)', () => {
+  // B = SB(~을·~인), P = SP(어휘형 「그림」), 블록 = SK(보기 머리 「⑤」), Q = SQ(어휘형 「구하시오」)
+  const sw = (id: string, markers: string[], color: Color, lexical?: boolean) =>
+    ({ id, kind: '조사·어미', markers, intent: '', color, lexical }) as SealedSwitch;
+  const table = (bracketLabels?: string[], quotedNames?: string[]): SealedTable => ({
+    version: 1,
+    source: { document: '(테스트)', sections: [] },
+    switches: [sw('SB', ['~을', '~인'], 'B'), sw('SP', ['그림'], 'P', true), sw('SK', ['⑤'], 'B', true), sw('SQ', ['구하시오'], 'Q', true)],
+    lights: [],
+    matrix: [],
+    symbols: [],
+    forms: [],
+    apply: { longestMatchFirst: true, precedence: [], endOfWord: true, statementBlocks: ['SK'], bracketLabels, quotedNames },
+    pending: [],
+  });
+  const ents = (q: string, t: SealedTable) => build_path_graph(q, t).nodes.map((n) => `${n.color}${n.entity}`);
+
+  it('「[그림 1]」은 P 하나 — 「그림」·「1]」로 갈라지지 않는다', () => {
+    assert.deepEqual(ents('[그림 1]을 구하시오.', table(['SP'])), ['P[그림 1]', 'Q구하시오']);
+    assert.deepEqual(ents('[그림 1]을 구하시오.', table()), ['P그림', 'B1]', 'Q구하시오']);
+  });
+
+  it('한글로 시작하지 않는 대괄호(구간)와 보기 블록 안의 대괄호는 그대로', () => {
+    assert.deepEqual(ents('구간 [0, 2]을 구하시오.', table(['SP'])), ['B구간 [0, 2]', 'Q구하시오']);
+    const block = '구하시오.\n⑤ 45/4 [그림]';
+    assert.deepEqual(ents(block, table(['SP'])), ents(block, table()));
+    assert.ok(!ents(block, table(['SP'])).includes('P[그림]'));
+  });
+
+  it("「'장인'」은 B 하나 — 안의 「인」이 표지로 걸리지 않는다 · 「f'(x)」의 프라임은 아니다", () => {
+    assert.deepEqual(ents("'장인'을 구하시오.", table(undefined, ['SB'])), ["B'장인'", 'Q구하시오']);
+    assert.deepEqual(ents("'장인'을 구하시오.", table()), ["B'장", "B'", 'Q구하시오']);
+    assert.deepEqual(ents("f'(x)을 구하시오.", table(undefined, ['SB'])), ["Bf'(x)", 'Q구하시오']);
+  });
+});
