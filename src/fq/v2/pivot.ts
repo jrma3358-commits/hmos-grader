@@ -187,6 +187,9 @@ function narrowForms(forms: PathNode[], perspectives: string[]): PathNode[] {
  *  [오종래 2026-10-06] 「하고」에 「나타내고」「고르고」「쓰고」 추가 */
 const CLAUSE_ENDS = ['하고', '나타내고', '고르고', '쓰고'];
 
+/** 서술방법 표지 — B 노드가 있으면 서술형태 급소 후보에서 빠진다 [오종래 2026-10-07] */
+const METHOD_MARKERS = ['비판적으로', '비판하여', '입장에서', '관점에서', '참고하여', '참조하여', '바탕으로', '근거하여'];
+
 /**
  * 복합 Q 절 나누기 — 「~하고,」「~나타내고,」「~고르고,」「~쓰고,」 Q(바로 뒤 쉼표)에서 물음을 절로 자른다.
  * 절마다 서술형태 노드가 꼭 하나씩이고 마지막 절에도 Q가 있으면 절 순서대로 그 노드들을, 아니면 undefined.
@@ -219,8 +222,13 @@ export function analyze_pivot(graph: PathGraph, table?: SealedTable): PivotAnaly
   // 서술형태 급소 [오종래 2026-10-05] — 서술형태 제약(apply.formPivot, C-F) 노드가 있으면 다른 급소 규칙보다 먼저
   //   그 노드가 급소이고, 실체는 그 안의 핵심어다 (예: 인문논술_문1 「논박하는 방식으로」 → 「논박」).
   //   「급소는 B」의 예외다 — 이 규칙에서만 급소가 C 노드다. 둘 이상이면 급소가 둘 — 문제 설계 오류로 플래그한다.
+  //   [오종래 2026-10-07] 서술방법 표지(METHOD_MARKERS)의 노드는 B 노드가 있으면 급소 후보에서 빠진다 — B가 급소다
+  //   (사회 논제2-2 「비판적으로」 · 논제3-2 「참고하여」). 나머지 서술형태 표지는 그대로 B보다 먼저다.
   const formIds = table?.apply.formPivot ?? [];
-  let forms = graph.nodes.filter((n) => formIds.includes(n.switchId));
+  const hasB = graph.nodes.some((n) => n.color === 'B');
+  let forms = graph.nodes.filter(
+    (n) => formIds.includes(n.switchId) && !(hasB && METHOD_MARKERS.some((m) => n.surface.includes(m))),
+  );
   // 서술 형태 우선 [오종래 2026-10-06] — 서술형태 노드가 둘 이상이면 입장·관점 표지(apply.formPerspective, 「입장에서」 등)가
   //   세운 노드를 뺀다. 서술 형태 표지(「비판적으로」 등)가 급소다 (논제1 「(나)의 입장에서 비판적으로 성찰하되」 → 「비판적으로」).
   //   빼고 하나가 남지 않으면 플래그 그대로.

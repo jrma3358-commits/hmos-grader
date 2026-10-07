@@ -1047,6 +1047,19 @@ describe('서술형태 급소 — C-F 노드 안의 핵심어 (오종래 2026-10
     assert.equal(r.ok && r.pivot.keyword, '갑와 을');
   });
 
+  it('서술방법 표지(「비판적으로」 등) C-F는 B가 있으면 B에 밀리고, B가 없을 때만 급소 (오종래 2026-10-07)', () => {
+    const t: SealedTable = {
+      ...table(['SF']),
+      switches: [sw('SF', ['비판적으로', '논박@M'], 'C', ['비판적으로', '논박@M']), sw('SB', ['~@B'], 'B'), sw('SQ', ['~@Q'], 'Q')],
+    };
+    const withB = analyze_pivot(build_path_graph('형태 @B 비판적으로 설명 @Q', t), t);
+    assert.ok(withB.ok && withB.pivot.node.color === 'B' && withB.pivot.node.entity === '형태', 'B가 있으면 B');
+    const noB = analyze_pivot(build_path_graph('비판적으로 설명 @Q', t), t);
+    assert.ok(noB.ok && noB.pivot.reason === '서술형태', 'B가 없으면 서술형태');
+    const other = analyze_pivot(build_path_graph('형태 @B 논박@M 설명 @Q', t), t);
+    assert.ok(other.ok && other.pivot.reason === '서술형태', '나머지 C-F는 그대로 B보다 먼저');
+  });
+
   it('C-F 노드가 둘이면 문제 설계 오류로 플래그', () => {
     const t = table(['SF']);
     const g = build_path_graph('형태 @B 논박@M 관점 @V 설명 @Q', t);
