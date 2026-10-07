@@ -1817,6 +1817,12 @@ describe('대괄호 묶음 · 따옴표 이름 — 묶음 전체가 노드 하�
     assert.deepEqual(ents('[그림 1]을 구하시오.', table()), ['P그림', 'B1]', 'Q구하시오']);
   });
 
+  it('꺾쇠 「<표 1>」「<가>」도 P 하나 — 부등호 「0<x<1」은 그대로', () => {
+    assert.deepEqual(ents('<표 1>을 구하시오.', table(['SP'])), ['P<표 1>', 'Q구하시오']);
+    assert.deepEqual(ents('<가>을 구하시오.', table(['SP'])), ['P<가>', 'Q구하시오']);
+    assert.deepEqual(ents('0<x<1인 값을 구하시오.', table(['SP'])), ents('0<x<1인 값을 구하시오.', table()));
+  });
+
   it('한글로 시작하지 않는 대괄호(구간)와 보기 블록 안의 대괄호는 그대로', () => {
     assert.deepEqual(ents('구간 [0, 2]을 구하시오.', table(['SP'])), ['B구간 [0, 2]', 'Q구하시오']);
     const block = '구하시오.\n⑤ 45/4 [그림]';

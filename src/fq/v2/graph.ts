@@ -391,6 +391,9 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
   //   여는 따옴표는 어절 머리(앞이 공백·문두·여는 괄호)에서만 본다 — 「f'(x)」의 프라임은 인용이 아니다.
   const groupings: [string[] | null | undefined, RegExp][] = [
     [table.apply.bracketLabels, /\[[가-힣][^[\]\n]*\]/g],
+    //   [오종래 2026-10-07] 꺾쇠도 같은 규칙 — 「<표 1>」「<가>」「<제시문3>」 꺾쇠+내용 전체가 P 노드 하나다.
+    //   부등호(「0<x<1」)와 섞이지 않게 꺾쇠 안은 한글로 시작하고 20자 이내다.
+    [table.apply.bracketLabels, /<[가-힣][^<>\n]{0,19}>/g],
     [table.apply.quotedNames, /(?<=^|[\s(])(['‘])[가-힣A-Za-z][가-힣A-Za-z ]*['’]/g],
   ];
   //   [오종래 2026-10-07] 따옴표 이름의 실체는 따옴표를 뗀 이름이다 (「'뉴질랜드 정부'」 → B「뉴질랜드 정부」).
