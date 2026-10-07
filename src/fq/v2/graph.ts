@@ -821,11 +821,15 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
     cursor = hit.end;
 
     // 「~의 N에」 묶음 [오종래 2026-10-07] — 명사구 연결 「의」가 다음 노드가 B가 아니어서 노드로 섰고, 바로 뒤 어절이 「한글 명사+에」이면
-    //   그 명사까지 B 실체에 넣는다 (경제 2-2 「자국의 경제에 어떤 도움이 될 수 있는지」 → B「자국의 경제」). 「에」는 노드가 아니다.
+    //   그 명사까지 실체에 넣는다 (경제 2-2 「자국의 경제에 어떤 도움이 될 수 있는지」 → 「자국의 경제」). 「에」는 노드가 아니다.
+    //   [오종래 2026-10-07] 이 묶음은 C다 — 적용 관점·범위 제약이지 묻는 대상이 아니다. Q 직전 B 규칙이 잡지 않고
+    //   그 앞 B가 급소다 (2-2 → B「D국이 시행한 정책」). 원래 색(B)은 recoloredFrom에 남긴다.
     if (chainsNoun(hit) && !nextIsB) {
       const tail = question.slice(hit.end).match(/^[ \t]+([가-힣]{2,})에(?=[ \t])/);
       if (tail && (next === undefined || next.at >= hit.end + tail[0].length)) {
         node.entity = `${entity}${surface} ${tail[1]}`;
+        node.recoloredFrom = node.color;
+        node.color = 'C';
         cursor = hit.end + tail[0].length;
       }
     }
