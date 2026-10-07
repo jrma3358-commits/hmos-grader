@@ -249,8 +249,10 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
   // 제시문 지정 [오종래 2026-10-07] — apply.designatedPassages(예: 「제시문」)의 표지 바로 뒤에 괄호 기호 「(마)」 또는
   //   범위 「(나)~(라)」가 오면 표지+기호가 노드 하나, 실체는 기호(범위 전체)다. 기호가 없으면 걸지 않는다.
   //   단독 기호(「(가)」 보기 기호)는 여기 들지 않는다 — 제 스위치 그대로다.
+  //   [오종래 2026-10-07] 기호 나열도 전부 — 괄호+한글/숫자 기호가 쉼표·가운뎃점·물결로 이어지면 「(가), (다), (라)」
+  //   「(가)·(나)·(다)」「(가)~(라)」 전체가 P 노드 하나다 (사회 논제3-2).
   const designatedIds = table.apply.designatedPassages ?? [];
-  const PASSAGE_LABEL = /^\s*(\([가-힣]\)(?:\s*[~∼～-]\s*\([가-힣]\))?)/;
+  const PASSAGE_LABEL = /^\s*(\([가-힣0-9]+\)(?:\s*[,·ㆍ・~∼～-]\s*\([가-힣0-9]+\))*)/;
   //   식 끝의 공백·쉼표는 소비한다(end) — 다음 노드의 실체로 넘어가지 않는다. 실체(text)에서는 뗀다.
   const mathEnd = (from: number) => {
     const tail = question.slice(from).match(/^[^가-힣ㄱ-ㅎㅏ-ㅣ\n]*/)![0];

@@ -120,11 +120,15 @@ function formKeyword(graph: PathGraph, node: PathNode, table: SealedTable): stri
   //   앞 명사구 = C-F 노드 앞의 가장 가까운 B 노드 실체. 그 바로 앞에 병렬 P 노드(「와」·「과」)가 잇따르면 함께 묶는다
   //   (예: 윤리12 「응보주의와 공리주의가 있다. 각각의 관점에서」 → 「응보주의와 공리주의」).
   if (!DEICTICS.includes(keyword)) return keyword;
-  const at = graph.nodes.indexOf(node);
-  let b = at - 1;
+  return antecedent(graph, node) ?? keyword;
+}
+
+/** 지시어가 가리키는 앞 명사구 — 노드 앞의 가장 가까운 B 노드 실체. 바로 앞 병렬 P(「와」·「과」)가 잇따르면 함께 묶는다 */
+function antecedent(graph: PathGraph, node: PathNode): string | undefined {
+  let b = graph.nodes.indexOf(node) - 1;
   while (b >= 0 && graph.nodes[b].color !== 'B') b--;
-  if (b < 0) return keyword;
-  let phrase = graph.nodes[b].entity.trim();
+  if (b < 0) return undefined;
+  let phrase = graph.nodes[b].entity.trim().replace(/^[\s,]+/, '');
   for (let i = b - 1; i >= 0 && graph.nodes[i].color === 'P' && PARALLEL.includes(graph.nodes[i].surface); i--) {
     phrase = `${graph.nodes[i].entity.trim()}${graph.nodes[i].surface} ${phrase}`;
   }
@@ -149,9 +153,11 @@ function isWritingForm(graph: PathGraph, node: PathNode): boolean {
  * 실체가 「한글 이름 + 식·기호」(예: 「일반항 a_n」 「점 C(0, -1)」)면 실체값 = 식·기호, 이름은 따로 둔다. 아니면 실체 그대로.
  * [오종래 2026-10-06] 실체 머리의 쉼표·공백은 뗀다 — 앞 조각에서 끌려온 것이다 (수능_3 「, k」 → 「k」). 노드 실체는 그대로다.
  * [오종래 2026-10-06] 끝의 형식 명사 「의 값」도 뗀다 — 실체값은 값을 가진 쪽이다 (서술형2차 수학1 「상수 a, b, c의 값」 → 「a, b, c」).
+ * [오종래 2026-10-07] 실체가 지시어(「그것」「이것」「각각」 등, 앞 쉼표를 뗀 뒤)면 가리키는 앞 명사구가 실체값이다 (사회 논제2-2 「, 그것」).
  */
-function bValue(node: PathNode): Pick<Pivot, 'keyword' | 'name'> {
+function bValue(node: PathNode, graph: PathGraph): Pick<Pivot, 'keyword' | 'name'> {
   const entity = node.entity.trim().replace(/^[\s,]+/, '').replace(/\s*의\s*값$/, '');
+  if (DEICTICS.includes(entity)) return { keyword: antecedent(graph, node) ?? entity };
   const m = entity.match(/^(.*[가-힣ㄱ-ㅎㅏ-ㅣ])\s+([^가-힣ㄱ-ㅎㅏ-ㅣ\s][^가-힣ㄱ-ㅎㅏ-ㅣ]*)$/);
   const symbol = m?.[2].replace(/[\s,]+$/, '');
   return m && symbol ? { keyword: symbol, name: m[1].trim() } : { keyword: entity };
@@ -319,7 +325,7 @@ export function analyze_pivot(graph: PathGraph, table?: SealedTable): PivotAnaly
       pivot: {
         node,
         reason: '강한 C 연결 B',
-        ...bValue(node),
+        ...bValue(node, graph),
         convergence: convergenceOf(graph, node, table),
         sameAsDeepest: deepest_node(graph)?.id === node.id,
       },
@@ -361,7 +367,7 @@ export function analyze_pivot(graph: PathGraph, table?: SealedTable): PivotAnaly
   const atQ = (node: PathNode): Pivot => ({
     node,
     reason: 'Q 직전 B',
-    ...bValue(node),
+    ...bValue(node, graph),
     convergence: convergenceOf(graph, node, table),
     sameAsDeepest: deepest_node(graph)?.id === node.id,
   });
@@ -411,7 +417,7 @@ export function analyze_pivot(graph: PathGraph, table?: SealedTable): PivotAnaly
   const { node, convergence } = winners[0];
   return {
     ok: true,
-    pivot: { node, reason: '최수렴 B', ...bValue(node), convergence, sameAsDeepest: deepest_node(graph)?.id === node.id },
+    pivot: { node, reason: '최수렴 B', ...bValue(node, graph), convergence, sameAsDeepest: deepest_node(graph)?.id === node.id },
   };
 }
 

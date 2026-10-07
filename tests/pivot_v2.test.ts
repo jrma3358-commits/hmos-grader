@@ -1625,6 +1625,12 @@ describe('제시문 지정 — 「제시문」이 붙은 괄호 기호·범위�
     assert.deepEqual(entities('@P (나)~(라)에 나타난 영향을', ['SP']), ['P:(나)~(라)', 'B:나타난 영향']);
   });
 
+  it('기호 나열 「(가), (다), (라)」「(가)·(나)·(다)」도 전체가 P 하나 (오종래 2026-10-07)', () => {
+    assert.deepEqual(entities('@P (가), (다), (라)의 설명을', ['SP']), ['P:(가), (다), (라)', 'B:설명']);
+    assert.deepEqual(entities('@P (가)·(나)·(다)의 설명을', ['SP']), ['P:(가)·(나)·(다)', 'B:설명']);
+    assert.deepEqual(entities('@P (1), (2)의 설명을', ['SP']), ['P:(1), (2)', 'B:설명']);
+  });
+
   it('단독 지정 「(마)」도 P', () => {
     assert.deepEqual(entities('@P (마)의 설명을', ['SP']), ['P:(마)', 'B:설명']);
   });
@@ -1636,6 +1642,36 @@ describe('제시문 지정 — 「제시문」이 붙은 괄호 기호·범위�
   it('뒤에 기호가 없으면 걸지 않는다 · 지정이 없으면 적용하지 않는다', () => {
     assert.equal(entities('@P 내용을', ['SP']).some((e) => e.startsWith('P:')), false);
     assert.equal(entities('@P (마)의 설명을').includes('P:(마)'), false);
+  });
+});
+
+describe('지시어 B 급소 — 실체값이 지시어면 앞 명사구 (오종래 2026-10-07)', () => {
+  // B = SB(~을·~의), 병렬 = SP(~와), Q = SQ(어휘형 「설명하고」「서술하시오」)
+  const sw = (id: string, markers: string[], color: Color, lexical?: boolean) =>
+    ({ id, kind: '조사·어미', markers, intent: '', color, lexical }) as SealedSwitch;
+  const t: SealedTable = {
+    version: 1,
+    source: { document: '(테스트)', sections: [] },
+    switches: [sw('SB', ['~을', '~의'], 'B'), sw('SP', ['~와'], 'P'), sw('SQ', ['설명하고', '서술하시오'], 'Q', true)],
+    lights: [],
+    matrix: [],
+    symbols: [],
+    forms: [],
+    apply: { longestMatchFirst: true, precedence: [], endOfWord: true },
+    pending: [],
+  };
+  const keyword = (q: string) => {
+    const r = analyze_pivot(build_path_graph(q, t), t);
+    return r.ok ? r.pivot.keyword : r.flag;
+  };
+
+  it('앞 쉼표가 붙은 「, 그것」도 앞 B 명사구로 · 병렬 P는 함께', () => {
+    assert.equal(keyword('관점을 설명하고, 그것을 서술하시오'), '관점');
+    assert.equal(keyword('갑와 을을 설명하고, 그것을 서술하시오'), '갑와 을');
+  });
+
+  it('지시어가 아니면 그대로', () => {
+    assert.equal(keyword('관점을 설명하고, 반론을 서술하시오'), '반론');
   });
 });
 
