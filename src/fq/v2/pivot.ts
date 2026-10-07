@@ -106,7 +106,8 @@ export function deepest_node(graph: PathGraph): PathNode | undefined {
  */
 function formKeyword(graph: PathGraph, node: PathNode, table: SealedTable): string {
   let keyword: string;
-  if (node.entity !== node.surface) keyword = node.entity.trim();
+  //   [오종래 2026-10-07] 앞말 실체 머리의 쉼표·공백은 뗀다 — B 실체값(bValue)과 같다 (논술 논제 서술형태 급소)
+  if (node.entity !== node.surface) keyword = node.entity.trim().replace(/^[\s,]+/, '');
   else {
     const sw = table.switches.find((s) => s.id === node.switchId);
     const frame = (sw?.markers ?? [])

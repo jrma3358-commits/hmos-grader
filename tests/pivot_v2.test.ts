@@ -1041,6 +1041,14 @@ describe('서술형태 급소 — C-F 노드 안의 핵심어 (오종래 2026-10
     assert.equal(r.ok && r.pivot.keyword, '관점');
   });
 
+  it('끌어온 앞말 머리의 쉼표는 핵심어에서 뗀다 — 노드 실체는 그대로 (오종래 2026-10-07)', () => {
+    const t = table(['SF']);
+    const g = build_path_graph('형태 @B, 관점 @V 설명 @Q', t);
+    const r = analyze_pivot(g, t);
+    assert.equal(r.ok && r.pivot.keyword, '관점');
+    assert.equal(r.ok && r.pivot.node.entity, ', 관점');
+  });
+
   it('핵심어가 지시어면 앞 명사구가 핵심어 — 병렬 P(와)는 함께 묶는다', () => {
     const t = table(['SF']);
     const g = build_path_graph('갑와 을 @B 각각 @V 설명 @Q', t);
@@ -1955,7 +1963,7 @@ describe('주격 「이」 관형절 꾸밈 명사 · 소문항 번호 전처리
     matrix: [],
     symbols: [],
     forms: [],
-    apply: { longestMatchFirst: true, precedence: [], endOfWord: true, afterMathOnly: ['SI'] },
+    apply: { longestMatchFirst: true, precedence: [], endOfWord: true, afterMathOnly: ['SI'], nounChainMarkers: ['~의'] },
     pending: [],
   };
   const ents = (q: string) => build_path_graph(q, table).nodes.map((n) => `${n.color}${n.entity}`);
@@ -1967,6 +1975,10 @@ describe('주격 「이」 관형절 꾸밈 명사 · 소문항 번호 전처리
   it('명사·관형사·주제 조사 뒤(「동전 앞면이」「어떤 도움이」「동전은 뒷면이」)와 한 음절 명사(「같은 높이」)는 걸지 않는다', () => {
     assert.deepEqual(ents('동전 앞면이 어떤 도움이 설명하시오.'), ['Q설명하시오']);
     assert.deepEqual(ents('동전은 뒷면이 주어진 높이 설명하시오.'), ['Q설명하시오']);
+  });
+
+  it('「자국의 경제에」 — 다음 노드가 B가 아니어서 선 「의」 B는 뒤 「명사+에」 어절까지 묶는다', () => {
+    assert.deepEqual(ents('자국의 경제에 도움 설명하시오.'), ['B자국의 경제', 'Q설명하시오']);
   });
 
   it('줄 머리의 「(1-1)」「(2-2)」는 지우고 · 식 안의 괄호는 그대로', () => {

@@ -820,6 +820,16 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
     if (hit.math) mathNodes.add(node);
     cursor = hit.end;
 
+    // 「~의 N에」 묶음 [오종래 2026-10-07] — 명사구 연결 「의」가 다음 노드가 B가 아니어서 노드로 섰고, 바로 뒤 어절이 「한글 명사+에」이면
+    //   그 명사까지 B 실체에 넣는다 (경제 2-2 「자국의 경제에 어떤 도움이 될 수 있는지」 → B「자국의 경제」). 「에」는 노드가 아니다.
+    if (chainsNoun(hit) && !nextIsB) {
+      const tail = question.slice(hit.end).match(/^[ \t]+([가-힣]{2,})에(?=[ \t])/);
+      if (tail && (next === undefined || next.at >= hit.end + tail[0].length)) {
+        node.entity = `${entity}${surface} ${tail[1]}`;
+        cursor = hit.end + tail[0].length;
+      }
+    }
+
     // 강한 C 안의 참조어 [오종래 2026-10-02] — 어휘형 강한 C(apply.strongC) 표지 안에 어휘형 P 표지(예: 참조자료 「토론」)가
     //   단독 어절로 들어 있으면, 강한 C 노드는 그대로 두고 그 P를 따로 노드로 세운다 (예: 생윤_문_2 「다음 토론의」 → C + P「토론」).
     if ((table.apply.strongC ?? []).includes(sw.id) && isLexical(sw, hit.c.surface)) {
