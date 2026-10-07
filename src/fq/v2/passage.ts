@@ -1,12 +1,17 @@
-// 제시문 인식 — 단락 급소 → 전체 급소 → 논제 연결
+// 제시문 인식 — 단락 서두·말미 → 논제 방향으로 단락 급소 → 논제 연결
 //
 // 정본: `HMOS_제시문인식원리_구조화.md` · `HMOS_제시문인식원리_원문.md` (2026-10-07 오종래)
 //   §3 단락 단위 인식 절차 — 단락을 끊고, P·B·D·C를 잡고, 단락의 급소(무게중심 B)를 잡고, 단락들을 이어 전체 무게중심을 잡는다
 //   §2 제시문에서 Q는 표면에 드러나지 않고 B 안에 접혀 있다 · 무대(P)와 신상(D)은 급소가 아니다 — 급소는 B다
+//   제시문 급소 규칙 — 단락 급소는 서두의 핵심 B 아니면 말미의 핵심 B. 나머지 B는 부연·가지.
+//     제시문 급소는 논제 급소에 닿아 있는 B다 — 논제가 방향을 잡은 뒤 찾는다 (논제 없이는 정하지 않는다)
+//   판별 확정 원칙 — ① 서두·말미 = keyword를 가진 B (노드 순서가 아니다) ② 닿는다 = 논제 급소 keyword·관련 정보를 품는다
+//     ③ 가운데 급소는 없다 ④ 급소 없는 단락 = 배경지식 단락(background)
 //   §4 논제-제시문 연결 — 논제의 기호(㉠·㉡)는 제시문 단락에서 온 B 실체 · 논제의 지정(<가>를 바탕으로)은 그 제시문 급소가 논제의 C가 된 것
 //   §5 검증 기준 — 단락별 급소 · 전체 무게중심 하나로 수렴 · 그 무게중심이 논제 급소와 맞물리는가
 //
-// 노드와 급소는 논제 인식과 같은 5색 규칙이다 — recognizeV2Analysis와 같은 층(normalizeV2 → build_path_graph → analyze_pivot)을 단락마다 돌린다.
+// 노드는 논제 인식과 같은 5색 규칙이다 — recognizeV2Analysis와 같은 층(normalizeV2 → build_path_graph)을 단락마다 돌린다.
+// 의미 정합(원칙 ②의 「의미 정합」)은 표지로 잡을 수 없어 여기서 판정하지 않는다 — keyword 포함만 본다.
 // 이 층은 급소를 잡고 연결을 확인하면 멈춘다. 풀지 않는다.
 
 import { normalizeV2, type V2Analysis } from '../pipeline.ts';
@@ -16,18 +21,10 @@ import { build_path_graph, type PathGraph, type PathNode } from './graph.ts';
 import { analyze_pivot, type Pivot, type PivotAnalysis } from './pivot.ts';
 
 /** 급소가 B 하나로 서지 않은 까닭 — 엔진 플래그(NO_B·MULTIPLE_CONVERGENCE) 그대로, 또는
- *  NOT_B = 급소가 B가 아니다(§2: 급소는 B다) · MULTIPLE = 급소가 둘 이상 (단락의 급소는 하나다) */
+ *  NOT_B = 급소가 B가 아니다(§2: 급소는 B다) · MULTIPLE = 급소가 둘 이상 */
 export type PassagePivotFlag = 'NO_B' | 'MULTIPLE_CONVERGENCE' | 'NOT_B' | 'MULTIPLE';
 
-export interface PassagePivot {
-  /** 급소(무게중심 B). 서지 않았으면 없다 — flag가 까닭이다 */
-  pivot?: Pivot;
-  flag?: PassagePivotFlag;
-  /** 엔진 급소 결과 그대로 */
-  analysis: PivotAnalysis;
-}
-
-export interface PassageParagraph extends PassagePivot {
+export interface PassageParagraph {
   /** 단락 머리 기호 — [가]·<가>·(가)의 글자 또는 「단락N:」의 N. 없으면 없다 */
   label?: string;
   /** 머리 기호를 뗀 단락 본문 */
@@ -35,24 +32,27 @@ export interface PassageParagraph extends PassagePivot {
   graph: PathGraph;
   /** 색별 노드 실체 — Q는 표면 노드가 있으면 그대로 싣는다 (제시문에서 Q는 B 안에 접힌다, §2) */
   colors: Record<Color, string[]>;
+  /** 서두(첫 문장)의 B 노드 — 급소 후보 자리 */
+  head: PathNode[];
+  /** 말미(마지막 문장)의 B 노드 — 급소 후보 자리. 한 문장 단락이면 서두와 같다 */
+  tail: PathNode[];
 }
 
-export interface PassageRecognition extends PassagePivot {
+export interface PassageRecognition {
   paragraphs: PassageParagraph[];
   /** 단락들을 이어 붙인 전체의 그래프 (§3-7) */
   graph: PathGraph;
+  /** 전체 급소(무게중심 B). 서지 않았으면 없다 — flag가 까닭이다 */
+  pivot?: Pivot;
+  flag?: PassagePivotFlag;
+  /** 엔진 급소 결과 그대로 */
+  analysis: PivotAnalysis;
 }
 
 /** 단락 머리 기호 — [가] · <가> · (가) · 단락N: */
 const HEAD_LABEL = /^\s*(?:\[([가-힣])\]|<([가-힣])>|\(([가-힣])\)|단락\s*(\d+)\s*:)\s*/;
-
-function pivotOf(graph: PathGraph, table: SealedTable): PassagePivot {
-  const analysis = analyze_pivot(graph, table);
-  if (!analysis.ok) return { analysis, flag: analysis.flag };
-  if (analysis.pivots && analysis.pivots.length > 1) return { analysis, flag: 'MULTIPLE' };
-  if (analysis.pivot.node.color !== 'B') return { analysis, flag: 'NOT_B' };
-  return { analysis, pivot: analysis.pivot };
-}
+/** 문장 끝 — 마침표·물음표·느낌표 뒤 공백 */
+const SENTENCE_END = /[.?!](?=\s|$)/g;
 
 function colorsOf(nodes: PathNode[]): Record<Color, string[]> {
   const out: Record<Color, string[]> = { P: [], B: [], D: [], C: [], Q: [] };
@@ -60,9 +60,17 @@ function colorsOf(nodes: PathNode[]): Record<Color, string[]> {
   return out;
 }
 
+/** 첫 문장 끝과 마지막 문장 시작 — 서두·말미 자리 (원칙 ③: 그 사이는 가운데) */
+function sentenceSpan(text: string): { headEnd: number; tailStart: number } {
+  const ends = [...text.trimEnd().matchAll(SENTENCE_END)].map((m) => m.index! + 1);
+  const inner = ends.filter((e) => e < text.trimEnd().length);
+  return { headEnd: inner[0] ?? text.length, tailStart: inner.at(-1) ?? 0 };
+}
+
 /**
- * 제시문 인식 — 단락을 끊고(§3-1, 문단 경계 = 빈 줄, normalizeV2와 같다), 단락마다 5색 노드와 급소를 잡고,
- * 단락들을 이어 붙인 전체에 같은 급소 규칙을 걸어 전체 무게중심을 잡는다 (§3-7).
+ * 제시문 인식 — 단락을 끊고(§3-1, 문단 경계 = 빈 줄, normalizeV2와 같다), 단락마다 5색 노드와 서두·말미의 B를 잡는다.
+ * 단락 급소는 여기서 정하지 않는다 — 논제가 방향을 잡은 뒤 `connectPassage`가 정한다 (제시문 급소 규칙).
+ * 전체는 단락들을 이어 붙인 그래프에 기존 급소 규칙을 건다 (§3-7).
  */
 export function recognizePassage(text: string, table: SealedTable): PassageRecognition {
   const paragraphs = normalizeV2(text)
@@ -72,11 +80,28 @@ export function recognizePassage(text: string, table: SealedTable): PassageRecog
       const label = m ? (m[1] ?? m[2] ?? m[3] ?? m[4]) : undefined;
       const body = m ? raw.slice(m[0].length) : raw;
       const graph = build_path_graph(body, table);
-      return { label, text: body, graph, colors: colorsOf(graph.nodes), ...pivotOf(graph, table) };
+      const { headEnd, tailStart } = sentenceSpan(body);
+      const bs = graph.nodes.filter((n) => n.color === 'B');
+      return {
+        label,
+        text: body,
+        graph,
+        colors: colorsOf(graph.nodes),
+        head: bs.filter((n) => n.index < headEnd),
+        tail: bs.filter((n) => n.index >= tailStart),
+      };
     })
     .filter((p) => p.text.trim() !== '');
   const graph = build_path_graph(paragraphs.map((p) => p.text).join('\n'), table);
-  return { paragraphs, graph, ...pivotOf(graph, table) };
+  const analysis = analyze_pivot(graph, table);
+  const whole: Pick<PassageRecognition, 'pivot' | 'flag'> = !analysis.ok
+    ? { flag: analysis.flag }
+    : analysis.pivots && analysis.pivots.length > 1
+      ? { flag: 'MULTIPLE' }
+      : analysis.pivot.node.color !== 'B'
+        ? { flag: 'NOT_B' }
+        : { pivot: analysis.pivot };
+  return { paragraphs, graph, analysis, ...whole };
 }
 
 export type PassageLinkKind =
@@ -84,8 +109,8 @@ export type PassageLinkKind =
   | '기호'
   /** 논제가 이 단락을 지정했다(<가>를 바탕으로) — 단락 급소가 논제의 C(근거 조건)가 된 것 (§4) */
   | '지정'
-  /** 논제 급소와 단락 급소의 실체값이 같거나 한쪽이 다른 쪽을 품는다 (§4 「맞물린다」) */
-  | '맞물림';
+  /** 이 단락의 급소가 논제 급소 keyword·관련 정보에 닿는다 (원칙 ②) */
+  | '급소';
 
 export interface PassageLink {
   kind: PassageLinkKind;
@@ -95,12 +120,26 @@ export interface PassageLink {
   questionNode: string;
 }
 
+/** 논제 방향으로 정한 단락 급소 */
+export interface ParagraphPivot {
+  /** 단락 급소 B 노드 */
+  node: PathNode;
+  /** 서두 아니면 말미 (원칙 ③) */
+  place: '서두' | '말미';
+  /** 닿은 논제 쪽 말 (논제 급소 keyword 또는 관련 정보) */
+  key: string;
+  /** 닿은 논제 노드 id */
+  questionNode: string;
+}
+
 export interface PassageConnection {
+  /** 단락마다 급소. 없으면 null — 그 단락은 background다 (원칙 ④) */
+  pivots: (ParagraphPivot | null)[];
   links: PassageLink[];
   /** 전체 제시문 급소가 논제 급소와 맞물리는가 (§5). 어느 쪽 급소든 서지 않았으면 없다 */
   wholeMatches?: boolean;
-  /** 놀고 있는 급소 — 단락 급소가 섰는데 논제와 어떤 연결도 없는 단락 (추가 논제 후보) */
-  idle: number[];
+  /** 배경지식 단락 — 급소가 없는 단락. 논제 해결을 위해 펼쳐놓은 배경 (원칙 ④) */
+  background: number[];
 }
 
 /** 원문자 기호 ㉠~㉻ */
@@ -121,21 +160,50 @@ function designatedLabels(entity: string): string[] {
   return out;
 }
 
-const keywordOf = (p: Pivot) => (p.keyword ?? p.node.entity).trim();
-const meshes = (a: string, b: string) => a !== '' && b !== '' && (a.includes(b) || b.includes(a));
+const clean = (s: string) => s.trim().replace(/^[\s,]+/, '');
+/** keyword 포함 (원칙 ②) — 한쪽이 다른 쪽을 품는다. 품기는 쪽은 두 글자 이상 (한 글자 조각은 어디에나 들어 있다) */
+const contains = (a: string, b: string) => (b.length >= 2 && a.includes(b)) || (a.length >= 2 && b.includes(a));
 
 /**
- * 논제-제시문 연결 확인 (§4·§5) — 기호 · 지정 · 급소 맞물림. 어느 연결도 없는 단락 급소는 놀고 있는 급소다.
- * 어긋남(설계 오류인지 인식 갭인지)은 판정하지 않는다 — 연결이 없다는 사실만 낸다.
+ * 논제 방향의 열쇠 — 논제 급소 keyword가 먼저, 관련 정보(논제의 다른 B 노드 실체)가 다음 (원칙 ②).
+ * 서술형태 급소(「논박」)처럼 B가 아닌 급소도 keyword는 그대로 열쇠다.
+ */
+function questionKeys(question: V2Analysis): { key: string; node: string }[] {
+  const keys: { key: string; node: string }[] = [];
+  const add = (key: string, node: string) => {
+    const k = clean(key);
+    if (k && !keys.some((x) => x.key === k)) keys.push({ key: k, node });
+  };
+  if (question.pivot.ok) for (const p of question.pivot.pivots ?? [question.pivot.pivot]) add(p.keyword ?? p.node.entity, p.node.id);
+  for (const n of question.graph.nodes) if (n.color === 'B') add(n.entity, n.id);
+  return keys;
+}
+
+/** 단락 급소 — 서두·말미의 B 가운데 열쇠를 품은 B (원칙 ①②③). 열쇠 순서가 앞선 것, 같으면 서두가 먼저 */
+function paragraphPivot(p: PassageParagraph, keys: { key: string; node: string }[]): ParagraphPivot | null {
+  for (const { key, node } of keys) {
+    for (const [place, nodes] of [['서두', p.head], ['말미', p.tail]] as const) {
+      const hit = nodes.find((n) => contains(clean(n.entity), key));
+      if (hit) return { node: hit, place, key, questionNode: node };
+    }
+  }
+  return null;
+}
+
+/**
+ * 논제-제시문 연결 (§4·§5·제시문 급소 규칙) — 논제가 방향을 잡고, 단락마다 서두·말미에서 닿는 B를 급소로 정한다.
+ * 급소가 없는 단락은 배경지식 단락이다. 기호·지정 연결은 급소와 따로 본다.
  */
 export function connectPassage(question: V2Analysis, passage: PassageRecognition): PassageConnection {
+  const keys = questionKeys(question);
+  const pivots = passage.paragraphs.map((p) => paragraphPivot(p, keys));
+
   const links: PassageLink[] = [];
   const add = (kind: PassageLinkKind, paragraph: number, questionNode: string) => {
     if (!links.some((l) => l.kind === kind && l.paragraph === paragraph && l.questionNode === questionNode)) {
       links.push({ kind, paragraph, questionNode });
     }
   };
-
   for (const n of question.graph.nodes) {
     if (n.color === 'B') {
       for (const sym of n.entity.match(CIRCLED) ?? []) {
@@ -146,14 +214,10 @@ export function connectPassage(question: V2Analysis, passage: PassageRecognition
       passage.paragraphs.forEach((p, i) => p.label === label && add('지정', i, n.id));
     }
   }
+  pivots.forEach((pv, i) => pv && add('급소', i, pv.questionNode));
 
-  const qPivots = question.pivot.ok ? (question.pivot.pivots ?? [question.pivot.pivot]) : [];
-  for (const q of qPivots) {
-    passage.paragraphs.forEach((p, i) => p.pivot && meshes(keywordOf(q), keywordOf(p.pivot)) && add('맞물림', i, q.node.id));
-  }
-
-  const wholeMatches =
-    passage.pivot && qPivots.length ? qPivots.some((q) => meshes(keywordOf(q), keywordOf(passage.pivot!))) : undefined;
-  const idle = passage.paragraphs.flatMap((p, i) => (p.pivot && !links.some((l) => l.paragraph === i) ? [i] : []));
-  return { links, wholeMatches, idle };
+  const wholeKey = passage.pivot && clean(passage.pivot.keyword ?? passage.pivot.node.entity);
+  const wholeMatches = wholeKey !== undefined && keys.length ? keys.some((k) => contains(wholeKey, k.key)) : undefined;
+  const background = pivots.flatMap((pv, i) => (pv ? [] : [i]));
+  return { pivots, links, wholeMatches, background };
 }

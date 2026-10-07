@@ -1,4 +1,4 @@
-// 제시문 인식 — HMOS_제시문인식원리_구조화.md §2~§5 (오종래 2026-10-07)
+// 제시문 인식 — HMOS_제시문인식원리_구조화.md §2~§5 · 제시문 급소 규칙 · 판별 확정 원칙 (오종래 2026-10-07)
 // 표지는 봉인 값이 아니라 테스트용 가짜 표지다. B = SB(~를), P = SP(어휘형 [가]·[나]), Q = SQ(설명하시오)
 
 import assert from 'node:assert/strict';
@@ -28,47 +28,71 @@ const question = (q: string): V2Analysis => {
   return { question: q, graph, form: describeCombination(graph.combination, table), pivot: analyze_pivot(graph, table) };
 };
 
-describe('제시문 인식 — 단락 분리 · 5색 · 단락 급소 (§2·§3)', () => {
+describe('제시문 인식 — 단락 분리 · 5색 · 서두·말미 (§2·§3)', () => {
   it('빈 줄로 단락을 끊고, 머리 기호([가]·단락N:)를 떼어 label로 남긴다', () => {
     const r = recognizePassage('[가] 다수결를 본다.\n\n단락2:\n만장일치를 본다.', table);
     assert.deepEqual(r.paragraphs.map((p) => [p.label, p.text]), [['가', '다수결를 본다.'], ['2', '만장일치를 본다.']]);
   });
 
-  it('단락마다 색별 노드 실체와 급소(B)를 낸다', () => {
-    const r = recognizePassage('[가] 다수결를 본다.', table);
-    const p = r.paragraphs[0];
+  it('단락마다 색별 노드 실체를 낸다', () => {
+    const p = recognizePassage('[가] 다수결를 본다.', table).paragraphs[0];
     assert.deepEqual(p.colors.B, ['다수결']);
-    assert.equal(p.pivot?.node.entity, '다수결');
-    assert.equal(p.flag, undefined);
   });
 
-  it('B가 없으면 급소가 서지 않는다 — NO_B (P·D는 급소가 아니다)', () => {
-    const p = recognizePassage('그냥 본다.', table).paragraphs[0];
-    assert.equal(p.pivot, undefined);
-    assert.equal(p.flag, 'NO_B');
+  it('서두 = 첫 문장의 B · 말미 = 마지막 문장의 B — 가운데 문장의 B는 어느 쪽도 아니다', () => {
+    const p = recognizePassage('다수결를 본다. 가운데를 본다. 만장일치를 본다.', table).paragraphs[0];
+    assert.deepEqual(p.head.map((n) => n.entity), ['다수결']);
+    assert.deepEqual(p.tail.map((n) => n.entity), ['만장일치']);
   });
 
-  it('B가 동점으로 둘이면 급소가 서지 않는다 — MULTIPLE_CONVERGENCE (단락의 급소는 하나)', () => {
-    const p = recognizePassage('다수결를 만장일치를 본다.', table).paragraphs[0];
-    assert.equal(p.pivot, undefined);
-    assert.equal(p.flag, 'MULTIPLE_CONVERGENCE');
-  });
-});
-
-describe('제시문 인식 — 전체 급소 (§3-7)', () => {
-  it('단락들을 이어 붙인 전체에 같은 급소 규칙 — B가 하나면 그것이 전체 급소', () => {
-    const r = recognizePassage('[가] 다수결를 본다.\n\n[나] 그냥 본다.', table);
-    assert.equal(r.pivot?.node.entity, '다수결');
+  it('한 문장 단락은 서두와 말미가 같다', () => {
+    const p = recognizePassage('다수결를 본다.', table).paragraphs[0];
+    assert.deepEqual(p.head, p.tail);
   });
 
-  it('전체가 하나로 수렴하지 않으면 플래그', () => {
-    const r = recognizePassage('[가] 다수결를 본다.\n\n[나] 만장일치를 본다.', table);
-    assert.equal(r.pivot, undefined);
-    assert.equal(r.flag, 'MULTIPLE_CONVERGENCE');
+  it('전체 — 단락들을 이어 붙인 전체에 같은 급소 규칙 (§3-7)', () => {
+    assert.equal(recognizePassage('[가] 다수결를 본다.\n\n[나] 그냥 본다.', table).pivot?.node.entity, '다수결');
+    assert.equal(recognizePassage('[가] 다수결를 본다.\n\n[나] 만장일치를 본다.', table).flag, 'MULTIPLE_CONVERGENCE');
   });
 });
 
-describe('논제-제시문 연결 · 놀고 있는 급소 (§4·§5)', () => {
+describe('단락 급소 — 논제 방향 · 서두·말미 · background (판별 확정 원칙)', () => {
+  it('논제 급소 keyword를 품은 서두 B가 급소', () => {
+    const passage = recognizePassage('다수결 원칙를 본다. 가운데를 본다. 끝를 본다.', table);
+    const c = connectPassage(question('다수결를 설명하시오.'), passage);
+    assert.equal(c.pivots[0]?.node.entity, '다수결 원칙');
+    assert.equal(c.pivots[0]?.place, '서두');
+  });
+
+  it('말미 B도 급소가 된다', () => {
+    const passage = recognizePassage('처음를 본다. 가운데를 본다. 만장일치 제도를 본다.', table);
+    const c = connectPassage(question('만장일치를 설명하시오.'), passage);
+    assert.equal(c.pivots[0]?.place, '말미');
+    assert.equal(c.pivots[0]?.node.entity, '만장일치 제도');
+  });
+
+  it('가운데 문장의 B는 keyword를 품어도 급소가 아니다 — 그 단락은 background', () => {
+    const passage = recognizePassage('처음를 본다. 다수결를 본다. 끝를 본다.', table);
+    const c = connectPassage(question('다수결를 설명하시오.'), passage);
+    assert.equal(c.pivots[0], null);
+    assert.deepEqual(c.background, [0]);
+  });
+
+  it('keyword가 B 실체를 품어도 닿는다 — 「D국이 시행한 정책」 ↔ 「정책」 · 한 글자는 닿지 않는다', () => {
+    const passage = recognizePassage('정책를 본다.\n\n이를 본다.', table);
+    const c = connectPassage(question('시행한 정책를 설명하시오.'), passage);
+    assert.equal(c.pivots[0]?.node.entity, '정책');
+    assert.equal(c.pivots[1], null);
+  });
+
+  it('논제 급소 keyword가 먼저, 관련 정보(논제의 다른 B)가 다음', () => {
+    const passage = recognizePassage('자료를 본다. 끝를 본다.', table);
+    const c = connectPassage(question('자료를 그 이유를 설명하시오.'), passage);
+    assert.equal(c.pivots[0]?.key, '자료');
+  });
+});
+
+describe('논제-제시문 연결 (§4·§5)', () => {
   const passage = recognizePassage('[가] 다수결를 본다.\n\n[나] 만장일치를 본다.\n\n㉠ 위임를 본다.', table);
 
   it('지정 — 논제의 [가]는 그 단락과 잇는다', () => {
@@ -81,14 +105,10 @@ describe('논제-제시문 연결 · 놀고 있는 급소 (§4·§5)', () => {
     assert.ok(c.links.some((l) => l.kind === '기호' && l.paragraph === 2));
   });
 
-  it('맞물림 — 논제 급소와 단락 급소의 실체값이 같거나 한쪽이 품는다', () => {
+  it('급소 — 단락 급소가 선 단락은 논제와 잇는다', () => {
     const c = connectPassage(question('만장일치 방식를 설명하시오.'), passage);
-    assert.deepEqual(c.links.filter((l) => l.kind === '맞물림').map((l) => l.paragraph), [1]);
-  });
-
-  it('놀고 있는 급소 — 급소가 섰는데 어떤 연결도 없는 단락', () => {
-    const c = connectPassage(question('[가] 자료를 설명하시오.'), passage);
-    assert.deepEqual(c.idle, [1, 2]);
+    assert.deepEqual(c.links.filter((l) => l.kind === '급소').map((l) => l.paragraph), [1]);
+    assert.deepEqual(c.background, [0, 2]);
   });
 
   it('전체 급소가 서지 않았으면 전체 맞물림은 판정하지 않는다', () => {

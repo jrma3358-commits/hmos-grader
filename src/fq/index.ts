@@ -72,6 +72,7 @@ export {
   type PassageConnection,
   type PassageLink,
   type PassageParagraph,
+  type ParagraphPivot,
   type PassageRecognition,
 } from './v2/passage.ts';
 export {
