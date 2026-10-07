@@ -1020,6 +1020,15 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
     }
   }
 
+  // 관형형 수식어 떼기 [오종래 2026-10-07] — B 실체 머리의 「한글+는」 어절(관형형 동사: 갖는·주는·하는·되는·있는·없는·나타내는 …)은
+  //   실체가 아니라 수식어다 — 잘라낸다 (논제2 「갖는 역할」 → 「역할」, 논제4-3 「하는 자연수 p의 값」 → 「자연수 p의 값」).
+  //   뒤에 남는 말이 있을 때만 자른다. 머리의 쉼표·공백은 그대로 둔다.
+  for (const node of nodes) {
+    if (node.color !== 'B') continue;
+    let m: RegExpMatchArray | null;
+    while ((m = node.entity.match(/^([\s,]*)[가-힣]+는\s+(?=\S)/))) node.entity = m[1] + node.entity.slice(m[0].length);
+  }
+
   // 조합은 접기 전 색으로 센다 [오종래 2026-10-01] — 판단기준(Q에 접힌 B)은 급소 판정에서만 B이고,
   //   표면에 켜진 등은 원래 색이다 (예: 수학_문_4 「연속일 때」 = C → 조합 B·C·Q).
   //   약속된 길 간선의 색(예: 「→」 D)도 켜진 등이다 — 노드와 함께 문장 순서로 센다.
