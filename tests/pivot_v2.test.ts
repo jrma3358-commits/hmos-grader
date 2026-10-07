@@ -1542,6 +1542,12 @@ describe('단서절 — 「단,」 뒤 문장 끝까지 D 노드 하나 (오종�
     assert.ok(!entities('반응을 나타내시오(상태를 표시하시오).').some((e) => e.startsWith('D:')), '지정 없음');
   });
 
+  it('정답지 요약 괄호 「(표:」「(상자:」「(제시문:」은 D로 묶지 않는다 (오종래 2026-10-07)', () => {
+    for (const head of ['표:', '상자:', '제시문:']) {
+      assert.ok(!entities(`반응을 나타내시오. (${head} 물의 상태)`, ['SD']).some((e) => e.startsWith('D:')), head);
+    }
+  });
+
   it('어절 머리가 아니면(「판단,」) 걸지 않는다 · 지정이 없으면 그대로', () => {
     assert.deepEqual(entities('판단, 반응을 나타내시오', ['SD']), ['B:판단, 반응', 'Q:나타내시오']);
     assert.ok(entities(q).includes('Q:표시하시오'), '지정이 없으면 단서절로 묶지 않는다');

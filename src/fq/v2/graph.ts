@@ -417,7 +417,8 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
     // 말미 괄호 [오종래 2026-10-07] — 문장 말미에 괄호로 묶인 부연·조건·예시도 단서절과 같은 D 노드 하나다.
     //   안의 표지는 걸지 않는다 — 괄호 안 B·Q가 급소로 걸리지 않게 (「…구하시오. (예를 들어, …이다.)」,
     //   「…비교하시오(대물림 비율은 … 표시하시오).」). 말미 = 여는 괄호 앞이 문장 끝(「.」「?」「!」)이거나 종결 어미
-    //   「~시오」「~하라」「~다」, 짝이 맞는 닫는 괄호 뒤가 문장 끝(「.」「?」「!」·공백·끝). 안에 한글이 없으면(「(10^100)」) 묶지 않는다.
+    //   「~시오」「~하라」「~다」, 짝이 맞는 닫는 괄호 뒤가 문장 끝(「.」「?」「!」·공백·끝). 안에 한글이 없으면(「(10^100)」),
+  //   「(표:」「(상자:」「(제시문:」으로 시작하면 묶지 않는다.
     const provisoC = cands.find((c) => provisoIds.includes(c.sw.id));
     if (provisoC) {
       for (let open = question.indexOf('('); open >= 0; open = question.indexOf('(', open + 1)) {
@@ -434,6 +435,7 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
         if (close < 0 || !/^[.?!]?(?:\s|$)/.test(question.slice(close + 1))) continue;
         const inner = question.slice(open + 1, close).trim();
         if (!/[가-힣]/.test(inner)) continue;
+        if (/^(?:표|상자|제시문)\s*:/.test(inner)) continue; // 정답지 정리자 요약 괄호 [오종래 2026-10-07] — 문항 원문이 아니다
         const end = close + 1;
         hits = hits.filter((x) => x.end <= open || x.at >= end);
         hits.push({ at: open, end, c: provisoC, inner, chained: false, proviso: true });
