@@ -67,6 +67,14 @@ export { recognizeV2, recognizeV2Analysis, recognizeV2Path, type V2Recognition }
 export { build_path_graph, describeCombination, type FormCombination, type PathGraph } from './v2/graph.ts';
 export { split_units } from './v2/units.ts';
 export {
+  connectPassage,
+  recognizePassage,
+  type PassageConnection,
+  type PassageLink,
+  type PassageParagraph,
+  type PassageRecognition,
+} from './v2/passage.ts';
+export {
   analyze_pivot,
   convergenceOf,
   deepest_node,
