@@ -253,6 +253,8 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
   //   「(가)·(나)·(다)」「(가)~(라)」 전체가 P 노드 하나다 (사회 논제3-2).
   const designatedIds = table.apply.designatedPassages ?? [];
   const PASSAGE_LABEL = /^\s*(\([가-힣0-9]+\)(?:\s*[,·ㆍ・~∼～-]\s*\([가-힣0-9]+\))*)/;
+  //   원문자 기호(㉠~㉻, 나열 포함) + 뒤에 붙은 조사. m[1] = 기호 (아래 원문자 기호 묶음)
+  const CIRCLED_LABEL = /(?<=^|[\s(])([㉠-㉻](?:\s*[,·ㆍ・~∼～-]\s*[㉠-㉻])*)[가-힣]*/g;
   //   식 끝의 공백·쉼표는 소비한다(end) — 다음 노드의 실체로 넘어가지 않는다. 실체(text)에서는 뗀다.
   const mathEnd = (from: number) => {
     const tail = question.slice(from).match(/^[^가-힣ㄱ-ㅎㅏ-ㅣ\n]*/)![0];
@@ -395,6 +397,9 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
     //   부등호(「0<x<1」)와 섞이지 않게 꺾쇠 안은 한글로 시작하고 20자 이내다.
     [table.apply.bracketLabels, /<[가-힣][^<>\n]{0,19}>/g],
     [table.apply.quotedNames, /(?<=^|[\s(])(['‘])[가-힣A-Za-z][가-힣A-Za-z ]*['’]/g],
+    // 원문자 기호 [오종래 2026-10-07] — apply.circledLabels: 어절 머리의 원문자(「㉠」「㉤」, 「㉠~㉢」「㉠, ㉡」 나열 포함)와
+    //   뒤에 붙은 조사가 B 노드 하나다. 실체는 기호뿐 — 앞말 「에 기술된」을 끌지 않고(갭10), 「㉠과」가 와/과 P로 서지 않는다 (논제1-1·5).
+    [table.apply.circledLabels, CIRCLED_LABEL],
   ];
   //   [오종래 2026-10-07] 따옴표 이름의 실체는 따옴표를 뗀 이름이다 (「'뉴질랜드 정부'」 → B「뉴질랜드 정부」).
   const quotedNameIds = table.apply.quotedNames ?? [];
@@ -406,7 +411,7 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
       const end = start + m[0].length;
       if (hits.some((h) => h.at < start && start < h.end)) continue; // 앞에서 시작한 묶음(인용 명제·보기 블록) 안이다
       hits = hits.filter((h) => h.end <= start || h.at >= end);
-      const inner = ids === table.apply.quotedNames ? m[0].slice(1, -1) : m[0];
+      const inner = ids === table.apply.quotedNames ? m[0].slice(1, -1) : ids === table.apply.circledLabels ? m[1] : m[0];
       hits.push({ at: start, end, c: groupC, inner, chained: false, quote: true });
     }
     hits.sort((a, b) => a.at - b.at);

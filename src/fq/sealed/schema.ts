@@ -367,6 +367,13 @@ export interface SealedApplyRules {
    * 묶는 **규칙**은 구조라 코드에 있다(`v2/graph.ts`). 여기 있는 것은 «어느 스위치인가»(값)뿐이다.
    */
   quotedNames?: Undecided<string[]>;
+  /**
+   * 원문자 기호 — 어절 머리의 원문자(「㉠」~「㉻」)와 뒤에 붙은 조사(「㉠과」「㉤의」)를 이 스위치(id, 예: B) 노드 하나로 잡는다.
+   * 실체는 기호뿐이다. 앞말(「에 기술된」)을 끌고 나오지 않는다. 없거나 null이면 적용하지 않는다.
+   *
+   * 묶는 **규칙**은 구조라 코드에 있다(`v2/graph.ts`). 여기 있는 것은 «어느 스위치인가»(값)뿐이다.
+   */
+  circledLabels?: Undecided<string[]>;
 }
 
 /**

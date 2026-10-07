@@ -1837,6 +1837,34 @@ describe('대괄호 묶음 · 따옴표 이름 — 묶음 전체가 노드 하�
   });
 });
 
+describe('원문자 기호 — 기호+조사 어절이 B 하나, 실체는 기호뿐 (오종래 2026-10-07)', () => {
+  // B = SB(~을·~를·~의·~에), P = SW(병렬 ~과), Q = SQ(어휘형 「구하시오」)
+  const sw = (id: string, markers: string[], color: Color, lexical?: boolean) =>
+    ({ id, kind: '조사·어미', markers, intent: '', color, lexical }) as SealedSwitch;
+  const table = (circledLabels?: string[]): SealedTable => ({
+    version: 1,
+    source: { document: '(테스트)', sections: [] },
+    switches: [sw('SB', ['~을', '~를', '~의', '~에'], 'B'), sw('SW', ['~과'], 'P'), sw('SQ', ['구하시오'], 'Q', true)],
+    lights: [],
+    matrix: [],
+    symbols: [],
+    forms: [],
+    apply: { longestMatchFirst: true, precedence: [], endOfWord: true, circledLabels },
+    pending: [],
+  });
+  const ents = (q: string, t: SealedTable) => build_path_graph(q, t).nodes.map((n) => `${n.color}${n.entity}`);
+
+  it('「에 기술된 ㉤의 특징을」 — 앞말을 끌지 않고 B「㉤」 · B「특징」', () => {
+    assert.deepEqual(ents('그림에 기술된 ㉤의 특징을 구하시오.', table(['SB'])).slice(1), ['B㉤', 'B특징', 'Q구하시오']);
+  });
+
+  it('「㉠과」는 와/과 P가 아니라 B「㉠」 · 나열 「㉠~㉢」도 하나', () => {
+    assert.deepEqual(ents('㉠과 관련된 문제를 구하시오.', table(['SB'])), ['B㉠', 'B관련된 문제', 'Q구하시오']);
+    assert.deepEqual(ents('㉠~㉢을 구하시오.', table(['SB'])), ['B㉠~㉢', 'Q구하시오']);
+    assert.notDeepEqual(ents('㉠과 관련된 문제를 구하시오.', table()), ents('㉠과 관련된 문제를 구하시오.', table(['SB'])));
+  });
+});
+
 describe('따옴표 이름 B + 「와/과」 비교구문 확장 — 다음 명사구도 B, 「각각」도 비교 자리 (오종래 2026-10-07)', () => {
   // B = SB(~을), P = SW(병렬 ~과), SP(어휘형 「그림」), Q = SQ(어휘형 「구하시오」)
   const sw = (id: string, markers: string[], color: Color, lexical?: boolean) =>
