@@ -335,6 +335,10 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
         }
         if (mathIds.includes(c.sw.id) && isLexical(c.sw, c.surface)) {
           if (/^[A-Za-z]/.test(c.surface.trim()) && /[A-Za-z]/.test(question[i - 1] ?? '')) continue; // 영문 낱말 안
+          //   [오종래 2026-10-07] 괄호 안의 수식 표지(「점 (a/√3−9)」의 「√」)는 걸지 않는다 — 괄호 앞에서 잘리지 않고
+          //   뒤 조사 노드가 「점 (a/√3−9)」 전체를 실체로 끌고 나온다 (논제4-iii). 같은 어절에서 닫히지 않은 「(」 뒤면 괄호 안이다.
+          const word = question.slice(0, i).match(/\S*$/)![0];
+          if (word.split('(').length > word.split(')').length) continue;
           const { end, text } = mathEnd(i + m[0].length);
           matched = { len: end - i, c, inner: question.slice(i, text), chained: false, math: true };
           break;
@@ -876,6 +880,16 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
     if (next?.color !== 'B') continue;
     const entity = next.entity.trim();
     if (!COMPARE_AFTER.test(question.slice(next.index + next.surface.length)) && !COMPARE_NOUN.test(entity) && !COMPARE_IN.test(entity)) continue;
+    //   수식 변수 짝 [오종래 2026-10-07] — 앞이 단일 영문 변수(「b」「R」)이고 뒤 B가 조건·방법 표현(「~식」「~관계」「~값」)으로 끝나면
+    //   비교 대상이 아니라 한 덩어리다 → 나누지 않고 B 하나로 합친다 (「b와 c의 관계를」 → B「b와 c의 관계」).
+    if (/^[A-Za-z]$/.test(node.entity.trim()) && /(?:식|관계|값)$/.test(entity)) {
+      nodes[j] = { ...next, entity:`${node.entity.trim()}${node.surface.trim()} ${entity}` };
+      for (const [k, e] of edges.entries()) if (e.to === node.id) edges[k] = { ...e, to: next.id };
+      for (let k = edges.length - 1; k >= 0; k--) if (edges[k].from === node.id) edges.splice(k, 1);
+      nodes.splice(i, 1);
+      i--;
+      continue;
+    }
     nodes[i] = { ...node, color: 'B' };
     const split = entity.match(COMPARE_SPLIT);
     if (!split) continue;

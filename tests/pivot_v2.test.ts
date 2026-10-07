@@ -1857,3 +1857,31 @@ describe('따옴표 이름 B + 「와/과」 비교구문 확장 — 다음 명�
     assert.deepEqual(ents('갑과 을을 구하시오.'), ['P갑', 'B을', 'Q구하시오']);
   });
 });
+
+describe('수식 괄호 전체 묶음 · 「b와 c」 변수 짝 비교구문 오인 차단 — 갭9 (오종래 2026-10-07)', () => {
+  // B = SB(~를·~의), 수식 = SM(어휘형 「√」, mathExpressions), P = SW(병렬 ~와), Q = SQ(어휘형 「구하시오」)
+  const sw = (id: string, markers: string[], color: Color, lexical?: boolean) =>
+    ({ id, kind: '조사·어미', markers, intent: '', color, lexical }) as SealedSwitch;
+  const table: SealedTable = {
+    version: 1,
+    source: { document: '(테스트)', sections: [] },
+    switches: [sw('SB', ['~를', '~의'], 'B'), sw('SM', ['√'], 'B', true), sw('SW', ['~와'], 'P'), sw('SQ', ['구하시오'], 'Q', true)],
+    lights: [],
+    matrix: [],
+    symbols: [],
+    forms: [],
+    apply: { longestMatchFirst: true, precedence: [], endOfWord: true, mathExpressions: ['SM'], nounChainMarkers: ['~의'] },
+    pending: [],
+  };
+  const ents = (q: string) => build_path_graph(q, table).nodes.map((n) => `${n.color}${n.entity}`);
+
+  it('괄호 안 수식 표지는 걸지 않는다 — 「점 (a/√3−9)」 전체가 B 하나 · 괄호 밖 「√」는 그대로', () => {
+    assert.deepEqual(ents('점 (a/√3−9)를 구하시오.'), ['B점 (a/√3−9)', 'Q구하시오']);
+    assert.deepEqual(ents('√3−9를 구하시오.'), ['B√3−9', 'Q구하시오']);
+  });
+
+  it('「b와 c의 관계를 각각」 — 단일 변수 + 「~관계·~식·~값」이면 B 하나 · 한글 명사구 짝은 그대로 B+B', () => {
+    assert.deepEqual(ents('b와 c의 관계를 각각 구하시오.'), ['Bb와 c의 관계', 'Q구하시오']);
+    assert.deepEqual(ents('허자와 실옹의 관계를 각각 구하시오.'), ['B허자', 'B실옹의 관계', 'Q구하시오']);
+  });
+});
