@@ -170,6 +170,10 @@ export interface PassageConnection {
   wholeMatches?: boolean;
   /** 배경지식 단락 — 급소가 없는 단락. 논제 해결을 위해 펼쳐놓은 배경 (원칙 ④) */
   background: number[];
+  /** 논제가 참조한 제시문 기호 (「제시문 [가], [나], [다]를 참고하여」 → 가·나·다). 참조가 없으면 없다 — 모든 단락이 후보 */
+  scope?: string[];
+  /** 참조 범위 밖 단락 — 연결 후보가 아니다 (급소·연결·background 모두 없음) */
+  outOfScope: number[];
 }
 
 /** 원문자 기호 ㉠~㉻ */
@@ -188,6 +192,19 @@ function designatedLabels(entity: string): string[] {
     else out.push(m[1], ...(m[2] ? [m[2]] : []));
   }
   return out;
+}
+
+/** 논제의 제시문 참조 — 「제시문」 뒤 기호 나열·범위 ([가], [나], [다] · (나)~(라) · <가>·<나>) */
+const PASSAGE_REFERENCE = /제시문\s*((?:[[<(][가-힣][\]>)](?:\s*(?:[,·~∼～]|및|와|과)\s*)?)+)/g;
+
+/**
+ * 논제가 참조한 제시문 기호 — 마지막 참조를 쓴다 (공통 발문의 「제시문 [가]~[마]」 뒤에 소문항 자신의 참조가 온다).
+ * 참조가 없으면 undefined.
+ */
+function referencedLabels(question: string): string[] | undefined {
+  const last = [...question.matchAll(PASSAGE_REFERENCE)].at(-1);
+  const labels = last && designatedLabels(last[1]);
+  return labels?.length ? labels : undefined;
 }
 
 const clean = (s: string) => s.trim().replace(/^[\s,]+/, '');
@@ -236,18 +253,32 @@ function paragraphPivot(
 }
 
 /**
+ * 단락마다 속한 제시문 기호 — 머리 기호가 없는 단락은 앞 단락의 기호를 잇는다 (한 제시문의 이어진 단락).
+ * 숫자 머리(단락N:)는 제시문 기호가 아니다.
+ */
+export function passageLabels(paragraphs: PassageParagraph[]): (string | undefined)[] {
+  let current: string | undefined;
+  return paragraphs.map((p) => (current = p.label && LABEL_ORDER.includes(p.label) ? p.label : p.label ? undefined : current));
+}
+
+/**
  * 논제-제시문 연결 (§4·§5·제시문 급소 규칙) — 논제가 방향을 잡고, 단락마다 서두·말미에서 닿는 B를 급소로 정한다.
  * 급소가 없는 단락은 배경지식 단락이다. 기호·지정 연결은 급소와 따로 본다.
+ * 논제가 참조 제시문을 밝혔으면(「제시문 [가], [나], [다]를 참고하여」) 그 단락만 연결 후보다 — keyword만으로는 논제별 참조 범위를 모른다.
  */
 export function connectPassage(question: V2Analysis, passage: PassageRecognition): PassageConnection {
   const exceptions = passage.keyExceptions;
   const keys = questionKeys(question).filter((k) => !exceptions.includes(k.key));
+  const scope = referencedLabels(question.question);
+  const labels = passageLabels(passage.paragraphs);
+  const inScope = (i: number) => !scope || (labels[i] !== undefined && scope.includes(labels[i]!));
+  const outOfScope = passage.paragraphs.flatMap((_, i) => (inScope(i) ? [] : [i]));
   const pivots: (ParagraphPivot | null)[] = [];
-  for (const p of passage.paragraphs) pivots.push(paragraphPivot(p, keys, pivots.at(-1) ?? null, exceptions));
+  passage.paragraphs.forEach((p, i) => pivots.push(inScope(i) ? paragraphPivot(p, keys, pivots.at(-1) ?? null, exceptions) : null));
 
   const links: PassageLink[] = [];
   const add = (kind: PassageLinkKind, paragraph: number, questionNode: string) => {
-    if (!links.some((l) => l.kind === kind && l.paragraph === paragraph && l.questionNode === questionNode)) {
+    if (inScope(paragraph) && !links.some((l) => l.kind === kind && l.paragraph === paragraph && l.questionNode === questionNode)) {
       links.push({ kind, paragraph, questionNode });
     }
   };
@@ -265,6 +296,6 @@ export function connectPassage(question: V2Analysis, passage: PassageRecognition
 
   const wholeKey = passage.pivot && clean(passage.pivot.keyword ?? passage.pivot.node.entity);
   const wholeMatches = wholeKey !== undefined && keys.length ? keys.some((k) => contains(wholeKey, k.key)) : undefined;
-  const background = pivots.flatMap((pv, i) => (pv ? [] : [i]));
-  return { pivots, links, wholeMatches, background };
+  const background = pivots.flatMap((pv, i) => (pv || !inScope(i) ? [] : [i]));
+  return { pivots, links, wholeMatches, background, ...(scope && { scope }), outOfScope };
 }

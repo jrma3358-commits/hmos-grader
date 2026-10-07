@@ -76,6 +76,16 @@ export {
   type PassageRecognition,
 } from './v2/passage.ts';
 export {
+  generateQuestions,
+  type CandidatePattern,
+  type ExcludedEntry,
+  type Generation,
+  type PoolEntry,
+  type QuestionCandidate,
+  type QuestionVerdict,
+  type Verdict,
+} from './v2/generate.ts';
+export {
   analyze_pivot,
   convergenceOf,
   deepest_node,

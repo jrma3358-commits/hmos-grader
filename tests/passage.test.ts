@@ -117,7 +117,44 @@ describe('논제-제시문 연결 (§4·§5)', () => {
   });
 });
 
-describe('제시문 급소 3규칙 — 지시어 역추적 · keyword 특이도 · 서술문 B (오종래 2026-10-07)', () => {
+describe('논제별 참조 범위 — 「제시문 [가], [나], [다]를 참고하여」 밖의 단락은 연결 후보가 아니다 (사회논술_문1 1-2·2-2)', () => {
+  const passage = recognizePassage(
+    '[가] 무역를 본다.\n\n[나] 관세를 본다.\n\n[다] 대응조치를 본다.\n\n[라] 환율를 본다.\n\n[마] 정책를 본다.\n\n이어진 단락이다. 정책를 본다.',
+    table,
+  );
+
+  it('1-2 — 참조 [가][나][다] 밖의 [마]는 keyword 「정책」이 닿아도 잇지 않는다', () => {
+    const c = connectPassage(question('제시문 [가], [나], [다]를 참고하여 정책 대응조치를 설명하시오.'), passage);
+    assert.deepEqual(c.scope, ['가', '나', '다']);
+    assert.deepEqual(c.outOfScope, [3, 4, 5]);
+    assert.equal(c.pivots[4], null);
+    assert.equal(c.pivots[5], null);
+    assert.ok(c.links.every((l) => l.paragraph <= 2));
+    assert.ok(c.background.every((i) => i <= 2));
+  });
+
+  it('2-2 — 참조 [가][나][라][마] 안의 [마]는 keyword 「정책」으로 잇는다 · 머리 기호 없는 단락은 앞 제시문을 잇는다', () => {
+    const c = connectPassage(question('제시문 [가], [나], [라], [마]를 참고하여 정책를 설명하시오.'), passage);
+    assert.deepEqual(c.outOfScope, [2]);
+    assert.equal(c.pivots[4]?.node.entity, '정책');
+    assert.equal(c.pivots[5]?.place, '말미');
+    assert.deepEqual(c.links.filter((l) => l.kind === '급소').map((l) => l.paragraph), [4, 5]);
+  });
+
+  it('범위 표기 (나)~(라) · 공통 발문 뒤 소문항의 참조가 범위다', () => {
+    const c = connectPassage(question('제시문 [가]~[마]를 읽고 답하시오.\n\n제시문 (나)~(라)를 참고하여 정책를 설명하시오.'), passage);
+    assert.deepEqual(c.scope, ['나', '다', '라']);
+  });
+
+  it('참조가 없으면 모든 단락이 후보다', () => {
+    const c = connectPassage(question('정책를 설명하시오.'), passage);
+    assert.equal(c.scope, undefined);
+    assert.deepEqual(c.outOfScope, []);
+    assert.equal(c.pivots[4]?.node.entity, '정책');
+  });
+});
+
+describe('제시문 급소 3규칙 —지시어 역추적 · keyword 특이도 · 서술문 B (오종래 2026-10-07)', () => {
   const t: SealedTable = {
     ...table,
     switches: [...table.switches, sw('SD', ['~이다.'], 'B')],
