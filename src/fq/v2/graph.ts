@@ -414,6 +414,33 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
       h.end = end;
       h.proviso = true;
     }
+    // 말미 괄호 [오종래 2026-10-07] — 문장 말미에 괄호로 묶인 부연·조건·예시도 단서절과 같은 D 노드 하나다.
+    //   안의 표지는 걸지 않는다 — 괄호 안 B·Q가 급소로 걸리지 않게 (「…구하시오. (예를 들어, …이다.)」,
+    //   「…비교하시오(대물림 비율은 … 표시하시오).」). 말미 = 여는 괄호 앞이 문장 끝(「.」「?」「!」)이거나 종결 어미
+    //   「~시오」「~하라」「~다」, 짝이 맞는 닫는 괄호 뒤가 문장 끝(「.」「?」「!」·공백·끝). 안에 한글이 없으면(「(10^100)」) 묶지 않는다.
+    const provisoC = cands.find((c) => provisoIds.includes(c.sw.id));
+    if (provisoC) {
+      for (let open = question.indexOf('('); open >= 0; open = question.indexOf('(', open + 1)) {
+        if (!/(?:[.?!]|시오|하라|다)\s*$/.test(question.slice(0, open))) continue;
+        if (hits.some((x) => x.proviso && x.at <= open && open < x.end)) continue; // 「(단, …)」 — 위에서 묶었다
+        let close = -1;
+        for (let k = open + 1, depth = 1; k < question.length; k++) {
+          if (question[k] === '(') depth++;
+          else if (question[k] === ')' && --depth === 0) {
+            close = k;
+            break;
+          }
+        }
+        if (close < 0 || !/^[.?!]?(?:\s|$)/.test(question.slice(close + 1))) continue;
+        const inner = question.slice(open + 1, close).trim();
+        if (!/[가-힣]/.test(inner)) continue;
+        const end = close + 1;
+        hits = hits.filter((x) => x.end <= open || x.at >= end);
+        hits.push({ at: open, end, c: provisoC, inner, chained: false, proviso: true });
+        open = close;
+      }
+      hits.sort((a, b) => a.at - b.at);
+    }
   }
 
   // 제시문 블록 [오종래 2026-10-02] — 봉인 파일이 지정한 스위치(apply.passageBlocks, 예: 빈칸 기호 「(가)」)의 표지가

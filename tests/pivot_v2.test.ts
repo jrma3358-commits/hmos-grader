@@ -1524,6 +1524,24 @@ describe('단서절 — 「단,」 뒤 문장 끝까지 D 노드 하나 (오종�
     ]);
   });
 
+  it('말미 괄호(부연·조건·예시)도 D 하나 — 안의 B·Q는 서지 않는다 (오종래 2026-10-07)', () => {
+    assert.deepEqual(entities('반응을 나타내시오. (예를 들어, 물의 상태를 표시하시오.)', ['SD']), [
+      'B:반응',
+      'Q:나타내시오',
+      'D:예를 들어, 물의 상태를 표시하시오.',
+    ]);
+    assert.deepEqual(entities('반응을 나타내시오(상태를 표시하시오).', ['SD']), ['B:반응', 'Q:나타내시오', 'D:상태를 표시하시오']);
+    const t = table(['SD']);
+    const r = analyze_pivot(build_path_graph('반응을 나타내시오(상태를 표시하시오).', t), t);
+    assert.ok(r.ok && r.pivot.node.entity === '반응', '괄호 안 B는 급소가 되지 않는다');
+  });
+
+  it('말미가 아닌 괄호 · 한글 없는 괄호 · 지정이 없으면 묶지 않는다', () => {
+    assert.ok(!entities('g(x)의 상태를 나타내시오', ['SD']).some((e) => e.startsWith('D:')), '문장 중간 괄호');
+    assert.ok(!entities('반응을 나타내시오. (10^100)', ['SD']).some((e) => e.startsWith('D:')), '한글 없음');
+    assert.ok(!entities('반응을 나타내시오(상태를 표시하시오).').some((e) => e.startsWith('D:')), '지정 없음');
+  });
+
   it('어절 머리가 아니면(「판단,」) 걸지 않는다 · 지정이 없으면 그대로', () => {
     assert.deepEqual(entities('판단, 반응을 나타내시오', ['SD']), ['B:판단, 반응', 'Q:나타내시오']);
     assert.ok(entities(q).includes('Q:표시하시오'), '지정이 없으면 단서절로 묶지 않는다');
