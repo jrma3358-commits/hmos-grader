@@ -814,6 +814,41 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
     }
   }
 
+  // 비교구문 [오종래 2026-10-07] — 「A과/와 B를 비교하여」「A과/와 B의 차이를」의 A·B는 각각 독립 B다.
+  //   「~과/와」로 선 P 노드 A는 다음 B가 비교 대상이면 B로 바꾼다 (B는 이미 B). 사이의 「~과/와」 아닌 P(제시문 기호
+  //   「제시문 (나)의 관점을」)는 건너뛴다.
+  //   비교 대상 = 그 B의 표지 뒤가 「비교」「대조」 또는 「차이」「공통점」「유사점」이거나, 그 B의 실체가 그 말로 끝날 때.
+  //   「~과/와 함께」「~과/와 달리」 등 부사구는 제외.
+  //   [오종래 2026-10-07] 「중 더 큰/작은/많은/적은」도 비교어다 (수리 논제1-3 「g(3)과 "구골"(10^100) 중 더 큰 수」).
+  //   「중」은 앞 대상들을 모두 B로 부르는 자리 — 그 B 실체는 나누지 않는다.
+  //   [오종래 2026-10-07] 비교 대상 B의 실체가 「A의 차이」(비교 기준어)면 「의」 명사구 연결보다 먼저 나눈다 —
+  //   A(비교 대상)와 기준어가 각각 독립 B다 (「공리주의와 의무론의 차이를」 → B「의무론」 · B「차이」).
+  const COMPARE_AFTER = /^\s*(?:서로\s*)?(?:비교|대조|차이|공통점|유사점)|^\s*(?:중\s*)?더\s*(?:큰|작은|많은|적은)/;
+  const COMPARE_NOUN = /(?:차이|차이점|공통점|유사점)$/;
+  const COMPARE_IN = /(?:^|\s)(?:중\s*)?더\s*(?:큰|작은|많은|적은)(?:\s|$)/;
+  const COMPARE_SPLIT = /^(.+?)\s*의\s*(차이점?|공통점|유사점)$/;
+  const ADVERBIAL = /^\s*(?:함께|달리|같이|더불어|마찬가지)/;
+  for (let i = 0; i < nodes.length; i++) {
+    const node = nodes[i];
+    if (node.color !== 'P' || !['와', '과'].includes(node.surface.trim())) continue;
+    if (ADVERBIAL.test(question.slice(node.index + node.surface.length))) continue;
+    let j = i + 1;
+    while (nodes[j]?.color === 'P' && !['와', '과'].includes(nodes[j].surface.trim())) j++;
+    const next = nodes[j];
+    if (next?.color !== 'B') continue;
+    const entity = next.entity.trim();
+    if (!COMPARE_AFTER.test(question.slice(next.index + next.surface.length)) && !COMPARE_NOUN.test(entity) && !COMPARE_IN.test(entity)) continue;
+    nodes[i] = { ...node, color: 'B' };
+    const split = entity.match(COMPARE_SPLIT);
+    if (!split) continue;
+    const of = question.lastIndexOf('의', next.index);
+    const target: PathNode = { ...next, id: `${next.id}a`, surface: '의', index: of, entity: split[1].trim() };
+    nodes[j] = { ...next, entity: split[2] };
+    nodes.splice(j, 0, target);
+    for (const [k, e] of edges.entries()) if (e.to === next.id && e.index <= of) edges[k] = { ...e, to: target.id };
+    edges.push({ from: target.id, to: next.id, surface: null, kind: 'adjacent', index: next.index });
+  }
+
   // 결과 묶기 [오종래 2026-10-01] — 봉인 파일이 지정한 스위치(apply.foldResult, 예: 가정 「ならば」)의 조건 노드 바로 뒤에
   //   잇따라 선 B 노드들은 그 조건의 결과다 (예: 「a < b ならば, a = [イ], b = [ウ]」). B가 아닌 노드가 나오면 묶음이 끝난다.
   //   묶인 노드에 resultOf를 적고 조건 노드로 '결과' 간선을 보낸다. 결과 노드의 색은 바꾸지 않는다.

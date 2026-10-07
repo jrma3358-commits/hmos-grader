@@ -1675,6 +1675,46 @@ describe('지시어 B 급소 — 실체값이 지시어면 앞 명사구 (오종
   });
 });
 
+describe('비교구문 — 「A과/와 B를 비교하여」「A과/와 B의 차이를」의 A·B는 각각 B (오종래 2026-10-07)', () => {
+  // B = SB(~을·~를·~의), 병렬 = SP(~와·~과 P), Q = SQ(어휘형 「서술하시오」)
+  const sw = (id: string, markers: string[], color: Color, lexical?: boolean) =>
+    ({ id, kind: '조사·어미', markers, intent: '', color, lexical }) as SealedSwitch;
+  const t: SealedTable = {
+    version: 1,
+    source: { document: '(테스트)', sections: [] },
+    switches: [sw('SB', ['~을', '~를', '~의'], 'B'), sw('SP', ['~와', '~과'], 'P'), sw('SQ', ['서술하시오'], 'Q', true)],
+    lights: [],
+    matrix: [],
+    symbols: [],
+    forms: [],
+    apply: { longestMatchFirst: true, precedence: [], endOfWord: true },
+    pending: [],
+  };
+  const entities = (q: string) => build_path_graph(q, t).nodes.map((n) => `${n.color}:${n.entity}`);
+
+  it('비교 대상 A·B가 각각 B — 「비교하여」「~의 차이」', () => {
+    assert.deepEqual(entities('갑과 을을 비교하여 서술하시오'), ['B:갑', 'B:을', 'Q:서술하시오']);
+    assert.deepEqual(entities('갑과 을의 차이를 서술하시오'), ['B:갑', 'B:을', 'B:차이', 'Q:서술하시오']);
+  });
+
+  it('「~과 함께」 등 부사구 · 비교어 없는 병렬은 P 그대로', () => {
+    assert.equal(entities('갑과 함께 을을 비교하여 서술하시오')[0], 'P:갑');
+    assert.equal(entities('갑과 을을 서술하시오')[0], 'P:갑');
+  });
+
+  it('「A의 차이」는 「의」 명사구 연결보다 먼저 나눈다 — A와 기준어가 각각 B (오종래 2026-10-07)', () => {
+    const chained: SealedTable = { ...t, apply: { ...t.apply, nounChainMarkers: ['~의'] } };
+    const ents = (q: string) => build_path_graph(q, chained).nodes.map((n) => `${n.color}:${n.entity}`);
+    assert.deepEqual(ents('갑과 병의 차이를 서술하시오'), ['B:갑', 'B:병', 'B:차이', 'Q:서술하시오']);
+    assert.deepEqual(ents('갑과 병의 결과를 서술하시오'), ['P:갑', 'B:병의 결과', 'Q:서술하시오'], '비교어가 아니면 연결 그대로');
+  });
+
+  it('「중 더 큰/작은/많은/적은」도 비교어 — 「중」 뒤 B 실체는 나누지 않는다 (오종래 2026-10-07)', () => {
+    assert.deepEqual(entities('갑과 병 중 더 큰 수를 서술하시오'), ['B:갑', 'B:병 중 더 큰 수', 'Q:서술하시오']);
+    assert.equal(entities('갑과 병 중 더 적은 쪽을 서술하시오')[0], 'B:갑');
+  });
+});
+
 describe('접속사 Q절 — 문장 머리 접속사로 이어진 Q절은 절마다 단위 (오종래 2026-10-07)', () => {
   // B = SB(~을·~를), Q = SQ(어휘형 「제시하시오」「설명하시오」), 접속사 = 「@C」(테스트용 가짜 낱말)
   const sw = (id: string, markers: string[], color: Color, lexical?: boolean) =>
