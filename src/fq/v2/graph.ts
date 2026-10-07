@@ -217,6 +217,15 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
     const word = question.slice(0, at).match(/(\S+)[ \t]*$/)?.[1];
     return word !== undefined && !/[가-힣ㄱ-ㅎㅏ-ㅣ]/.test(word);
   };
+  //   관형절 꾸밈 명사 [오종래 2026-10-07] — 주격 「이」는 수식 뒤가 아니어도, 앞 어절이 2음절 이상 관형형(「~한」「~된」「~진」「~던」:
+  //   「시행한」「주어진」)이고 붙은 명사가 두 음절 이상이면 건다 — 관형절이 꾸민 명사구가 B다
+  //   (경제 2-2 「D국이 시행한 정책이 자국의」 → B「D국이 시행한 정책」). 받침 ㄴ 전부로 넓히면 명사(「동전 앞면이」)·
+  //   관형사(「어떤 도움이」)·주제 조사(「동전은 뒷면이」)에도 걸린다. 한 음절 명사(「높이」「길이」「차이」)는 걸지 않는다.
+  const afterModifiedNoun = (at: number) => {
+    const noun = question.slice(0, at).match(/(\S*)$/)![1];
+    const prev = question.slice(0, at - noun.length).match(/(\S+)[ \t]+$/)?.[1];
+    return /^[가-힣]{2,}$/.test(noun) && prev !== undefined && /[가-힣][한된진던]$/.test(prev);
+  };
 
   // 문장 종결 [오종래 2026-10-04] — apply.sentenceEnds(예: 「이다.」「만족시킨다.」「~하다.」)가 걸리면 절 경계다.
   //   다른 표지보다 먼저 본다 — 종결 표지 안의 글자(「이다」의 「이」)를 조사로 걸지 않는다.
@@ -314,7 +323,7 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
         if (afterNounOnly.includes(c.sw.id) && verbStemBefore(question[i - 1])) {
           continue; // 앞이 용언 어간 — 관형형 어미로 본다
         }
-        if (afterMathOnly.includes(c.sw.id) && !afterMath(i)) {
+        if (afterMathOnly.includes(c.sw.id) && !afterMath(i) && !(m[0].startsWith('이') && afterModifiedNoun(i))) {
           continue; // 바로 앞이 수식이 아니다
         }
         // 단독 어절 [오종래 2026-10-01] — 스위치의 standalone이면 앞에 한글 글자가 붙지 않을 때만 건다

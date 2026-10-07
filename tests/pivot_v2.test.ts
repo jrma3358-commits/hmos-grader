@@ -6,6 +6,7 @@ import { describe, it } from 'node:test';
 
 import { analyze_pivot, build_path_graph, convergenceOf, deepest_node, find_pivot, PivotError, split_units } from '../src/fq/index.ts';
 import { markerRegex } from '../src/fq/v2/graph.ts';
+import { stripSubItemNumbers } from '../src/fq/pipeline.ts';
 import type { SealedSwitch, SealedTable } from '../src/fq/sealed/schema.ts';
 import type { PathEdge, PathGraph, PathNode } from '../src/fq/v2/graph.ts';
 import type { Color } from '../src/fq/types.ts';
@@ -1940,5 +1941,36 @@ describe('수식 괄호 전체 묶음 · 「b와 c」 변수 짝 비교구문 �
     assert.deepEqual(ents('갖는 역할를 구하시오.'), ['B역할', 'Q구하시오']);
     assert.deepEqual(ents('보여주는 있는 값를 구하시오.'), ['B값', 'Q구하시오']);
     assert.deepEqual(ents('하는를 구하시오.'), ['B하는', 'Q구하시오']);
+  });
+});
+
+describe('주격 「이」 관형절 꾸밈 명사 · 소문항 번호 전처리 (오종래 2026-10-07)', () => {
+  const sw = (id: string, markers: string[], color: Color, lexical?: true) =>
+    ({ id, kind: '조사·어미', markers, intent: '', color, lexical }) as SealedSwitch;
+  const table: SealedTable = {
+    version: 1,
+    source: { document: '(테스트)', sections: [] },
+    switches: [sw('SB', ['~의'], 'B'), sw('SI', ['~이'], 'B'), sw('SQ', ['설명하시오'], 'Q', true)],
+    lights: [],
+    matrix: [],
+    symbols: [],
+    forms: [],
+    apply: { longestMatchFirst: true, precedence: [], endOfWord: true, afterMathOnly: ['SI'] },
+    pending: [],
+  };
+  const ents = (q: string) => build_path_graph(q, table).nodes.map((n) => `${n.color}${n.entity}`);
+
+  it('「시행한 정책이」 — 관형형(~한·~된·~진·~던) 뒤 두 음절 이상 명사의 「이」는 건다', () => {
+    assert.deepEqual(ents('D국이 시행한 정책이 자국의 설명하시오.'), ['BD국이 시행한 정책', 'B자국', 'Q설명하시오']);
+  });
+
+  it('명사·관형사·주제 조사 뒤(「동전 앞면이」「어떤 도움이」「동전은 뒷면이」)와 한 음절 명사(「같은 높이」)는 걸지 않는다', () => {
+    assert.deepEqual(ents('동전 앞면이 어떤 도움이 설명하시오.'), ['Q설명하시오']);
+    assert.deepEqual(ents('동전은 뒷면이 주어진 높이 설명하시오.'), ['Q설명하시오']);
+  });
+
+  it('줄 머리의 「(1-1)」「(2-2)」는 지우고 · 식 안의 괄호는 그대로', () => {
+    assert.equal(stripSubItemNumbers('답하시오.\n(1-1) 자유무역이\n  (2-2) A국'), '답하시오.\n자유무역이\n  A국');
+    assert.equal(stripSubItemNumbers('f(1-2)의 값'), 'f(1-2)의 값');
   });
 });

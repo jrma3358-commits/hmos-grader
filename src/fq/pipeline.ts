@@ -42,11 +42,19 @@ export function normalize(question: string): string {
 }
 
 /**
+ * 소문항 번호 전처리 [오종래 2026-10-07] — 줄 머리의 「(1-1)」「(2-2)」 같은 번호를 지우고 인식한다.
+ * 번호가 첫 노드 실체 머리에 붙지 않게 (경제 1-1 B「(1-1) 자유무역이…」). 줄 머리만 본다 — 식 안의 괄호는 그대로다.
+ */
+export function stripSubItemNumbers(question: string): string {
+  return question.replace(/^([ \t]*)\(\d+-\d+\)[ \t]*/gm, '$1');
+}
+
+/**
  * v2 정규화 — 문단 경계(빈 줄, 줄바꿈 두 번)는 줄바꿈 하나로 남기고 나머지 공백은 한 칸으로 접는다.
  * [오종래 2026-10-01] 문단 경계에서 실체를 끊으려면 경계가 정규화에서 살아남아야 한다 (`v2/graph.ts`).
  */
 export function normalizeV2(question: string): string {
-  return question
+  return stripSubItemNumbers(question)
     .split(/\r?\n[ \t\r]*\n\s*/)
     .map(normalize)
     .filter(Boolean)
