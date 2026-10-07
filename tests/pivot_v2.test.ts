@@ -1861,6 +1861,11 @@ describe('원문자 기호 — 기호+조사 어절이 B 하나, 실체는 기�
   it('「㉠과」는 와/과 P가 아니라 B「㉠」 · 나열 「㉠~㉢」도 하나', () => {
     assert.deepEqual(ents('㉠과 관련된 문제를 구하시오.', table(['SB'])), ['B㉠', 'B관련된 문제', 'Q구하시오']);
     assert.deepEqual(ents('㉠~㉢을 구하시오.', table(['SB'])), ['B㉠~㉢', 'Q구하시오']);
+  });
+
+  it('「㉠에 대한 관점을」은 B 하나 — 기호에서 끊지 않고, 앞말 「에 기술된」도 끌지 않는다', () => {
+    assert.deepEqual(ents('㉠에 대한 관점을 구하시오.', table(['SB'])), ['B㉠에 대한 관점', 'Q구하시오']);
+    assert.deepEqual(ents('그림에 기술된 ㉤에 대한 설명을 구하시오.', table(['SB'])).slice(1), ['B㉤에 대한 설명', 'Q구하시오']);
     assert.notDeepEqual(ents('㉠과 관련된 문제를 구하시오.', table()), ents('㉠과 관련된 문제를 구하시오.', table(['SB'])));
   });
 });

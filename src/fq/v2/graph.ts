@@ -403,6 +403,7 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
   ];
   //   [오종래 2026-10-07] 따옴표 이름의 실체는 따옴표를 뗀 이름이다 (「'뉴질랜드 정부'」 → B「뉴질랜드 정부」).
   const quotedNameIds = table.apply.quotedNames ?? [];
+  const entityHeads: number[] = [];
   for (const [ids, re] of groupings) {
     const groupC = ids?.[0] ? cands.find((c) => c.sw.id === ids[0]) : undefined;
     if (!groupC) continue;
@@ -411,6 +412,13 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
       const end = start + m[0].length;
       if (hits.some((h) => h.at < start && start < h.end)) continue; // 앞에서 시작한 묶음(인용 명제·보기 블록) 안이다
       hits = hits.filter((h) => h.end <= start || h.at >= end);
+      //   [오종래 2026-10-07] 「㉠에 대한 ~」은 기호에서 끊지 않는다 — 기호 어절 안의 표지만 지우고 노드는 세우지 않아,
+      //   뒤 B 노드가 「㉠에 대한 관점」 전체를 실체로 끌고 나온다 (「대한 관점」 조각 급소 방지).
+      //   실체는 기호에서 시작한다 (entityHeads) — 「에 기술된 ㉤에 대한 설명」 → 「㉤에 대한 설명」.
+      if (ids === table.apply.circledLabels && /에$/.test(m[0]) && /^\s+대한\s/.test(question.slice(end))) {
+        entityHeads.push(start);
+        continue;
+      }
       const inner = ids === table.apply.quotedNames ? m[0].slice(1, -1) : ids === table.apply.circledLabels ? m[1] : m[0];
       hits.push({ at: start, end, c: groupC, inner, chained: false, quote: true });
     }
@@ -678,6 +686,9 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
       cursor = crossed.end;
       pendingEdge = undefined;
     }
+    // 실체 머리 — 「㉠에 대한 ~」의 기호에서 실체가 시작한다 (앞말을 끌지 않는다, 간선은 그대로)
+    const head = entityHeads.filter((a) => a >= cursor && a < hit.at).at(-1);
+    if (head !== undefined) cursor = head;
     const surface = hit.math ? hit.inner : question.slice(hit.at, hit.end); // 수식 묶기는 끝 공백·쉼표를 뗀 식
 
     if (sw.kind === null) {
