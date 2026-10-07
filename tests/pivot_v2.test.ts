@@ -1460,6 +1460,18 @@ describe('부등호 조건은 판단기준이 아니라 C · 「의 값」은 �
     assert.equal(g.nodes[0].color, 'B');
     assert.equal(find_pivot(g, table).node.id, g.nodes[0].id);
   });
+
+  it('수치 지정 조건 「n=7일 때」 + 같은 문장 뒤 「~의 값」 B → 접지 않는다, 급소는 그 B (오종래 2026-10-07, 논제5-1)', () => {
+    const g = build_path_graph('n=7일 때, 내적 b·c의 값을 구하시오', table);
+    assert.equal(g.nodes[0].color, 'C');
+    assert.equal(g.edges.some((e) => e.kind === '접힘'), false);
+    assert.equal(find_pivot(g, table).keyword, 'b·c');
+  });
+
+  it('수치 지정 조건이라도 같은 문장에 묻는 값이 없으면 지금처럼 접는다 (수능_수학_11)', () => {
+    const g = build_path_graph('t=0일 때 출발한다. 가속도를 구하시오', table);
+    assert.equal(g.nodes[0].color, 'B');
+  });
 });
 
 describe('인용 명제 — 따옴표 안 「…다.」 명제 전체가 노드 하나 (오종래 2026-10-06)', () => {
