@@ -129,7 +129,8 @@ function antecedent(graph: PathGraph, node: PathNode): string | undefined {
   while (b >= 0 && graph.nodes[b].color !== 'B') b--;
   if (b < 0) return undefined;
   let phrase = graph.nodes[b].entity.trim().replace(/^[\s,]+/, '');
-  for (let i = b - 1; i >= 0 && graph.nodes[i].color === 'P' && PARALLEL.includes(graph.nodes[i].surface); i--) {
+  //   비교구문(`graph.ts`)으로 B가 된 「와/과」 노드도 병렬이다 [오종래 2026-10-07]
+  for (let i = b - 1; i >= 0 && (graph.nodes[i].color === 'P' || graph.nodes[i].color === 'B') && PARALLEL.includes(graph.nodes[i].surface); i--) {
     phrase = `${graph.nodes[i].entity.trim()}${graph.nodes[i].surface} ${phrase}`;
   }
   return phrase;

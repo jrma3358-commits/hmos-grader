@@ -389,6 +389,8 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
     [table.apply.bracketLabels, /\[[가-힣][^[\]\n]*\]/g],
     [table.apply.quotedNames, /(?<=^|[\s(])(['‘])[가-힣A-Za-z][가-힣A-Za-z ]*['’]/g],
   ];
+  //   [오종래 2026-10-07] 따옴표 이름의 실체는 따옴표를 뗀 이름이다 (「'뉴질랜드 정부'」 → B「뉴질랜드 정부」).
+  const quotedNameIds = table.apply.quotedNames ?? [];
   for (const [ids, re] of groupings) {
     const groupC = ids?.[0] ? cands.find((c) => c.sw.id === ids[0]) : undefined;
     if (!groupC) continue;
@@ -397,7 +399,8 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
       const end = start + m[0].length;
       if (hits.some((h) => h.at < start && start < h.end)) continue; // 앞에서 시작한 묶음(인용 명제·보기 블록) 안이다
       hits = hits.filter((h) => h.end <= start || h.at >= end);
-      hits.push({ at: start, end, c: groupC, inner: m[0], chained: false, quote: true });
+      const inner = ids === table.apply.quotedNames ? m[0].slice(1, -1) : m[0];
+      hits.push({ at: start, end, c: groupC, inner, chained: false, quote: true });
     }
     hits.sort((a, b) => a.at - b.at);
   }
@@ -846,7 +849,19 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
   //   「중」은 앞 대상들을 모두 B로 부르는 자리 — 그 B 실체는 나누지 않는다.
   //   [오종래 2026-10-07] 비교 대상 B의 실체가 「A의 차이」(비교 기준어)면 「의」 명사구 연결보다 먼저 나눈다 —
   //   A(비교 대상)와 기준어가 각각 독립 B다 (「공리주의와 의무론의 차이를」 → B「의무론」 · B「차이」).
-  const COMPARE_AFTER = /^\s*(?:서로\s*)?(?:비교|대조|차이|공통점|유사점)|^\s*(?:중\s*)?더\s*(?:큰|작은|많은|적은)/;
+  //   [오종래 2026-10-07] 「각각」도 비교 자리다 — 「허자와 실옹의 주장을 각각」의 A·B는 각각 독립 B다 (논제1-1).
+  //   [오종래 2026-10-07] 따옴표 이름 B(apply.quotedNames) 바로 뒤에 「와/과」가 오면 다음 명사구도 B로 소환한다 — 「와/과」는
+  //   따옴표 뒤라 끌 실체가 없어 노드가 서지 않으므로 여기서 본다. 사이의 제시문 기호 P(「제시문 (마)의」)는 건너뛴다 (논제1-2).
+  const COMPARE_AFTER = /^\s*(?:서로\s*)?(?:비교|대조|차이|공통점|유사점|각각)|^\s*(?:중\s*)?더\s*(?:큰|작은|많은|적은)/;
+  for (let i = 0; i < nodes.length; i++) {
+    const node = nodes[i];
+    const quotedName = quotedNameIds.includes(node.switchId) && /^['‘]/.test(node.surface) && node.entity === node.surface.slice(1, -1);
+    if (!quotedName || !/^\s*[와과](?=\s|$)/.test(question.slice(node.index + node.surface.length))) continue;
+    let j = i + 1;
+    while (nodes[j] && designatedIds.includes(nodes[j].switchId)) j++;
+    const next = nodes[j];
+    if (next && next.color !== 'B' && next.color !== 'Q') nodes[j] = { ...next, color: 'B', recoloredFrom: next.color };
+  }
   const COMPARE_NOUN = /(?:차이|차이점|공통점|유사점)$/;
   const COMPARE_IN = /(?:^|\s)(?:중\s*)?더\s*(?:큰|작은|많은|적은)(?:\s|$)/;
   const COMPARE_SPLIT = /^(.+?)\s*의\s*(차이점?|공통점|유사점)$/;

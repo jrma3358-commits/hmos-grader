@@ -1825,8 +1825,35 @@ describe('대괄호 묶음 · 따옴표 이름 — 묶음 전체가 노드 하�
   });
 
   it("「'장인'」은 B 하나 — 안의 「인」이 표지로 걸리지 않는다 · 「f'(x)」의 프라임은 아니다", () => {
-    assert.deepEqual(ents("'장인'을 구하시오.", table(undefined, ['SB'])), ["B'장인'", 'Q구하시오']);
+    assert.deepEqual(ents("'장인'을 구하시오.", table(undefined, ['SB'])), ['B장인', 'Q구하시오']);
     assert.deepEqual(ents("'장인'을 구하시오.", table()), ["B'장", "B'", 'Q구하시오']);
     assert.deepEqual(ents("f'(x)을 구하시오.", table(undefined, ['SB'])), ["Bf'(x)", 'Q구하시오']);
+  });
+});
+
+describe('따옴표 이름 B + 「와/과」 비교구문 확장 — 다음 명사구도 B, 「각각」도 비교 자리 (오종래 2026-10-07)', () => {
+  // B = SB(~을), P = SW(병렬 ~과), SP(어휘형 「그림」), Q = SQ(어휘형 「구하시오」)
+  const sw = (id: string, markers: string[], color: Color, lexical?: boolean) =>
+    ({ id, kind: '조사·어미', markers, intent: '', color, lexical }) as SealedSwitch;
+  const table: SealedTable = {
+    version: 1,
+    source: { document: '(테스트)', sections: [] },
+    switches: [sw('SB', ['~을'], 'B'), sw('SW', ['~과'], 'P'), sw('SP', ['그림'], 'P', true), sw('SQ', ['구하시오'], 'Q', true)],
+    lights: [],
+    matrix: [],
+    symbols: [],
+    forms: [],
+    apply: { longestMatchFirst: true, precedence: [], endOfWord: true, quotedNames: ['SB'] },
+    pending: [],
+  };
+  const ents = (q: string) => build_path_graph(q, table).nodes.map((n) => `${n.color}${n.entity}`);
+
+  it("「'갑'과 그림을」 — 따옴표 B 뒤 「과」면 다음 명사구(P)도 B", () => {
+    assert.deepEqual(ents("'갑'과 그림을 구하시오."), ['B갑', 'B그림', 'Q구하시오']);
+  });
+
+  it('「갑과 을을 각각」 — 「과」 앞 명사구도 B · 「각각」이 없으면 P 그대로', () => {
+    assert.deepEqual(ents('갑과 을을 각각 구하시오.'), ['B갑', 'B을', 'Q구하시오']);
+    assert.deepEqual(ents('갑과 을을 구하시오.'), ['P갑', 'B을', 'Q구하시오']);
   });
 });
