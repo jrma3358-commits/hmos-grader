@@ -1,4 +1,4 @@
-// 문항 유형 감지 — 서숳형문항2차검증 문항1 · 사회논술_문1 원문 (generate.test.ts와 같은 원문)
+// 문항 유형 감지 (6형식) — 서숳형문항2차검증 문항1 · 사회논술_문1 원문 (generate.test.ts와 같은 원문) · 수리논술_문_3 원문
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
@@ -26,24 +26,38 @@ const 사회논술_문1 = `[가] 자유무역은 국제 사회에서 국가 간 
 (2-1) C국과 같은 원자재 중심의 수출국이 국제무역 환경의 변화 때문에 겪는 구조적 약점을 제시하고, 국내 물가 상승의 이유를 설명하시오.
 (2-2) A국과 C국의 무역분쟁으로 인한 손실을 줄이기 위해, D국이 시행한 정책이 자국의 경제에 어떤 도움이 될 수 있는지 설명하시오.`;
 
-describe('문항 유형 감지', () => {
-  it('문항1 — 수학서술형 (수식 + 조건 + 구하시오·서술하시오)', () => {
-    const r = detectType(문항1);
-    assert.equal(r.type, '수학서술형');
-    assert.equal(r.subType, undefined);
-    assert.ok(r.flags.includes('조건:부등호'));
-    assert.ok(r.flags.some((f) => f.startsWith('수식:')));
-    assert.ok(r.confidence >= 0.9);
-  });
+// 수리논술_문_3 원문 (검증/수리논술_문_3_정답지.md) — 수식 + 조건(a ≥ 0) + 소문항 (1)(2)(3)
+const 수리논술_문_3 = `곡선 y = x² - 1 위의 점 A(a, a² - 1)에서 그은 접선 l이 원 C: x² + y² = 4 와 서로 다른 두 점 P, Q에서 만난다. 다음 물음에 답하시오.
+(1) 접선 l의 방정식을 구하시오.
+(2) 원점 O에 대하여 부채꼴 OPQ의 넓이가 4π/3일 때 이를 만족하는 실수 a를 모두 구하시오. (단, 부채꼴 OPQ의 중심각은 π보다 작다.)
+(3) (2)에서 구한 점들 A(a, a² - 1)을 생각하자. 각 점에서의 접선들과 곡선 y = x² - 1로 둘러싸인 부분의 넓이를 구하시오. (단, a ≥ 0)`;
 
-  it('문항1 — 서술 표지 「서술하시오」「이유를」 → 수학서술형 (수학주관식 아님)', () => {
+describe('문항 유형 감지', () => {
+  it('문항1 — 제시문서술형 (서술 표지 「이유를」 앞에 「~것이다.」 서술문 · 소문항 없음)', () => {
     const r = detectType(문항1);
-    assert.equal(r.type, '수학서술형');
+    assert.equal(r.type, '제시문서술형');
+    assert.equal(r.subType, undefined);
+    assert.ok(r.flags.includes('제시문:서술문'));
+    assert.ok(r.flags.includes('조건:부등호'));
     assert.ok(r.flags.includes('서술표지:서술하시오'));
     assert.ok(r.flags.includes('서술표지:이유를'));
   });
 
-  it('주관식 예시 — 서술 표지 없이 「구하시오」만 → 주관식 (조건 부등식이 없어 수학주관식 아님)', () => {
+  it('서술형 — 제시문(서술문) 없이 서술 표지만', () => {
+    const r = detectType('함수의 극값이 존재하는 이유를 설명하시오.');
+    assert.equal(r.type, '서술형');
+    assert.ok(!r.flags.includes('제시문:서술문'));
+  });
+
+  it('수리논술_문_3 — 소문항제시형 + 단계형 (수식 + 조건 + 소문항)', () => {
+    const r = detectType(수리논술_문_3);
+    assert.equal(r.type, '소문항제시형');
+    assert.equal(r.subType, '단계형');
+    assert.ok(r.flags.includes('소문항:(1)(2)(3)'));
+    assert.ok(r.flags.includes('조건:부등호'));
+  });
+
+  it('주관식 예시 — 서술 표지 없이 「구하시오」만 → 주관식', () => {
     const r = detectType('함수 f(x) = x² + 1의 최솟값을 구하시오');
     assert.equal(r.type, '주관식');
     assert.ok(r.flags.includes('주관표지:구하시오'));
@@ -67,7 +81,7 @@ describe('문항 유형 감지', () => {
   });
 });
 
-// 수리논술 예시 — 시험 원문이 아니라 2단계 기준 1(B 수식 + 라벨 2개)을 세우려고 만든 문항이다.
+// 수리논술 예시 — 시험 원문이 아니라 라벨 2개 + 수식 문항을 세우려고 만든 문항이다.
 // [가]는 수리논술_문_4 제시문(근과 계수의 관계)을 빌렸다.
 const 수리논술_예시_제시문 = `[가] 이차방정식 ax² + bx + c = 0의 두 근을 α, β라고 하면 α + β = -b/a, αβ = c/a 이다.
 
@@ -77,14 +91,21 @@ const 수리논술_예시_논제 = '제시문 [가], [나]를 참고하여 방�
 describe('문항 유형 확정 (2단계)', { skip: !isSealedAvailable() && '봉인 표지사전 없음' }, () => {
   const table = () => loadSealedTable();
 
-  it('문항1 — 수학서술형 (B 수식 + C 부등식)', () => {
+  it('문항1 — 제시문서술형 유지 (B 수식 + C 부등식이지만 소문항 없음)', () => {
     const r = confirmType(문항1, recognizeV2Analysis(문항1), recognizePassage(문항1, table()));
-    assert.equal(r.type, '수학서술형');
+    assert.equal(r.type, '제시문서술형');
     assert.equal(r.subType, undefined);
-    assert.equal(r.surface.type, '수학서술형');
+    assert.equal(r.surface.type, '제시문서술형');
     assert.equal(r.overridden, false);
     assert.ok(r.flags.some((f) => f.startsWith('확정:B수식')));
     assert.ok(r.flags.some((f) => f.startsWith('확정:C부등식')));
+  });
+
+  it('수리논술_문_3 — 소문항제시형 + 단계형', () => {
+    const r = confirmType(수리논술_문_3, recognizeV2Analysis(수리논술_문_3), recognizePassage(수리논술_문_3, table()));
+    assert.equal(r.type, '소문항제시형');
+    assert.equal(r.subType, '단계형');
+    assert.equal(r.surface.type, '소문항제시형');
   });
 
   it('사회논술_문1 — 논술형 + 단계형 (단락 라벨 5개)', () => {
@@ -97,11 +118,11 @@ describe('문항 유형 확정 (2단계)', { skip: !isSealedAvailable() && '봉�
     assert.ok(r.flags.includes('확정:단락라벨[가][나][다][라][마]'));
   });
 
-  it('수리논술 예시 — 수리논술 (B 수식 + 단락 라벨 2개)', () => {
+  it('수리논술 예시 — 제시문서술형 (라벨 2개 + 수식 · B 수식이 있어 논술형으로 확정하지 않음)', () => {
     const text = `${수리논술_예시_제시문}\n\n${수리논술_예시_논제}`;
     const r = confirmType(text, recognizeV2Analysis(수리논술_예시_논제), recognizePassage(수리논술_예시_제시문, table()));
-    assert.equal(r.type, '수리논술');
-    assert.equal(r.surface.type, '수리논술');
+    assert.equal(r.type, '제시문서술형');
+    assert.equal(r.surface.type, '제시문서술형');
     assert.equal(r.overridden, false);
     assert.ok(r.flags.some((f) => f.startsWith('확정:B수식')));
     assert.ok(r.flags.includes('확정:단락라벨[가][나]'));

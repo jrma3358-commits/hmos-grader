@@ -1,25 +1,30 @@
 // 문항 유형 감지 — 두 단계.
-//   1단계 detectType(text)                     — 겉모습(선택지·제시문 기호·수식·조건·요구어)만 본다
+//   1단계 detectType(text)                     — 겉모습(선택지·제시문 기호·수식·조건·표지)만 본다
 //   2단계 confirmType(text, analysis, passage) — v2 인식 결과(5색 노드 · 제시문 단락 라벨)로 확정한다. 다르면 2단계가 이긴다
 //
-// [오종래 2026-10-08] 1단계 감지 우선순위
-//   1. 소문항 번호 → 단계형 (다른 유형과 함께 온다 — 상위 유형 + subType 단계형)
-//   2. 선택지 → 객관식
-//   3. 수식 + [가][나] 제시문 → 수리논술
-//   4. [가][나][다] 제시문 → 논술형
-//   5. 수식 + 조건 + 서술 표지 → 수학서술형 / 수식 + 조건 + 주관 표지(서술 표지 없음) → 수학주관식
-//   6. 서술 표지(DECLARATIVE)가 어디든 있음 → 서술형
-//   7. 서술 표지 없이 주관 표지(DEMAND)만 있음 → 주관식
-//   8. 나머지 → 단답형
-//   [오종래 2026-10-08] 서술형은 표지만 본다 — 요구어 앞 서술문(기호 없는 제시문) 조건은 없앴다
+// [오종래 2026-10-08] QuestionType 6형식
+//   객관식       — 선택지에서 고르는 것
+//   주관식       — 답만 쓰게 하는 것 (단답형·수학주관식 포함)
+//   서술형       — 제시문 없이 묻고 쓰게 함
+//   제시문서술형 — 제시문 읽고 답 서술
+//   소문항제시형 — 수식·조건 있고 소문항으로 풀이 과정을 씀
+//   논술형       — 제시문 + 논제 형식 (인문·사회논술)
+//   소문항 번호 구조는 어느 형식이든 subType 단계형으로 함께 온다
+//
+// [오종래 2026-10-08] 1단계 분기 (위에서부터)
+//   1. 선택지(원문자 4개 이상 · ㄱㄴㄷ 보기) → 객관식
+//   2. 수식 + 조건 + 소문항 → 소문항제시형
+//   3. 제시문 라벨 2개 이상 + 수식 없음 → 논술형
+//   4. 제시문 라벨 2개 이상 + 수식 → 제시문서술형
+//      라벨 없이 서술 표지 앞에 「~다.」 서술문(제시문) + 서술 표지 → 제시문서술형
+//   5. 서술 표지(DECLARATIVE) → 서술형
+//   6. 나머지(주관 표지 · 표지 없음) → 주관식
 //
 // [오종래 2026-10-08] 2단계 확정 기준 (위에서부터)
 //   1. 객관식은 덮어쓰지 않는다 — 객관식 유지
-//   2. B에 수식 + 제시문 라벨 2개 이상 → 수리논술
-//   3. B에 수식 + C에 부등식 조건 → 서술 표지면 수학서술형, 주관 표지만이면 수학주관식
-//   4. 제시문 라벨 2개 이상 → 논술형
-//   5. 단계형은 subType으로만 (1단계 것을 그대로 잇는다)
-//   어느 것에도 안 걸리면 1단계 유형 그대로
+//   2. B에 수식 + C에 부등식 조건 + 소문항 → 소문항제시형
+//   3. 제시문 단락 라벨 2개 이상 + B에 수식 없음 → 논술형
+//   어느 것에도 안 걸리면 1단계 형식 그대로. 단계형은 subType으로만 (1단계 것을 그대로 잇는다)
 //
 // 이 파일이 하지 않는 것:
 //   - 급소를 정하는 일 (유형은 겉모습이다 — 급소는 v2 엔진이 정한다)
@@ -29,16 +34,7 @@ import type { V2Analysis } from './pipeline.ts';
 import type { Color } from './types.ts';
 import type { PassageRecognition } from './v2/passage.ts';
 
-export type QuestionType =
-  | '객관식'
-  | '단답형'
-  | '주관식'
-  | '수학주관식'
-  | '수학서술형'
-  | '서술형'
-  | '단계형'
-  | '논술형'
-  | '수리논술';
+export type QuestionType = '객관식' | '주관식' | '서술형' | '제시문서술형' | '소문항제시형' | '논술형';
 
 export interface TypeDetection {
   type: QuestionType;
@@ -76,7 +72,7 @@ const MATH = [
 const CONDITION = /[<>≤≥≦≧]/;
 /** 꺾쇠 제목 — <규칙> · <보기> · 〈규칙〉 [오종래 2026-10-08] 부등호가 아니다 */
 const ANGLE_TITLE = /[<〈][ \t]*[가-힣][가-힣 \t]*[>〉]/g;
-/** 서술형 표지 [오종래 2026-10-08] — 문항 어디든 하나라도 있으면 서술형 */
+/** 서술형 표지 [오종래 2026-10-08] — 문항 어디든 하나라도 있으면 쓰게 하는 문항 */
 const DECLARATIVE = [
   '서술하시오', '서술하여라', '서술하라',
   '쓰시오', '써라', '쓰라',
@@ -87,6 +83,8 @@ const DECLARATIVE = [
 ];
 /** 주관식 표지 [오종래 2026-10-08] — 서술형 표지 없이 이것만 있으면 주관식 */
 const DEMAND = ['구하시오', '구하여라', '구하라', '구하면', '값은', '얼마인가'];
+/** 서술문 끝 「~다.」 — 서술 표지 앞에 있으면 라벨 없는 제시문으로 본다 */
+const STATEMENT_END = /다\.(?=\s|$)/;
 
 const distinct = (xs: string[]) => [...new Set(xs)];
 
@@ -98,7 +96,7 @@ function answerMarkers(text: string): { declarative: string[]; demand: string[] 
 export function detectType(text: string): TypeDetection {
   const flags: string[] = [];
 
-  // 1. 소문항 번호
+  // 소문항 번호 — subType 단계형
   const subNumbers = distinct([...text.matchAll(SUB_NUMBER)].map((m) => m[1] ?? m[2]));
   const circled = distinct(text.match(CIRCLED) ?? []);
   const bogi = distinct([...text.matchAll(BOGI)].map((m) => m[1]));
@@ -125,25 +123,27 @@ export function detectType(text: string): TypeDetection {
     flags,
   });
 
-  // 2. 선택지
+  // 1. 선택지
   if (circled.length >= 4 || bogi.length >= 2) {
     if (circled.length >= 4) flags.push(`선택지:${circled.join('')}`);
     if (bogi.length >= 2) flags.push(`보기:${bogi.join('')}`);
     return done('객관식', circled.length >= 5 ? 0.95 : 0.85);
   }
-  // 3. 수식 + 제시문 기호 둘 이상
-  if (math.length && labels.length >= 2) return done('수리논술', 0.9);
-  // 4. 제시문 기호 둘 이상
-  if (labels.length >= 2) return done('논술형', declarative.length ? 0.9 : 0.7);
-  // 5. 수식 + 조건 — 표지로 서술·주관을 가른다. 표지가 없으면 아래로 내려간다
-  if (math.length && condition && declarative.length) return done('수학서술형', 0.9);
-  if (math.length && condition && demand.length) return done('수학주관식', 0.9);
-  // 6. 서술 표지
+  // 2. 수식 + 조건 + 소문항
+  if (math.length && condition && stepped) return done('소문항제시형', 0.9);
+  // 3. 라벨 2개 이상 + 수식 없음
+  if (labels.length >= 2 && !math.length) return done('논술형', declarative.length ? 0.9 : 0.7);
+  // 4. 라벨 2개 이상 + 수식 / 라벨 없는 제시문(서술 표지 앞 「~다.」) + 서술 표지
+  if (labels.length >= 2) return done('제시문서술형', 0.85);
+  const firstMarker = Math.min(...declarative.map((m) => text.indexOf(m)));
+  if (declarative.length && STATEMENT_END.test(text.slice(0, firstMarker))) {
+    flags.push('제시문:서술문');
+    return done('제시문서술형', 0.8);
+  }
+  // 5. 서술 표지
   if (declarative.length) return done('서술형', 0.8);
-  // 7. 주관 표지만
-  if (demand.length) return done('주관식', 0.8);
-  // 8. 나머지
-  return done('단답형', 0.4);
+  // 6. 나머지
+  return done('주관식', demand.length ? 0.8 : 0.5);
 }
 
 /** 제시문 단락 라벨 — 가~하 글자만 (「단락N:」의 N은 뺀다) */
@@ -156,7 +156,7 @@ function entitiesOf(color: Color, analysis: V2Analysis, passage?: PassageRecogni
 }
 
 /**
- * 2단계 — v2 인식 결과로 유형을 확정한다. 1단계와 다르면 2단계가 이긴다 (객관식은 예외 — 유지).
+ * 2단계 — v2 인식 결과로 형식을 확정한다. 1단계와 다르면 2단계가 이긴다 (객관식은 예외 — 유지).
  * B 수식은 논제(analysis)의 B 노드만 본다. C 부등식은 논제와 제시문 양쪽의 C 노드를 본다.
  */
 export function confirmType(text: string, analysis: V2Analysis, passage?: PassageRecognition): TypeConfirmation {
@@ -185,13 +185,9 @@ export function confirmType(text: string, analysis: V2Analysis, passage?: Passag
   flags.push(...conditionC.map((e) => `확정:C부등식「${e}」`));
   if (labels.length) flags.push(`확정:단락라벨${labels.map((l) => `[${l}]`).join('')}`);
 
-  // 2. B 수식 + 라벨 2개 이상
-  if (mathB.length && labels.length >= 2) return confirm('수리논술');
-  // 3. B 수식 + C 부등식 — 표지로 서술·주관을 가른다. 표지가 없으면 아래로 내려간다
-  const { declarative, demand } = answerMarkers(text);
-  if (mathB.length && conditionC.length && declarative.length) return confirm('수학서술형');
-  if (mathB.length && conditionC.length && demand.length) return confirm('수학주관식');
-  // 4. 라벨 2개 이상
-  if (labels.length >= 2) return confirm('논술형');
+  // 2. B 수식 + C 부등식 + 소문항
+  if (mathB.length && conditionC.length && surface.subType) return confirm('소문항제시형');
+  // 3. 라벨 2개 이상 + B 수식 없음
+  if (labels.length >= 2 && !mathB.length) return confirm('논술형');
   return keep();
 }
