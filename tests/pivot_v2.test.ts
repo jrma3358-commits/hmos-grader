@@ -452,11 +452,11 @@ describe('발문 P 고정 — 발문에서 P로 잡힌 실체는 뒤에서 B로 
   };
   const cells = (q: string) => build_path_graph(q, table).nodes.map((n) => [n.color, n.entity, n.stemPinnedBy ?? null]);
 
-  it('발문 안 뒤쪽 B와 소문항 B(머리 「(1)」은 떼고 비교)가 P로 고정되고, 고정한 발문 노드 id가 남는다', () => {
+  it('발문 안 뒤쪽 B와 소문항 B가 P로 고정되고, 고정한 발문 노드 id가 남는다', () => {
     assert.deepEqual(cells('직사각형@P 있다. 직사각형@B 채운다.\n(1) 직사각형@B 경우@B 끝@Q'), [
       ['P', '직사각형', null],
       ['P', '직사각형', 'n0'],
-      ['P', '(1) 직사각형', 'n0'],
+      ['P', '직사각형', 'n0'],
       ['B', '경우', null],
       ['Q', '끝', null],
     ]);
@@ -468,6 +468,33 @@ describe('발문 P 고정 — 발문에서 P로 잡힌 실체는 뒤에서 B로 
       ['P', '직사각형', null],
     ]);
     assert.deepEqual(cells('판@B 있다.\n(1) 타일@P 놓고 타일@B 끝@Q').map(([c]) => c), ['B', 'P', 'B', 'Q']);
+  });
+});
+
+describe('소문항 번호 떼기 — 실체 머리의 「(1)」「1)」「①」은 실체가 아니다 (오종래 2026-10-08, 서술형문항 2)', () => {
+  const sw = (id: string, marker: string, color: Color) => ({ id, kind: '조사·어미', markers: [marker], intent: '', color }) as SealedSwitch;
+  const table: SealedTable = {
+    version: 1,
+    source: { document: '(테스트)', sections: [] },
+    switches: [sw('SB', '~@B', 'B'), sw('SC', '~@C', 'C'), sw('SQ', '~@Q', 'Q')],
+    lights: [],
+    matrix: [],
+    symbols: [],
+    forms: [],
+    apply: { longestMatchFirst: true, precedence: [] },
+    pending: [],
+  };
+  const ents = (q: string) => build_path_graph(q, table).nodes.map((n) => n.entity);
+
+  it('머리 하나만 뗀다 — 「(2) (1)의 경우」의 「(1)」은 참조라 남고, 문장은 그대로', () => {
+    assert.deepEqual(ents('발문@B 있다.\n(1) n = 1, 2, 3@C 끝@Q\n(2) (1)의 경우@B 끝@Q'), ['발문', 'n = 1, 2, 3', '끝', '(1)의 경우', '끝']);
+    assert.match(build_path_graph('발문@B 있다.\n(1) 그림@B 끝@Q', table).question, /\n\(1\) /);
+  });
+
+  it('번호만 있는 실체 · 기호 나열 「(1), (2)」는 그대로 둔다 · 「①」「1)」도 뗀다', () => {
+    assert.deepEqual(ents('(1), (2)의 설명@B 끝@Q').slice(0, 1), ['(1), (2)의 설명']);
+    assert.deepEqual(ents('(1)@B 끝@Q'), ['(1)', '끝']);
+    assert.deepEqual(ents('① 타일@B 끝@Q\n1) 판@B 끝@Q'), ['타일', '끝', '판', '끝']);
   });
 });
 
@@ -1354,7 +1381,8 @@ describe('상자 블록 — 빈 줄로 뗀 상자를 닻 없이 P 하나로 (오
   it('발문 뒤 Q 없는 문단이 다음 물음 문단 앞까지 P 하나 — 닻 표지 없이', () => {
     const g = build_path_graph('의미@B 서술@Q\n가@B 나@B\n(1) 다@B 서술@Q', table(['SR']));
     assert.deepEqual(g.nodes.filter((n) => n.color === 'P').map((n) => n.entity), ['가@B 나@B']);
-    assert.ok(g.nodes.some((n) => n.entity === '(1) 다'), '물음 문단은 그대로');
+    // 실체 머리의 소문항 번호 「(1)」은 뗀다 (오종래 2026-10-08) — 물음 문단 노드가 상자에 묶이지 않고 남는지만 본다
+    assert.ok(g.nodes.some((n) => n.entity === '다' && n.color === 'B'), '물음 문단은 그대로');
   });
 
   it('연결형 Q(「~고」)만 선 문단은 상자다 — 대화 속 「구하고」', () => {

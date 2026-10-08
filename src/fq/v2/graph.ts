@@ -176,8 +176,8 @@ const NODE_KIND = '조사·어미' satisfies SwitchKind;
 
 /** 발문 끝 — 첫 소문항 머리 (문단 머리의 (1) · 1) · ①). 발문 P 고정이 쓴다 */
 const STEM_END = /(?<=^|\n)[ \t]*(?:\(\d+\)|\d+\)|[①-⑳])/;
-/** 실체 머리에 붙은 소문항 머리 — 발문 P 고정의 비교에서만 뗀다 */
-const SUB_HEAD_PREFIX = /^(?:\(\d+\)|\d+\)|[①-⑳])\s*/;
+/** 실체 머리에 붙은 소문항 머리 — 그래프를 만든 뒤 실체에서 뗀다 */
+const SUB_HEAD_PREFIX = /^\s*(?:\(\d+\)|\d+\)|[①-⑳])\s*/;
 
 /**
  * 표지로 문장을 훑어 경로 그래프를 만든다.
@@ -1059,13 +1059,21 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
     while ((m = node.entity.match(/^([\s,]*)[가-힣]+는\s+(?=\S)/))) node.entity = m[1] + node.entity.slice(m[0].length);
   }
 
+  // 소문항 번호 떼기 [오종래 2026-10-08] — 실체 머리에 붙은 「(1)」「1)」「①」은 실체가 아니다 (서술형문항 2 C「(1) n = 1, 2, 3」 → 「n = 1, 2, 3」).
+  //   그래프를 만든 뒤 실체에서만 뗀다 — 문장에서는 지우지 않는다 (발문 끝 = 첫 소문항 머리가 살아 있어야 한다).
+  //   「(1-1)」 꼴은 정규화(stripSubItemNumbers)가 이미 지웠다. 머리 하나만 뗀다 — 「(2) (1)의 경우」의 「(1)」은 참조라 남는다.
+  //   기호 나열 「(1), (2)」「(1)·(2)」는 지정이라 떼지 않는다 (제시문 지정 P).
+  for (const node of nodes) {
+    const rest = node.entity.replace(SUB_HEAD_PREFIX, '');
+    if (rest !== node.entity && rest.trim() && !/^[,·]/.test(rest)) node.entity = rest;
+  }
+
   // 발문 P 고정 [오종래 2026-10-08] — 발문(첫 소문항 머리 앞, 소문항이 없으면 전체)에서 P로 잡힌 실체는 무대다.
   //   그 뒤에서 같은 실체가 B로 다시 걸려도 P로 둔다 — 발문 안에서도, 소문항에서도
   //   (서술형문항 2 「[그림 1]은 … 직사각형이고」 P → 「[그림 1]의 직사각형을」 B ✕ → P).
-  //   실체가 글자 그대로 같을 때만 (소문항 머리 「(1)」은 떼고 비교 — 실체에서 떼지는 않는다)
-  //   · 처음 P 자리보다 뒤의 B만 · 접힌 B(판단기준)는 건드리지 않는다.
+  //   실체가 글자 그대로 같을 때만 · 처음 P 자리보다 뒤의 B만 · 접힌 B(판단기준)는 건드리지 않는다.
   const stemEnd = question.search(STEM_END);
-  const stemKey = (n: PathNode) => n.entity.trim().replace(SUB_HEAD_PREFIX, '');
+  const stemKey = (n: PathNode) => n.entity.trim();
   const stemP = new Map<string, PathNode>();
   for (const node of nodes) {
     if (node.color === 'P' && (stemEnd === -1 || node.index < stemEnd) && !stemP.has(stemKey(node))) stemP.set(stemKey(node), node);
