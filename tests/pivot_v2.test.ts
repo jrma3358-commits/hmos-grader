@@ -6,7 +6,7 @@ import { describe, it } from 'node:test';
 
 import { analyze_pivot, build_path_graph, convergenceOf, deepest_node, find_pivot, PivotError, split_units } from '../src/fq/index.ts';
 import { markerRegex } from '../src/fq/v2/graph.ts';
-import { stripSubItemNumbers } from '../src/fq/pipeline.ts';
+import { stripScoreMarks, stripSubItemNumbers } from '../src/fq/pipeline.ts';
 import type { SealedSwitch, SealedTable } from '../src/fq/sealed/schema.ts';
 import type { PathEdge, PathGraph, PathNode } from '../src/fq/v2/graph.ts';
 import type { Color } from '../src/fq/types.ts';
@@ -1993,5 +1993,11 @@ describe('주격 「이」 관형절 꾸밈 명사 · 소문항 번호 전처리
   it('줄 머리의 「(1-1)」「(2-2)」는 지우고 · 식 안의 괄호는 그대로', () => {
     assert.equal(stripSubItemNumbers('답하시오.\n(1-1) 자유무역이\n  (2-2) A국'), '답하시오.\n자유무역이\n  A국');
     assert.equal(stripSubItemNumbers('f(1-2)의 값'), 'f(1-2)의 값');
+  });
+
+  it('배점 「[총 4점]」「[6점]」「(2점)」은 지우고 · 식 안의 괄호는 그대로 (서술형 문항3)', () => {
+    assert.equal(stripScoreMarks('물음에 답하시오. [총 4점]'), '물음에 답하시오.');
+    assert.equal(stripScoreMarks('설명하시오. (2점)\n서술하시오. [6점]'), '설명하시오.\n서술하시오.');
+    assert.equal(stripScoreMarks('f(2)의 값과 [가]'), 'f(2)의 값과 [가]');
   });
 });

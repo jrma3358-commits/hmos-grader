@@ -51,6 +51,12 @@ describe('문항 유형 감지', () => {
     assert.ok(!r.flags.includes('조건:부등호'));
   });
 
+  it('꺾쇠 제목 <규칙>·〈보기〉는 조건:부등호가 아니다 (서술형 문항3) · 진짜 부등호는 그대로', () => {
+    assert.ok(!detectType('다음 <규칙>에 따라 옮기려고 한다. 과정을 설명하시오.').flags.includes('조건:부등호'));
+    assert.ok(!detectType('〈보기〉에서 고르시오.').flags.includes('조건:부등호'));
+    assert.ok(detectType('<규칙>을 따르고 a < b일 때 설명하시오.').flags.includes('조건:부등호'));
+  });
+
   it('사회논술_문1 — 논술형 + 단계형 ((1-1)~(2-2) 소문항)', () => {
     const r = detectType(사회논술_문1);
     assert.equal(r.type, '논술형');

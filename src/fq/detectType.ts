@@ -72,8 +72,10 @@ const MATH = [
   { re: /\b[a-zA-Z]\s*\(\s*[a-zA-Z]\s*\)/, flag: '수식:f(x)' },
   { re: /[a-zA-Z0-9)]\s*=\s*[-a-zA-Z0-9(]/, flag: '수식:등식' },
 ];
-/** 조건 — 부등호 (제시문 기호 <가>는 미리 지운다) */
+/** 조건 — 부등호 (제시문 기호 <가>와 꺾쇠 제목 <규칙>·<보기>는 미리 지운다) */
 const CONDITION = /[<>≤≥≦≧]/;
+/** 꺾쇠 제목 — <규칙> · <보기> · 〈규칙〉 [오종래 2026-10-08] 부등호가 아니다 */
+const ANGLE_TITLE = /[<〈][ \t]*[가-힣][가-힣 \t]*[>〉]/g;
 /** 서술형 표지 [오종래 2026-10-08] — 문항 어디든 하나라도 있으면 서술형 */
 const DECLARATIVE = [
   '서술하시오', '서술하여라', '서술하라',
@@ -108,7 +110,7 @@ export function detectType(text: string): TypeDetection {
 
   const labels = distinct([...text.matchAll(PASSAGE_LABEL)].map((m) => m[1]));
   if (labels.length) flags.push(`제시문:${labels.map((l) => `[${l}]`).join('')}`);
-  const bare = text.replace(PASSAGE_LABEL, '');
+  const bare = text.replace(PASSAGE_LABEL, '').replace(ANGLE_TITLE, '');
   const math = MATH.filter((m) => m.re.test(bare)).map((m) => m.flag);
   flags.push(...math);
   const condition = CONDITION.test(bare);

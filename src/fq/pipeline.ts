@@ -50,11 +50,19 @@ export function stripSubItemNumbers(question: string): string {
 }
 
 /**
+ * 배점 표기 전처리 [오종래 2026-10-08] — 「[총 4점]」「[6점]」「(2점)」을 지우고 인식한다.
+ * 배점은 문항 내용이 아니다 — 노드(P「[총 4점]」, D「2점」)로 잡히지 않게 한다.
+ */
+export function stripScoreMarks(question: string): string {
+  return question.replace(/[ \t]*[[(][ \t]*(?:총[ \t]*)?\d+[ \t]*점[ \t]*[\])]/g, '');
+}
+
+/**
  * v2 정규화 — 문단 경계(빈 줄, 줄바꿈 두 번)는 줄바꿈 하나로 남기고 나머지 공백은 한 칸으로 접는다.
  * [오종래 2026-10-01] 문단 경계에서 실체를 끊으려면 경계가 정규화에서 살아남아야 한다 (`v2/graph.ts`).
  */
 export function normalizeV2(question: string): string {
-  return stripSubItemNumbers(question)
+  return stripScoreMarks(stripSubItemNumbers(question))
     .split(/\r?\n[ \t\r]*\n\s*/)
     .map(normalize)
     .filter(Boolean)
