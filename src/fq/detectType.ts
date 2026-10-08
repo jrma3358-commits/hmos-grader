@@ -7,14 +7,15 @@
 //   주관식       — 답만 쓰게 하는 것 (단답형·수학주관식 포함)
 //   서술형       — 제시문 없이 묻고 쓰게 함
 //   제시문서술형 — 제시문 읽고 답 서술
-//   소문항제시형 — 수식·조건 있고 소문항으로 풀이 과정을 씀
+//   소문항제시형 — 소문항 번호 (1)(2)(3) + 각 소문항이 서술 표지로 끝나는 구조
 //   논술형       — 제시문 + 논제 형식 (인문·사회논술)
 //   소문항 번호 구조는 어느 형식이든 subType 단계형으로 함께 온다
 //
 // [오종래 2026-10-08] 1단계 분기 (위에서부터)
 //   1. 선택지(원문자 4개 이상 · ㄱㄴㄷ 보기) → 객관식
-//   2. 수식 + 조건 + 소문항 → 소문항제시형
-//   3. 제시문 라벨 2개 이상 + 수식 없음 → 논술형
+//   2. 제시문 라벨 2개 이상 + 수식 없음 → 논술형 (소문항이 서술 표지로 끝나도 논술형이 먼저다 — 사회논술_문1)
+//   3. 소문항 2개 이상 + 모든 소문항이 서술 표지로 끝남 → 소문항제시형
+//      [오종래 2026-10-08] 배점 「(2점)」과 끝의 「(단, …)」을 떼고 마지막 말이 서술 표지인지 본다
 //   4. 제시문 라벨 2개 이상 + 수식 → 제시문서술형
 //      라벨 없이 서술 표지 앞에 「~다.」 서술문(제시문) + 서술 표지 → 제시문서술형
 //   5. 서술 표지(DECLARATIVE) → 서술형
@@ -22,15 +23,15 @@
 //
 // [오종래 2026-10-08] 2단계 확정 기준 (위에서부터)
 //   1. 객관식은 덮어쓰지 않는다 — 객관식 유지
-//   2. B에 수식 + C에 부등식 조건 + 소문항 → 소문항제시형
-//   3. 제시문 단락 라벨 2개 이상 + B에 수식 없음 → 논술형
+//   2. 제시문 단락 라벨 2개 이상 + B에 수식 없음 → 논술형
+//   (소문항제시형은 텍스트 구조만 보므로 1단계가 정한다 — 2단계 기준 없음)
 //   어느 것에도 안 걸리면 1단계 형식 그대로. 단계형은 subType으로만 (1단계 것을 그대로 잇는다)
 //
 // 이 파일이 하지 않는 것:
 //   - 급소를 정하는 일 (유형은 겉모습이다 — 급소는 v2 엔진이 정한다)
 //   - 봉인 표지사전을 읽는 일 (1단계는 봉인 없이 돈다. 2단계는 이미 나온 인식 결과만 받는다)
 
-import type { V2Analysis } from './pipeline.ts';
+import { stripScoreMarks, type V2Analysis } from './pipeline.ts';
 import type { Color } from './types.ts';
 import type { PassageRecognition } from './v2/passage.ts';
 
@@ -85,6 +86,17 @@ const DECLARATIVE = [
 const DEMAND = ['구하시오', '구하여라', '구하라', '구하면', '값은', '얼마인가'];
 /** 서술문 끝 「~다.」 — 서술 표지 앞에 있으면 라벨 없는 제시문으로 본다 */
 const STATEMENT_END = /다\.(?=\s|$)/;
+/** 소문항 머리 — 줄 머리의 (1) · (1-1) · 1) · ① */
+const SUB_HEAD = /(?:^|\n)[ \t]*(?:\(\d+(?:-\d+)?\)|\d+\)|[①-⑳])/g;
+/** 소문항 끝 꼬리 — 「(단, …)」 단서와 문장 부호 */
+const SUB_TAIL = /(?:\s*\(단[,\s][^)]*\))+\s*$|[\s.?!]+$/g;
+
+/** 소문항마다 마지막 말이 서술 표지인가 — 소문항 머리부터 다음 머리 앞까지가 한 소문항 */
+function subItemsEndDeclarative(text: string): { count: number; ending: number } {
+  const heads = [...text.matchAll(SUB_HEAD)].map((m) => m.index!);
+  const items = heads.map((at, i) => stripScoreMarks(text.slice(at, heads[i + 1] ?? text.length)).replace(SUB_TAIL, '').replace(SUB_TAIL, ''));
+  return { count: items.length, ending: items.filter((s) => DECLARATIVE.some((m) => s.endsWith(m))).length };
+}
 
 const distinct = (xs: string[]) => [...new Set(xs)];
 
@@ -129,10 +141,12 @@ export function detectType(text: string): TypeDetection {
     if (bogi.length >= 2) flags.push(`보기:${bogi.join('')}`);
     return done('객관식', circled.length >= 5 ? 0.95 : 0.85);
   }
-  // 2. 수식 + 조건 + 소문항
-  if (math.length && condition && stepped) return done('소문항제시형', 0.9);
-  // 3. 라벨 2개 이상 + 수식 없음
+  // 2. 라벨 2개 이상 + 수식 없음
   if (labels.length >= 2 && !math.length) return done('논술형', declarative.length ? 0.9 : 0.7);
+  // 3. 모든 소문항이 서술 표지로 끝남
+  const sub = subItemsEndDeclarative(text);
+  if (sub.count >= 2) flags.push(`소문항:서술표지끝(${sub.ending}/${sub.count})`);
+  if (sub.count >= 2 && sub.ending === sub.count) return done('소문항제시형', 0.9);
   // 4. 라벨 2개 이상 + 수식 / 라벨 없는 제시문(서술 표지 앞 「~다.」) + 서술 표지
   if (labels.length >= 2) return done('제시문서술형', 0.85);
   const firstMarker = Math.min(...declarative.map((m) => text.indexOf(m)));
@@ -185,9 +199,7 @@ export function confirmType(text: string, analysis: V2Analysis, passage?: Passag
   flags.push(...conditionC.map((e) => `확정:C부등식「${e}」`));
   if (labels.length) flags.push(`확정:단락라벨${labels.map((l) => `[${l}]`).join('')}`);
 
-  // 2. B 수식 + C 부등식 + 소문항
-  if (mathB.length && conditionC.length && surface.subType) return confirm('소문항제시형');
-  // 3. 라벨 2개 이상 + B 수식 없음
+  // 2. 라벨 2개 이상 + B 수식 없음
   if (labels.length >= 2 && !mathB.length) return confirm('논술형');
   return keep();
 }
