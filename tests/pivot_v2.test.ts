@@ -436,6 +436,41 @@ describe('약속된 길 — 「→」는 D, 화살표 앞 글자는 B 노드 (�
   });
 });
 
+describe('발문 P 고정 — 발문에서 P로 잡힌 실체는 뒤에서 B로 다시 걸려도 P (오종래 2026-10-08, 서술형문항 2)', () => {
+  // 표지는 봉인 값이 아니라 테스트용 가짜 기호다
+  const sw = (id: string, marker: string, color: Color) => ({ id, kind: '조사·어미', markers: [marker], intent: '', color }) as SealedSwitch;
+  const table: SealedTable = {
+    version: 1,
+    source: { document: '(테스트)', sections: [] },
+    switches: [sw('SP', '~@P', 'P'), sw('SB', '~@B', 'B'), sw('SQ', '~@Q', 'Q')],
+    lights: [],
+    matrix: [],
+    symbols: [],
+    forms: [],
+    apply: { longestMatchFirst: true, precedence: [] },
+    pending: [],
+  };
+  const cells = (q: string) => build_path_graph(q, table).nodes.map((n) => [n.color, n.entity, n.stemPinnedBy ?? null]);
+
+  it('발문 안 뒤쪽 B와 소문항 B(머리 「(1)」은 떼고 비교)가 P로 고정되고, 고정한 발문 노드 id가 남는다', () => {
+    assert.deepEqual(cells('직사각형@P 있다. 직사각형@B 채운다.\n(1) 직사각형@B 경우@B 끝@Q'), [
+      ['P', '직사각형', null],
+      ['P', '직사각형', 'n0'],
+      ['P', '(1) 직사각형', 'n0'],
+      ['B', '경우', null],
+      ['Q', '끝', null],
+    ]);
+  });
+
+  it('처음 P 자리보다 앞의 B는 그대로 · 소문항에서 처음 P로 잡힌 실체는 고정하지 않는다', () => {
+    assert.deepEqual(cells('직사각형@B 먼저. 직사각형@P 뒤.'), [
+      ['B', '직사각형', null],
+      ['P', '직사각형', null],
+    ]);
+    assert.deepEqual(cells('판@B 있다.\n(1) 타일@P 놓고 타일@B 끝@Q').map(([c]) => c), ['B', 'P', 'B', 'Q']);
+  });
+});
+
 describe('결과 묶기 — 조건 뒤 잇따른 B는 그 조건의 결과 (오종래 2026-10-01)', () => {
   // 표지는 봉인 값이 아니라 테스트용 가짜 기호다. 조건 = SC(@C, C), 빈칸 = SX([x]·[y]·[z], 어휘형 B)
   const sw = (id: string, markers: string[], color: Color, lexical?: boolean) =>

@@ -39,6 +39,8 @@ export interface PathNode {
   anchoredBy?: string;
   /** 제시문 블록(apply.passageBlocks)으로 문단 전체를 잡은 B 노드 — 그 빈칸 노드의 id. 아닌 노드에는 없다 */
   passageOf?: string;
+  /** 발문 P 고정으로 B에서 P가 된 노드 — 같은 실체를 처음 P로 잡은 발문 노드의 id. 아닌 노드에는 없다 */
+  stemPinnedBy?: string;
 }
 
 export interface PathEdge {
@@ -171,6 +173,11 @@ function isLexical(sw: SealedSwitch, marker: string): boolean {
 
 /** 노드가 되는 표지의 종류 — 나머지(연결어·부사)는 간선이 된다 */
 const NODE_KIND = '조사·어미' satisfies SwitchKind;
+
+/** 발문 끝 — 첫 소문항 머리 (문단 머리의 (1) · 1) · ①). 발문 P 고정이 쓴다 */
+const STEM_END = /(?<=^|\n)[ \t]*(?:\(\d+\)|\d+\)|[①-⑳])/;
+/** 실체 머리에 붙은 소문항 머리 — 발문 P 고정의 비교에서만 뗀다 */
+const SUB_HEAD_PREFIX = /^(?:\(\d+\)|\d+\)|[①-⑳])\s*/;
 
 /**
  * 표지로 문장을 훑어 경로 그래프를 만든다.
@@ -1050,6 +1057,25 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
     if (node.color !== 'B') continue;
     let m: RegExpMatchArray | null;
     while ((m = node.entity.match(/^([\s,]*)[가-힣]+는\s+(?=\S)/))) node.entity = m[1] + node.entity.slice(m[0].length);
+  }
+
+  // 발문 P 고정 [오종래 2026-10-08] — 발문(첫 소문항 머리 앞, 소문항이 없으면 전체)에서 P로 잡힌 실체는 무대다.
+  //   그 뒤에서 같은 실체가 B로 다시 걸려도 P로 둔다 — 발문 안에서도, 소문항에서도
+  //   (서술형문항 2 「[그림 1]은 … 직사각형이고」 P → 「[그림 1]의 직사각형을」 B ✕ → P).
+  //   실체가 글자 그대로 같을 때만 (소문항 머리 「(1)」은 떼고 비교 — 실체에서 떼지는 않는다)
+  //   · 처음 P 자리보다 뒤의 B만 · 접힌 B(판단기준)는 건드리지 않는다.
+  const stemEnd = question.search(STEM_END);
+  const stemKey = (n: PathNode) => n.entity.trim().replace(SUB_HEAD_PREFIX, '');
+  const stemP = new Map<string, PathNode>();
+  for (const node of nodes) {
+    if (node.color === 'P' && (stemEnd === -1 || node.index < stemEnd) && !stemP.has(stemKey(node))) stemP.set(stemKey(node), node);
+  }
+  for (const node of nodes) {
+    const pin = node.color === 'B' && node.foldedFrom === undefined ? stemP.get(stemKey(node)) : undefined;
+    if (pin && pin.index < node.index) {
+      node.color = 'P';
+      node.stemPinnedBy = pin.id;
+    }
   }
 
   // 조합은 접기 전 색으로 센다 [오종래 2026-10-01] — 판단기준(Q에 접힌 B)은 급소 판정에서만 B이고,
