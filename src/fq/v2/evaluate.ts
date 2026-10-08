@@ -1,21 +1,27 @@
-// 문항 평가 — 급소(analyze_pivot)를 받아 서술 정합성과 대안 문장을 낸다
+// 문항 평가 — 급소(analyze_pivot)를 받아 실체·서술 정합성·결론·대안을 낸다
 //
-// [오종래 2026-10-08] 설계 확정 8~13번
+// [오종래 2026-10-08] 설계 확정
+//   실체   keyword가 형식어(FORM_WORDS, 전체 일치)면 실체 아님, 아니면 실체
 //   8  「Q 연결」 = 급소 노드와 그 뒤 첫 Q 사이에 다른 B가 없다
 //   9  「P에만 있음」 = 급소 keyword가 P 노드 실체에만 있고, P 아닌 노드 실체(급소 노드 포함)에는 없다
 //   10 「지시대상 불명확」 = keyword 첫 어절이 지시어(DEICTICS)다
-//   11 형식어 → 실체: 같은 Q 절에서 형식어 급소 앞의 실체 B를 꺼내 「X의 값을 구하고, 그 형식어를」로 바꾼다
+//   11 형식어 → 실체: 같은 Q 절에서 형식어 급소 앞의 실체 B를 꺼내 「X의 값을 구하고, 그 형식어를」로 바꾼다.
+//      꺼낸 실체에 수식 기호(등호·부등호)가 있으면 값을 구할 대상이 아니다 → 대안 불가
 //   12 지시대상 불명확이면 대안 불가 — 대안 문장을 만들지 않고 막는다
 //   13 대안은 해당하는 규칙 수만큼, 최대 2개
+//   결론   실체✅+정합✅ → 통과 · 실체✅+정합⚠️ → 보완 권장 · 실체❌ → 수정 필요
 //
-// 실체 판정(형식어·수학적 객체 목록, B계열 재추적)과 최종 결론은 설계 1~7번 확정 전이라 여기 없다.
+// B계열 재추적(급소 노드가 B가 아닐 때)은 확정 전이라 여기 없다.
 // 이 층은 평가하고 멈춘다. 풀지 않는다.
 
 import type { PathGraph, PathNode } from './graph.ts';
 import { DEICTICS, type Pivot, type PivotAnalysis, type PivotFlag } from './pivot.ts';
 
-/** 형식어 — 대안 규칙 11번만 쓴다. 지시에 적힌 네 낱말, keyword 전체 일치 (목록·비교 방식은 설계 2·4번 확정 전) */
+/** 형식어 — 실체 아님. 지시에 적힌 네 낱말, keyword 전체 일치 [오종래 2026-10-08 확정] */
 export const FORM_WORDS = ['과정', '성립함', '나타내시오', '설명하시오'];
+
+/** 수식 기호 — 꺼낸 실체에 있으면 식·명제라 「X의 값」 대안을 막는다 */
+const FORMULA_SIGNS = /[=<>≤≥≠]/;
 
 export interface Coherence {
   /** 8 — 급소와 그 뒤 첫 Q 사이에 다른 B가 없다 */
@@ -37,12 +43,17 @@ export interface Alternative {
   question: string;
 }
 
+export type EvaluationVerdict = '통과' | '보완 권장' | '수정 필요';
+
 export interface PivotEvaluation {
   pivot: Pivot;
+  /** keyword가 형식어가 아니다 */
+  substance: boolean;
   coherence: Coherence;
+  verdict: EvaluationVerdict;
   alternatives: Alternative[];
-  /** 12 — 지시대상 불명확이라 대안을 막았다 */
-  blocked?: '지시대상 불명확';
+  /** 대안을 막은 까닭 — 12 지시대상 불명확 · 11 꺼낸 실체에 수식 기호 */
+  blocked?: '지시대상 불명확' | '실체에 수식 기호';
 }
 
 export type Evaluation = { ok: true; items: PivotEvaluation[] } | { ok: false; flag: PivotFlag };
@@ -75,8 +86,8 @@ function coherence(graph: PathGraph, p: Pivot): Coherence {
   return { linked, passageOnly, deictic, ok: linked && !passageOnly && !deictic };
 }
 
-/** 11 — 형식어 급소 앞, 같은 Q 절 안의 실체 B를 꺼낸다. 실체가 깨져 있어도 그대로 낸다 */
-function formToEntity(graph: PathGraph, p: Pivot): Alternative | undefined {
+/** 11 — 형식어 급소 앞, 같은 Q 절 안의 실체 B를 꺼낸다. 실체에 수식 기호가 있으면 막는다 */
+function formToEntity(graph: PathGraph, p: Pivot): Alternative | 'blocked' | undefined {
   const kw = keywordOf(p);
   if (!FORM_WORDS.includes(kw)) return undefined;
   let x: PathNode | undefined;
@@ -91,6 +102,7 @@ function formToEntity(graph: PathGraph, p: Pivot): Alternative | undefined {
   }
   if (!x) return undefined;
   const ex = clean(x.entity);
+  if (FORMULA_SIGNS.test(ex)) return 'blocked';
   const found = graph.question.lastIndexOf(ex, x.index);
   const start = found >= 0 ? found : x.index;
   const end = p.node.index + p.node.surface.length;
@@ -98,16 +110,20 @@ function formToEntity(graph: PathGraph, p: Pivot): Alternative | undefined {
   return { rule: '형식어→실체', from: graph.question.slice(start, end), to, question: graph.question.slice(0, start) + to + graph.question.slice(end) };
 }
 
-/** 급소마다 서술 정합성과 대안. 급소가 플래그로 서지 않았으면 평가하지 않는다 */
+function evaluateOne(graph: PathGraph, pivot: Pivot): PivotEvaluation {
+  const substance = !FORM_WORDS.includes(keywordOf(pivot));
+  const c = coherence(graph, pivot);
+  const verdict: EvaluationVerdict = !substance ? '수정 필요' : c.ok ? '통과' : '보완 권장';
+  const base = { pivot, substance, coherence: c, verdict };
+  if (verdict === '통과') return { ...base, alternatives: [] };
+  if (c.deictic) return { ...base, alternatives: [], blocked: '지시대상 불명확' };
+  const form = formToEntity(graph, pivot);
+  if (form === 'blocked') return { ...base, alternatives: [], blocked: '실체에 수식 기호' };
+  return { ...base, alternatives: form ? [form].slice(0, 2) : [] };
+}
+
+/** 급소마다 실체·정합·결론·대안. 급소가 플래그로 서지 않았으면 평가하지 않는다 */
 export function evaluate_pivot(analysis: PivotAnalysis, graph: PathGraph): Evaluation {
   if (!analysis.ok) return { ok: false, flag: analysis.flag };
-  return {
-    ok: true,
-    items: (analysis.pivots ?? [analysis.pivot]).map((pivot) => {
-      const c = coherence(graph, pivot);
-      if (c.deictic) return { pivot, coherence: c, alternatives: [], blocked: '지시대상 불명확' as const };
-      const alternatives = [formToEntity(graph, pivot)].filter((a): a is Alternative => !!a).slice(0, 2);
-      return { pivot, coherence: c, alternatives };
-    }),
-  };
+  return { ok: true, items: (analysis.pivots ?? [analysis.pivot]).map((p) => evaluateOne(graph, p)) };
 }

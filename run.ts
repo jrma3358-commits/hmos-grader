@@ -1,4 +1,4 @@
-// 사용: node run.ts 문항.txt — 5색 노드·급소에 이어 문항 평가(서술 정합성·대안)를 찍는다
+// 사용: node run.ts 문항.txt — 5색 노드·급소에 이어 문항 평가(실체·서술 정합성·결론·대안)를 찍는다
 import { readFileSync } from 'node:fs';
 import { evaluate_pivot, recognizeV2Analysis } from './src/fq/index.ts';
 import type { V2Analysis } from './src/fq/pipeline.ts';
@@ -20,8 +20,11 @@ const show = (a: V2Analysis, label: string) => {
   ev.items.forEach((it, i) => {
     const c = it.coherence;
     console.log(`    [급소 ${i + 1}] ${it.pivot.node.color}「${it.pivot.node.entity.trim()}」 keyword 「${it.pivot.keyword ?? ''}」 (${it.pivot.reason})`);
+    console.log(`      실체 ${it.substance ? '✅' : '❌ 형식어'}`);
     console.log(`      정합 ${mark(c.ok)} — Q 연결 ${mark(c.linked)} · P에만 있음 ${c.passageOnly ? '⚠️' : '✅'} · 지시대상 ${c.deictic ? '⚠️ 불명확' : '✅'}`);
+    console.log(`      결론: ${it.verdict}`);
     if (it.blocked) console.log(`      대안 불가 (${it.blocked})`);
+    else if (it.verdict !== '통과' && !it.alternatives.length) console.log('      대안 없음');
     for (const alt of it.alternatives) {
       console.log(`      대안 (${alt.rule}): 「${alt.from}」 → 「${alt.to}」`);
       // 대안 문장을 엔진에 다시 넣어 급소를 확인한다 — 문단 경계(줄바꿈 하나)를 빈 줄로 되돌려야 정규화에서 살아남는다

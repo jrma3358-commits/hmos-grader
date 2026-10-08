@@ -101,6 +101,7 @@ export {
   type Alternative,
   type Coherence,
   type Evaluation,
+  type EvaluationVerdict,
   type PivotEvaluation,
 } from './v2/evaluate.ts';
 export { confirmType, detectType, type QuestionType, type TypeConfirmation, type TypeDetection } from './detectType.ts';

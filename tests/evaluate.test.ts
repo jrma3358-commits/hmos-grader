@@ -60,6 +60,26 @@ describe('서술 정합성 — Q 연결 · P에만 있음 · 지시대상', () =
   });
 });
 
+describe('실체·결론 — 통과 · 보완 권장 · 수정 필요', () => {
+  const g = graphOf('명제는 반례를 들고 이름을 쓰고, 그 과정을 설명하시오', [
+    ['B', '명제', '는'],
+    ['C', '반례를 들고', '반례를 들고'],
+    ['B', '이름', '을'],
+    ['Q', '쓰고', '쓰고'],
+    ['B', '그 과정', '을'],
+    ['Q', '설명하시오', '설명하시오'],
+  ]);
+  const one = (a: PivotAnalysis) => {
+    const ev = evaluate_pivot(a, g);
+    assert.ok(ev.ok);
+    return [ev.items[0].substance, ev.items[0].verdict];
+  };
+
+  it('실체✅+정합✅ → 통과', () => assert.deepEqual(one(at(g, 'n2')), [true, '통과']));
+  it('실체✅+정합⚠️ → 보완 권장 (서술형태 급소 뒤 B)', () => assert.deepEqual(one(at(g, 'n1', '서술형태', '반례')), [true, '보완 권장']));
+  it('형식어 keyword는 실체❌ → 수정 필요', () => assert.deepEqual(one(at(g, 'n4', 'Q 직전 B', '과정')), [false, '수정 필요']));
+});
+
 describe('대안 — 형식어 → 실체', () => {
   it('같은 Q 절 앞의 실체 B를 꺼내 「X의 값을 구하고, 그 과정을」', () => {
     const q = '물음에 답하시오.\na_2를 이용하여 a_3을 구하는 과정을 설명하시오.';
@@ -94,6 +114,19 @@ describe('대안 — 형식어 → 실체', () => {
     const ev2 = evaluate_pivot(at(g, 'n0'), g);
     assert.ok(ev2.ok);
     assert.deepEqual(ev2.items[0].alternatives, []);
+  });
+
+  it('꺼낸 실체에 수식 기호(등호·부등호)가 있으면 대안 불가', () => {
+    const g = graphOf('a_n과 a_{n+1}=2a_n+1이 성립함을 설명하시오', [
+      ['P', 'a_n', '과'],
+      ['B', 'a_{n+1}=2a_n+1', '이'],
+      ['B', '성립함', '을'],
+      ['Q', '설명하시오', '설명하시오'],
+    ]);
+    const ev = evaluate_pivot(at(g, 'n2'), g);
+    assert.ok(ev.ok);
+    assert.equal(ev.items[0].blocked, '실체에 수식 기호');
+    assert.deepEqual(ev.items[0].alternatives, []);
   });
 
   it('급소 플래그면 평가하지 않는다', () => {
