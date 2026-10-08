@@ -95,6 +95,14 @@ export {
   type PivotAnalysis,
   type PivotFlag,
 } from './v2/pivot.ts';
+export {
+  evaluate_pivot,
+  FORM_WORDS,
+  type Alternative,
+  type Coherence,
+  type Evaluation,
+  type PivotEvaluation,
+} from './v2/evaluate.ts';
 export { confirmType, detectType, type QuestionType, type TypeConfirmation, type TypeDetection } from './detectType.ts';
 export { isSealedAvailable, markerTable, SealedError, sealedPath, undecided } from './lexicon.ts';
 export type { SealedTable } from './sealed/schema.ts';
