@@ -1,0 +1,33 @@
+// F5 배점산출 — 두 층 구조는 여기, 값(지수·반올림)은 sealed/f5.ts([봉인④])에 있다.
+import { 봉인4_파트지수, 봉인4a_반올림 } from './sealed/f5.ts';
+import type { 계열, 배점조각, 조각뼈대, 파트 } from './types.ts';
+
+export interface 배점결과 {
+  조각들: 배점조각[];
+  /** 1층 — 파트별 배점 */
+  파트배점: Record<파트, number>;
+  /** 지수는 있는데 조각이 0개인 파트 — 배점이 갈 곳이 없다 (문항평가 §5 «요소 결손») */
+  미배정: 파트[];
+}
+
+/**
+ * F5 배점산출(조각[], 총배점) → 조각[].배점  (구현명세 §3 F5)
+ *   1층: 파트 배점 = 총배점 × 지수 / Σ지수  (⑤표현을 뺀 뒤에도 총배점이 남김없이 배정되도록 Σ지수로 나눈다)
+ *   2층: 조각당 배점 = 파트 배점 ÷ 그 파트 조각 수 → [봉인④-a] 반올림
+ * k의 중심성은 배점이 아니라 게이트(G1)로 실현한다 — 여기서 가중하지 않는다.
+ * @throws SealedError 봉인④·④-a가 비어 있을 때
+ */
+export function allocate_points(조각들: 조각뼈대[], 총배점: number, 계열: 계열): 배점결과 {
+  const 지수 = 봉인4_파트지수(계열);
+  const 합 = Object.values(지수).reduce((a, b) => a + b, 0);
+  const 파트배점 = Object.fromEntries(
+    Object.entries(지수).map(([p, w]) => [p, (총배점 * w) / 합]),
+  ) as Record<파트, number>;
+
+  const 수 = (p: 파트) => 조각들.filter((c) => c.파트 === p).length;
+  return {
+    조각들: 조각들.map((c) => ({ ...c, 배점: 봉인4a_반올림(파트배점[c.파트] / 수(c.파트)) })),
+    파트배점,
+    미배정: (Object.keys(지수) as 파트[]).filter((p) => 수(p) === 0),
+  };
+}

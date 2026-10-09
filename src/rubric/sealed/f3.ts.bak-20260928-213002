@@ -1,0 +1,16 @@
+// [봉인③] 조각이 어느 요소인지 — 파트가 좁힌 후보 중에서 고른다. 오종래가 채운다.
+// [오종래 2026-09-28] 후보가 하나면 그것, 여럿이면 미결로 멈춘다.
+//                     단 ④ 답구하기는 k 우선 — 후보에 k가 있으면 k, 없으면 q.
+import { SealedError } from '../../fq/sealed/index.ts';
+import type { 계열, 요소, 조각뼈대 } from '../types.ts';
+
+export function 봉인3_요소판정(조각: 조각뼈대, 후보: 요소[], _계열: 계열): 요소 {
+  if (후보.length === 1) return 후보[0];
+  if (조각.파트 === '답구하기') {
+    if (후보.includes('k')) return 'k';
+    if (후보.includes('q')) return 'q';
+  }
+  throw new SealedError(
+    `[봉인③] ${조각.id}(${조각.파트}): 후보 ${후보.join('·')} 중 고르는 규칙이 비어 있습니다 — 오종래가 정해야 합니다.`,
+  );
+}

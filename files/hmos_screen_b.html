@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HMOS — 채점 재료</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=Noto+Serif+KR:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --ink:      #1C1C1E;
+  --teal:     #1A4A4A;
+  --teal-mid: #2A6060;
+  --teal-lt:  #3D8080;
+  --gold:     #C8A84B;
+  --ivory:    #F7F5F0;
+  --ivory-dk: #EDE9E1;
+  --muted:    #8A8A8E;
+  --white:    #FFFFFF;
+  --radius:   6px;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Noto Sans KR', sans-serif; background: var(--ivory); color: var(--ink); }
+
+/* ── TOPBAR ── */
+.topbar {
+  height: 52px; background: var(--teal);
+  display: flex; align-items: center; padding: 0 28px; gap: 16px;
+  position: sticky; top: 0; z-index: 100;
+}
+.topbar-brand { font-family: 'Noto Serif KR', serif; font-size: 16px; font-weight: 600; color: var(--white); }
+.topbar-brand em { font-style: normal; color: var(--gold); font-size: 11px; font-family: 'Noto Sans KR', sans-serif; font-weight: 300; margin-left: 6px; }
+.topbar-label { font-size: 13px; color: rgba(255,255,255,0.55); }
+.topbar-sep { color: rgba(255,255,255,0.25); }
+.print-btn {
+  margin-left: auto;
+  background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2);
+  color: rgba(255,255,255,0.7); padding: 5px 14px;
+  border-radius: 4px; font-family: inherit; font-size: 12px;
+  cursor: pointer; transition: background 0.15s;
+}
+.print-btn:hover { background: rgba(255,255,255,0.18); }
+
+/* ── LAYOUT ── */
+.layout { display: grid; grid-template-columns: 300px 1fr; min-height: calc(100vh - 52px); }
+
+/* ── PIN PANEL (left) ── */
+.pin-panel {
+  background: var(--white); border-right: 1.5px solid var(--ivory-dk);
+  padding: 24px 20px; position: sticky; top: 52px; height: calc(100vh - 52px);
+  overflow-y: auto;
+}
+.pin-label { font-size: 11px; color: var(--muted); letter-spacing: 0.3px; margin-bottom: 6px; }
+.pin-tag {
+  display: inline-block; padding: 2px 10px; border-radius: 3px; font-size: 12px;
+  font-weight: 500; margin-bottom: 10px;
+}
+.pin-type { background: #E3EEFF; color: #1A3F8A; }
+.pin-pivot {
+  font-family: 'Noto Serif KR', serif;
+  font-size: 20px; font-weight: 600; color: var(--teal);
+  line-height: 1.4; margin-bottom: 10px;
+}
+.pin-intent { font-size: 12.5px; color: var(--muted); line-height: 1.7; margin-bottom: 16px; }
+.pin-divider { border: none; border-top: 1px solid var(--ivory-dk); margin: 14px 0; }
+.pin-q-label { font-size: 11px; color: var(--muted); margin-bottom: 8px; }
+.pin-q-text { font-size: 12.5px; color: var(--ink); line-height: 1.8; }
+
+/* 5색 mini */
+.color-mini { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 10px; }
+.cm { padding: 2px 7px; border-radius: 3px; font-size: 11px; font-weight: 500; }
+.cm-B { background: #E8F5E8; color: #1E6B1E; }
+.cm-C { background: #E3EEFF; color: #1A3F8A; }
+.cm-P { background: #F0EAFF; color: #4A208A; }
+.cm-D { background: #FFF3E0; color: #7A3F00; }
+.cm-Q { background: #FFE8E8; color: #7A1818; }
+
+/* ── MAIN (right) ── */
+.main { padding: 28px 32px; }
+
+.sec { margin-bottom: 28px; }
+.sec-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 14px; padding-bottom: 10px;
+  border-bottom: 1.5px solid var(--ivory-dk);
+}
+.sec-title {
+  font-family: 'Noto Serif KR', serif;
+  font-size: 16px; font-weight: 600; color: var(--teal);
+  display: flex; align-items: center; gap: 8px;
+}
+.sec-num {
+  width: 24px; height: 24px; border-radius: 50%;
+  background: var(--teal); color: var(--white);
+  font-size: 12px; font-weight: 500;
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Noto Sans KR', sans-serif;
+}
+
+/* 수정 버튼 */
+.edit-btn {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 5px 13px;
+  background: transparent; border: 1.5px solid #C8C4BA;
+  border-radius: var(--radius); color: var(--muted);
+  font-family: inherit; font-size: 12px; cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+.edit-btn:hover { border-color: var(--teal-lt); color: var(--teal); }
+.edit-btn.active { border-color: var(--teal); color: var(--teal); background: #EEF6F6; }
+.save-btn {
+  display: none; align-items: center; gap: 5px;
+  padding: 5px 13px;
+  background: var(--teal); border: none; border-radius: var(--radius);
+  color: var(--white); font-family: inherit; font-size: 12px; cursor: pointer;
+}
+.save-btn.show { display: inline-flex; }
+
+/* ── 루브릭 ── */
+.rubric-table { width: 100%; border-collapse: collapse; }
+.rubric-table th, .rubric-table td {
+  padding: 10px 14px; font-size: 13px;
+  border: 1px solid var(--ivory-dk); text-align: left;
+}
+.rubric-table th {
+  background: #F2FAF8; color: var(--teal);
+  font-weight: 500; font-size: 12px;
+}
+.rubric-table td.score {
+  text-align: center; font-weight: 500;
+  color: var(--teal); width: 60px;
+}
+.rubric-table tr:hover td { background: #FAFAF7; }
+
+/* inline edit */
+.editable { outline: none; border-radius: 3px; }
+.editable[contenteditable="true"] {
+  background: #F0F7F8; border: 1.5px solid var(--teal-lt);
+  padding: 2px 6px; cursor: text;
+}
+
+/* ── 체크리스트 ── */
+.checklist { list-style: none; }
+.checklist li {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 9px 14px; background: var(--white);
+  border: 1px solid var(--ivory-dk); border-radius: var(--radius);
+  margin-bottom: 6px; font-size: 13px; line-height: 1.6;
+}
+.checklist li .ck-ico { color: var(--teal-lt); flex-shrink: 0; margin-top: 1px; }
+
+/* ── 부분점수 ── */
+.score-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
+.score-card {
+  background: var(--white); border: 1.5px solid var(--ivory-dk);
+  border-radius: 8px; padding: 12px 14px;
+}
+.sc-label { font-size: 11.5px; color: var(--muted); margin-bottom: 4px; }
+.sc-item { font-size: 13.5px; font-weight: 500; color: var(--ink); margin-bottom: 2px; }
+.sc-pt {
+  font-size: 11.5px; color: var(--teal);
+  background: #E8F5EE; padding: 1px 8px; border-radius: 3px; display: inline-block;
+}
+
+/* ── 모범답안 ── */
+.ans-tabs { display: flex; gap: 6px; margin-bottom: 14px; }
+.ans-tab {
+  padding: 6px 16px;
+  background: var(--white); border: 1.5px solid #C8C4BA;
+  border-radius: 20px; font-family: inherit; font-size: 12.5px;
+  color: var(--muted); cursor: pointer; transition: all 0.15s;
+}
+.ans-tab.active { background: var(--teal); border-color: var(--teal); color: var(--white); }
+.ans-panel { display: none; }
+.ans-panel.active { display: block; }
+.ans-box {
+  background: var(--white); border: 1.5px solid var(--ivory-dk);
+  border-radius: 8px; padding: 18px 20px;
+}
+.ans-path {
+  font-size: 11.5px; color: var(--teal);
+  background: #EEF6F6; padding: 2px 10px; border-radius: 3px;
+  display: inline-block; margin-bottom: 12px;
+}
+.ans-text {
+  font-size: 13.5px; line-height: 1.9; color: var(--ink);
+  white-space: pre-wrap;
+}
+
+/* 사이드 패널 (모범답안 편집) */
+.side-overlay {
+  display: none; position: fixed; inset: 0;
+  background: rgba(0,0,0,0.3); z-index: 200;
+}
+.side-panel {
+  position: fixed; top: 0; right: -420px; width: 420px; height: 100%;
+  background: var(--white); box-shadow: -4px 0 24px rgba(0,0,0,0.12);
+  z-index: 201; transition: right 0.25s ease;
+  display: flex; flex-direction: column;
+}
+.side-panel.open { right: 0; }
+.sp-head {
+  padding: 20px 24px; border-bottom: 1.5px solid var(--ivory-dk);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.sp-title { font-size: 15px; font-weight: 500; color: var(--teal); }
+.sp-close {
+  background: none; border: none; font-size: 20px;
+  color: var(--muted); cursor: pointer; padding: 0 4px; line-height: 1;
+}
+.sp-body { flex: 1; padding: 20px 24px; overflow-y: auto; }
+.sp-label { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+.sp-textarea {
+  width: 100%; min-height: 200px; padding: 12px 14px;
+  border: 1.5px solid #C8C4BA; border-radius: var(--radius);
+  font-family: inherit; font-size: 13.5px; line-height: 1.8;
+  color: var(--ink); background: var(--ivory);
+  resize: vertical; outline: none; transition: border-color 0.15s;
+  margin-bottom: 16px;
+}
+.sp-textarea:focus { border-color: var(--teal-mid); background: var(--white); }
+.sp-save {
+  width: 100%; padding: 11px;
+  background: var(--teal); color: var(--white);
+  border: none; border-radius: var(--radius);
+  font-family: inherit; font-size: 13.5px; font-weight: 500;
+  cursor: pointer; transition: background 0.15s;
+}
+.sp-save:hover { background: var(--teal-mid); }
+
+@media (max-width: 700px) {
+  .layout { grid-template-columns: 1fr; }
+  .pin-panel { position: static; height: auto; border-right: none; border-bottom: 1.5px solid var(--ivory-dk); }
+  .main { padding: 20px 16px; }
+}
+@media print {
+  .topbar, .edit-btn, .save-btn, .ans-tabs, .side-overlay, .side-panel { display: none !important; }
+  .layout { grid-template-columns: 1fr; }
+  .pin-panel { position: static; height: auto; }
+  .ans-panel { display: block !important; margin-bottom: 16px; }
+}
+</style>
+</head>
+<body>
+
+<!-- topbar -->
+<nav class="topbar">
+  <span class="topbar-brand">HMOS <em>평가 솔루션</em></span>
+  <span class="topbar-sep">|</span>
+  <span class="topbar-label">채점 재료</span>
+  <button class="print-btn" onclick="window.print()">인쇄 / PDF 저장</button>
+</nav>
+
+<div class="layout">
+
+  <!-- ── PIN PANEL ── -->
+  <aside class="pin-panel">
+    <div class="pin-label">확정 문항</div>
+    <span class="pin-tag pin-type" id="p-type">서술형</span>
+    <div class="pin-pivot" id="p-pivot">급소 로딩 중...</div>
+    <div class="pin-intent" id="p-intent"></div>
+    <hr class="pin-divider">
+    <div class="pin-q-label">5색</div>
+    <div class="color-mini" id="p-colors"></div>
+    <hr class="pin-divider">
+    <div class="pin-q-label">문항 원문</div>
+    <div class="pin-q-text" id="p-qtext"></div>
+  </aside>
+
+  <!-- ── MAIN ── -->
+  <main class="main">
+
+    <!-- 1. 루브릭 -->
+    <div class="sec">
+      <div class="sec-head">
+        <div class="sec-title">
+          <div class="sec-num">1</div>루브릭
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button class="edit-btn" id="rubric-edit-btn" onclick="toggleInlineEdit('rubric')">수정</button>
+          <button class="save-btn" id="rubric-save-btn" onclick="saveInlineEdit('rubric')">저장</button>
+        </div>
+      </div>
+      <table class="rubric-table" id="rubric-table">
+        <thead>
+          <tr>
+            <th>채점 기준</th>
+            <th>배점</th>
+            <th>비고</th>
+          </tr>
+        </thead>
+        <tbody id="rubric-body"></tbody>
+      </table>
+    </div>
+
+    <!-- 2. 체크리스트 -->
+    <div class="sec">
+      <div class="sec-head">
+        <div class="sec-title">
+          <div class="sec-num">2</div>체크리스트
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button class="edit-btn" id="check-edit-btn" onclick="toggleInlineEdit('check')">수정</button>
+          <button class="save-btn" id="check-save-btn" onclick="saveInlineEdit('check')">저장</button>
+        </div>
+      </div>
+      <ul class="checklist" id="check-list"></ul>
+    </div>
+
+    <!-- 3. 부분점수 -->
+    <div class="sec">
+      <div class="sec-head">
+        <div class="sec-title">
+          <div class="sec-num">3</div>부분점수 요소
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button class="edit-btn" id="score-edit-btn" onclick="toggleInlineEdit('score')">수정</button>
+          <button class="save-btn" id="score-save-btn" onclick="saveInlineEdit('score')">저장</button>
+        </div>
+      </div>
+      <div class="score-grid" id="score-grid"></div>
+    </div>
+
+    <!-- 4. 모범답안 -->
+    <div class="sec">
+      <div class="sec-head">
+        <div class="sec-title">
+          <div class="sec-num">4</div>모범답안
+        </div>
+        <button class="edit-btn" onclick="openSidePanel()">수정</button>
+      </div>
+      <div class="ans-tabs" id="ans-tabs"></div>
+      <div id="ans-panels"></div>
+    </div>
+
+  </main>
+</div>
+
+<!-- 사이드 패널: 모범답안 편집 -->
+<div class="side-overlay" id="side-overlay" onclick="closeSidePanel()"></div>
+<div class="side-panel" id="side-panel">
+  <div class="sp-head">
+    <span class="sp-title">모범답안 수정</span>
+    <button class="sp-close" onclick="closeSidePanel()">✕</button>
+  </div>
+  <div class="sp-body" id="sp-body"></div>
+</div>
+
+<script>
+// ── 샘플 채점 재료 (실제로는 API 응답) ──
+const RUBRIC = [
+  { criterion: 'C의 좌표를 넓이 조건으로 결정함', score: '2점', note: '계산 과정 포함' },
+  { criterion: 'B, C 두 점을 지나는 직선의 방정식을 정확히 구함', score: '2점', note: '최종 식 형태 확인' },
+];
+const CHECKLIST = [
+  '삼각형 넓이 공식을 올바르게 적용하였는가',
+  'a, b에 대한 조건을 넓이 식에서 도출하였는가',
+  '두 점을 지나는 직선의 기울기를 정확히 구하였는가',
+  '직선의 방정식을 표준 형태(y = mx + n)로 표현하였는가',
+];
+const SCORES = [
+  { label: '넓이 조건 설정', item: '삼각형 넓이 = 16 식 작성', pt: '1점' },
+  { label: 'C 좌표 결정', item: 'a, b 값 특정', pt: '1점' },
+  { label: '직선 기울기', item: 'BC 기울기 계산', pt: '1점' },
+  { label: '직선 방정식', item: '최종 방정식 완성', pt: '1점' },
+];
+const ANSWERS = [
+  {
+    path: '경로 1 — 넓이 → 좌표 → 직선',
+    text: `넓이 조건 ½|det([B-A, C-A])| = 16 에서
+C의 좌표 (a, b)를 결정한다.
+
+예) C(5, 0)이면 BC의 기울기 = (4-0)/(3-5) = -2
+직선 방정식: y - 4 = -2(x - 3)
+∴ y = -2x + 10`,
+  },
+  {
+    path: '경로 2 — 벡터 외적 활용',
+    text: `벡터 AB = (2, 4), AC = (a-1, b)로 두면
+외적 크기 = |2b - 4(a-1)| = 32 (넓이×2)
+b - 2a + 2 = ±16 에서 C의 좌표 결정 후 직선 방정식 도출`,
+  },
+];
+
+// ── 초기화 ──
+window.onload = () => {
+  // sessionStorage에서 확정 데이터 로드
+  let confirmed = null;
+  try { confirmed = JSON.parse(sessionStorage.getItem('hmos_confirmed')); } catch(e) {}
+
+  // 핀 패널
+  if (confirmed) {
+    document.getElementById('p-type').textContent = confirmed.type || '서술형';
+    document.getElementById('p-pivot').textContent = confirmed.pivot || '—';
+    document.getElementById('p-intent').textContent = confirmed.intent || '';
+    document.getElementById('p-qtext').textContent = confirmed.question || '';
+    renderColors(confirmed.colors || []);
+  } else {
+    // 샘플 fallback
+    document.getElementById('p-pivot').textContent = '직선 BC의 방정식';
+    document.getElementById('p-intent').textContent = '좌표 조건(넓이=16)으로 C의 위치를 결정하고, 두 점을 지나는 직선의 방정식을 도출하는 능력을 평가한다.';
+    document.getElementById('p-qtext').textContent = '좌표평면 위의 세 점 A(1,0), B(3,4), C(a,b)에 대하여 삼각형 ABC의 넓이가 16일 때, 직선 BC의 방정식을 구하시오.';
+    renderColors([
+      {code:'P', label:'P'}, {code:'C', label:'C'}, {code:'B', label:'B'}, {code:'Q', label:'Q'}
+    ]);
+  }
+
+  renderRubric();
+  renderChecklist();
+  renderScores();
+  renderAnswers();
+};
+
+function renderColors(colors) {
+  const el = document.getElementById('p-colors');
+  el.innerHTML = '';
+  colors.forEach(c => {
+    const s = document.createElement('span');
+    s.className = 'cm cm-' + c.code;
+    s.textContent = c.label || c.code;
+    el.appendChild(s);
+  });
+}
+
+// ── 루브릭 ──
+function renderRubric() {
+  const tb = document.getElementById('rubric-body');
+  tb.innerHTML = '';
+  RUBRIC.forEach((r, i) => {
+    tb.innerHTML += `<tr>
+      <td><span class="editable" id="rc-${i}">${r.criterion}</span></td>
+      <td class="score"><span class="editable" id="rs-${i}">${r.score}</span></td>
+      <td><span class="editable" id="rn-${i}">${r.note}</span></td>
+    </tr>`;
+  });
+}
+
+// ── 체크리스트 ──
+function renderChecklist() {
+  const ul = document.getElementById('check-list');
+  ul.innerHTML = '';
+  CHECKLIST.forEach((c, i) => {
+    ul.innerHTML += `<li>
+      <span class="ck-ico">✓</span>
+      <span class="editable" id="ck-${i}">${c}</span>
+    </li>`;
+  });
+}
+
+// ── 부분점수 ──
+function renderScores() {
+  const g = document.getElementById('score-grid');
+  g.innerHTML = '';
+  SCORES.forEach((s, i) => {
+    g.innerHTML += `<div class="score-card">
+      <div class="sc-label"><span class="editable" id="sl-${i}">${s.label}</span></div>
+      <div class="sc-item"><span class="editable" id="si-${i}">${s.item}</span></div>
+      <span class="sc-pt"><span class="editable" id="sp-${i}">${s.pt}</span></span>
+    </div>`;
+  });
+}
+
+// ── 모범답안 ──
+function renderAnswers() {
+  const tabs = document.getElementById('ans-tabs');
+  const panels = document.getElementById('ans-panels');
+  tabs.innerHTML = ''; panels.innerHTML = '';
+  ANSWERS.forEach((a, i) => {
+    const tb = document.createElement('button');
+    tb.className = 'ans-tab' + (i === 0 ? ' active' : '');
+    tb.textContent = '답안 ' + (i+1);
+    tb.onclick = () => switchAns(i);
+    tabs.appendChild(tb);
+
+    const pn = document.createElement('div');
+    pn.className = 'ans-panel' + (i === 0 ? ' active' : '');
+    pn.id = 'ans-' + i;
+    pn.innerHTML = `<div class="ans-box">
+      <span class="ans-path">${a.path}</span>
+      <div class="ans-text" id="ans-text-${i}">${a.text}</div>
+    </div>`;
+    panels.appendChild(pn);
+  });
+}
+
+function switchAns(n) {
+  document.querySelectorAll('.ans-tab').forEach((t,i) => t.classList.toggle('active', i===n));
+  document.querySelectorAll('.ans-panel').forEach((p,i) => p.classList.toggle('active', i===n));
+}
+
+// ── 인라인 편집 토글 ──
+const editSections = {
+  rubric: { ids: () => {
+    const ids = [];
+    RUBRIC.forEach((_,i) => ids.push(`rc-${i}`, `rs-${i}`, `rn-${i}`));
+    return ids;
+  }},
+  check: { ids: () => CHECKLIST.map((_,i) => `ck-${i}`) },
+  score: { ids: () => {
+    const ids = [];
+    SCORES.forEach((_,i) => ids.push(`sl-${i}`, `si-${i}`, `sp-${i}`));
+    return ids;
+  }},
+};
+
+function toggleInlineEdit(key) {
+  const btn = document.getElementById(key+'-edit-btn');
+  const sbtn = document.getElementById(key+'-save-btn');
+  const ids = editSections[key].ids();
+  const isEditing = btn.classList.contains('active');
+  if (isEditing) {
+    ids.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.removeAttribute('contenteditable');
+    });
+    btn.classList.remove('active');
+    btn.textContent = '수정';
+    sbtn.classList.remove('show');
+  } else {
+    ids.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.setAttribute('contenteditable', 'true');
+    });
+    btn.classList.add('active');
+    btn.textContent = '수정 중';
+    sbtn.classList.add('show');
+  }
+}
+
+function saveInlineEdit(key) {
+  toggleInlineEdit(key);
+  // 실제 환경: 변경값 수집 후 API POST
+}
+
+// ── 사이드 패널: 모범답안 편집 ──
+function openSidePanel() {
+  const body = document.getElementById('sp-body');
+  body.innerHTML = '';
+  ANSWERS.forEach((a, i) => {
+    body.innerHTML += `
+      <div class="sp-label" style="margin-top:${i>0?'20px':'0'};">답안 ${i+1} — ${a.path}</div>
+      <textarea class="sp-textarea" id="sp-ans-${i}">${a.text}</textarea>
+    `;
+  });
+  body.innerHTML += `<button class="sp-save" onclick="saveSidePanel()">저장</button>`;
+  document.getElementById('side-overlay').style.display = 'block';
+  document.getElementById('side-panel').classList.add('open');
+}
+
+function closeSidePanel() {
+  document.getElementById('side-overlay').style.display = 'none';
+  document.getElementById('side-panel').classList.remove('open');
+}
+
+function saveSidePanel() {
+  ANSWERS.forEach((a, i) => {
+    const ta = document.getElementById('sp-ans-'+i);
+    if (ta) { a.text = ta.value; }
+  });
+  renderAnswers();
+  closeSidePanel();
+}
+</script>
+</body>
+</html>

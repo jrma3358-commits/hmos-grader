@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HMOS — 문항 분석</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=Noto+Serif+KR:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --ink:      #1C1C1E;
+  --teal:     #1A4A4A;
+  --teal-mid: #2A6060;
+  --teal-lt:  #3D8080;
+  --gold:     #C8A84B;
+  --ivory:    #F7F5F0;
+  --ivory-dk: #EDE9E1;
+  --muted:    #8A8A8E;
+  --white:    #FFFFFF;
+  --success:  #2E7D2E;
+  --warn:     #8A6800;
+  --danger:   #8B2020;
+  --radius:   6px;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Noto Sans KR', sans-serif; background: var(--ivory); color: var(--ink); min-height: 100vh; }
+
+/* ── LOGIN ── */
+#login {
+  display: flex; align-items: center; justify-content: center;
+  min-height: 100vh; background: var(--teal);
+}
+.login-card {
+  background: var(--white); border-radius: 12px;
+  padding: 48px 52px 40px; width: 400px;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.22);
+}
+.brand { display: flex; align-items: baseline; gap: 8px; margin-bottom: 28px; }
+.brand-name { font-family: 'Noto Serif KR', serif; font-size: 24px; font-weight: 600; color: var(--teal); }
+.brand-sub  { font-size: 12px; color: var(--muted); letter-spacing: 0.5px; }
+.login-tagline {
+  font-size: 13px; color: var(--muted); line-height: 1.7;
+  border-left: 2px solid var(--gold); padding-left: 12px; margin-bottom: 28px;
+}
+.field { margin-bottom: 14px; }
+.field label { display: block; font-size: 12px; font-weight: 500; color: var(--teal); margin-bottom: 5px; }
+.field input {
+  width: 100%; padding: 10px 13px;
+  border: 1.5px solid #D4D0C8; border-radius: var(--radius);
+  font-family: inherit; font-size: 14px; color: var(--ink);
+  background: var(--ivory); outline: none; transition: border-color 0.15s;
+}
+.field input:focus { border-color: var(--teal-mid); background: var(--white); }
+.login-btn {
+  width: 100%; padding: 12px; margin-top: 6px;
+  background: var(--teal); color: var(--white);
+  border: none; border-radius: var(--radius);
+  font-family: inherit; font-size: 14px; font-weight: 500;
+  cursor: pointer; transition: background 0.15s;
+}
+.login-btn:hover { background: var(--teal-mid); }
+.login-err { margin-top: 10px; font-size: 12px; color: var(--danger); text-align: center; display: none; }
+
+/* ── APP ── */
+#app { display: none; min-height: 100vh; flex-direction: column; }
+
+/* topbar */
+.topbar {
+  height: 54px; background: var(--teal);
+  display: flex; align-items: center; padding: 0 28px; gap: 0;
+  position: sticky; top: 0; z-index: 100;
+}
+.topbar-brand {
+  font-family: 'Noto Serif KR', serif; font-size: 17px;
+  font-weight: 600; color: var(--white); margin-right: 36px; white-space: nowrap;
+}
+.topbar-brand em { font-style: normal; color: var(--gold); font-size: 11px; font-family: 'Noto Sans KR', sans-serif; font-weight: 300; letter-spacing: 0.8px; margin-left: 6px; }
+.sol-tabs { display: flex; gap: 2px; flex: 1; }
+.sol-tab {
+  display: flex; align-items: center; gap: 7px;
+  padding: 0 18px; height: 54px;
+  border: none; background: transparent;
+  font-family: inherit; font-size: 13px; font-weight: 400;
+  color: rgba(255,255,255,0.5);
+  border-bottom: 3px solid transparent;
+  cursor: pointer; transition: color 0.15s, background 0.15s;
+  white-space: nowrap; position: relative;
+}
+.sol-tab.active { color: var(--white); border-bottom-color: var(--gold); font-weight: 500; }
+.sol-tab.locked { color: rgba(255,255,255,0.25); cursor: default; }
+.sol-tab:hover:not(.locked):not(.active) { color: rgba(255,255,255,0.8); background: rgba(255,255,255,0.05); }
+.tab-num {
+  width: 20px; height: 20px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; background: rgba(255,255,255,0.12);
+}
+.sol-tab.active .tab-num { background: var(--gold); color: var(--teal); }
+.sol-tab.locked .tab-num { background: rgba(255,255,255,0.07); }
+.lock-ico { font-size: 10px; }
+.tip {
+  display: none; position: absolute; top: 58px; left: 50%;
+  transform: translateX(-50%);
+  background: var(--ink); color: var(--white);
+  font-size: 11.5px; padding: 6px 13px; border-radius: 5px;
+  white-space: nowrap; pointer-events: none; z-index: 200;
+}
+.tip::before {
+  content: ''; position: absolute; top: -5px; left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent; border-top: none; border-bottom-color: var(--ink);
+}
+.sol-tab.locked:hover .tip { display: block; }
+.topbar-user {
+  margin-left: auto; display: flex; align-items: center;
+  gap: 10px; font-size: 12px; color: rgba(255,255,255,0.6);
+}
+.logout-btn {
+  background: rgba(255,255,255,0.1); border: none;
+  color: rgba(255,255,255,0.55); padding: 5px 11px;
+  border-radius: 4px; font-family: inherit; font-size: 11.5px;
+  cursor: pointer; transition: background 0.15s;
+}
+.logout-btn:hover { background: rgba(255,255,255,0.18); }
+
+/* ── MAIN CONTENT ── */
+.content { flex: 1; max-width: 860px; width: 100%; margin: 0 auto; padding: 32px 28px; }
+
+/* step indicator */
+.steps { display: flex; align-items: center; gap: 0; margin-bottom: 32px; }
+.step-item {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 12.5px; color: var(--muted); position: relative;
+}
+.step-item.active { color: var(--teal); font-weight: 500; }
+.step-item.done { color: var(--teal-lt); }
+.step-dot {
+  width: 26px; height: 26px; border-radius: 50%;
+  border: 1.5px solid #C8C4BA;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; background: var(--white); flex-shrink: 0;
+}
+.step-item.active .step-dot { border-color: var(--teal); background: var(--teal); color: var(--white); }
+.step-item.done .step-dot { border-color: var(--teal-lt); background: var(--teal-lt); color: var(--white); }
+.step-line { flex: 1; height: 1px; background: #D4D0C8; min-width: 24px; }
+
+/* ── STEP 1: 입력 ── */
+#step1 {}
+.sec-head { margin-bottom: 18px; }
+.sec-title { font-family: 'Noto Serif KR', serif; font-size: 18px; font-weight: 600; color: var(--teal); }
+.sec-sub { font-size: 13px; color: var(--muted); margin-top: 4px; }
+
+.input-area {
+  width: 100%; min-height: 200px;
+  padding: 16px 18px;
+  border: 1.5px solid #C8C4BA; border-radius: 8px;
+  font-family: inherit; font-size: 14px; line-height: 1.8;
+  color: var(--ink); background: var(--white);
+  resize: vertical; outline: none; transition: border-color 0.15s;
+}
+.input-area:focus { border-color: var(--teal-mid); }
+.input-area::placeholder { color: #B0ADA6; }
+
+.input-footer { display: flex; align-items: center; justify-content: space-between; margin-top: 12px; }
+.input-hint { font-size: 12px; color: var(--muted); }
+.run-btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 10px 24px;
+  background: var(--teal); color: var(--white);
+  border: none; border-radius: var(--radius);
+  font-family: inherit; font-size: 13.5px; font-weight: 500;
+  cursor: pointer; transition: background 0.15s;
+}
+.run-btn:hover { background: var(--teal-mid); }
+.run-btn:disabled { background: #B0ADA6; cursor: not-allowed; }
+
+/* ── STEP 2: 인식 결과 ── */
+#step2 { display: none; }
+#step3 { display: none; }
+#step4 { display: none; }
+
+.result-section { margin-bottom: 24px; }
+.rs-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 10px;
+}
+.rs-title { font-size: 13px; font-weight: 500; color: var(--teal); }
+
+/* 5색 */
+.color-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.cb {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 4px 10px; border-radius: 4px; font-size: 12.5px;
+}
+.cb-label { font-weight: 500; font-size: 11px; }
+.cb-B { background: #E8F5E8; color: #1E6B1E; }
+.cb-C { background: #E3EEFF; color: #1A3F8A; }
+.cb-P { background: #F0EAFF; color: #4A208A; }
+.cb-D { background: #FFF3E0; color: #7A3F00; }
+.cb-Q { background: #FFE8E8; color: #7A1818; }
+
+/* 카드 그리드 */
+.card-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.info-card {
+  background: var(--white); border: 1.5px solid var(--ivory-dk);
+  border-radius: 8px; padding: 14px 16px;
+}
+.ic-label { font-size: 11px; color: var(--muted); margin-bottom: 6px; }
+.ic-val { font-size: 14px; font-weight: 500; color: var(--teal); line-height: 1.5; }
+.ic-sub { font-size: 11.5px; color: var(--muted); margin-top: 4px; }
+
+/* 상세 테이블 */
+.detail-table { width: 100%; border-collapse: collapse; background: var(--white); border-radius: 8px; overflow: hidden; border: 1.5px solid var(--ivory-dk); }
+.detail-table td { padding: 10px 14px; font-size: 13px; border-bottom: 1px solid var(--ivory-dk); vertical-align: top; }
+.detail-table tr:last-child td { border-bottom: none; }
+.detail-table .dk { color: var(--muted); font-size: 12px; width: 88px; padding-top: 11px; }
+.detail-table .dv { color: var(--ink); line-height: 1.6; }
+
+/* 완성도 */
+.verdict {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 14px; border-radius: 20px; font-size: 13px; font-weight: 500;
+}
+.verdict-pass { background: #E8F5E8; color: var(--success); }
+.verdict-warn { background: #FFF8E0; color: var(--warn); }
+.verdict-fail { background: #FFE8E8; color: var(--danger); }
+
+.suggest-box {
+  background: #FFF8E8; border: 1px solid #E8D898;
+  border-radius: var(--radius); padding: 12px 16px;
+  font-size: 13px; color: #6A5200; line-height: 1.7; margin-top: 8px;
+}
+.suggest-box strong { font-weight: 500; }
+
+/* 교사 편집 영역 */
+.edit-section {
+  background: var(--white); border: 1.5px solid var(--ivory-dk);
+  border-radius: 8px; padding: 18px 20px; margin-bottom: 16px;
+}
+.edit-label { font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+.edit-field {
+  width: 100%; padding: 9px 12px;
+  border: 1.5px solid #D4D0C8; border-radius: var(--radius);
+  font-family: inherit; font-size: 13.5px; color: var(--ink);
+  background: var(--ivory); outline: none; transition: border-color 0.15s;
+  resize: none;
+}
+.edit-field:focus { border-color: var(--teal-mid); background: var(--white); }
+
+.confirm-row { display: flex; align-items: center; gap: 12px; margin-top: 8px; }
+.confirm-btn {
+  padding: 11px 28px;
+  background: var(--teal); color: var(--white);
+  border: none; border-radius: var(--radius);
+  font-family: inherit; font-size: 14px; font-weight: 500;
+  cursor: pointer; transition: background 0.15s;
+}
+.confirm-btn:hover { background: var(--teal-mid); }
+.back-btn {
+  padding: 11px 20px;
+  background: transparent; color: var(--muted);
+  border: 1.5px solid #C8C4BA; border-radius: var(--radius);
+  font-family: inherit; font-size: 13.5px;
+  cursor: pointer; transition: border-color 0.15s;
+}
+.back-btn:hover { border-color: var(--teal-lt); color: var(--teal); }
+
+/* loading */
+.loading-wrap { text-align: center; padding: 60px 0; }
+.spinner {
+  width: 36px; height: 36px; margin: 0 auto 16px;
+  border: 3px solid var(--ivory-dk);
+  border-top-color: var(--teal);
+  border-radius: 50%; animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.loading-text { font-size: 13px; color: var(--muted); }
+
+/* notice */
+.notice {
+  background: #F0F7F0; border: 1px solid #B8D8B8;
+  border-radius: 6px; padding: 9px 14px;
+  font-size: 12.5px; color: #2E6B2E; margin-bottom: 20px;
+}
+
+/* nav btn */
+.next-btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 10px 22px;
+  background: var(--teal); color: var(--white);
+  border: none; border-radius: var(--radius);
+  font-family: inherit; font-size: 13.5px; font-weight: 500;
+  cursor: pointer; transition: background 0.15s; margin-top: 6px;
+}
+.next-btn:hover { background: var(--teal-mid); }
+
+@media (max-width: 640px) {
+  .card-grid { grid-template-columns: 1fr; }
+  .content { padding: 20px 16px; }
+  .sol-tab { padding: 0 10px; font-size: 12px; }
+}
+</style>
+</head>
+<body>
+
+<!-- ══ LOGIN ══ -->
+<div id="login">
+  <div class="login-card">
+    <div class="brand">
+      <span class="brand-name">HMOS</span>
+      <span class="brand-sub">훈민정음 OS</span>
+    </div>
+    <p class="login-tagline">급소를 읽어 채점을 넘어<br>학습을 진단하는 평가 솔루션</p>
+    <div class="field">
+      <label>아이디</label>
+      <input type="text" id="inp-id" placeholder="아이디 입력" />
+    </div>
+    <div class="field">
+      <label>비밀번호</label>
+      <input type="password" id="inp-pw" placeholder="비밀번호 입력"
+             onkeydown="if(event.key==='Enter')doLogin()" />
+    </div>
+    <button class="login-btn" onclick="doLogin()">로그인</button>
+    <p class="login-err" id="login-err">아이디 또는 비밀번호를 확인해 주세요.</p>
+  </div>
+</div>
+
+<!-- ══ APP ══ -->
+<div id="app" style="display:none; flex-direction:column;">
+
+  <nav class="topbar">
+    <span class="topbar-brand">HMOS <em>평가 솔루션</em></span>
+    <div class="sol-tabs">
+      <button class="sol-tab active" id="tab1">
+        <span class="tab-num">①</span> 문항 분석
+      </button>
+      <button class="sol-tab locked">
+        <span class="tab-num">②</span> 서논술형 채점
+        <span class="lock-ico">🔒</span>
+        <div class="tip">구매 후 이용 가능합니다</div>
+      </button>
+      <button class="sol-tab locked">
+        <span class="tab-num">③</span> 학습역량 진단
+        <span class="lock-ico">🔒</span>
+        <div class="tip">① + ② 구매 필요</div>
+      </button>
+    </div>
+    <div class="topbar-user">
+      <span id="uname">선생님</span>
+      <button class="logout-btn" onclick="doLogout()">로그아웃</button>
+    </div>
+  </nav>
+
+  <div class="content">
+
+    <!-- step indicator -->
+    <div class="steps">
+      <div class="step-item active" id="si1">
+        <div class="step-dot" id="sd1">1</div>
+        <span>문항 입력</span>
+      </div>
+      <div class="step-line"></div>
+      <div class="step-item" id="si2">
+        <div class="step-dot" id="sd2">2</div>
+        <span>인식 결과</span>
+      </div>
+      <div class="step-line"></div>
+      <div class="step-item" id="si3">
+        <div class="step-dot" id="sd3">3</div>
+        <span>완성도 확인</span>
+      </div>
+      <div class="step-line"></div>
+      <div class="step-item" id="si4">
+        <div class="step-dot" id="sd4">4</div>
+        <span>교사 확정</span>
+      </div>
+    </div>
+
+    <!-- ── STEP 1 ── -->
+    <div id="step1">
+      <div class="sec-head">
+        <div class="sec-title">문항 입력</div>
+        <div class="sec-sub">분석할 문항 텍스트를 붙여넣으세요</div>
+      </div>
+      <textarea class="input-area" id="q-input"
+        placeholder="예) 좌표평면 위의 세 점 A(1, 0), B(3, 4), C(a, b)에 대하여 삼각형 ABC의 넓이가 16일 때, 직선 BC의 방정식을 구하시오. [4점]"></textarea>
+      <div class="input-footer">
+        <span class="input-hint">txt · hwp · pdf 붙여넣기 가능</span>
+        <button class="run-btn" id="run-btn" onclick="runAnalysis()">
+          분석 실행 →
+        </button>
+      </div>
+    </div>
+
+    <!-- ── LOADING ── -->
+    <div id="loading" style="display:none;">
+      <div class="loading-wrap">
+        <div class="spinner"></div>
+        <div class="loading-text" id="loading-text">문항을 인식하는 중...</div>
+      </div>
+    </div>
+
+    <!-- ── STEP 2: 인식 결과 ── -->
+    <div id="step2">
+      <div class="sec-head">
+        <div class="sec-title">인식 결과</div>
+        <div class="sec-sub">엔진이 읽어낸 5색·급소·출제의도입니다</div>
+      </div>
+
+      <div class="notice" id="orig-q"></div>
+
+      <!-- 카드 그리드 -->
+      <div class="card-grid" style="margin-bottom:16px;">
+        <div class="info-card">
+          <div class="ic-label">문항 유형</div>
+          <div class="ic-val" id="r-type">—</div>
+        </div>
+        <div class="info-card">
+          <div class="ic-label">급소 (K)</div>
+          <div class="ic-val" id="r-pivot" style="color:var(--teal);">—</div>
+          <div class="ic-sub" id="r-pivot-sub"></div>
+        </div>
+      </div>
+
+      <!-- 5색 -->
+      <div class="result-section">
+        <div class="rs-head"><span class="rs-title">5색 분해</span></div>
+        <div class="color-row" id="r-colors"></div>
+      </div>
+
+      <!-- 상세 -->
+      <div class="result-section">
+        <div class="rs-head"><span class="rs-title">출제의도 · 실체</span></div>
+        <table class="detail-table">
+          <tr>
+            <td class="dk">출제의도</td>
+            <td class="dv" id="r-intent">—</td>
+          </tr>
+          <tr>
+            <td class="dk">핵심 실체</td>
+            <td class="dv" id="r-substance">—</td>
+          </tr>
+          <tr>
+            <td class="dk">허들</td>
+            <td class="dv" id="r-hurdles">—</td>
+          </tr>
+        </table>
+      </div>
+
+      <button class="next-btn" onclick="goStep(3)">완성도 확인 →</button>
+    </div>
+
+    <!-- ── STEP 3: 완성도 ── -->
+    <div id="step3">
+      <div class="sec-head">
+        <div class="sec-title">완성도 확인</div>
+        <div class="sec-sub">급소가 실체를 정확히 가리키는지 평가합니다</div>
+      </div>
+
+      <div class="result-section">
+        <div class="rs-head"><span class="rs-title">평가 결론</span></div>
+        <div id="r-verdict"></div>
+      </div>
+
+      <div id="r-suggest-wrap" style="display:none;">
+        <div class="rs-title" style="margin-bottom:8px; margin-top:16px;">추가 논제 제안</div>
+        <div class="suggest-box" id="r-suggest"></div>
+      </div>
+
+      <div id="r-alt-wrap" style="display:none; margin-top:16px;">
+        <div class="rs-title" style="margin-bottom:8px;">대안 문항</div>
+        <div class="suggest-box" id="r-alt"></div>
+      </div>
+
+      <div style="display:flex; gap:12px; margin-top:20px;">
+        <button class="back-btn" onclick="goStep(2)">← 인식 결과</button>
+        <button class="next-btn" onclick="goStep(4)">교사 확정으로 →</button>
+      </div>
+    </div>
+
+    <!-- ── STEP 4: 교사 확정 ── -->
+    <div id="step4">
+      <div class="sec-head">
+        <div class="sec-title">교사 확정</div>
+        <div class="sec-sub">급소·출제의도를 직접 수정하고 문항을 확정합니다</div>
+      </div>
+
+      <div class="edit-section">
+        <div class="edit-label">급소 (K) — 수정 가능</div>
+        <input class="edit-field" id="edit-pivot" type="text" />
+      </div>
+
+      <div class="edit-section">
+        <div class="edit-label">출제의도 — 수정 가능</div>
+        <textarea class="edit-field" id="edit-intent" rows="3"></textarea>
+      </div>
+
+      <div class="edit-section">
+        <div class="edit-label">문항 원문</div>
+        <div style="font-size:13.5px; color:var(--ink); line-height:1.8;" id="edit-orig"></div>
+      </div>
+
+      <div class="confirm-row">
+        <button class="back-btn" onclick="goStep(3)">← 완성도 확인</button>
+        <button class="confirm-btn" onclick="doConfirm()">이 문항으로 확정 → 채점 재료 생성</button>
+      </div>
+    </div>
+
+  </div><!-- /content -->
+</div><!-- /app -->
+
+<script>
+// ── 샘플 분석 데이터 (실제로는 run.ts API 응답으로 교체) ──
+const SAMPLE = {
+  type: '서술형',
+  pivot: '직선 BC의 방정식',
+  pivotSub: 'Q에 맞닿은 실체 · B계열',
+  colors: [
+    { code: 'P', label: 'P 상황', text: '좌표평면 위의 세 점 A(1,0) B(3,4) C(a,b)' },
+    { code: 'C', label: 'C 제약', text: '삼각형 ABC의 넓이 = 16' },
+    { code: 'B', label: 'B 대상', text: '직선 BC의 방정식' },
+    { code: 'Q', label: 'Q 질문', text: '구하시오' },
+  ],
+  intent: '좌표 조건(넓이=16)으로 C의 위치를 결정하고, 두 점을 지나는 직선의 방정식을 도출하는 능력을 평가한다.',
+  substance: '직선 BC의 방정식 — P·C 허들을 통과해야 만나는 수학적 객체',
+  hurdles: 'P(좌표 배경) → C(넓이 조건) → B(직선의 방정식)',
+  verdict: 'pass',
+  verdictText: '통과 — 급소가 실체를 정확히 가리킵니다',
+  suggest: null,
+  alt: null,
+};
+
+let analysisData = null;
+
+// ── Login ──
+function doLogin() {
+  const id = document.getElementById('inp-id').value.trim();
+  const pw = document.getElementById('inp-pw').value.trim();
+  const err = document.getElementById('login-err');
+  if (!id || !pw) { err.style.display = 'block'; return; }
+  err.style.display = 'none';
+  document.getElementById('uname').textContent = id + ' 선생님';
+  document.getElementById('login').style.display = 'none';
+  const app = document.getElementById('app');
+  app.style.display = 'flex';
+}
+
+function doLogout() {
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('login').style.display = 'flex';
+  document.getElementById('inp-id').value = '';
+  document.getElementById('inp-pw').value = '';
+  resetAll();
+}
+
+// ── Step control ──
+function goStep(n) {
+  [1,2,3,4].forEach(i => {
+    document.getElementById('step'+i).style.display = 'none';
+    const si = document.getElementById('si'+i);
+    const sd = document.getElementById('sd'+i);
+    si.className = 'step-item' + (i < n ? ' done' : i === n ? ' active' : '');
+    sd.textContent = i < n ? '✓' : i;
+  });
+  document.getElementById('step'+n).style.display = 'block';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// ── Analysis ──
+function runAnalysis() {
+  const q = document.getElementById('q-input').value.trim();
+  if (!q) {
+    alert('문항 텍스트를 입력해 주세요.');
+    return;
+  }
+
+  // 로딩
+  document.getElementById('step1').style.display = 'none';
+  const loadEl = document.getElementById('loading');
+  loadEl.style.display = 'block';
+
+  const msgs = ['문항을 인식하는 중...', '5색 분해 중...', '급소를 추출하는 중...', '출제의도를 읽는 중...'];
+  let mi = 0;
+  const lt = document.getElementById('loading-text');
+  const ticker = setInterval(() => {
+    mi = (mi + 1) % msgs.length;
+    lt.textContent = msgs[mi];
+  }, 700);
+
+  fetch('/api/analyze', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ question: q }),
+  })
+  .then(r => r.json())
+  .then(data => {
+    clearInterval(ticker);
+    loadEl.style.display = 'none';
+    // API 오류 시 샘플로 fallback
+    analysisData = (data && !data.error) ? data : SAMPLE;
+    if (data.error) console.warn('엔진 오류 — 샘플 데이터로 표시:', data.error);
+    renderStep2(q);
+    goStep(2);
+  })
+  .catch(err => {
+    clearInterval(ticker);
+    loadEl.style.display = 'none';
+    console.warn('서버 연결 실패 — 샘플 데이터로 표시:', err);
+    analysisData = SAMPLE;
+    renderStep2(q);
+    goStep(2);
+  });
+}
+
+function renderStep2(q) {
+  const d = analysisData;
+
+  // 원문 표시
+  document.getElementById('orig-q').textContent = '입력 문항: ' + q.substring(0, 80) + (q.length > 80 ? '...' : '');
+
+  // 카드
+  document.getElementById('r-type').textContent = d.type;
+  document.getElementById('r-pivot').textContent = d.pivot;
+  document.getElementById('r-pivot-sub').textContent = d.pivotSub;
+
+  // 5색
+  const cr = document.getElementById('r-colors');
+  cr.innerHTML = '';
+  d.colors.forEach(c => {
+    const span = document.createElement('span');
+    span.className = 'cb cb-' + c.code;
+    span.innerHTML = '<span class="cb-label">' + c.label + '</span> ' + c.text;
+    cr.appendChild(span);
+  });
+
+  // 상세
+  document.getElementById('r-intent').textContent = d.intent;
+  document.getElementById('r-substance').textContent = d.substance;
+  document.getElementById('r-hurdles').textContent = d.hurdles;
+
+  // step3 미리 렌더
+  const vm = document.getElementById('r-verdict');
+  const cls = d.verdict === 'pass' ? 'verdict-pass' : d.verdict === 'warn' ? 'verdict-warn' : 'verdict-fail';
+  vm.innerHTML = '<span class="verdict ' + cls + '">' + d.verdictText + '</span>';
+
+  if (d.suggest) {
+    document.getElementById('r-suggest-wrap').style.display = 'block';
+    document.getElementById('r-suggest').innerHTML = d.suggest;
+  }
+  if (d.alt) {
+    document.getElementById('r-alt-wrap').style.display = 'block';
+    document.getElementById('r-alt').innerHTML = d.alt;
+  }
+
+  // step4 편집 필드 미리 채움
+  document.getElementById('edit-pivot').value = d.pivot;
+  document.getElementById('edit-intent').value = d.intent;
+  document.getElementById('edit-orig').textContent = document.getElementById('q-input').value.trim();
+}
+
+// ── Confirm → 화면 B ──
+function doConfirm() {
+  const pivot  = document.getElementById('edit-pivot').value.trim();
+  const intent = document.getElementById('edit-intent').value.trim();
+  const orig   = document.getElementById('edit-orig').textContent;
+
+  if (!pivot) { alert('급소를 입력해 주세요.'); return; }
+
+  // 확정 데이터를 sessionStorage에 담아 화면 B로 넘김
+  const payload = {
+    question: orig,
+    pivot,
+    intent,
+    type: analysisData ? analysisData.type : '',
+    colors: analysisData ? analysisData.colors : [],
+  };
+  sessionStorage.setItem('hmos_confirmed', JSON.stringify(payload));
+  window.open('hmos_screen_b.html', '_blank');
+}
+
+function resetAll() {
+  document.getElementById('q-input').value = '';
+  document.getElementById('r-colors').innerHTML = '';
+  document.getElementById('r-suggest-wrap').style.display = 'none';
+  document.getElementById('r-alt-wrap').style.display = 'none';
+  analysisData = null;
+  goStep(1);
+}
+</script>
+</body>
+</html>

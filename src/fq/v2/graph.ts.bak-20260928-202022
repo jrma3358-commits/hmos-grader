@@ -1,0 +1,221 @@
+// v2 경로 그래프 — 표지가 문장 위에 그리는 경로의 뼈대.
+//
+// 노드 = 조사·어미 (실체를 끌고 나와 색을 켜는 자리)
+// 간선 = 부사·연결어 (노드와 노드 사이의 관계)
+//
+// 이 파일이 하지 않는 것:
+//   - 어떤 표지가 어떤 색인가를 정하는 일 (봉인 파일이 정한다)
+//   - 어떤 표지가 노드인가 간선인가를 정하는 일 (봉인 파일의 `kind`가 정한다)
+//   - 색이 미결일 때 대신 고르는 일 (미결로 들어 올린다)
+//
+// 7형식은 **닫힌 목록이 아니다.** 백서 §4-3은 "이 문제 구조와 **그 조합**"이라 적는다.
+// 그래서 조합은 색의 배열 그대로 남고, 형식 이름은 그 조합에 붙는 라벨일 뿐이다.
+// 이름이 없는 조합도 유효하다 — 색을 하나도 버리지 않는다. (v1의 병: BUILD_PLAN §6-3)
+
+import { SealedError } from '../sealed/index.ts';
+import type { SealedSwitch, SealedTable } from '../sealed/schema.ts';
+import type { Color, SwitchKind } from '../types.ts';
+
+export interface PathNode {
+  id: string;
+  /** 문장에서 실제로 걸린 표지 표층형 */
+  surface: string;
+  /** 봉인 파일의 어느 스위치가 걸렸나 */
+  switchId: string;
+  index: number;
+  /** 이 표지가 켠 등. 봉인 파일이 미결이면 null — 추측하지 않는다 */
+  color: Color | null;
+  /** 표지가 끌고 나온 실체(앞말). 표지가 주인이고 실체는 끌려 나온다 (백서 §3-4) */
+  entity: string;
+}
+
+export interface PathEdge {
+  from: string;
+  to: string;
+  /** 간선을 만든 표지 표층형. 인접만으로 이어졌으면 null */
+  surface: string | null;
+  kind: 'adjacent' | '연결어' | '부사';
+  index: number;
+}
+
+/** 걸렸으나 자리를 정할 수 없는 표지 — 색이나 종류가 미결이다 */
+export interface UndecidedHit {
+  surface: string;
+  switchId: string;
+  index: number;
+  reason: 'color' | 'kind';
+}
+
+export interface PathGraph {
+  question: string;
+  nodes: PathNode[];
+  edges: PathEdge[];
+  /** 켜진 색들 (문장 순서, 중복 제거). 7형식은 이 조합에 붙는 이름일 뿐이다 */
+  combination: Color[];
+  undecided: UndecidedHit[];
+}
+
+/** 조합에 붙는 라벨. 이름이 없어도 조합은 유효하다 */
+export interface FormCombination {
+  /** 봉인 파일 forms[]에 같은 조합이 있으면 그 id. 없으면 null */
+  id: string | null;
+  name: string | null;
+  /** 관측된 색 — **입력을 하나도 버리지 않는다** */
+  colors: Color[];
+  /** 봉인 파일에 이름이 있는 조합인가 */
+  known: boolean;
+}
+
+// ─────────────────────────────────────────────────────────────
+// 표지 스캔
+// ─────────────────────────────────────────────────────────────
+
+const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/**
+ * 표지 표층형 → 정규식.
+ * '~'는 "여기에 실체가 온다"는 자리표시다 — 앞의 '~'는 조건 없음, 가운데 '~'는 사이에 실체가 낀다.
+ * 가운데 '~'는 캡처한다 — 사이에 낀 실체가 곧 그 노드의 entity다.
+ * 예: "~가 되도록" → /가\s*되도록/ · "모든 ~에 대하여" → /모든\s*([\s\S]*?)에\s*대하여/
+ */
+export function markerRegex(surface: string): RegExp {
+  const parts = surface
+    .split('~')
+    .map((p) => p.trim())
+    .filter(Boolean)
+    .map((p) => escape(p).replace(/\s+/g, '\\s*'));
+  if (!parts.length) throw new SealedError(`표지가 비어 있습니다: "${surface}"`);
+  return new RegExp(parts.join('\\s*([\\s\\S]*?)\\s*'));
+}
+
+interface Candidate {
+  surface: string;
+  sw: SealedSwitch;
+  re: RegExp;
+}
+
+/** 봉인 파일의 표지를 전부 모은다. 순서는 `apply`가 정한다 — 코드가 정하지 않는다 */
+function candidates(table: SealedTable): Candidate[] {
+  const all: Candidate[] = [];
+  for (const sw of table.switches) {
+    for (const surface of sw.markers) all.push({ surface, sw, re: markerRegex(surface) });
+  }
+  if (table.apply.longestMatchFirst === null) {
+    throw new SealedError(
+      '적용 규칙이 미정입니다: apply.longestMatchFirst\n' +
+        '봉인 파일에서 정해야 합니다 — 짧은 표지가 긴 표지를 먼저 먹으면 "~가"가 "~가 되도록"을 삼킵니다.',
+    );
+  }
+  if (table.apply.longestMatchFirst !== true) {
+    throw new SealedError(
+      '최장 일치가 아닌 적용 방식은 아직 명세가 없습니다 (apply.longestMatchFirst=false).',
+    );
+  }
+  return all.sort((a, b) => b.surface.length - a.surface.length);
+}
+
+/** 노드가 되는 표지의 종류 — 나머지(연결어·부사)는 간선이 된다 */
+const NODE_KIND = '조사·어미' satisfies SwitchKind;
+
+/**
+ * 표지로 문장을 훑어 경로 그래프를 만든다.
+ *
+ * 뼈대 한계 (의도적):
+ *   - 실체(entity)는 표지 가운데 '~'가 붙잡은 글자, 없으면 "앞 표지 끝 ~ 이 표지 시작"의 글자 그대로다.
+ *     실체를 해석하지 않는다.
+ *   - 간선은 인접 노드를 잇는 데까지다. 관계의 성격(순접·역접·병렬)은 원전 명세가 서면 붙인다.
+ */
+export function build_path_graph(question: string, table: SealedTable): PathGraph {
+  const cands = candidates(table);
+  const hits: { at: number; end: number; c: Candidate; inner: string }[] = [];
+
+  for (let i = 0; i < question.length; ) {
+    const rest = question.slice(i);
+    let matched: { len: number; c: Candidate; inner: string } | undefined;
+    for (const c of cands) {
+      const m = rest.match(c.re);
+      if (m && m.index === 0) {
+        // 가운데 '~'가 붙잡은 실체 (여럿이면 이어 붙인다)
+        const inner = m.slice(1).map((s) => s.trim()).filter(Boolean).join(' ');
+        matched = { len: m[0].length, c, inner };
+        break; // 최장 일치 — cands가 이미 긴 것부터다
+      }
+    }
+    if (matched) {
+      hits.push({ at: i, end: i + matched.len, c: matched.c, inner: matched.inner });
+      i += matched.len;
+    } else {
+      i += 1;
+    }
+  }
+
+  const nodes: PathNode[] = [];
+  const edges: PathEdge[] = [];
+  const undecided: UndecidedHit[] = [];
+  let cursor = 0;
+  let pendingEdge: { surface: string; kind: '연결어' | '부사'; index: number } | undefined;
+
+  for (const [n, hit] of hits.entries()) {
+    const { sw } = hit.c;
+    const surface = question.slice(hit.at, hit.end);
+
+    if (sw.kind === null) {
+      undecided.push({ surface, switchId: sw.id, index: hit.at, reason: 'kind' });
+      cursor = hit.end;
+      continue;
+    }
+
+    if (sw.kind !== NODE_KIND) {
+      // 연결어·부사 → 간선. 다음 노드가 설 때 이어 붙인다
+      pendingEdge = { surface, kind: sw.kind, index: hit.at };
+      cursor = hit.end;
+      continue;
+    }
+
+    if (sw.color === null) undecided.push({ surface, switchId: sw.id, index: hit.at, reason: 'color' });
+
+    const node: PathNode = {
+      id: `n${n}`,
+      surface,
+      switchId: sw.id,
+      index: hit.at,
+      color: sw.color,
+      entity: hit.inner || question.slice(cursor, hit.at).trim(),
+    };
+    const prev = nodes.at(-1);
+    nodes.push(node);
+    cursor = hit.end;
+
+    if (prev) {
+      edges.push(
+        pendingEdge
+          ? { from: prev.id, to: node.id, surface: pendingEdge.surface, kind: pendingEdge.kind, index: pendingEdge.index }
+          : { from: prev.id, to: node.id, surface: null, kind: 'adjacent', index: node.index },
+      );
+    }
+    pendingEdge = undefined;
+  }
+
+  const combination: Color[] = [];
+  for (const node of nodes) {
+    if (node.color && !combination.includes(node.color)) combination.push(node.color);
+  }
+
+  return { question, nodes, edges, combination, undecided };
+}
+
+/**
+ * 색 조합에 이름을 붙인다. 이름이 없어도 그대로 둔다 — **색을 버리지 않는다.**
+ * (v1 `formFromColors`는 P+B+C+Q에서 B를 조용히 버렸다: BUILD_PLAN §6-3)
+ */
+export function describeCombination(colors: Color[], table: SealedTable): FormCombination {
+  const key = (cs: Color[]) => [...new Set(cs)].sort().join('');
+  const mine = key(colors);
+  const hit = table.forms.find((f) => key(f.colors) === mine);
+  return {
+    id: hit?.id ?? null,
+    name: hit?.name ?? null,
+    colors,
+    known: Boolean(hit),
+  };
+}

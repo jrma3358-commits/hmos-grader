@@ -1,0 +1,8 @@
+// [봉인②] 조각 수를 «급소에서 역산한 최소 핵심 수»로 세는 규칙 — 오종래가 채운다.
+// 코드가 대신 세지 않는다. 비어 있으면 소리 내어 실패한다 (구현명세 §7).
+import { SealedError } from '../../fq/sealed/index.ts';
+import type { 급소K, 인식결과, 조각뼈대, 파트별물음 } from '../types.ts';
+
+export function 봉인2_조각역산(_물음: 파트별물음 | null, _k: 급소K, _인식: 인식결과): 조각뼈대[] {
+  throw new SealedError('[봉인②] 조각역산 규칙이 비어 있습니다 — 구현명세 §3 F2. 코드는 조각 수를 추측하지 않습니다.');
+}

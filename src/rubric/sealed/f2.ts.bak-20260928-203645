@@ -1,0 +1,61 @@
+// [봉인②] 조각 수를 «급소에서 역산한 최소 핵심 수»로 세는 규칙 — 오종래가 채운다.
+// 코드가 대신 세지 않는다. 비어 있으면 소리 내어 실패한다 (구현명세 §7).
+//
+// 채워진 칸 (2026-09-28 오종래):
+//   ① 근거대기 = nodes 중 B·D 노드 수
+//   ② 세우기   = nodes 중 C·P 노드 수
+// 빈 칸: ③ 풀기 · ④ 답구하기
+import { SealedError } from '../../fq/sealed/index.ts';
+import type { Color } from '../../fq/types.ts';
+import type { 급소K, 인식결과, 조각뼈대, 파트, 파트별물음, 요소 } from '../types.ts';
+
+/** 파트 안의 노드 하나 = 조각 하나. 색이 미결(null)인 노드는 세지 않는다 */
+function piecesFromNodes(
+  파트: 파트,
+  colors: Color[],
+  물음: 파트별물음 | null,
+  k: 급소K,
+  인식: 인식결과,
+): 조각뼈대[] {
+  return 인식.nodes
+    .filter((n) => n.color !== null && colors.includes(n.color))
+    .map((n, i) => ({
+      id: `${파트}-${i + 1}`,
+      파트,
+      요소: n.color!.toLowerCase() as 요소,
+      수행질: null,
+      확인물음: 물음?.[파트] ?? '',
+      is_중심: n.id === k.node.id,
+      node: n,
+    }));
+}
+
+/** ① 근거대기 = B·D 노드 수 */
+export function 봉인2_근거대기(물음: 파트별물음 | null, k: 급소K, 인식: 인식결과): 조각뼈대[] {
+  return piecesFromNodes('근거대기', ['B', 'D'], 물음, k, 인식);
+}
+
+/** ② 세우기 = C·P 노드 수 */
+export function 봉인2_세우기(물음: 파트별물음 | null, k: 급소K, 인식: 인식결과): 조각뼈대[] {
+  return piecesFromNodes('세우기', ['C', 'P'], 물음, k, 인식);
+}
+
+/** ③ 풀기 = 세워진 식에 따른 «완성된 식의 결과» 수 — 비어 있음 */
+export function 봉인2_풀기(_물음: 파트별물음 | null, _k: 급소K, _인식: 인식결과): 조각뼈대[] {
+  throw new SealedError('[봉인②-③] 풀기 조각 규칙이 비어 있습니다 — 구현명세 §3 F2. 코드는 조각 수를 추측하지 않습니다.');
+}
+
+/** ④ 답구하기 = «급소 대상 ↔ 요구값» 일치 짝 수 — 비어 있음 */
+export function 봉인2_답구하기(_물음: 파트별물음 | null, _k: 급소K, _인식: 인식결과): 조각뼈대[] {
+  throw new SealedError('[봉인②-④] 답구하기 조각 규칙이 비어 있습니다 — 구현명세 §3 F2. 코드는 조각 수를 추측하지 않습니다.');
+}
+
+/** 네 파트 전부. ③·④가 비어 있는 동안은 SealedError로 멈춘다 */
+export function 봉인2_조각역산(물음: 파트별물음 | null, k: 급소K, 인식: 인식결과): 조각뼈대[] {
+  return [
+    ...봉인2_근거대기(물음, k, 인식),
+    ...봉인2_세우기(물음, k, 인식),
+    ...봉인2_풀기(물음, k, 인식),
+    ...봉인2_답구하기(물음, k, 인식),
+  ];
+}
