@@ -346,7 +346,11 @@ export function analyze_pivot(graph: PathGraph, table?: SealedTable): PivotAnaly
   const strongIds = table?.apply.strongC ?? [];
   //   표지표 없이 불려도 판단기준을 알아본다 — 판단기준으로 판정되는 노드는 '접힘' 간선을 보낸다 (graph.ts Q→B 추출)
   //   접히지 않고 C로 남은 판단기준 스위치 노드(부등호 조건, graph.ts)는 판단기준이 아니다
-  const isJudge = (n: PathNode) => (judgeIds.includes(n.switchId) && n.color === 'B') || graph.edges.some((e) => e.kind === '접힘' && e.to === n.id);
+  //   [오종래 2026-10-11] C에서 접힌 노드(「~일 때」 등)는 판단기준으로 세지 않는다 — 급소는 언제나 B다. C(조건)는 B로 접혀도
+  //   허들이지 급소가 아니다. Q 직전 B 규칙이 그대로 선다 (수능_수학_4 「연속일 때, 상수 a의 값은?」 → 「연속」이 아니라 「상수 a」.
+  //   같은 까닭으로 수능_수학_6·11·14·17·19·24·27·29·30도 Q 직전 B — 30은 「k」에서 「p+q」로).
+  const isJudge = (n: PathNode) =>
+    n.foldedFrom !== 'C' && ((judgeIds.includes(n.switchId) && n.color === 'B') || graph.edges.some((e) => e.kind === '접힘' && e.to === n.id));
   const hasJudge = graph.nodes.some(isJudge);
   const hasStrongC = graph.nodes.some((n) => strongIds.includes(n.switchId));
   //   지시어 「이」 [오종래 2026-10-02] — 판단기준 뒤에 그 조건을 받는 지시어 B「이」(예: 「이를 만족하는」)가 있으면

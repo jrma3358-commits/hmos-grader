@@ -155,7 +155,7 @@ describe('Q→B 추출 — 판단기준은 Q에 접힌 B다 (구현명세 §2-3,
     assert.deepEqual(g.combination, ['C', 'Q']);
   });
 
-  it('(나) 뒤의 노드(분기 결과·Q)가 모두 판단기준으로 수렴 → 급소', () => {
+  it('(나) 뒤의 노드(분기 결과·Q)가 모두 판단기준으로 접힘 간선을 보낸다 — C에서 접힌 판단기준은 급소가 아니고 Q 직전 B가 급소 (오종래 2026-10-11)', () => {
     const g = build_path_graph(q, table(['SJ']));
     const 접힘 = g.edges.filter((e) => e.kind === '접힘');
     assert.deepEqual(
@@ -163,9 +163,8 @@ describe('Q→B 추출 — 판단기준은 Q에 접힌 B다 (구현명세 §2-3,
       [['n2', 'n1'], ['n3', 'n1'], ['n4', 'n1']],
     );
     const p = find_pivot(g);
-    assert.equal(p.node.id, 'n1');
-    assert.equal(p.node.entity, '기준');
-    assert.equal(p.convergence, 3);
+    assert.equal(p.node.entity, '나');
+    assert.equal(p.reason, 'Q 직전 B');
   });
 
   describe('재색칠 간선 — 화살표가 가리키는 노드는 C, 이미 B면 그대로 (오종래 2026-09-30)', () => {
@@ -214,7 +213,8 @@ describe('Q→B 추출 — 판단기준은 Q에 접힌 B다 (구현명세 §2-3,
       assert.equal(k.recoloredFrom, 'P');
       assert.equal(k.foldedFrom, 'C');
       assert.equal(k.color, 'B');
-      assert.equal(find_pivot(g).node.id, k.id);
+      // C에서 접혔으니 급소가 아니다 — Q 직전 B (오종래 2026-10-11)
+      assert.equal(find_pivot(g).node.entity, '가');
     });
   });
 
@@ -625,12 +625,12 @@ describe('강한 C — 바로 다음 B가 급소 (오종래 2026-10-01)', () => 
     assert.deepEqual(g.combination, ['B', 'C', 'Q']);
   });
 
-  it('판단기준 우선 — 판단기준 노드가 있으면 강한 C는 걸지 않는다', () => {
+  it('판단기준 우선 — 판단기준 노드가 있으면 강한 C는 걸지 않는다. C에서 접힌 판단기준은 급소가 아니라 Q 직전 B가 급소 (오종래 2026-10-11)', () => {
     const g = build_path_graph('기준 @F 앞 @B @S 구역 @B 고른 것 @Q', table(['SS'], ['SF']));
     assert.equal(g.nodes.some((n) => n.anchoredBy !== undefined), false);
     const p = find_pivot(g);
-    assert.equal(p.node.entity, '기준');
-    assert.equal(p.reason, '최수렴 B');
+    assert.equal(p.node.entity, '구역');
+    assert.equal(p.reason, 'Q 직전 B');
   });
 
   it('연결된 B가 둘이면 문제 설계 오류로 플래그한다', () => {

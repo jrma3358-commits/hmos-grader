@@ -987,6 +987,7 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
   //   [오종래 2026-10-07] 조건부확률 조건절 — 「~(이/가) [색·상태]일 때」 뒤에 실체가 apply.conditionalTargets(예: 「확률」)로 끝나는
   //   B 노드가 오면 판단기준이 아니라 조건 C다 — 접지 않는다. 묻는 대상은 그 B다 (논제5-2 「공이 빨간색일 때, … A일 확률」).
   //   상태는 한글 낱말이다 — 실체가 식·기호로 끝나면(「눈의 수가 k일 때」) 판단기준 그대로. 그 B는 같은 문장 안이어야 한다 (수능_수학_30 급소 「k」).
+  //   [오종래 2026-10-11] C에서 접힌 판단기준은 급소가 아니다(`v2/pivot.ts`) — 수능_수학_30 급소는 이제 Q 직전 B 「p+q」다.
   const condTargets = table.apply.conditionalTargets ?? [];
   const conditional = (i: number) => {
     if (!/[가-힣]$/.test(nodes[i].entity.trim())) return false;
