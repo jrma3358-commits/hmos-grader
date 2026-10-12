@@ -229,7 +229,7 @@ app.post('/api/generate',async(req,res)=>{
       인식대조:{
         급소포함,
         일치여부:null, // GJ(급소일치판정)는 봉인⑤⑥ — 비어 있어 판정하지 않는다
-        플래그:급소포함?null:`모범답안에 급소 keyword(${keywords.join(' / ')})가 글자로 나타나지 않음 — 교사 확인`,
+        플래그:급소포함?null:`모범답안에 급소(${keywords.join(' / ')})가 글자로 나타나지 않음 — 교사 확인`,
       },
       조각:out.pieces.map(x=>({이름:`${x.part} ${파트이름[x.part]}${x.element==='none'?'':' · '+x.element}`,내용:x.model_piece})),
       해설:out.commentary,

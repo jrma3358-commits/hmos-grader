@@ -314,11 +314,6 @@
     font-weight: 700;
     color: var(--text);
   }
-  .pivot-keyword {
-    font-size: 12px;
-    color: var(--text-sub);
-    margin-left: 6px;
-  }
 
   /* 조합 표시 */
   .combo-display {
@@ -649,7 +644,6 @@
       <div class="pivot-box">
         <div class="pivot-label">급소 K</div>
         <div class="pivot-value" id="result-pivot">—</div>
-        <div class="pivot-keyword" id="result-keyword"></div>
       </div>
 
       <div class="card">
@@ -811,7 +805,6 @@ const SAMPLES = {
         { id: "n5", 색: "Q", 실체: "값은?", 표지: "" }
       ],
       급소: "상수 a",
-      keyword: "a",
       한계: ["조각 정의 식을 나누지 못해 경계점 x=-2가 따로 실체로 뽑히지 않음", "조합 B-C-Q는 등록된 7형식에 없음 — 형식 등록 여부 미정"]
     },
     단계3: {
@@ -852,7 +845,6 @@ const SAMPLES = {
         { id: "n5", 색: "Q", 실체: "구하시오", 표지: "" }
       ],
       급소: "f(2)의 값",
-      keyword: "f(2)",
       한계: ["「에 대하여」는 원전에서 B 표지인데 엔진은 P로 칠함", "급소 실체에 「의 값」이 붙어 있음 — 규칙 4 확정 전", "조합 P-C-B-Q는 등록 7형식에 없음"]
     },
     단계3: {
@@ -961,7 +953,6 @@ const SAMPLES = {
         }
       ],
       "급소": "(1) B「0 ≤ x < π/2일 때 sinx ≥ xcosx가 성립한다」 (n8, reason: Q「증명하시오」 직전 B) / (2) B「0 ≤ x < π/2일 때 sinx ≥ xcosx가 성립한다」 (n12, reason: Q「증명하시오」 직전 B)",
-      "keyword": "(1) sinx ≥ xcosx (0 ≤ x < π/2) / (2) sinx ≥ xcosx (0 ≤ x < π/2)",
       "한계": [
         "「방법으로」 유실 — 「으로」가 표지표에 없음(인식명세 §5 미결 3). 「철수의」·「영희의」만 B로 남아 서술 방향(C-F)이 엔진에 잡히지 않음",
         "인용 명제가 한 덩어리 B — 안의 C「0 ≤ x < π/2일 때」와 B「sinx ≥ xcosx가」가 분리되지 않음. 급소 판정에는 영향 없음",
@@ -1151,7 +1142,6 @@ const SAMPLES = {
         }
       ],
       "급소": "(1-1) B「영향」 (n11, Q 직전 B) / (1-2) B「B국이 시행한 대응조치」 (n10, Q 직전 B) / (2-1) ① B「구조적 약점」 (n14, 중간 Q 「제시하고」 직전) · ② B「국내 물가 상승의 이유」 (n17, Q 「설명하시오」 직전) / (2-2) B「D국이 시행한 정책」 (n12, Q 직전 B)",
-      "keyword": "영향 / B국이 시행한 대응조치 / 구조적 약점 · 국내 물가 상승의 이유 / D국이 시행한 정책",
       "한계": [
         "(2-2) 요구 실체 「도움」이 Q 노드 n14 안에 묻힘 — 엔진은 Q 직전 B인 「D국이 시행한 정책」을 급소로 잡음",
         "(1-1) 「긍정적」이 C로 떨어져 급소가 「영향」만 잡힘",
@@ -1450,7 +1440,6 @@ function fromEngine(out, 원문, 파이프라인) {
       '5색조합': 전체.조합.join('-'),
       노드: 전체.노드,
       급소: 전체.급소.map(p => p.실체.trim()).join(' / ') || '(서지 않음)',
-      keyword: 전체.급소.map(p => p.keyword.trim()).join(' / '),
       한계,
     },
     단계3: {
@@ -1530,7 +1519,6 @@ function renderTab2(data) {
 
   const d2 = data.단계2;
   document.getElementById('result-pivot').textContent = d2.급소;
-  document.getElementById('result-keyword').textContent = 'keyword: ' + d2.keyword;
 
   // 조합
   const comboEl = document.getElementById('result-combo');
