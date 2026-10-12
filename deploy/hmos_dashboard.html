@@ -1480,6 +1480,9 @@ function fromEngine(out, 원문, 파이프라인) {
 async function generateProposal() {
   const data = currentData;
   if (!data || !data.생성입력) return;
+  // 계열은 교사가 고른다 — 미리 골라 두지 않는다
+  const 고른 = document.querySelector('input[name="gyeyeol"]:checked');
+  if (!고른) { alert('계열(수리·인문사회국어)을 고르세요.'); return; }
   const btn = document.getElementById('generate-btn');
   btn.disabled = true;
   btn.textContent = '제안 생성 중… (약 1분)';
@@ -1487,7 +1490,7 @@ async function generateProposal() {
     const res = await fetch('/api/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data.생성입력),
+      body: JSON.stringify({ ...data.생성입력, 계열: 고른.value }),
     });
     const gen = await res.json();
     if (gen.error) {
@@ -1612,7 +1615,12 @@ function renderTab4(data) {
     const 글 = d4 ? '엔진이 루브릭 앞에서 멈춤 — ' + esc(d4.멈춤) : '이 파이프라인(A)은 루브릭 단계가 없습니다';
     // 급소가 섰으면 교사가 눌러 제안을 받을 수 있다 (엔진 멈춤 사유는 그대로 보인다)
     const 버튼 = data.생성입력
-      ? `<div style="margin-top: 16px;"><button class="type-btn" id="generate-btn" onclick="generateProposal()">HMOS 이론 기반 제안 생성</button>
+      ? `<div style="margin-top: 16px;">
+         <div style="margin-bottom: 10px; font-size: 13px;">계열
+           <label style="margin-left: 8px;"><input type="radio" name="gyeyeol" value="수리"> 수리 (완전 일치)</label>
+           <label style="margin-left: 8px;"><input type="radio" name="gyeyeol" value="인문사회국어"> 인문사회국어 (급소 도달)</label>
+         </div>
+         <button class="type-btn" id="generate-btn" onclick="generateProposal()">HMOS 이론 기반 제안 생성</button>
          <div style="margin-top: 8px; font-size: 12px;">급소·5색 인식 결과로 루브릭·모범답안·해설을 제안합니다 (Claude API, 약 1분). 교사 확정 전 검토용입니다.</div></div>`
       : '';
     document.querySelector('.rubric-table thead tr').innerHTML = '<th>채점 축</th>';
