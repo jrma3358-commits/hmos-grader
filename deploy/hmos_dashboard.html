@@ -1,0 +1,1750 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>HMOS — 문항 분석</title>
+<style>
+  :root {
+    --bg: #F7F6F2;
+    --surface: #FFFFFF;
+    --border: #E2DFD8;
+    --text: #1A1A1A;
+    --text-sub: #6B6760;
+    --accent: #2B5BA8;
+    --accent-light: #EEF2FA;
+    --B: #2A7A4B;
+    --C: #1E6FA8;
+    --P: #7B3FB5;
+    --D: #C05C1A;
+    --Q: #B02020;
+    --pivot: #2B5BA8;
+    --ok: #2A7A4B;
+    --warn: #B07A00;
+    --radius: 6px;
+    --font: 'Noto Sans KR', 'Apple SD Gothic Neo', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: var(--font);
+    background: var(--bg);
+    color: var(--text);
+    font-size: 14px;
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+
+  /* 헤더 */
+  header {
+    background: var(--text);
+    color: #fff;
+    padding: 0 24px;
+    height: 52px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .logo {
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+  }
+  .logo span { color: #6EA8FE; }
+  .header-sub {
+    font-size: 12px;
+    color: #9CA3AF;
+    border-left: 1px solid #374151;
+    padding-left: 12px;
+  }
+
+  /* 레이아웃 */
+  .layout {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    min-height: calc(100vh - 52px);
+  }
+
+  /* 사이드바 */
+  .sidebar {
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    padding: 20px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .sidebar-label {
+    font-size: 11px;
+    color: var(--text-sub);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: 0 4px;
+    margin-bottom: 4px;
+  }
+
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: var(--radius);
+    cursor: pointer;
+    color: var(--text-sub);
+    font-size: 13px;
+    transition: background 0.15s;
+    border: none;
+    background: none;
+    width: 100%;
+    text-align: left;
+  }
+  .nav-item:hover { background: var(--bg); color: var(--text); }
+  .nav-item.active {
+    background: var(--accent-light);
+    color: var(--accent);
+    font-weight: 600;
+  }
+  .nav-num {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+  .nav-item.active .nav-num {
+    background: var(--accent);
+    color: #fff;
+  }
+  .nav-item.done .nav-num {
+    background: var(--ok);
+    color: #fff;
+  }
+
+  .pipeline-badge {
+    margin-top: 16px;
+    padding: 10px 12px;
+    background: var(--bg);
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    font-size: 12px;
+    color: var(--text-sub);
+  }
+  .pipeline-badge strong {
+    display: block;
+    color: var(--text);
+    font-size: 13px;
+    margin-bottom: 2px;
+  }
+
+  /* 메인 */
+  .main {
+    padding: 24px;
+    overflow-y: auto;
+  }
+
+  .tab-pane { display: none; }
+  .tab-pane.active { display: block; }
+
+  /* 섹션 헤더 */
+  .section-header {
+    margin-bottom: 20px;
+  }
+  .section-title {
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: -0.3px;
+    color: var(--text);
+  }
+  .section-sub {
+    font-size: 13px;
+    color: var(--text-sub);
+    margin-top: 4px;
+  }
+
+  /* 카드 */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+  .card-title {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-sub);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 12px;
+  }
+
+  /* 문항 입력 */
+  .input-area {
+    width: 100%;
+    min-height: 140px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px;
+    font-family: var(--font);
+    font-size: 14px;
+    line-height: 1.7;
+    color: var(--text);
+    background: var(--bg);
+    resize: vertical;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .input-area:focus { border-color: var(--accent); }
+
+  .type-selector {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin: 12px 0;
+  }
+  .type-btn {
+    padding: 7px 14px;
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    font-size: 13px;
+    cursor: pointer;
+    background: var(--surface);
+    color: var(--text-sub);
+    transition: all 0.15s;
+  }
+  .type-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .type-btn.selected {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+    font-weight: 600;
+  }
+
+  .run-btn {
+    margin-top: 16px;
+    padding: 12px 24px;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: var(--radius);
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    width: 100%;
+    transition: opacity 0.15s;
+  }
+  .run-btn:hover { opacity: 0.85; }
+
+  /* 5색 노드 */
+  .nodes-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .node-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    background: var(--bg);
+  }
+  .node-color {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-top: 5px;
+    flex-shrink: 0;
+  }
+  .node-color.B { background: var(--B); }
+  .node-color.C { background: var(--C); }
+  .node-color.P { background: var(--P); }
+  .node-color.D { background: var(--D); }
+  .node-color.Q { background: var(--Q); }
+
+  .node-tag {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 3px;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+  .node-tag.B { background: #DCF0E5; color: var(--B); }
+  .node-tag.C { background: #DCE9F5; color: var(--C); }
+  .node-tag.P { background: #EDE0F7; color: var(--P); }
+  .node-tag.D { background: #FAE8D8; color: var(--D); }
+  .node-tag.Q { background: #FAE0E0; color: var(--Q); }
+
+  .node-text { font-size: 13px; flex: 1; }
+  .node-text .표지 { color: var(--text-sub); font-size: 12px; margin-left: 6px; }
+
+  /* 급소 강조 */
+  .pivot-box {
+    padding: 16px 18px;
+    background: var(--accent-light);
+    border: 2px solid var(--accent);
+    border-radius: var(--radius);
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .pivot-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    white-space: nowrap;
+  }
+  .pivot-value {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text);
+  }
+  .pivot-keyword {
+    font-size: 12px;
+    color: var(--text-sub);
+    margin-left: 6px;
+  }
+
+  /* 조합 표시 */
+  .combo-display {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+  }
+  .combo-chip {
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 13px;
+    font-weight: 700;
+  }
+  .combo-chip.B { background: #DCF0E5; color: var(--B); }
+  .combo-chip.C { background: #DCE9F5; color: var(--C); }
+  .combo-chip.P { background: #EDE0F7; color: var(--P); }
+  .combo-chip.D { background: #FAE8D8; color: var(--D); }
+  .combo-chip.Q { background: #FAE0E0; color: var(--Q); }
+  .combo-arrow { color: var(--text-sub); font-size: 12px; }
+
+  /* 모범답안 조각 */
+  .answer-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+  .answer-step {
+    display: flex;
+    gap: 0;
+  }
+  .step-line {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 32px;
+    flex-shrink: 0;
+  }
+  .step-dot {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+  .step-connector {
+    width: 2px;
+    flex: 1;
+    background: var(--border);
+    min-height: 16px;
+  }
+  .step-content {
+    padding: 2px 0 20px 12px;
+    flex: 1;
+  }
+  .step-name {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-sub);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 4px;
+  }
+  .step-body {
+    font-size: 13px;
+    line-height: 1.7;
+    white-space: pre-wrap;
+  }
+
+  /* 플래그 */
+  .flag-box {
+    padding: 10px 14px;
+    background: #FEF9E7;
+    border: 1px solid #F0D060;
+    border-radius: var(--radius);
+    font-size: 12px;
+    color: #7A5C00;
+    margin-top: 12px;
+  }
+  .flag-box::before { content: '⚑ '; font-weight: 700; }
+
+  /* 루브릭 테이블 */
+  .rubric-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  .rubric-table th {
+    text-align: left;
+    padding: 8px 12px;
+    background: var(--bg);
+    border-bottom: 2px solid var(--border);
+    font-weight: 700;
+    color: var(--text-sub);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .rubric-table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  .rubric-table tr:last-child td { border-bottom: none; }
+
+  /* 교사 확정 체크리스트 */
+  .checklist {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .check-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 12px 14px;
+    background: var(--bg);
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .check-item:hover { background: #EDEDEA; }
+  .check-item input[type="checkbox"] {
+    margin-top: 2px;
+    width: 16px;
+    height: 16px;
+    accent-color: var(--accent);
+    flex-shrink: 0;
+    cursor: pointer;
+  }
+  .check-text { font-size: 13px; line-height: 1.5; }
+
+  .confirm-btn {
+    margin-top: 20px;
+    padding: 12px 24px;
+    background: var(--ok);
+    color: #fff;
+    border: none;
+    border-radius: var(--radius);
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    width: 100%;
+    transition: opacity 0.15s;
+  }
+  .confirm-btn:hover { opacity: 0.85; }
+  .confirm-btn:disabled {
+    background: var(--border);
+    color: var(--text-sub);
+    cursor: not-allowed;
+    opacity: 1;
+  }
+
+  /* 평가 결과 */
+  .eval-result {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 16px;
+    border-radius: var(--radius);
+    margin-bottom: 16px;
+  }
+  .eval-result.ok { background: #E8F5EE; border: 1px solid #A8D8B8; }
+  .eval-result.warn { background: #FEF9E7; border: 1px solid #F0D060; }
+  .eval-icon { font-size: 18px; }
+  .eval-text { font-size: 14px; font-weight: 700; }
+
+  /* 남은 점 목록 */
+  .note-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .note-item {
+    padding: 10px 14px;
+    background: var(--bg);
+    border-left: 3px solid var(--border);
+    border-radius: 0 var(--radius) var(--radius) 0;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  /* 문항 원문 박스 */
+  .question-box {
+    padding: 16px 18px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    font-size: 14px;
+    line-height: 1.8;
+    margin-bottom: 16px;
+    white-space: pre-wrap;
+  }
+
+  /* 인식 대조 */
+  .match-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+  }
+  .match-row:last-child { border-bottom: none; }
+  .match-icon { font-size: 14px; flex-shrink: 0; }
+  .match-label { font-weight: 600; width: 80px; flex-shrink: 0; }
+  .match-text { color: var(--text-sub); flex: 1; }
+
+  /* 반응형 */
+  @media (max-width: 768px) {
+    .layout { grid-template-columns: 1fr; }
+    .sidebar { display: none; }
+    .main { padding: 16px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">HM<span>OS</span></div>
+  <div class="header-sub">훈민정음 OS · 문항 분석 시스템</div>
+</header>
+
+<div class="layout">
+
+  <!-- 사이드바 -->
+  <aside class="sidebar">
+    <div class="sidebar-label">분석 단계</div>
+
+    <button class="nav-item active" onclick="showTab(0, this)">
+      <div class="nav-num">1</div>
+      문항 입력
+    </button>
+    <button class="nav-item" onclick="showTab(1, this)">
+      <div class="nav-num">2</div>
+      인식 결과
+    </button>
+    <button class="nav-item" onclick="showTab(2, this)">
+      <div class="nav-num">3</div>
+      문제 평가
+    </button>
+    <button class="nav-item" onclick="showTab(3, this)">
+      <div class="nav-num">4</div>
+      루브릭
+    </button>
+    <button class="nav-item" onclick="showTab(4, this)">
+      <div class="nav-num">5</div>
+      모범답안
+    </button>
+    <button class="nav-item" onclick="showTab(5, this)">
+      <div class="nav-num">6</div>
+      교사 확정
+    </button>
+
+    <div class="pipeline-badge">
+      <strong id="pipeline-display">— 파이프라인 미선택</strong>
+      <span id="type-display">문항 유형 선택 필요</span>
+    </div>
+  </aside>
+
+  <!-- 메인 -->
+  <main class="main">
+
+    <!-- 탭 1: 문항 입력 -->
+    <div class="tab-pane active" id="tab-0">
+      <div class="section-header">
+        <div class="section-title">문항 입력</div>
+        <div class="section-sub">분석할 문항을 입력하고 파이프라인을 선택하세요</div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">문항 원문</div>
+        <textarea class="input-area" id="question-input" placeholder="문항 원문을 붙여넣으세요.&#10;예) 4. 함수 f(x) = ... 가 실수 전체에서 연속일 때, 상수 a의 값은? [3점]"></textarea>
+
+        <div style="margin-top: 16px;">
+          <div class="card-title">파이프라인 선택</div>
+          <div class="type-selector">
+            <button class="type-btn" onclick="selectType('A-객관식', this)">A · 객관식</button>
+            <button class="type-btn" onclick="selectType('A-주관식', this)">A · 주관식</button>
+            <button class="type-btn" onclick="selectType('B-서술형', this)">B · 서술형</button>
+            <button class="type-btn" onclick="selectType('C-논술', this)">C · 논술</button>
+          </div>
+        </div>
+
+        <!-- C · 논술: 필터가 논제와 제시문을 따로 받는다 -->
+        <div id="essay-inputs" style="display:none; margin-top: 16px;">
+          <div class="card-title">논제</div>
+          <textarea class="input-area" id="thesis-input" style="min-height: 90px;" placeholder="논제만 붙여넣으세요.&#10;예) [문항 1] 제시문 [가], [나], [다]를 참고하여 …&#10;(1-1) …설명하시오."></textarea>
+          <div class="card-title" style="margin-top: 12px;">제시문</div>
+          <textarea class="input-area" id="passage-input" placeholder="제시문을 [가] [나] … 라벨과 함께 붙여넣으세요.&#10;[가] …&#10;[나] …"></textarea>
+        </div>
+
+        <button class="run-btn" id="run-btn" onclick="runAnalysis()">분석 시작</button>
+      </div>
+
+      <!-- 샘플 로드 -->
+      <div class="card">
+        <div class="card-title">저장된 결과 불러오기</div>
+        <div class="type-selector">
+          <button class="type-btn" onclick="loadSample('수능수학4')">수능 수학 4번 (객관식)</button>
+          <button class="type-btn" onclick="loadSample('수능수학17')">수능 수학 17번 (주관식)</button>
+          <button class="type-btn" onclick="loadSample('서술형')">서술형 루브릭</button>
+          <button class="type-btn" onclick="loadSample('논술')">사회논술</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 탭 2: 인식 결과 -->
+    <div class="tab-pane" id="tab-1">
+      <div class="section-header">
+        <div class="section-title">인식 결과</div>
+        <div class="section-sub">5색 분해 · 급소 · 조합</div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">문항 원문</div>
+        <div class="question-box" id="result-question">—</div>
+      </div>
+
+      <div class="pivot-box">
+        <div class="pivot-label">급소 K</div>
+        <div class="pivot-value" id="result-pivot">—</div>
+        <div class="pivot-keyword" id="result-keyword"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">5색 조합</div>
+        <div class="combo-display" id="result-combo"></div>
+        <div class="card-title" style="margin-top: 8px;">노드 분해</div>
+        <div class="nodes-grid" id="result-nodes"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">인식 한계 · 발견</div>
+        <div class="note-list" id="result-limits"></div>
+      </div>
+    </div>
+
+    <!-- 탭 3: 문제 평가 -->
+    <div class="tab-pane" id="tab-2">
+      <div class="section-header">
+        <div class="section-title">문제 평가</div>
+        <div class="section-sub">급소가 문항의 실체를 바르게 잡았는가</div>
+      </div>
+
+      <div class="eval-result ok" id="eval-result-box">
+        <div class="eval-icon" id="eval-icon">✓</div>
+        <div class="eval-text" id="eval-result-text">바르게 잡음</div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">근거</div>
+        <div style="font-size: 13px; line-height: 1.7;" id="eval-reason">—</div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">남은 점</div>
+        <div class="note-list" id="eval-notes"></div>
+      </div>
+    </div>
+
+    <!-- 탭 4: 루브릭 -->
+    <div class="tab-pane" id="tab-3">
+      <div class="section-header">
+        <div class="section-title">루브릭</div>
+        <div class="section-sub" id="rubric-sub">급소 기반 채점 축 · 배점</div>
+      </div>
+
+      <div class="card" id="rubric-content">
+        <div class="card-title">채점 축</div>
+        <table class="rubric-table">
+          <thead>
+            <tr>
+              <th>논제</th>
+              <th>급소</th>
+              <th>근거대기</th>
+              <th>세우기</th>
+              <th>풀기</th>
+              <th>표현</th>
+            </tr>
+          </thead>
+          <tbody id="rubric-tbody">
+            <tr><td colspan="6" style="text-align:center; color: var(--text-sub); padding: 24px;">결과를 불러오면 표시됩니다</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="card" id="rubric-policy" style="display:none;">
+        <div class="card-title">공통 정책</div>
+        <div class="note-list" id="rubric-policy-list"></div>
+      </div>
+    </div>
+
+    <!-- 탭 5: 모범답안 -->
+    <div class="tab-pane" id="tab-4">
+      <div class="section-header">
+        <div class="section-title">모범답안</div>
+        <div class="section-sub" id="answer-sub">인식 결과와 대조 완료</div>
+      </div>
+
+      <!-- 인식 대조 요약 -->
+      <div class="card" style="margin-bottom: 16px;">
+        <div class="card-title">인식 대조</div>
+        <div id="answer-match">
+          <div class="match-row">
+            <div class="match-icon" id="match-pivot-icon">—</div>
+            <div class="match-label">급소 포함</div>
+            <div class="match-text" id="match-pivot-text">—</div>
+          </div>
+          <div class="match-row">
+            <div class="match-icon" id="match-align-icon">—</div>
+            <div class="match-label">인식 일치</div>
+            <div class="match-text" id="match-align-text">—</div>
+          </div>
+        </div>
+        <div class="flag-box" id="answer-flag" style="display:none;"></div>
+      </div>
+
+      <!-- 단계별 조각 -->
+      <div class="card">
+        <div class="card-title">답안 (단계별)</div>
+        <div class="answer-steps" id="answer-steps"></div>
+      </div>
+
+      <!-- 해설 (HMOS 이론 기반 제안일 때만) -->
+      <div class="card" id="answer-commentary" style="display:none;">
+        <div class="card-title">해설</div>
+        <div style="font-size: 13px; line-height: 1.7; white-space: pre-wrap;" id="answer-commentary-text"></div>
+      </div>
+    </div>
+
+    <!-- 탭 6: 교사 확정 -->
+    <div class="tab-pane" id="tab-5">
+      <div class="section-header">
+        <div class="section-title">교사 확정</div>
+        <div class="section-sub">AI 분석 결과를 검토하고 확정하세요</div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">확인 항목</div>
+        <div class="checklist" id="confirm-list"></div>
+      </div>
+
+      <div class="card" style="margin-top: 0;">
+        <div class="card-title">확정 정보</div>
+        <div style="display: flex; gap: 12px; margin-bottom: 12px;">
+          <div style="flex: 1;">
+            <div style="font-size: 12px; color: var(--text-sub); margin-bottom: 4px;">확정자</div>
+            <input type="text" id="confirm-name" placeholder="교사 이름"
+              style="width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius); font-size: 13px; outline: none;">
+          </div>
+          <div style="flex: 1;">
+            <div style="font-size: 12px; color: var(--text-sub); margin-bottom: 4px;">확정일</div>
+            <input type="date" id="confirm-date"
+              style="width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius); font-size: 13px; outline: none;">
+          </div>
+        </div>
+        <button class="confirm-btn" id="confirm-btn" onclick="confirmResult()">확정하기</button>
+      </div>
+
+      <div id="confirm-done" style="display:none; padding: 20px; text-align: center; color: var(--ok); font-weight: 700; font-size: 16px;">
+        ✓ 확정 완료
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+// 샘플 데이터
+const SAMPLES = {
+  '수능수학4': {
+    문항원문: "4. 함수 f(x) = { 5x+a (x < -2) / x^2-a (x ≥ -2) } 가 실수 전체의 집합에서 연속일 때, 상수 a의 값은? [3점]\n① 6  ② 7  ③ 8  ④ 9  ⑤ 10",
+    파이프라인: "A-객관식",
+    단계2: {
+      "5색조합": "B-C-Q",
+      노드: [
+        { id: "n0", 색: "B", 실체: "함수 f(x) = { 5x+a (x < -2) / x^2-a (x ≥ -2)", 표지: "" },
+        { id: "n2", 색: "B", 실체: "실수 전체의 집합", 표지: "" },
+        { id: "n3", 색: "C", 실체: "연속", 표지: "일 때 (LS-24)" },
+        { id: "n4", 색: "B", 실체: "상수 a", 표지: "을 (sw 1)" },
+        { id: "n5", 색: "Q", 실체: "값은?", 표지: "" }
+      ],
+      급소: "상수 a",
+      keyword: "a",
+      한계: ["조각 정의 식을 나누지 못해 경계점 x=-2가 따로 실체로 뽑히지 않음", "조합 B-C-Q는 등록된 7형식에 없음 — 형식 등록 여부 미정"]
+    },
+    단계3: {
+      평가: "바르게 잡음",
+      근거: "선택지 ①~⑤가 모두 a의 후보값이므로 선택지가 가리키는 실체가 「상수 a」다. 이것은 Q「값은?」에 맞닿은 B다. 조각 정의·범위·연속 조건은 허들로 남았다. 급소는 하나다.",
+      남은점: ["허들의 핵심인 경계점 x=-2가 그래프에 따로 실체로 없다 — 교사 보충 필요", "조합 B-C-Q는 등록된 7형식에 없다 — 형식 등록 여부 미정"]
+    },
+    단계4: null,
+    단계5: {
+      인식대조: { 급소포함: true, 일치여부: true, 플래그: "경계점 x=-2는 엔진이 따로 뽑지 못했다. n0 실체 문자열의 구간 표기에서 읽어 근거대기 조각에 넣었다 — 교사 확인 필요" },
+      조각: [
+        { 이름: "근거대기", 내용: "f(x)는 x<-2에서 5x+a, x≥-2에서 x^2-a인 조각 정의 함수다. 각 조각은 다항식이라 자기 구간 안에서 연속이므로 '실수 전체에서 연속'은 경계점 x=-2에서의 연속으로 좁혀진다." },
+        { 이름: "세우기", 내용: "lim(x→-2-)(5x+a) = -10+a,  lim(x→-2+)(x^2-a) = f(-2) = 4-a이므로\n-10+a = 4-a" },
+        { 이름: "풀기", 내용: "2a = 14,  a = 7" },
+        { 이름: "답구하기", 내용: "상수 a = 7" },
+        { 이름: "표현", 내용: "정답 ② 7" }
+      ]
+    },
+    교사확정: {
+      확인할_것: [
+        "4단계 플래그 — 경계점 x=-2 보충을 인정하는가",
+        "「풀지 마라」 규칙을 1~3단계 인식에만 적용하는 것이 맞는가",
+        "조합 B-C-Q 형식 등록 여부",
+        "남은 C 급소 자리 처리 방침"
+      ]
+    }
+  },
+  '수능수학17': {
+    문항원문: "17. 다항함수 f(x)에 대하여 f'(x)=9x²+4x이고 f(1)=6일 때, f(2)의 값을 구하시오. [3점]",
+    파이프라인: "A-주관식",
+    단계2: {
+      "5색조합": "P-C-B-Q",
+      노드: [
+        { id: "n0", 색: "P", 실체: "다항함수 f(x)", 표지: "에 대하여 (sw 3)" },
+        { id: "n1", 색: "P", 실체: "f'(x)=9x²+4x", 표지: "이고 (sw 10)" },
+        { id: "n2", 색: "C", 실체: "f(1)=6", 표지: "일 때 (LS-24)" },
+        { id: "n4", 색: "B", 실체: "f(2)의 값", 표지: "을 (sw 1)" },
+        { id: "n5", 색: "Q", 실체: "구하시오", 표지: "" }
+      ],
+      급소: "f(2)의 값",
+      keyword: "f(2)",
+      한계: ["「에 대하여」는 원전에서 B 표지인데 엔진은 P로 칠함", "급소 실체에 「의 값」이 붙어 있음 — 규칙 4 확정 전", "조합 P-C-B-Q는 등록 7형식에 없음"]
+    },
+    단계3: {
+      평가: "바르게 잡음",
+      근거: "이 문항이 요구하는 실체는 함숫값 f(2)이고, Q「구하시오」에 바로 맞닿은 B가 그것이다. 다항함수·도함수·초기조건은 허들로 남았다.",
+      남은점: ["「에 대하여」 원전 표지표와 엔진 처리가 다름 — 급소 판정에 영향 없음", "조합 P-C-B-Q는 등록 7형식에 없음 — 형식 등록 여부 미정"]
+    },
+    단계4: null,
+    단계5: {
+      인식대조: { 급소포함: true, 일치여부: true, 플래그: "적분상수 C는 인식 그래프에 실체로 없다. 풀이 과정에서 생긴 매개이고, 그 값을 정하는 근거는 f(1)=6에 있다 — 교사 확인 필요" },
+      조각: [
+        { 이름: "근거대기", 내용: "f(x)는 다항함수이고 f'(x)=9x²+4x이므로 f(x)는 f'(x)의 부정적분이다.\n적분상수 하나가 남고, 그 값은 조건 f(1)=6으로 정해진다." },
+        { 이름: "세우기", 내용: "f(x) = ∫(9x²+4x)dx = 3x³+2x²+C" },
+        { 이름: "풀기", 내용: "f(1) = 3+2+C = 6,  C = 1\n따라서 f(x) = 3x³+2x²+1" },
+        { 이름: "답구하기", 내용: "f(2) = 3·8 + 2·4 + 1 = 24+8+1 = 33" },
+        { 이름: "표현", 내용: "33" }
+      ]
+    },
+    교사확정: {
+      확인할_것: [
+        "적분상수 C(생성물)를 플래그로 둘 것인가",
+        "「에 대하여」를 B로 볼 것인가 P로 볼 것인가",
+        "급소 실체의 「의 값」 처리 — 규칙 4 확정 여부",
+        "조합 P-C-B-Q 형식 등록 여부",
+        "문항 파일 수능_수학_17.txt가 작업 트리에서 삭제된 상태 — 의도한 삭제인가"
+      ]
+    }
+  },
+  '서술형': {
+    "문항원문": "다음은 '0 ≤ x < π/2일 때 부등식 sinx ≥ xcosx가 성립한다.'를 증명하는 방법에 대한 철수와 영희의 대화 중 일부이다. 물음에 답하시오. [총 8점]\n\n철수 : f(x) = sinx - xcosx의 증가, 감소를 따져보는 것은 어때?\n영희 : 곡선 y=tanx와 직선 y=x의 그래프를 그려서 비교하면 어때?\n\n(1) 철수의 방법으로 '0 ≤ x < π/2일 때 부등식 sinx ≥ xcosx가 성립한다.'를 증명하시오. [4점]\n\n(2) 영희의 방법으로 '0 ≤ x < π/2일 때 부등식 sinx ≥ xcosx가 성립한다.'를 증명하시오. [4점]",
+    "파이프라인": "B-서술형",
+    "단계2": {
+      "5색조합": "B-P-Q",
+      "노드": [
+        {
+          "id": "n0",
+          "색": "B",
+          "실체": "다음",
+          "표지": "은"
+        },
+        {
+          "id": "n1",
+          "색": "B",
+          "실체": "'0 ≤ x < π/2일 때 부등식 sinx ≥ xcosx가 성립한다.'",
+          "표지": "인용 통째"
+        },
+        {
+          "id": "n3",
+          "색": "P",
+          "실체": "증명하는 방법에 대한 철수",
+          "표지": "와"
+        },
+        {
+          "id": "n4",
+          "색": "B",
+          "실체": "영희",
+          "표지": "의"
+        },
+        {
+          "id": "n5",
+          "색": "Q",
+          "실체": "답하시오",
+          "표지": "답하시오"
+        },
+        {
+          "id": "n6",
+          "색": "P",
+          "실체": "철수 : f(x) = sinx - xcosx의 증가, 감소를 따져보는 것은 어때? 영희 : 곡선 y=tanx와 직선 y=x의 그래프를 그려서 비교하면 어때?",
+          "표지": "대화 통째"
+        },
+        {
+          "id": "n7",
+          "색": "B",
+          "실체": "철수",
+          "표지": "의"
+        },
+        {
+          "id": "n8",
+          "색": "B",
+          "실체": "'0 ≤ x < π/2일 때 부등식 sinx ≥ xcosx가 성립한다.'",
+          "표지": "인용 통째"
+        },
+        {
+          "id": "n10",
+          "색": "Q",
+          "실체": "증명하시오",
+          "표지": "증명하시오"
+        },
+        {
+          "id": "n11",
+          "색": "B",
+          "실체": "영희",
+          "표지": "의"
+        },
+        {
+          "id": "n12",
+          "색": "B",
+          "실체": "'0 ≤ x < π/2일 때 부등식 sinx ≥ xcosx가 성립한다.'",
+          "표지": "인용 통째"
+        },
+        {
+          "id": "n14",
+          "색": "Q",
+          "실체": "증명하시오",
+          "표지": "증명하시오"
+        }
+      ],
+      "급소": "(1) B「0 ≤ x < π/2일 때 sinx ≥ xcosx가 성립한다」 (n8, reason: Q「증명하시오」 직전 B) / (2) B「0 ≤ x < π/2일 때 sinx ≥ xcosx가 성립한다」 (n12, reason: Q「증명하시오」 직전 B)",
+      "keyword": "(1) sinx ≥ xcosx (0 ≤ x < π/2) / (2) sinx ≥ xcosx (0 ≤ x < π/2)",
+      "한계": [
+        "「방법으로」 유실 — 「으로」가 표지표에 없음(인식명세 §5 미결 3). 「철수의」·「영희의」만 B로 남아 서술 방향(C-F)이 엔진에 잡히지 않음",
+        "인용 명제가 한 덩어리 B — 안의 C「0 ≤ x < π/2일 때」와 B「sinx ≥ xcosx가」가 분리되지 않음. 급소 판정에는 영향 없음",
+        "대화 n6이 통째 P — 두 방법이 소문항과 연결되지 않음",
+        "n3 「증명하는 방법에 대한 철수」 — 「에 대한」에서 자르지 못함(원전 표지표상 「~에 대하여」는 B 표지)",
+        "노드 id n2·n9·n13 빔. 정규화에서 「[총 8점]」·「[4점]」 지워짐"
+      ]
+    },
+    "단계3": {
+      "평가": "타당 — 두 소문항의 급소는 같은 명제이고 서술 방향(C-F)만 다르다. 한 실체를 두 증명 경로로 묻는 구조다.",
+      "근거": "① 급소가 참이다: x=0에서 양변 0으로 등호, 0<x<π/2에서 cosx>0·tanx>x이므로 sinx>xcosx. ② 허들이 각 경로를 지탱한다: 철수 경로는 f'(x)=xsinx ≥ 0, f(0)=0 → f(x) ≥ 0. 영희 경로는 원점 접선 기울기 1과 tanx의 아래로 볼록 → tanx ≥ x, cosx>0을 곱함. 대화 n6이 두 경로의 출발점을 모두 준다. ③ 구간 끝 「x < π/2」의 엄격 부등호가 영희 경로의 cosx>0·tanx 정의와 맞물린다. 조건 C가 장식이 아니다. ④ 미괄식 구조가 지켜진다.",
+      "남은점": [
+        "(2) 「그래프를 그려서 비교」의 엄밀성 기준이 문항에 없음 — 그림만 인정할지, 접선·볼록성·도함수 근거를 요구할지",
+        "(2) sinx ≥ xcosx ⇔ tanx ≥ x에서 cosx>0을 짚는 것이 숨은 채점 요소",
+        "(1) f'(x) ≥ 0에서 f(x) ≥ f(0)=0으로 넘어가는 단계가 숨은 채점 요소",
+        "두 소문항의 급소가 같음 — 루브릭 축은 C-F 서술 방향에서 갈라짐(엔진은 C-F를 못 잡음)",
+        "(2)의 실제 부담은 그래프 근거의 엄밀성에 따라 (1)과 달라질 수 있음"
+      ]
+    },
+    "단계4": {
+      "축": [
+        {
+          "소문항": "(1)",
+          "이름": "1-0 서술 방향",
+          "배점": "관문 — 점수 없음",
+          "판정": "[인정: f(x)=sinx−xcosx의 증감으로 증명 / 보류: 다른 함수(예: g(x)=tanx−x)의 증감 — 철수의 방법으로 볼지 저자 기준 필요 / 감점: 증감 없이 그래프 비교 등 다른 방법만 씀]"
+        },
+        {
+          "소문항": "(1)",
+          "이름": "1-1 함수 설정",
+          "배점": "1 (제안)",
+          "판정": "[인정: f(x)=sinx−xcosx를 두고 f(x) ≥ 0을 보이는 문제로 바꿈 / 부분인정: f(x)는 두었으나 목표를 밝히지 않음 / 감점: f(x)를 다르게 둠]"
+        },
+        {
+          "소문항": "(1)",
+          "이름": "1-2 도함수 계산",
+          "배점": "1 (제안)",
+          "판정": "[인정: f'(x)=cosx−(cosx−xsinx)=xsinx / 부분인정: 곱의 미분 방향은 맞으나 부호·정리 실수(계산감점) / 감점: 곱의 미분 자체를 틀림(논리감점)]"
+        },
+        {
+          "소문항": "(1)",
+          "이름": "1-3 부호 판정과 증가",
+          "배점": "1 (제안)",
+          "판정": "[인정: 0 ≤ x < π/2에서 x ≥ 0, sinx ≥ 0 → f'(x) ≥ 0 → f 증가 / 부분인정: f'(x) ≥ 0만 쓰고 구간 근거 없음 / 감점: 부호 판단 없이 증가라고만 씀]"
+        },
+        {
+          "소문항": "(1)",
+          "이름": "1-4 결론",
+          "배점": "1 (제안)",
+          "판정": "[인정: f(x) ≥ f(0)=0, 곧 sinx ≥ xcosx / 부분인정: f(0)=0을 빼고 f(x) ≥ 0만 씀 / 감점: 원인 없이 결론만 씀]"
+        },
+        {
+          "소문항": "(2)",
+          "이름": "2-0 서술 방향",
+          "배점": "관문 — 점수 없음",
+          "판정": "[인정: tanx ≥ x를 두 그래프의 위치 관계로 보임 / 보류: h(x)=tanx−x의 증감으로만 보임 — 영희의 방법으로 볼지 저자 기준 필요 / 감점: 철수의 방법을 그대로 반복함]"
+        },
+        {
+          "소문항": "(2)",
+          "이름": "2-1 동치 변형",
+          "배점": "1 (제안)",
+          "판정": "[인정: 0 ≤ x < π/2에서 cosx > 0이므로 sinx ≥ xcosx ⇔ tanx ≥ x / 부분인정: 나누기(곱하기)는 했으나 cosx > 0을 밝히지 않음 / 감점: 부호 근거 없이 부등호를 다룸, 또는 동치 변형 없음]"
+        },
+        {
+          "소문항": "(2)",
+          "이름": "2-2 그래프의 출발점",
+          "배점": "1 (제안)",
+          "판정": "[인정: 두 그래프가 원점을 지나고 y=x가 y=tanx의 원점 접선(x=0에서 sec²x=1) / 부분인정: 원점을 지난다는 것만 씀 / 감점: 두 그래프의 공통점을 다루지 않음]"
+        },
+        {
+          "소문항": "(2)",
+          "이름": "2-3 위치 관계의 근거",
+          "배점": "1 (제안)",
+          "판정": "[인정: y=tanx가 0 ≤ x < π/2에서 아래로 볼록(또는 sec²x ≥ 1)이라 y=x보다 위에 있음 / 부분인정: 그림만 그리고 위에 있다고 씀 — ※엄밀성 기준 미확정 / 보류: 그림 판독 불가 / 감점: 위치 관계를 반대로 씀]"
+        },
+        {
+          "소문항": "(2)",
+          "이름": "2-4 결론",
+          "배점": "1 (제안)",
+          "판정": "[인정: tanx ≥ x의 양변에 cosx > 0을 곱해 sinx ≥ xcosx, x=0에서 등호 / 부분인정: tanx ≥ x에서 멈춤 / 감점: 결론만 있고 연결 없음]"
+        }
+      ],
+      "공통정책": [
+        "[표현 감점 금지: 식과 조건 적용이 맞으면 문장이 어색해도 점수 유지 (가이드 §8)]",
+        "[중복 점수 금지: 한 식이 두 축을 만족해도 기록만 각각, 점수는 부풀리지 않음 (가이드 §6)]",
+        "[인과 단절: 끊기기 전 축은 인정, 끊긴 뒤 결론 축은 만점 불가 (가이드 §7)]",
+        "[needs_review: 서술 방향 관문의 보류 사례, 2-3의 그림만 있는 답안 (가이드 §10)]"
+      ]
+    },
+    "단계5": {
+      "인식대조": {
+        "급소포함": true,
+        "일치여부": true,
+        "플래그": "[보충] 그래프에 실체로 없는 생성물 넷 — 도함수 f'(x)=xsinx, cosx>0, 접선 기울기 sec²x=1, 볼록성 2sec²x·tanx ≥ 0. 모두 허들(구간 조건, 대화 n6)에서 풀이 과정으로 나온 매개이고 원문 밖 실체는 아니다. [인식한계 연동] 서술 방향 「철수의/영희의 방법으로」는 엔진이 n7·n11의 B「철수」·「영희」로만 잡아(「방법으로」 유실), 답안을 두 갈래로 나눈 근거는 n6 대화에서 손으로 연결했다. 교사 확인 필요."
+      },
+      "조각": [
+        {
+          "이름": "(1) ① 근거대기",
+          "내용": "0 ≤ x < π/2에서 sinx ≥ xcosx를 보이는 것은 f(x)=sinx−xcosx ≥ 0을 보이는 것과 같다."
+        },
+        {
+          "이름": "(1) ② 세우기",
+          "내용": "f'(x) = cosx − (cosx − xsinx) = xsinx."
+        },
+        {
+          "이름": "(1) ③ 풀기",
+          "내용": "0 ≤ x < π/2에서 x ≥ 0이고 sinx ≥ 0이므로 f'(x) = xsinx ≥ 0이다(0 < x < π/2에서는 f'(x) > 0). 따라서 f(x)는 0 ≤ x < π/2에서 증가한다."
+        },
+        {
+          "이름": "(1) ④ 결론",
+          "내용": "f(x) ≥ f(0) = sin0 − 0·cos0 = 0."
+        },
+        {
+          "이름": "(1) ⑤ 표현",
+          "내용": "그러므로 0 ≤ x < π/2일 때 sinx ≥ xcosx이다. (등호는 x=0일 때) ■"
+        },
+        {
+          "이름": "(2) ① 근거대기",
+          "내용": "0 ≤ x < π/2에서 cosx > 0이므로 sinx ≥ xcosx ⇔ tanx ≥ x이다."
+        },
+        {
+          "이름": "(2) ② 세우기",
+          "내용": "곡선 y=tanx와 직선 y=x는 모두 원점을 지난다. (tanx)' = sec²x이고 x=0에서 1이므로, 직선 y=x는 곡선 y=tanx의 원점에서의 접선이다."
+        },
+        {
+          "이름": "(2) ③ 풀기",
+          "내용": "(tanx)'' = 2sec²x·tanx ≥ 0 (0 ≤ x < π/2)이므로 y=tanx는 이 구간에서 아래로 볼록하다. 아래로 볼록한 곡선은 접선보다 아래로 내려가지 않으므로 0 ≤ x < π/2일 때 y=tanx는 y=x와 같거나 위에 있다. 곧 tanx ≥ x이다."
+        },
+        {
+          "이름": "(2) ④ 결론",
+          "내용": "tanx ≥ x의 양변에 cosx(>0)를 곱하면 sinx ≥ xcosx."
+        },
+        {
+          "이름": "(2) ⑤ 표현",
+          "내용": "그러므로 0 ≤ x < π/2일 때 sinx ≥ xcosx이다. (등호는 x=0일 때) ■"
+        }
+      ]
+    },
+    "교사확정": {
+      "확인할_것": [
+        "2-3 그림만 있는 답안 — 0.5 / 1 / needs_review (3단계 엄밀성 질문과 같은 문제)",
+        "1-0·2-0 관문 위반 — 안 A(소문항 0점) / 안 B(맞은 축만 인정)",
+        "h(x)=tanx−x 증감·평균값 정리 풀이를 영희의 방법으로 인정할지",
+        "배점 축당 1점·부분 0.5 확정 여부",
+        "x=0 등호 미언급 무감점 여부",
+        "3단계 보완 제안 — (2)에 「(단, 위치 관계의 근거를 밝히시오.)」 추가 여부",
+        "5단계 생성물 플래그(f'(x), cosx>0, sec²x, 볼록성) 처리",
+        "엔진 이론 결정: 「증명하시오」를 DECLARATIVE 서술 표지에 넣을지 / 「으로」 표지(서술 방향 C-F 유실) 처리"
+      ]
+    }
+  },
+  '논술': {
+    "문항원문": "문제 1 다음 제시문 [가], [나], [다], [라], [마]를 참고하여 각 문항에 답하시오. (800 ± 80자, 50점)\n\n[가] 자유무역은 국제 사회에서 국가 간 상품, 서비스 교역 활동에 대한 관세 인하와 비관세 장벽 완화를 통한 무역 확대를 목표로 한다. 자유무역의 긍정적인 효과는 소비자들이 저렴하고 다양한 상품을 구매할 수 있고, 자국 기업이 타국 기업과 경쟁을 통해 기술과 품질을 향상시키는 데 도움이 된다는 것이다. 또한, 자유무역을 통한 수출 증가는 정부의 고용 창출과 자국 산업의 성장에 도움을 준다. 하지만 부정적인 효과도 존재한다. 자유무역을 통해 얻을 수 있는 이익이 무역 당사국 간에 균등하지 않을 수 있으며, 국가 간 경쟁력 차이로 인해 빈부 격차가 커질 수도 있다. 또한, 자유무역을 하는 국가는 수출입의 증가로 해외 의존도가 높아지고 국제 원자재 등의 수입가격 변동에 대한 민감도가 상승하며, 국제경제 상황이 자국 경제에 미치는 영향도 커지게 된다.\n[나] A국은 오랜 기간 저렴한 제품의 수입을 대폭 확대해왔다. 그 결과 A국은 자국산 제품에 대한 수요가 줄었고, 일부 자국 기업이 파산하여 실업률이 상승하였다. 그러자 A국은 주요 수입품에 대해 고율의 관세를 부과함으로써 무역상대국이 A국에 수출한 제품에 대한 무역장벽을 높였다. 이에 대해 여러 무역상대국은 A국의 보호무역 정책이 세계무역기구(WTO)의 자유무역 원칙을 훼손한다고 주장하고 있다.\n[다] B국은 무역 의존도가 높은 국가로, A국의 보호무역 정책 때문에 주요 수출품의 가격 경쟁력이 약화하여 수출이 감소하였다. 이에 따라 B국 기업의 수익이 줄어들고 B국의 상품수지도 악화하였다. 그럼에도 불구하고 B국 정부는 A국에 대한 직접적인 무역보복을 피하고 자국 기업의 경쟁력 강화를 위해 연구개발(R&D) 지원과 자유무역협정(FTA) 다변화 정책을 추진하여 손실을 만회하면서 여전히 자유무역의 이점을 강조하고 있다.\n[라] C국은 원자재 중심의 수출국으로, 국제 원자재 가격 변화에 따라 자국 경제가 크게 영향을 받는다. 최근 A국의 보호무역 정책과 세계 경기 둔화로 인해 국제 원자재 수요가 줄어들면서 C국의 수출도 대폭 감소하였다. 이에 따라 C국은 상품수지 적자가 누적되고, 환율변동 때문에 수입품의 가격이 상승하여 국내 물가가 상승하였다.\n[마] D국은 개방 경제 국가로 자유무역 체제를 적극적으로 지지해왔다. D국은 FTA를 통해 A국에서 농·축산품을 수입하고, A국에 기술집약적인 제품을 수출해왔다. 그런데 제시문 [나]와 같이 A국이 보호무역 정책을 강화하자 C국이 대응조치로 핵심 소재와 원자재 수출을 제한하여 D국은 필요한 소재와 원자재를 확보하기 어렵게 되었다. 결국 D국은 C국에 대한 의존도를 낮추기 위해 자국의 소재 생산기반을 확대하고 원자재 수입국을 다변화하는 정책을 펴고 있다.\n\n<주의사항: 제시문 [나], [다], [라], [마]는 가상의 상황을 설정한 것임>\n\n[문항 1] 제시문 [가], [나], [다]를 참고하여 다음의 물음에 답하시오.\n(1-1) 자유무역이 국가의 경제에 미치는 긍정적인 영향을 경제주체별로 구분하여 설명하시오.\n(1-2) A국의 보호무역 정책으로 인한 손실을 줄이기 위해, B국이 시행한 대응조치는 무엇인지 설명하시오.\n\n[문항 2] 제시문 [가], [나], [라], [마]를 참고하여 다음의 물음에 답하시오.\n(2-1) C국과 같은 원자재 중심의 수출국이 국제무역 환경의 변화 때문에 겪는 구조적 약점을 제시하고, 국내 물가 상승의 이유를 설명하시오.\n(2-2) A국과 C국의 무역분쟁으로 인한 손실을 줄이기 위해, D국이 시행한 정책이 자국의 경제에 어떤 도움이 될 수 있는지 설명하시오.",
+    "파이프라인": "C-논술",
+    "단계2": {
+      "5색조합": "P-C-Q-B",
+      "노드": [
+        {
+          "id": "(1-1)",
+          "색": "B",
+          "실체": "영향",
+          "표지": "n11, Q 직전 B"
+        },
+        {
+          "id": "(1-2)",
+          "색": "B",
+          "실체": "B국이 시행한 대응조치",
+          "표지": "n10, Q 직전 B"
+        },
+        {
+          "id": "(2-1)",
+          "색": "B",
+          "실체": "구조적 약점",
+          "표지": "n14, 중간 Q 「제시하고」 직전"
+        },
+        {
+          "id": "(2-1)",
+          "색": "B",
+          "실체": "국내 물가 상승의 이유",
+          "표지": "n17, Q 「설명하시오」 직전"
+        },
+        {
+          "id": "(2-2)",
+          "색": "B",
+          "실체": "D국이 시행한 정책",
+          "표지": "n12, Q 직전 B"
+        }
+      ],
+      "급소": "(1-1) B「영향」 (n11, Q 직전 B) / (1-2) B「B국이 시행한 대응조치」 (n10, Q 직전 B) / (2-1) ① B「구조적 약점」 (n14, 중간 Q 「제시하고」 직전) · ② B「국내 물가 상승의 이유」 (n17, Q 「설명하시오」 직전) / (2-2) B「D국이 시행한 정책」 (n12, Q 직전 B)",
+      "keyword": "영향 / B국이 시행한 대응조치 / 구조적 약점 · 국내 물가 상승의 이유 / D국이 시행한 정책",
+      "한계": [
+        "(2-2) 요구 실체 「도움」이 Q 노드 n14 안에 묻힘 — 엔진은 Q 직전 B인 「D국이 시행한 정책」을 급소로 잡음",
+        "(1-1) 「긍정적」이 C로 떨어져 급소가 「영향」만 잡힘",
+        "(2-1) 「제시하고」가 중간 Q로 작동 — 확정 목록(들고·찾고·보이고)에 없음",
+        "B 실체가 잘못 잘림(「…미치」, 「…수출국이 국제무역 환경」), 「C국과」·「A국과」의 「과」가 P(sw 12)로 읽힘",
+        "조합 표기 P-C-Q-B가 노드 순서와 다름(색이 처음 나온 순서로 보임)"
+      ]
+    },
+    "단계3": {
+      "평가": "(1-1) 타당 · (1-2) 타당하지만 얕음 · (2-1) ① 타당(종합 요구) ② 타당하지만 경계 · (2-2) 비약",
+      "근거": "(1-1) 타당 — [가]가 경제주체별 긍정 효과를 직접 제시. 엔진의 불완전은 낱말 어긋남(영향/효과)에서 온 인식 한계\n(1-2) 타당하지만 얕음 — [다] 발췌로 끝남\n(2-1) ① 타당(종합 요구) ② 타당하지만 경계 — 환율 변동의 까닭은 배경지식에 맡겨짐\n(2-2) 비약 — 「도움」의 근거가 제시문에 없음, 「A국과 C국의 무역분쟁」은 [마]의 서술과 다름. 엔진의 타당은 「C국」 낱말로 이은 결과\n\n(조립설명서 ④-1의 4축(타당·비약·불완전·사족))",
+      "남은점": [
+        "[비약] (2-2) 「도움」의 근거 부재 · 「무역분쟁」 설정이 제시문에 없음",
+        "[불완전] [가]의 「이익 불균등·빈부 격차」를 어느 논제도 끌어오지 않음",
+        "[불완전] [나]의 보호무역 쟁점을 어느 논제도 묻지 않음 — 평가·논증형 논제 부재",
+        "[사족] (1-1)에 대해 [나][다]",
+        "[깊이] (1-2)는 발췌형",
+        "[원칙 충돌] 엔진의 「급소 2개 → 논제 분리」는 다중 급소 원칙(2026-10-08)과 맞지 않음"
+      ]
+    },
+    "단계4": {
+      "축": [
+        {
+          "논제": "(1-1)",
+          "급소": "영향",
+          "파트": {
+            "①": [
+              "①-1 d 자유무역의 뜻 2.5"
+            ],
+            "②": [
+              "②-1~3 p 소비자/기업/정부 구분 1.25×3"
+            ],
+            "③": [
+              "③-1~3 주체별 효과 연결 0.83×3"
+            ],
+            "④": [
+              "④-1 k 긍정적 영향을 주체별로 제시 2.5"
+            ],
+            "⑤": [
+              "⑤ 표현 1.25"
+            ]
+          }
+        },
+        {
+          "논제": "(1-2)",
+          "급소": "B국이 시행한 대응조치",
+          "파트": {
+            "①": [
+              "①-1 b A국 보호무역 2.5"
+            ],
+            "②": [
+              "②-1 p B국의 손실 상황 1.875",
+              "②-2 p 직접 보복 회피라는 제약 1.875"
+            ],
+            "③": [
+              "③-1~2 R&D → 경쟁력 / FTA → 시장 1.25×2"
+            ],
+            "④": [
+              "④-1 k R&D·FTA 다변화 둘 다 제시 2.5"
+            ],
+            "⑤": [
+              "⑤ 표현 1.25"
+            ]
+          }
+        },
+        {
+          "논제": "(2-1)",
+          "급소": "구조적 약점 · 국내 물가 상승의 이유",
+          "파트": {
+            "①": [
+              "①-1 b 원자재 중심 수출국 1.25",
+              "①-2 d [가]의 의존도·민감도 1.25"
+            ],
+            "②": [
+              "②-1 p 수요 감소 1.875",
+              "②-2 p 환율변동 1.875"
+            ],
+            "③": [
+              "③-1 수출 감소 → 적자 1.25",
+              "③-2 환율 → 수입품 → 물가 1.25"
+            ],
+            "④": [
+              "④-1 k 대외 의존 구조 1.25",
+              "④-2 k 환율에 따른 수입물가 1.25"
+            ],
+            "⑤": [
+              "⑤ 표현 1.25"
+            ]
+          }
+        },
+        {
+          "논제": "(2-2)",
+          "급소": "D국이 시행한 정책 + 도움",
+          "파트": {
+            "①": [
+              "①-1 b 개방 경제·FTA 1.25",
+              "①-2 d [가]의 의존도·민감도 1.25"
+            ],
+            "②": [
+              "②-1 p C국의 수출 제한 → 확보 곤란 1.875",
+              "②-2 p 의존도 완화라는 목적 1.875"
+            ],
+            "③": [
+              "③-1 생산기반 → 안정 조달 1.25",
+              "③-2 수입국 다변화 → 위험 분산 1.25"
+            ],
+            "④": [
+              "④-1 k·q 정책과 도움의 일치 2.5"
+            ],
+            "⑤": [
+              "⑤ 표현 1.25"
+            ]
+          }
+        }
+      ],
+      "공통정책": [
+        "[가정] 소문항 배점 50점 ÷ 4 = 12.5점 균등",
+        "[가정] 파트 지수 기본 2:3:2:2:1 ([봉인④-계열] 비어 있음)",
+        "[가정] ③풀기의 논술 해석 = 근거에서 이어진 인과 결과 하나하나",
+        "[가정] 반올림 [봉인④-a] 비어 있음 — 소수점 그대로",
+        "[충족조건] 열린 인문 — 급소에 닿으면 O (구현명세 F4)",
+        "[게이트] ④(k) X → 다른 파트 상한, 상한 값은 봉인이라 비워 둠"
+      ]
+    },
+    "단계5": {
+      "인식대조": {
+        "급소포함": true,
+        "일치여부": true,
+        "플래그": "[GJ 엔진 판정불가] judge_pivot_match 결과 (1-1)·(2-1)①②·(2-2)는 판정불가(MULTIPLE_CONVERGENCE), (1-2)는 X(답 급소 「수출 시장」). 서술문 답안에는 Q 표지가 없어 입구 로직이 급소를 세우지 못함 — 다시 짓지 않고 손으로 대조함, 교사 확인 필요. [추론 보충] (2-2) 「안정적 조달」·「위험 분산」·「도움」, (1-2) 「무역분쟁의 확대를 막으면서」, (1-1) 「소비자의 후생」(제시문에 없는 용어)"
+      },
+      "조각": [
+        {
+          "이름": "(1-1)",
+          "내용": "자유무역은 경제주체별로 긍정적인 영향을 준다. 소비자는 관세 인하와 비관세 장벽 완화로 저렴하고 다양한 상품을 구매할 수 있다. 기업은 타국 기업과의 경쟁을 통해 기술과 품질을 향상시킬 수 있다. 정부는 수출 증가로 고용을 창출하고 자국 산업을 성장시킬 수 있다. 이처럼 자유무역은 소비자의 후생, 기업의 경쟁력, 국가 경제의 성장에 함께 기여한다."
+        },
+        {
+          "이름": "(1-2)",
+          "내용": "B국은 A국의 보호무역 정책으로 수출품의 가격 경쟁력이 약화되어 기업 수익과 상품수지가 악화되었다. 이에 B국은 직접적인 무역보복을 피하는 대신, 연구개발(R&D) 지원으로 자국 기업의 경쟁력을 강화하고 자유무역협정(FTA)을 다변화하여 수출 시장을 넓히는 대응조치를 시행하였다. 이는 무역분쟁의 확대를 막으면서 손실을 만회하려는 조치이다."
+        },
+        {
+          "이름": "(2-1)",
+          "내용": "C국과 같은 원자재 중심의 수출국은 국제 원자재 가격과 해외 수요에 경제가 좌우되는 높은 대외 의존 구조라는 구조적 약점을 지닌다. 그래서 보호무역과 세계 경기 둔화로 원자재 수요가 줄면 수출이 급감하고 상품수지 적자가 누적된다. 또한 자유무역을 하는 국가는 수입가격 변동에 민감해지는데, C국의 국내 물가가 상승한 이유는 환율변동으로 수입품의 가격이 올랐기 때문이다."
+        },
+        {
+          "이름": "(2-2)",
+          "내용": "A국의 보호무역 강화 이후 C국이 핵심 소재와 원자재 수출을 제한하자 D국은 이를 확보하기 어려워졌다. D국이 자국의 소재 생산기반을 확대하면 핵심 소재를 안정적으로 조달할 수 있고, 원자재 수입국을 다변화하면 특정 국가의 공급 충격에 따른 위험을 분산할 수 있다. 이 정책은 자유무역으로 높아진 해외 의존도와 수입가격 변동에 대한 민감도를 낮추어, 기술집약적 제품의 생산과 수출을 안정적으로 이어가는 데 도움이 된다."
+        }
+      ]
+    },
+    "교사확정": {
+      "확인할_것": [
+        "원문 차이 — 테스트의 사회논술_문1 원문 두 곳을 이미지 원문대로 고칠지",
+        "(2-2) 급소 — 엔진 「D국이 시행한 정책」 vs 요구 실체 「도움」",
+        "(2-1) 「제시하고」를 중간 Q 표지 목록에 올릴지",
+        "엔진 「급소 2개 → 논제 분리」 규칙과 다중 급소 원칙의 충돌",
+        "4단계 평가 — (2-2)를 엔진은 타당, AI는 비약으로 판정",
+        "5단계 보완·추가 논제 채택 여부 (재인식 미실시)",
+        "6단계 가정 — 소문항 배점 12.5점 균등, 논술 파트 지수, ③풀기의 논술 해석, 반올림",
+        "엔진 루브릭 문제 — 세우기 부풀음, (2-1) 급소 하나만 들어감, 수리 문구, 표현 파트 없음",
+        "[봉인⑧] 제시문 관계 대조가 비어 있어 논술형 1차 필터가 멈춤",
+        "7단계 — GJ 판정불가 상태에서 모범답안을 다시 짓지 않고 손 대조한 처리를 인정할지",
+        "분량 계산 기준 — 공백 포함 825자 / 공백 제외 637자",
+        "게이트 상한 값 (봉인)",
+        "assemble.ts·confirm.test.ts 수정분 커밋 여부"
+      ]
+    }
+  }
+};
+
+let currentData = null;
+let selectedType = null;
+
+/**
+ * 노드 실체 표시용 — 앞 쉼표만 떼어 보인다. 엔진 값은 바꾸지 않는다.
+ * 끝 조사는 떼지 않는다 — 조사 vs 단어 끝 음절(길이·사이·차이)은 인식명세 규칙 5 미결.
+ */
+function displayEntity(s) {
+  return String(s ?? '').trim().replace(/^[,，]\s*/, '');
+}
+
+/** innerHTML에 넣는 엔진 출력·입력 문자열 — 「<가>」 같은 꺾쇠가 태그로 먹히지 않게 */
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+}
+
+function showTab(idx, btn) {
+  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + idx).classList.add('active');
+  btn.classList.add('active');
+}
+
+function selectType(type, btn) {
+  document.querySelectorAll('.type-btn').forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+  document.getElementById('pipeline-display').textContent = '파이프라인 ' + type;
+  document.getElementById('type-display').textContent = type;
+  selectedType = type;
+  document.getElementById('essay-inputs').style.display = type === 'C-논술' ? 'block' : 'none';
+}
+
+function loadSample(key) {
+  const data = SAMPLES[key];
+  if (!data) return;
+  currentData = data;
+  document.getElementById('question-input').value = data.문항원문;
+  renderAll(data);
+
+  // 타입 버튼 선택
+  document.querySelectorAll('.type-btn').forEach(b => {
+    if (b.textContent.trim().replace(' · ', '-') === data.파이프라인) b.click();
+    else if (data.파이프라인 === 'A-객관식' && b.textContent.includes('객관식')) b.click();
+    else if (data.파이프라인 === 'A-주관식' && b.textContent.includes('주관식')) b.click();
+    else if (data.파이프라인 === 'B-서술형' && b.textContent.includes('서술형')) b.click();
+    else if (data.파이프라인 === 'C-논술' && b.textContent.includes('논술')) b.click();
+  });
+}
+
+/** 제시문 칸 → [{id, 텍스트}] — [가]·<가>·(가) 단락 머리로 나눈다. 머리가 없으면 한 덩어리 */
+function splitPassages(text) {
+  const heads = [...text.matchAll(/(?:^|\n)\s*[\[<(]([가-하])[\]>)]\s*/g)];
+  if (!heads.length) return text.trim() ? [{ id: '제시문', 텍스트: text.trim() }] : [];
+  return heads.map((m, i) => ({
+    id: m[1],
+    텍스트: text.slice(m.index + m[0].length, heads[i + 1]?.index ?? text.length).trim(),
+  }));
+}
+
+async function runAnalysis() {
+  const q = document.getElementById('question-input').value.trim();
+  if (!q) { alert('문항 원문을 입력하세요.'); return; }
+  if (!selectedType) { alert('파이프라인을 선택하세요.'); return; }
+
+  const body = { 문항원문: q, 파이프라인: selectedType.charAt(0) };
+  if (selectedType === 'C-논술') {
+    const 논제 = document.getElementById('thesis-input').value.trim();
+    const 제시문 = splitPassages(document.getElementById('passage-input').value);
+    if (논제) body.논제 = 논제;
+    if (제시문.length) body.제시문 = 제시문;
+  }
+
+  const btn = document.getElementById('run-btn');
+  btn.disabled = true;
+  btn.textContent = '분석 중…';
+  try {
+    const res = await fetch('/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const out = await res.json();
+    if (!out.ok) {
+      alert('분석 실패: ' + ((out.error && out.error.사유) || res.status));
+      return;
+    }
+    currentData = fromEngine(out, q, selectedType);
+    if (currentData.생성입력) Object.assign(currentData.생성입력, { 논제: body.논제, 제시문: body.제시문 });
+    renderAll(currentData);
+    showTab(1, document.querySelectorAll('.nav-item')[1]);
+  } catch (e) {
+    alert('서버 연결 실패: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '분석 시작';
+  }
+}
+
+/** /analyze 응답 → 탭 자료. 값은 엔진 출력 그대로 옮기고, 엔진이 멈춘 단계는 멈춘 자리와 사유를 보인다 */
+function fromEngine(out, 원문, 파이프라인) {
+  const s = out.단계;
+  const 전체 = s.인식.전체;
+  // 엔진 사유가 이미 「[봉인N] …」로 시작하면 머리를 다시 붙이지 않는다
+  const 멈춤문 = m => !m ? '' : (m.사유 || '').startsWith(`[${m.멈춤}]`) ? m.사유 : `[${m.멈춤}] ${m.사유 || ''}`.trim();
+  const 평가 = Array.isArray(전체.평가) ? 전체.평가 : [];
+  const 통과 = 평가.length > 0 && 평가.every(e => e.결론 === '통과');
+
+  const 한계 = [
+    `엔진 타입 판정: ${s.타입 ? s.타입.type + (s.타입.subType ? ` (${s.타입.subType})` : '') : '—'}`,
+    `엔진: ${out.엔진 ? `${out.엔진.commit}${out.엔진.수정된파일 ? ` (+수정 ${out.엔진.수정된파일}파일)` : ''}` : '—'} · 인식 입력: ${s.인식.입력}`,
+    ...(전체.급소실패 ? [`급소 서지 않음 — ${전체.급소실패.flag}`] : []),
+    ...(s.인식.단위 || []).map((u, i) => `단위 ${i + 1}: ${u.조합.join('-')} · 급소 ${u.급소.map(p => p.실체).join(' / ') || '없음'}`),
+  ];
+
+  const 남은점 = [];
+  평가.forEach(e => e.대안.forEach(a => 남은점.push(`대안 (${a.rule}): 「${a.from}」 → 「${a.to}」`)));
+  if (!Array.isArray(전체.평가) && 전체.평가) 남은점.push(`평가 판정불가 — ${전체.평가.판정불가}`);
+  if (s.제시문) {
+    남은점.push(`제시문 ${s.제시문.단락.length}단락 · 전체 급소 ${s.제시문.전체급소 ? s.제시문.전체급소.실체 : `서지 않음 (${s.제시문.flag})`}`);
+  }
+  if (s.필터) 남은점.push(멈춤문(s.필터) || `1차 필터 (${s.필터.유형}): ${s.필터.필터판정}`);
+
+  return {
+    문항원문: 원문,
+    파이프라인,
+    단계2: {
+      '5색조합': 전체.조합.join('-'),
+      노드: 전체.노드,
+      급소: 전체.급소.map(p => p.실체.trim()).join(' / ') || '(서지 않음)',
+      keyword: 전체.급소.map(p => p.keyword.trim()).join(' / '),
+      한계,
+    },
+    단계3: {
+      평가: 평가.length ? `엔진 평가: ${평가.map(e => e.결론).join(' · ')}` : '엔진 평가 없음',
+      ok: 통과,
+      근거: 평가.map(e => {
+        const c = e.정합;
+        return `급소「${e.급소.trim()}」 실체 ${e.실체 ? '✓' : '✗ 형식어'} · Q 연결 ${c.linked ? '✓' : '✗'} · P에만 있음 ${c.passageOnly ? '⚠' : '✓'} · 지시대상 ${c.deictic ? '⚠' : '✓'} → ${e.결론}`;
+      }).join('\n') || '—',
+      남은점,
+    },
+    단계4: { 멈춤: 멈춤문(out.멈춘곳) || 멈춤문(s.루브릭) },
+    단계5: { 멈춤: 멈춤문(out.멈춘곳) || 멈춤문(s.모범답안) },
+    // 급소가 섰으면 탭 4에 「HMOS 이론 기반 제안 생성」 버튼 — 교사가 눌러야만 /api/generate 를 부른다
+    생성입력: 전체.급소.length ? { 문항원문: 원문, 파이프라인: 파이프라인.charAt(0), 인식: 전체 } : null,
+    교사확정: {
+      확인할_것: [
+        `엔진이 멈춘 곳 (${out.멈춘곳 ? out.멈춘곳.단계 : '—'}): ${멈춤문(out.멈춘곳) || '—'}`,
+        ...(s.필터 && s.필터.유형 ? [`1차 필터 유형 — ${s.필터.유형} (A·B는 detectType 단계형 여부로 자동 분류)`] : []),
+        '급소·노드 분해가 문항의 실체를 바르게 잡았는가',
+      ],
+    },
+  };
+}
+
+/** 탭 4 버튼 — 교사가 눌렀을 때만 /api/generate 로 HMOS 이론 기반 제안을 받는다 */
+async function generateProposal() {
+  const data = currentData;
+  if (!data || !data.생성입력) return;
+  const btn = document.getElementById('generate-btn');
+  btn.disabled = true;
+  btn.textContent = '제안 생성 중… (약 1분)';
+  try {
+    const res = await fetch('/api/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data.생성입력),
+    });
+    const gen = await res.json();
+    if (gen.error) {
+      alert('제안 생성 실패: ' + gen.error);
+      btn.disabled = false;
+      btn.textContent = 'HMOS 이론 기반 제안 생성';
+      return;
+    }
+    data.엔진멈춤 = data.단계4.멈춤;
+    data.단계4 = gen.단계4;
+    data.단계5 = gen.단계5;
+    data.단계4.공통정책.unshift(`엔진 멈춤 (제안은 이 멈춤과 별개로 생성됨): ${data.엔진멈춤}`);
+    data.교사확정.확인할_것.push(
+      '루브릭(HMOS 이론 기반 제안)의 조각·충족조건·배점이 타당한가',
+      '모범답안(HMOS 이론 기반 제안)이 급소에 닿는가 — 급소일치판정(GJ)은 봉인이라 교사가 판정',
+    );
+    renderTab4(data);
+    renderTab5(data);
+    renderTab6(data);
+  } catch (e) {
+    alert('서버 연결 실패: ' + e.message);
+    btn.disabled = false;
+    btn.textContent = 'HMOS 이론 기반 제안 생성';
+  }
+}
+
+function renderAll(data) {
+  renderTab2(data);
+  renderTab3(data);
+  renderTab4(data);
+  renderTab5(data);
+  renderTab6(data);
+}
+
+function renderTab2(data) {
+  document.getElementById('result-question').textContent = data.문항원문;
+
+  const d2 = data.단계2;
+  document.getElementById('result-pivot').textContent = d2.급소;
+  document.getElementById('result-keyword').textContent = 'keyword: ' + d2.keyword;
+
+  // 조합
+  const comboEl = document.getElementById('result-combo');
+  comboEl.innerHTML = '';
+  d2['5색조합'].split('-').forEach((c, i, arr) => {
+    const chip = document.createElement('span');
+    chip.className = 'combo-chip ' + c;
+    chip.textContent = c;
+    comboEl.appendChild(chip);
+    if (i < arr.length - 1) {
+      const arrow = document.createElement('span');
+      arrow.className = 'combo-arrow';
+      arrow.textContent = '→';
+      comboEl.appendChild(arrow);
+    }
+  });
+
+  // 노드
+  const nodesEl = document.getElementById('result-nodes');
+  nodesEl.innerHTML = '';
+  d2.노드.forEach(n => {
+    // C에서 접힌 B는 B 색 그대로, 태그만 「B(C↓)」
+    const colorKey = n.foldedFrom === 'C' ? 'B' : n.색.split(' ')[0];
+    const tag = n.foldedFrom === 'C' ? 'B(C↓)' : colorKey;
+    const 실체 = displayEntity(n.실체);
+    const 표지 = (n.표지 || '').trim();
+    const row = document.createElement('div');
+    row.className = 'node-row';
+    row.innerHTML = `
+      <span class="node-tag ${esc(colorKey)}">${esc(tag)}</span>
+      <div class="node-text">
+        <strong>${esc(n.id)}</strong> ${esc(실체)}
+        ${표지 && 표지 !== String(n.실체 ?? '').trim() ? `<span class="표지">${esc(표지)}</span>` : ''}
+      </div>
+    `;
+    nodesEl.appendChild(row);
+  });
+
+  // 한계
+  const limEl = document.getElementById('result-limits');
+  limEl.innerHTML = '';
+  (d2.한계 || []).forEach(l => {
+    const div = document.createElement('div');
+    div.className = 'note-item';
+    div.textContent = l;
+    limEl.appendChild(div);
+  });
+}
+
+function renderTab3(data) {
+  const d3 = data.단계3;
+  const box = document.getElementById('eval-result-box');
+  const txt = document.getElementById('eval-result-text');
+  // 「바르게 잡음」(A)·「타당 —」(B)은 통과, 논제별 판정(C)에 비약·불완전이 있으면 경고
+  const ok = d3.ok ?? (d3.평가.includes('바르게') || (d3.평가.startsWith('타당') && !/비약|불완전/.test(d3.평가)));
+  box.className = 'eval-result ' + (ok ? 'ok' : 'warn');
+  document.getElementById('eval-icon').textContent = ok ? '✓' : '⚑';
+  txt.textContent = d3.평가;
+  document.getElementById('eval-reason').textContent = d3.근거;
+
+  const notesEl = document.getElementById('eval-notes');
+  notesEl.innerHTML = '';
+  (d3.남은점 || []).forEach(n => {
+    const div = document.createElement('div');
+    div.className = 'note-item';
+    div.textContent = n;
+    notesEl.appendChild(div);
+  });
+}
+
+function renderTab4(data) {
+  const d4 = data.단계4;
+  const tbody = document.getElementById('rubric-tbody');
+  const policyEl = document.getElementById('rubric-policy');
+  const policyList = document.getElementById('rubric-policy-list');
+
+  document.getElementById('rubric-sub').textContent = d4 && d4.제안
+    ? 'HMOS 이론 기반 제안 · 교사 확정 전'
+    : '급소 기반 채점 축 · 배점';
+
+  if (!d4 || d4.멈춤) {
+    const 글 = d4 ? '엔진이 루브릭 앞에서 멈춤 — ' + esc(d4.멈춤) : '이 파이프라인(A)은 루브릭 단계가 없습니다';
+    // 급소가 섰으면 교사가 눌러 제안을 받을 수 있다 (엔진 멈춤 사유는 그대로 보인다)
+    const 버튼 = data.생성입력
+      ? `<div style="margin-top: 16px;"><button class="type-btn" id="generate-btn" onclick="generateProposal()">HMOS 이론 기반 제안 생성</button>
+         <div style="margin-top: 8px; font-size: 12px;">급소·5색 인식 결과로 루브릭·모범답안·해설을 제안합니다 (Claude API, 약 1분). 교사 확정 전 검토용입니다.</div></div>`
+      : '';
+    document.querySelector('.rubric-table thead tr').innerHTML = '<th>채점 축</th>';
+    tbody.innerHTML = `<tr><td style="text-align:center; color: var(--text-sub); padding: 24px;">${글}${버튼}</td></tr>`;
+    policyEl.style.display = 'none';
+    return;
+  }
+
+  tbody.innerHTML = '';
+  const rows = d4.축 || d4.논제 || [];
+
+  // 논술형인 경우 (논제별)
+  if (data.파이프라인 === 'C-논술' && rows.length && rows[0].논제) {
+    // 파트 ①~⑤ 조각 목록 (hmos_C 6_루브릭 채점축)
+    const 파트 = ['①', '②', '③', '④', '⑤'];
+    document.querySelector('.rubric-table thead tr').innerHTML = '<th>논제</th><th>급소</th><th>① 근거대기</th><th>② 세우기</th><th>③ 풀기</th><th>④ 답구하기</th><th>⑤ 표현</th>';
+    rows.forEach(r => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td><strong>${r.논제}</strong></td><td>${r.급소}</td>` +
+        파트.map(p => `<td>${(r.파트[p] || []).join('<br>') || '—'}</td>`).join('');
+      tbody.appendChild(tr);
+    });
+  } else {
+    // 서술형 (hmos_B 4_루브릭 채점축)
+    document.querySelector('.rubric-table thead tr').innerHTML = '<th>소문항</th><th>축</th><th>배점</th><th colspan="3">판정</th>';
+    rows.forEach(r => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${esc(r.소문항 || '')}</td><td><strong>${esc(r.이름)}</strong></td><td>${esc(r.배점)}</td><td colspan="3">${esc(r.판정 || '')}</td>`;
+      tbody.appendChild(tr);
+    });
+  }
+
+  // 공통 정책
+  policyList.innerHTML = '';
+  (d4.공통정책 || []).forEach(p => {
+    const div = document.createElement('div');
+    div.className = 'note-item';
+    div.textContent = p;
+    policyList.appendChild(div);
+  });
+  policyEl.style.display = 'block';
+}
+
+function renderTab5(data) {
+  const d5 = data.단계5;
+  if (!d5) return;
+
+  document.getElementById('answer-sub').textContent = d5.제안
+    ? 'HMOS 이론 기반 제안 · 교사 확정 전'
+    : '인식 결과와 대조 완료';
+  document.getElementById('answer-commentary').style.display = d5.해설 ? 'block' : 'none';
+  document.getElementById('answer-commentary-text').textContent = d5.해설 || '';
+
+  if (d5.멈춤) {
+    for (const k of ['pivot', 'align']) {
+      document.getElementById(`match-${k}-icon`).textContent = '—';
+      document.getElementById(`match-${k}-text`).textContent = '모범답안 없음';
+    }
+    const flagEl = document.getElementById('answer-flag');
+    flagEl.style.display = 'block';
+    flagEl.textContent = '엔진이 모범답안 앞에서 멈춤 — ' + d5.멈춤;
+    document.getElementById('answer-steps').innerHTML = '';
+    return;
+  }
+
+  const di = d5.인식대조;
+  document.getElementById('match-pivot-icon').textContent = di.급소포함 ? '✓' : '✗';
+  document.getElementById('match-pivot-text').textContent = di.급소포함 ? '급소가 답안에 포함됨' : '급소 미포함';
+  // 일치여부 null = 급소일치판정(GJ, 봉인⑤⑥)이 비어 판정하지 않음
+  document.getElementById('match-align-icon').textContent = di.일치여부 == null ? '—' : di.일치여부 ? '✓' : '✗';
+  document.getElementById('match-align-text').textContent = di.일치여부 == null
+    ? '판정 안 함 — GJ 봉인 비어 있음, 교사 확인'
+    : di.일치여부 ? '인식 결과와 일치' : '불일치 — 재검토 필요';
+
+  const flagEl = document.getElementById('answer-flag');
+  if (di.플래그) {
+    flagEl.style.display = 'block';
+    flagEl.textContent = di.플래그;
+  } else {
+    flagEl.style.display = 'none';
+  }
+
+  // 조각
+  const stepsEl = document.getElementById('answer-steps');
+  stepsEl.innerHTML = '';
+  const 조각들 = d5.조각 || [];
+  조각들.forEach((s, i) => {
+    const isLast = i === 조각들.length - 1;
+    const div = document.createElement('div');
+    div.className = 'answer-step';
+    div.innerHTML = `
+      <div class="step-line">
+        <div class="step-dot">${i + 1}</div>
+        ${!isLast ? '<div class="step-connector"></div>' : ''}
+      </div>
+      <div class="step-content">
+        <div class="step-name">${esc(s.이름)}</div>
+        <div class="step-body">${esc(s.내용)}</div>
+      </div>
+    `;
+    stepsEl.appendChild(div);
+  });
+}
+
+function renderTab6(data) {
+  const list = document.getElementById('confirm-list');
+  list.innerHTML = '';
+  (data.교사확정.확인할_것 || []).forEach(item => {
+    const label = document.createElement('label');
+    label.className = 'check-item';
+    label.innerHTML = `<input type="checkbox" onchange="checkConfirm()"><div class="check-text">${item}</div>`;
+    list.appendChild(label);
+  });
+  document.getElementById('confirm-done').style.display = 'none';
+  document.getElementById('confirm-btn').disabled = false;
+
+  // 오늘 날짜 기본값
+  const today = new Date().toISOString().split('T')[0];
+  document.getElementById('confirm-date').value = today;
+}
+
+function checkConfirm() {
+  // 모두 체크하면 버튼 강조 (선택사항)
+}
+
+function confirmResult() {
+  const name = document.getElementById('confirm-name').value.trim();
+  if (!name) { alert('확정자 이름을 입력하세요.'); return; }
+  document.getElementById('confirm-btn').style.display = 'none';
+  document.getElementById('confirm-done').style.display = 'block';
+}
+</script>
+
+</body>
+</html>
