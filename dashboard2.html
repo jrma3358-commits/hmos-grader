@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HMOS — 문항 분석</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=Noto+Serif+KR:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{--teal:#1A4A4A;--teal-mid:#2A6060;--gold:#C8A84B;--ivory:#F7F5F0;--ivory-dk:#EDE9E1;--muted:#8A8A8E;--ink:#1C1C1E;--white:#FFFFFF;--radius:6px;--B:#2A7A2A;--C:#1A5A9A;--P:#7A2A9A;--D:#C85A00;--Q:#C82020}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Noto Sans KR',sans-serif;background:var(--ivory);color:var(--ink);min-height:100vh;display:flex;flex-direction:column}
+.topbar{height:54px;background:var(--teal);display:flex;align-items:center;padding:0 28px;gap:16px;position:sticky;top:0;z-index:100}
+.topbar-brand{font-family:'Noto Serif KR',serif;font-size:17px;font-weight:600;color:#fff;margin-right:36px}
+.topbar-brand em{font-style:normal;color:var(--gold);font-size:11px;font-family:'Noto Sans KR',sans-serif;font-weight:300;margin-left:6px}
+.sol-tab{display:flex;align-items:center;gap:7px;padding:0 18px;height:54px;border:none;background:transparent;font-family:inherit;font-size:13px;color:rgba(255,255,255,0.5);border-bottom:3px solid transparent;cursor:pointer}
+.sol-tab.active{color:#fff;border-bottom-color:var(--gold);font-weight:500}
+.tab-num{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;background:rgba(255,255,255,0.12)}
+.sol-tab.active .tab-num{background:var(--gold);color:var(--teal)}
+.content{flex:1;max-width:900px;width:100%;margin:0 auto;padding:32px 28px}
+.step-nav{display:flex;gap:0;margin-bottom:28px;border-bottom:2px solid var(--ivory-dk)}
+.step-btn{padding:10px 20px;border:none;background:transparent;font-family:inherit;font-size:13px;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px}
+.step-btn.active{color:var(--teal);border-bottom-color:var(--teal);font-weight:500}
+.step-btn.done{color:var(--gold)}
+.step-panel{display:none}
+.step-panel.active{display:block}
+/* Step 1 입력 */
+.sec-title{font-family:'Noto Serif KR',serif;font-size:18px;font-weight:600;color:var(--teal);margin-bottom:6px}
+.sec-sub{font-size:13px;color:var(--muted);margin-bottom:20px}
+.input-area{width:100%;min-height:180px;padding:16px 18px;border:1.5px solid #C8C4BA;border-radius:8px;font-family:inherit;font-size:14px;line-height:1.8;color:var(--ink);background:var(--white);resize:vertical;outline:none}
+.input-area:focus{border-color:var(--teal-mid)}
+.input-footer{display:flex;align-items:center;justify-content:space-between;margin-top:12px}
+.input-hint{font-size:12px;color:var(--muted)}
+.run-btn{display:inline-flex;align-items:center;gap:8px;padding:10px 24px;background:var(--teal);color:#fff;border:none;border-radius:var(--radius);font-family:inherit;font-size:13.5px;font-weight:500;cursor:pointer}
+.run-btn:hover{background:var(--teal-mid)}
+.run-btn:disabled{background:var(--muted);cursor:not-allowed}
+/* Step 2 인식결과 */
+.result-section{margin-bottom:24px}
+.result-label{font-size:12px;font-weight:500;color:var(--muted);margin-bottom:10px;text-transform:uppercase;letter-spacing:0.05em}
+.color-grid{display:flex;flex-wrap:wrap;gap:8px}
+.color-chip{padding:6px 12px;border-radius:20px;font-size:13px;font-weight:500;color:#fff}
+.chip-B{background:var(--B)}
+.chip-C{background:var(--C)}
+.chip-P{background:var(--P)}
+.chip-D{background:var(--D)}
+.chip-Q{background:var(--Q)}
+.pivot-card{background:var(--white);border:1.5px solid var(--gold);border-radius:8px;padding:16px 20px}
+.pivot-label{font-size:11px;color:var(--gold);font-weight:600;margin-bottom:6px}
+.pivot-entity{font-size:15px;font-weight:500;color:var(--ink);line-height:1.6}
+.pivot-color{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;color:#fff;margin-left:8px}
+/* Step 3 완성도 */
+.verdict-card{border-radius:8px;padding:20px 24px;margin-bottom:16px}
+.verdict-pass{background:#E8F5E9;border:1.5px solid #4CAF50}
+.verdict-warn{background:#FFF8E1;border:1.5px solid #FFC107}
+.verdict-fail{background:#FFEBEE;border:1.5px solid #F44336}
+.verdict-title{font-size:16px;font-weight:600;margin-bottom:8px}
+.verdict-desc{font-size:14px;color:#555;line-height:1.6}
+/* Step 4 확정 */
+.confirm-section{text-align:center;padding:40px 0}
+.confirm-btn{padding:14px 40px;background:var(--gold);color:var(--teal);border:none;border-radius:var(--radius);font-family:inherit;font-size:15px;font-weight:600;cursor:pointer;margin:0 8px}
+.confirm-btn:hover{opacity:0.9}
+.confirm-sub{font-size:13px;color:var(--muted);margin-top:12px}
+/* 로딩 */
+.loading{text-align:center;padding:40px;color:var(--muted)}
+.spinner{display:inline-block;width:32px;height:32px;border:3px solid var(--ivory-dk);border-top-color:var(--teal);border-radius:50%;animation:spin 0.8s linear infinite;margin-bottom:12px}
+@keyframes spin{to{transform:rotate(360deg)}}
+/* 노드 목록 */
+.node-list{display:flex;flex-direction:column;gap:6px}
+.node-item{display:flex;align-items:flex-start;gap:10px;padding:8px 12px;background:var(--white);border-radius:6px;border:1px solid var(--ivory-dk)}
+.node-badge{min-width:24px;height:24px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:#fff}
+.node-text{font-size:13px;line-height:1.5;color:var(--ink)}
+</style>
+</head>
+<body>
+<nav class="topbar">
+  <span class="topbar-brand">HMOS <em>평가 솔루션</em></span>
+  <button class="sol-tab active"><span class="tab-num">①</span> 문항 분석</button>
+  <button class="sol-tab" style="color:rgba(255,255,255,0.25)"><span class="tab-num">②</span> 서논술형 채점 🔒</button>
+  <button class="sol-tab" style="color:rgba(255,255,255,0.25)"><span class="tab-num">③</span> 학습역량 진단 🔒</button>
+</nav>
+<div class="content">
+  <!-- 단계 네비게이션 -->
+  <div class="step-nav">
+    <button class="step-btn active" id="nav1" onclick="showStep(1)">① 문항 입력</button>
+    <button class="step-btn" id="nav2" onclick="showStep(2)">② 인식 결과</button>
+    <button class="step-btn" id="nav3" onclick="showStep(3)">③ 완성도</button>
+    <button class="step-btn" id="nav4" onclick="showStep(4)">④ 교사 확정</button>
+  </div>
+
+  <!-- Step 1: 입력 -->
+  <div class="step-panel active" id="step1">
+    <div class="sec-title">문항 입력</div>
+    <div class="sec-sub">분석할 문항 텍스트를 붙여넣으세요</div>
+    <textarea class="input-area" id="q-input" placeholder="예) 좌표평면 위의 세 점 A(1,0), B(3,4), C(a,b)에 대하여 삼각형 ABC의 넓이가 16일 때, 직선 BC의 방정식을 구하시오."></textarea>
+    <div class="input-footer">
+      <span class="input-hint">문항 텍스트를 붙여넣고 분석을 실행하세요</span>
+      <button class="run-btn" id="run-btn" onclick="runAnalysis()">분석 실행 →</button>
+    </div>
+  </div>
+
+  <!-- Step 2: 인식 결과 -->
+  <div class="step-panel" id="step2">
+    <div id="result-content">
+      <div class="loading"><div class="spinner"></div><br>분석 중...</div>
+    </div>
+  </div>
+
+  <!-- Step 3: 완성도 -->
+  <div class="step-panel" id="step3">
+    <div id="verdict-content">
+      <div class="loading">분석 결과를 기다리는 중...</div>
+    </div>
+  </div>
+
+  <!-- Step 4: 교사 확정 -->
+  <div class="step-panel" id="step4">
+    <div class="confirm-section">
+      <div class="sec-title" style="margin-bottom:16px">교사 최종 확정</div>
+      <p style="font-size:14px;color:var(--muted);margin-bottom:28px">인식 결과를 검토하고 확정하세요</p>
+      <button class="confirm-btn" onclick="confirmAnalysis()">✓ 확정하고 채점 재료 생성</button>
+      <button class="confirm-btn" style="background:var(--ivory-dk);color:var(--ink)" onclick="showStep(1)">← 다시 입력</button>
+      <p class="confirm-sub">확정하면 루브릭·모범답안 생성 단계로 이동합니다</p>
+    </div>
+  </div>
+</div>
+
+<script>
+let analysisData = null;
+
+function showStep(n) {
+  for(let i=1;i<=4;i++){
+    document.getElementById('step'+i).classList.remove('active');
+    document.getElementById('nav'+i).classList.remove('active');
+  }
+  document.getElementById('step'+n).classList.add('active');
+  document.getElementById('nav'+n).classList.add('active');
+}
+
+function colorClass(c){return 'chip-'+c;}
+function colorBg(c){const m={B:'#2A7A2A',C:'#1A5A9A',P:'#7A2A9A',D:'#C85A00',Q:'#C82020'};return m[c]||'#888';}
+function colorName(c){const m={B:'대상',C:'제약',P:'상황',D:'정의',Q:'질문'};return m[c]||c;}
+
+async function runAnalysis() {
+  const q = document.getElementById('q-input').value.trim();
+  if(!q){alert('문항을 입력하세요');return;}
+
+  document.getElementById('run-btn').disabled = true;
+  document.getElementById('run-btn').textContent = '분석 중...';
+
+  document.getElementById('result-content').innerHTML = '<div class="loading"><div class="spinner"></div><br>HMOS 엔진 분석 중...</div>';
+  document.getElementById('verdict-content').innerHTML = '<div class="loading">분석 중...</div>';
+  showStep(2);
+
+  try {
+    const res = await fetch('/api/analyze', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({question:q})
+    });
+    const data = await res.json();
+
+    if(data.error){
+      document.getElementById('result-content').innerHTML = '<div style="color:red;padding:20px">오류: '+data.error+'</div>';
+      return;
+    }
+
+    analysisData = data;
+    renderResult(data);
+    renderVerdict(data);
+
+  } catch(e) {
+    document.getElementById('result-content').innerHTML = '<div style="color:red;padding:20px">서버 오류: '+e.message+'</div>';
+  } finally {
+    document.getElementById('run-btn').disabled = false;
+    document.getElementById('run-btn').textContent = '분석 실행 →';
+  }
+}
+
+function renderResult(data) {
+  const parsed = data.parsed || {};
+  const nodes = parsed.nodes || [];
+  const colors = parsed.colors || {};
+  const k = parsed.급소 || {};
+
+  // 5색 노드 분류
+  let colorHtml = '';
+  const colorOrder = ['B','C','P','D','Q'];
+  for(const c of colorOrder){
+    const items = colors[c] || [];
+    if(items.length === 0) continue;
+    colorHtml += `<div style="margin-bottom:12px">
+      <div style="font-size:11px;font-weight:600;color:${colorBg(c)};margin-bottom:6px">${c} ${colorName(c)}</div>
+      <div class="node-list">`;
+    for(const item of items){
+      colorHtml += `<div class="node-item">
+        <div class="node-badge" style="background:${colorBg(c)}">${c}</div>
+        <div class="node-text">${item}</div>
+      </div>`;
+    }
+    colorHtml += `</div></div>`;
+  }
+
+  // 급소
+  const pivotHtml = k.entity ? `
+    <div class="pivot-card">
+      <div class="pivot-label">🎯 급소 (K)</div>
+      <div class="pivot-entity">
+        ${k.entity}
+        <span class="pivot-color" style="background:${colorBg(k.color||'B')}">${k.color||'B'} ${colorName(k.color||'B')}</span>
+      </div>
+      ${k.keyword ? `<div style="font-size:12px;color:var(--muted);margin-top:8px">keyword: ${k.keyword}</div>` : ''}
+    </div>` : '<div style="color:var(--muted);font-size:14px">급소를 찾지 못했습니다</div>';
+
+  document.getElementById('result-content').innerHTML = `
+    <div class="result-section">
+      <div class="result-label">급소 (무게중심)</div>
+      ${pivotHtml}
+    </div>
+    <div class="result-section">
+      <div class="result-label">5색 분해</div>
+      ${colorHtml || '<div style="color:var(--muted);font-size:14px">노드를 찾지 못했습니다</div>'}
+    </div>
+    <div style="margin-top:20px;text-align:right">
+      <button class="run-btn" onclick="showStep(3)">완성도 확인 →</button>
+    </div>`;
+}
+
+function renderVerdict(data) {
+  const parsed = data.parsed || {};
+  const nodes = parsed.nodes || [];
+  const k = parsed.급소 || {};
+
+  // 간단한 완성도 판정
+  const hasB = (parsed.colors&&parsed.colors.B&&parsed.colors.B.length>0);
+  const hasQ = (parsed.colors&&parsed.colors.Q&&parsed.colors.Q.length>0);
+  const hasK = !!k.entity;
+
+  let verdict, cls, desc;
+  if(hasB && hasQ && hasK){
+    verdict = '✅ 통과';
+    cls = 'verdict-pass';
+    desc = '급소(B)·질문(Q)·급소가 명확히 인식됐습니다. 채점 재료 생성이 가능합니다.';
+  } else if(hasK) {
+    verdict = '⚠️ 보완 권장';
+    cls = 'verdict-warn';
+    desc = '급소는 잡혔으나 일부 요소가 불명확합니다. 확인 후 진행하세요.';
+  } else {
+    verdict = '❌ 수정 필요';
+    cls = 'verdict-fail';
+    desc = '급소를 명확히 잡지 못했습니다. 문항을 다시 확인하세요.';
+  }
+
+  document.getElementById('verdict-content').innerHTML = `
+    <div class="verdict-card ${cls}">
+      <div class="verdict-title">${verdict}</div>
+      <div class="verdict-desc">${desc}</div>
+    </div>
+    <div style="margin-top:16px;font-size:13px;color:var(--muted)">
+      B(대상): ${hasB?'✓':'✗'} &nbsp;|&nbsp;
+      Q(질문): ${hasQ?'✓':'✗'} &nbsp;|&nbsp;
+      급소: ${hasK?'✓ '+k.entity:'✗'}
+    </div>
+    <div style="margin-top:20px;text-align:right">
+      <button class="run-btn" onclick="showStep(4)">교사 확정 →</button>
+    </div>`;
+}
+
+function confirmAnalysis() {
+  alert('확정됐습니다. 채점 재료 생성 기능은 준비 중입니다.');
+}
+</script>
+</body>
+</html>
