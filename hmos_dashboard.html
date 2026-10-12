@@ -692,7 +692,7 @@
     <div class="tab-pane" id="tab-3">
       <div class="section-header">
         <div class="section-title">루브릭</div>
-        <div class="section-sub">급소 기반 채점 축 · 배점</div>
+        <div class="section-sub" id="rubric-sub">급소 기반 채점 축 · 배점</div>
       </div>
 
       <div class="card" id="rubric-content">
@@ -724,7 +724,7 @@
     <div class="tab-pane" id="tab-4">
       <div class="section-header">
         <div class="section-title">모범답안</div>
-        <div class="section-sub">인식 결과와 대조 완료</div>
+        <div class="section-sub" id="answer-sub">인식 결과와 대조 완료</div>
       </div>
 
       <!-- 인식 대조 요약 -->
@@ -749,6 +749,12 @@
       <div class="card">
         <div class="card-title">답안 (단계별)</div>
         <div class="answer-steps" id="answer-steps"></div>
+      </div>
+
+      <!-- 해설 (HMOS 이론 기반 제안일 때만) -->
+      <div class="card" id="answer-commentary" style="display:none;">
+        <div class="card-title">해설</div>
+        <div style="font-size: 13px; line-height: 1.7; white-space: pre-wrap;" id="answer-commentary-text"></div>
       </div>
     </div>
 
@@ -1379,31 +1385,53 @@ async function runAnalysis() {
   if (!q) { alert('문항 원문을 입력하세요.'); return; }
   if (!selectedType) { alert('파이프라인을 선택하세요.'); return; }
 
-  const body = { 문항원문: q, 파이프라인: selectedType.charAt(0) };
+  const 파이프라인 = selectedType.charAt(0);
+  let 논제 = '', 제시문 = [];
   if (selectedType === 'C-논술') {
-    const 논제 = document.getElementById('thesis-input').value.trim();
-    const 제시문 = splitPassages(document.getElementById('passage-input').value);
-    if (논제) body.논제 = 논제;
-    if (제시문.length) body.제시문 = 제시문;
+    논제 = document.getElementById('thesis-input').value.trim();
+    제시문 = splitPassages(document.getElementById('passage-input').value);
   }
 
   const btn = document.getElementById('run-btn');
   btn.disabled = true;
   btn.textContent = '분석 중…';
   try {
-    const res = await fetch('/analyze', {
+    const res = await fetch('/api/analyze', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
+      body: JSON.stringify({ question: q }),
     });
     const out = await res.json();
-    if (!out.ok) {
-      alert('분석 실패: ' + ((out.error && out.error.사유) || res.status));
+    if (out.error) {
+      alert('분석 실패: ' + out.error);
       return;
     }
-    currentData = fromEngine(out, q, selectedType);
+    currentData = fromEngine(out.parsed, q, selectedType);
     renderAll(currentData);
     showTab(1, document.querySelectorAll('.nav-item')[1]);
+
+    // 4·5단계 — HMOS 이론 기반 제안 (급소가 서지 않았으면 서버가 멈춤 사유를 준다)
+    btn.textContent = '루브릭·모범답안 제안 생성 중…';
+    const gres = await fetch('/api/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 문항원문: q, 파이프라인, 논제, 제시문, analysis: out.parsed }),
+    });
+    const gen = await gres.json();
+    if (gen.error) {
+      currentData.단계4 = { 멈춤: gen.error };
+      currentData.단계5 = { 멈춤: gen.error };
+    } else {
+      currentData.단계4 = gen.단계4;
+      currentData.단계5 = gen.단계5;
+      currentData.교사확정.확인할_것.push(
+        '루브릭(HMOS 이론 기반 제안)의 조각·충족조건·배점이 타당한가',
+        '모범답안(HMOS 이론 기반 제안)이 급소에 닿는가 — 급소일치판정(GJ)은 봉인이라 교사가 판정',
+      );
+    }
+    renderTab4(currentData);
+    renderTab5(currentData);
+    renderTab6(currentData);
   } catch (e) {
     alert('서버 연결 실패: ' + e.message);
   } finally {
@@ -1412,57 +1440,29 @@ async function runAnalysis() {
   }
 }
 
-/** /analyze 응답 → 탭 자료. 값은 엔진 출력 그대로 옮기고, 엔진이 멈춘 단계는 멈춘 자리와 사유를 보인다 */
-function fromEngine(out, 원문, 파이프라인) {
-  const s = out.단계;
-  const 전체 = s.인식.전체;
-  // 엔진 사유가 이미 「[봉인N] …」로 시작하면 머리를 다시 붙이지 않는다
-  const 멈춤문 = m => !m ? '' : (m.사유 || '').startsWith(`[${m.멈춤}]`) ? m.사유 : `[${m.멈춤}] ${m.사유 || ''}`.trim();
-  const 평가 = Array.isArray(전체.평가) ? 전체.평가 : [];
-  const 통과 = 평가.length > 0 && 평가.every(e => e.결론 === '통과');
-
-  const 한계 = [
-    `엔진 타입 판정: ${s.타입 ? s.타입.type + (s.타입.subType ? ` (${s.타입.subType})` : '') : '—'}`,
-    `엔진: ${out.엔진 ? `${out.엔진.commit}${out.엔진.수정된파일 ? ` (+수정 ${out.엔진.수정된파일}파일)` : ''}` : '—'} · 인식 입력: ${s.인식.입력}`,
-    ...(전체.급소실패 ? [`급소 서지 않음 — ${전체.급소실패.flag}`] : []),
-    ...(s.인식.단위 || []).map((u, i) => `단위 ${i + 1}: ${u.조합.join('-')} · 급소 ${u.급소.map(p => p.실체).join(' / ') || '없음'}`),
-  ];
-
-  const 남은점 = [];
-  평가.forEach(e => e.대안.forEach(a => 남은점.push(`대안 (${a.rule}): 「${a.from}」 → 「${a.to}」`)));
-  if (!Array.isArray(전체.평가) && 전체.평가) 남은점.push(`평가 판정불가 — ${전체.평가.판정불가}`);
-  if (s.제시문) {
-    남은점.push(`제시문 ${s.제시문.단락.length}단락 · 전체 급소 ${s.제시문.전체급소 ? s.제시문.전체급소.실체 : `서지 않음 (${s.제시문.flag})`}`);
-  }
-  if (s.필터) 남은점.push(멈춤문(s.필터) || `1차 필터 (${s.필터.유형}): ${s.필터.필터판정}`);
-
+/** /api/analyze 의 parsed → 탭 자료. 값은 엔진 출력 그대로 옮긴다. 4·5단계는 /api/generate 응답으로 채운다 */
+function fromEngine(p, 원문, 파이프라인) {
+  const 통과 = p.평가.length > 0 && p.평가.every(e => e === '통과');
   return {
     문항원문: 원문,
     파이프라인,
     단계2: {
-      '5색조합': 전체.조합.join('-'),
-      노드: 전체.노드,
-      급소: 전체.급소.map(p => p.실체.trim()).join(' / ') || '(서지 않음)',
-      keyword: 전체.급소.map(p => p.keyword.trim()).join(' / '),
-      한계,
+      '5색조합': p.조합.split('').join('-'),
+      노드: p.nodes.map(n => ({ id: n.id, 색: n.color, 실체: n.entity, 표지: n.surface })),
+      급소: p.급소들.map(k => k.entity).join(' / ') || '(서지 않음)',
+      keyword: p.급소들.map(k => k.keyword).join(' / '),
+      한계: p.급소실패 ? [`급소 서지 않음 — ${p.급소실패}`] : [],
     },
     단계3: {
-      평가: 평가.length ? `엔진 평가: ${평가.map(e => e.결론).join(' · ')}` : '엔진 평가 없음',
+      평가: p.평가.length ? `엔진 평가: ${p.평가.join(' · ')}` : '엔진 평가 없음',
       ok: 통과,
-      근거: 평가.map(e => {
-        const c = e.정합;
-        return `급소「${e.급소.trim()}」 실체 ${e.실체 ? '✓' : '✗ 형식어'} · Q 연결 ${c.linked ? '✓' : '✗'} · P에만 있음 ${c.passageOnly ? '⚠' : '✓'} · 지시대상 ${c.deictic ? '⚠' : '✓'} → ${e.결론}`;
-      }).join('\n') || '—',
-      남은점,
+      근거: p.평가근거 || '—',
+      남은점: [],
     },
-    단계4: { 멈춤: 멈춤문(out.멈춘곳) || 멈춤문(s.루브릭) },
-    단계5: { 멈춤: 멈춤문(out.멈춘곳) || 멈춤문(s.모범답안) },
+    단계4: { 멈춤: '제안 생성 중…' },
+    단계5: { 멈춤: '제안 생성 중…' },
     교사확정: {
-      확인할_것: [
-        `엔진이 멈춘 곳 (${out.멈춘곳 ? out.멈춘곳.단계 : '—'}): ${멈춤문(out.멈춘곳) || '—'}`,
-        ...(s.필터 && s.필터.유형 ? [`1차 필터 유형 — ${s.필터.유형} (A·B는 detectType 단계형 여부로 자동 분류)`] : []),
-        '급소·노드 분해가 문항의 실체를 바르게 잡았는가',
-      ],
+      확인할_것: ['급소·노드 분해가 문항의 실체를 바르게 잡았는가'],
     },
   };
 }
@@ -1557,8 +1557,12 @@ function renderTab4(data) {
   const policyEl = document.getElementById('rubric-policy');
   const policyList = document.getElementById('rubric-policy-list');
 
+  document.getElementById('rubric-sub').textContent = d4 && d4.제안
+    ? 'HMOS 이론 기반 제안 · 교사 확정 전'
+    : '급소 기반 채점 축 · 배점';
+
   if (!d4 || d4.멈춤) {
-    const 글 = d4 ? '엔진이 루브릭 앞에서 멈춤 — ' + esc(d4.멈춤) : '이 파이프라인(A)은 루브릭 단계가 없습니다';
+    const 글 = d4 ? '루브릭 앞에서 멈춤 — ' + esc(d4.멈춤) : '이 파이프라인(A)은 루브릭 단계가 없습니다';
     document.querySelector('.rubric-table thead tr').innerHTML = '<th>채점 축</th>';
     tbody.innerHTML = `<tr><td style="text-align:center; color: var(--text-sub); padding: 24px;">${글}</td></tr>`;
     policyEl.style.display = 'none';
@@ -1584,7 +1588,7 @@ function renderTab4(data) {
     document.querySelector('.rubric-table thead tr').innerHTML = '<th>소문항</th><th>축</th><th>배점</th><th colspan="3">판정</th>';
     rows.forEach(r => {
       const tr = document.createElement('tr');
-      tr.innerHTML = `<td>${r.소문항 || ''}</td><td><strong>${r.이름}</strong></td><td>${r.배점}</td><td colspan="3">${r.판정 || ''}</td>`;
+      tr.innerHTML = `<td>${esc(r.소문항 || '')}</td><td><strong>${esc(r.이름)}</strong></td><td>${esc(r.배점)}</td><td colspan="3">${esc(r.판정 || '')}</td>`;
       tbody.appendChild(tr);
     });
   }
@@ -1604,6 +1608,13 @@ function renderTab5(data) {
   const d5 = data.단계5;
   if (!d5) return;
 
+  document.getElementById('answer-sub').textContent = d5.제안
+    ? 'HMOS 이론 기반 제안 · 교사 확정 전'
+    : '인식 결과와 대조 완료';
+  const 해설El = document.getElementById('answer-commentary');
+  해설El.style.display = d5.해설 ? 'block' : 'none';
+  document.getElementById('answer-commentary-text').textContent = d5.해설 || '';
+
   if (d5.멈춤) {
     for (const k of ['pivot', 'align']) {
       document.getElementById(`match-${k}-icon`).textContent = '—';
@@ -1611,7 +1622,7 @@ function renderTab5(data) {
     }
     const flagEl = document.getElementById('answer-flag');
     flagEl.style.display = 'block';
-    flagEl.textContent = '엔진이 모범답안 앞에서 멈춤 — ' + d5.멈춤;
+    flagEl.textContent = '모범답안 앞에서 멈춤 — ' + d5.멈춤;
     document.getElementById('answer-steps').innerHTML = '';
     return;
   }
@@ -1619,8 +1630,11 @@ function renderTab5(data) {
   const di = d5.인식대조;
   document.getElementById('match-pivot-icon').textContent = di.급소포함 ? '✓' : '✗';
   document.getElementById('match-pivot-text').textContent = di.급소포함 ? '급소가 답안에 포함됨' : '급소 미포함';
-  document.getElementById('match-align-icon').textContent = di.일치여부 ? '✓' : '✗';
-  document.getElementById('match-align-text').textContent = di.일치여부 ? '인식 결과와 일치' : '불일치 — 재검토 필요';
+  // 일치여부 null = 급소일치판정(GJ, 봉인⑤⑥)이 비어 판정하지 않음
+  document.getElementById('match-align-icon').textContent = di.일치여부 == null ? '—' : di.일치여부 ? '✓' : '✗';
+  document.getElementById('match-align-text').textContent = di.일치여부 == null
+    ? '판정 안 함 — GJ 봉인 비어 있음, 교사 확인'
+    : di.일치여부 ? '인식 결과와 일치' : '불일치 — 재검토 필요';
 
   const flagEl = document.getElementById('answer-flag');
   if (di.플래그) {
@@ -1644,8 +1658,8 @@ function renderTab5(data) {
         ${!isLast ? '<div class="step-connector"></div>' : ''}
       </div>
       <div class="step-content">
-        <div class="step-name">${s.이름}</div>
-        <div class="step-body">${s.내용}</div>
+        <div class="step-name">${esc(s.이름)}</div>
+        <div class="step-body">${esc(s.내용)}</div>
       </div>
     `;
     stepsEl.appendChild(div);
