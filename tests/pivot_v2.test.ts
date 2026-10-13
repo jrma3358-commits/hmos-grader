@@ -1131,6 +1131,17 @@ describe('서술형태 급소 — C-F 노드 안의 핵심어 (오종래 2026-10
     assert.ok(other.ok && other.pivot.reason === '서술형태', '나머지 C-F는 그대로 B보다 먼저');
   });
 
+  it('「측면에서」도 서술방법 표지 — B가 있으면 B가 급소 (오종래 2026-10-13)', () => {
+    const t: SealedTable = {
+      ...table(['SF']),
+      switches: [sw('SF', ['측면에서'], 'C', ['측면에서']), sw('SB', ['~@B'], 'B'), sw('SQ', ['~@Q'], 'Q')],
+    };
+    const withB = analyze_pivot(build_path_graph('형태 @B 경쟁력 측면에서 설명 @Q', t), t);
+    assert.ok(withB.ok && withB.pivot.node.color === 'B' && withB.pivot.node.entity === '형태');
+    const noB = analyze_pivot(build_path_graph('경쟁력 측면에서 설명 @Q', t), t);
+    assert.ok(noB.ok && noB.pivot.reason === '서술형태');
+  });
+
   it('C-F 노드가 둘이면 뒤쪽(서술 방향)이 급소 — 앞쪽은 서술 수단 (오종래 2026-10-13)', () => {
     const t = table(['SF']);
     const g = build_path_graph('형태 @B 논박@M 관점 @V 설명 @Q', t);
