@@ -1886,7 +1886,7 @@ const C화면 = {
   2: { 제목: '논제 인식', 도구: 'make', 설명: '엔진 — 소문항마다 핵심 · 서술 방식 · 조건 · 배경을 문장으로. 공통 발문은 떼어 내고 인식합니다' },
   3: { 제목: '제시문 분석', 도구: 'make', 설명: '엔진 — 제시문 무게중심과 단락마다 중심 실체를 문장으로' },
   4: { 제목: '연결 평가 (4축)', 도구: 'make', 설명: '엔진 — 논제 핵심과 제시문 단락이 어디서 연결되는지 문장으로' },
-  5: { 제목: '논제 정교화', 도구: 'make', 설명: '엔진 진단 [봉인⑬] 4갈래 · 정교화안 문장은 Claude가 엔진 진단에서' },
+  5: { 제목: '논제 정교화', 도구: 'make', 설명: '엔진 — 정교화할 곳을 문장으로 · 정교화안 문장은 Claude가 엔진 진단에서' },
   6: { 제목: '추가 논제', 도구: 'make', 설명: 'F_인문사회 6유형 — 엔진이 잡은 연결 안에서 Claude가 문장으로' },
   7: { 제목: '교사 확정', 도구: 'grade', 설명: '논제를 선택·수정·확정합니다 — 확정 논제는 엔진이 다시 인식합니다' },
   8: { 제목: '루브릭', 도구: 'grade', 설명: '확정 논제 급소(엔진)에서 채점 축 · C-F가 있으면 서술 방향 축' },
@@ -1993,6 +1993,9 @@ function 조사(글, 받침, 없음) {
 const 을를 = 글 => 조사(글, '을', '를');
 const 이가 = 글 => 조사(글, '이', '가');
 const 과와 = 글 => 조사(글, '과', '와');
+const 이었였 = 글 => 조사(글, '이었', '였');
+/** 「으로/로」 — ㄹ 받침은 「로」 */
+const 으로로 = 글 => (String(글 ?? '').trim().slice(-1).charCodeAt(0) - 0xAC00) % 28 === 8 ? '로' : 조사(글, '으로', '로');
 
 /**
  * 엔진 노드 → 실체 문장 (오종래 2026-10-13). 5색 태그는 화면에 내지 않는다 — 분류는 엔진 안에서만.
@@ -2104,37 +2107,78 @@ function renderC4() {
 // ── 5단계 논제 정교화 (엔진 진단 → Claude 문장) ──
 const 갈래번호 = { 일방흐름: '①', 서술복잡: '②', 급소불명확: '③', 사족: '④' };
 
+/**
+ * 봉인⑬ 진단 → 문장 (오종래 2026-10-13 문장 틀). 엔진은 갈래·근거 글만 주므로 근거 글에서 「실체」·개수를 읽는다.
+ * 근거 글 형식이 안 맞으면 갈래 문장만 — 원문은 「엔진 결과 보기」에 남는다
+ */
+function 진단문장(d) {
+  const 실체들 = [...String(d.근거 || '').matchAll(/「(.+?)」/g)].map(m => m[1].trim());
+  const 묶음 = 글들 => 글들.map(t => `「${esc(t)}」`).join(' · ');
+  if (d.갈래 === '일방흐름') {
+    return 실체들.length >= 2
+      ? `${묶음([실체들[0]])}에서 조건 없이 바로 ${묶음([실체들[1]])}${으로로(실체들[1])} 넘어갑니다 — 한 방향으로만 흐르는 논제입니다.`
+      : '조건 없이 한 방향으로만 흐르는 논제입니다.';
+  }
+  if (d.갈래 === '서술복잡') {
+    const n = (String(d.근거 || '').match(/(\d+)개/) || [])[1];
+    return `다룰 대상이 ${n ? n + '개인' : '많은'}데 서술 방식이 정해져 있지 않습니다.`;
+  }
+  if (d.갈래 === '급소불명확') {
+    return /^MULTIPLE_CONVERGENCE/.test(d.근거 || '') && 실체들.length
+      ? `핵심 후보가 ${묶음(실체들)}${으로로(실체들[실체들.length - 1])} 갈려 하나로 모이지 않습니다.`
+      : '무엇을 묻는지 핵심이 서지 않습니다.';
+  }
+  if (d.갈래 === '사족') {
+    return 실체들.length ? `논제 핵심 ${묶음([실체들[0]])}의 근거가 제시문에 없습니다.` : '논제 핵심의 근거가 제시문에 없습니다.';
+  }
+  return esc(d.갈래);
+}
+
+const 남은신호 = { 일방흐름: '한 방향으로만 흐른다는', 서술복잡: '서술이 복잡하다는', 급소불명확: '핵심이 서지 않는다는' };
+
+/** 정교화안 재인식(엔진) → 문장 */
+function 재인식문장(r) {
+  if (r.재인식.오류) return [`엔진에 다시 넣었지만 읽지 못했습니다 (${esc(r.재인식.오류)}).`];
+  const 여럿 = r.재인식.소문항.length > 1;
+  const 줄 = r.재인식.소문항.map(s => `${여럿 ? esc(단위이름(s.번호)) + ' ' : ''}${s.급소.length
+    ? `엔진에 다시 넣으니 핵심이 ${s.급소.map(k => `「${esc(k)}」`).join(' · ')}${으로로(s.급소[s.급소.length - 1])} 섭니다.`
+    : `엔진에 다시 넣어도 핵심이 서지 않습니다 (${esc((s.급소실패 && s.급소실패.flag) || '—')}).`}`);
+  const 남은 = [...new Set(r.재인식.진단.filter(d => d.갈래 !== '사족').map(d => d.갈래))];
+  줄.push(...(남은.length ? 남은.map(g => `아직 ${남은신호[g] || esc(g)} 신호가 남아 있습니다.`) : ['남은 정교화 신호가 없습니다.']));
+  return 줄;
+}
+
 function renderC5() {
   const 진단 = C.분석.단계.정교화.진단;
   const 단위들 = [...new Set([...C.분석.단계.인식.소문항.map(s => s.번호), ...진단.map(d => d.단위)])];
-  const 진단카드 = 단위들.map(u => {
+  const 여럿 = 단위들.length > 1;
+  const 진단줄 = 단위들.flatMap(u => {
+    const 앞 = 여럿 ? `${esc(단위이름(u))} ` : '';
     const ds = 진단.filter(d => d.단위 === u);
-    return `<div class="c-row"><strong>${esc(단위이름(u))}</strong> ${ds.length
-      ? ds.map(d => `<div style="margin-top:6px;"><span class="badge ${d.갈래 === '사족' ? 'warn' : 'muted'}">${갈래번호[d.갈래]} ${esc(d.갈래)}</span>${esc(d.근거)}</div>`).join('')
-      : ' <span class="badge ok">신호 없음</span>'}</div>`;
-  }).join('');
+    return ds.length ? ds.map(d => 앞 + 진단문장(d)) : [`${앞}이 논제는 정교화할 곳이 없습니다.`];
+  });
   const 생성대상 = 진단.filter(d => d.갈래 !== '사족').length;
   const 결과 = C.정교화 ? C.정교화.정교화.map(r => `
     <div class="card">
-      <div class="card-title">${AI배지}${갈래번호[r.갈래]} ${esc(r.갈래)} · ${esc(단위이름(r.단위))}</div>
-      <div class="c-meta">원 급소(엔진): ${r.원급소.map(k => `「${esc(k)}」`).join(' · ') || '—'}</div>
+      <div class="card-title">${AI배지}정교화안${여럿 ? ' · ' + esc(단위이름(r.단위)) : ''}</div>
+      ${r.원급소.length ? `<div class="c-meta">원래 핵심은 ${r.원급소.map(k => `「${esc(k)}」`).join(' · ')}${이었였(r.원급소[r.원급소.length - 1])}습니다.</div>` : ''}
       <div class="question-box">${esc(r.논제)}</div>
       <div class="c-row"><strong>바꾼 점</strong> ${esc(r.바꾼점)}</div>
       <div class="c-row"><strong>근거</strong> ${esc(r.근거)}</div>
-      <div class="c-row">${엔진배지}<strong>재인식</strong> ${r.재인식.오류 ? esc(r.재인식.오류)
-        : r.재인식.소문항.map(s => `${esc(단위이름(s.번호))} 급소 ${s.급소.length ? s.급소.map(k => `「${esc(k)}」`).join(' · ') : `서지 않음 (${esc((s.급소실패 && s.급소실패.flag) || '—')})`}`).join(' / ')
-          + ` · 남은 진단 ${r.재인식.진단.filter(d => d.갈래 !== '사족').map(d => 갈래번호[d.갈래] + d.갈래).join(' ') || '없음'}`}</div>
+      <div class="reading-box">${엔진배지}${재인식문장(r).map(t => `<p>${t}</p>`).join('')}</div>
+      ${엔진원본Html(r.재인식)}
     </div>`).join('') : '';
   document.getElementById('c5-body').innerHTML = `
     <div class="card">
-      <div class="card-title">${엔진배지}정교화 진단 [봉인⑬]</div>
-      ${진단카드}
+      <div class="card-title">${엔진배지}정교화 진단</div>
+      <div class="reading-box">${진단줄.map(t => `<p>${t}</p>`).join('')}</div>
+      ${엔진원본Html(진단)}
     </div>
     <div class="card">
       <div class="card-title">정교화안</div>
-      <div class="c-meta">①②③ 진단마다 Claude가 정교화한 논제를 문장으로 씁니다 (명세서-2 §3). ④ 사족은 표시만 — 교사 확인.
-        정교화안은 엔진에 다시 넣어 급소를 확인합니다.</div>
-      ${생성대상 ? `<button class="type-btn" id="c5-btn" onclick="refineC()">정교화안 문장 생성 (${생성대상}건)</button>` : '<div class="c-meta">①②③ 진단이 없어 만들 정교화안이 없습니다</div>'}
+      <div class="c-meta">진단마다 Claude가 정교화한 논제를 문장으로 씁니다 (명세서-2 §3). 근거가 제시문에 없는 핵심은 표시만 — 교사 확인.
+        정교화안은 엔진에 다시 넣어 핵심을 확인합니다.</div>
+      ${생성대상 ? `<button class="type-btn" id="c5-btn" onclick="refineC()">정교화안 문장 생성 (${생성대상}건)</button>` : '<div class="c-meta">정교화할 곳이 없어 만들 정교화안이 없습니다</div>'}
     </div>
     ${결과}`;
 }
