@@ -2068,7 +2068,7 @@ function renderC4() {
   body.innerHTML = `
     <div class="card">
       <div class="card-title">${엔진배지}논제 ↔ 제시문</div>
-      <div class="reading-box"><p>논제와 제시문이 ${N}개 단락에서 연결됩니다.</p></div>
+      <div class="reading-box"><p>${N ? `논제와 제시문이 ${N}개 단락에서 연결됩니다.` : '논제와 제시문이 연결되는 단락이 없습니다.'}</p></div>
       ${줄.length ? `<div class="note-list">${줄.map(t => `<div class="note-item">${t}</div>`).join('')}</div>` : '<div class="c-empty">급소가 선 소문항이 없습니다</div>'}
       ${엔진원본Html(C.분석.단계.정합)}
     </div>`;
