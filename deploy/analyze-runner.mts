@@ -3,7 +3,8 @@
 //   요청: { 문항원문, 파이프라인: 'A'|'B'|'C', 논제?, 제시문?, 사족? }
 //   A·B 흐름: 인식 → 1차 필터 확인화면 → [교사 ① 승인 대기]
 //   C 흐름 (조립설명서 C·논술 9단계, HMOS 절대 원칙 — 엔진이 잡는다): 2단계 소문항별 인식
-//     → 3·4단계 제시문 단락 급소 ↔ 논제 급소 연결·사족 (제시문이 오면) → 5단계 정교화 진단[봉인⑬]. 1차 필터는 타지 않는다
+//     → 3·4단계 제시문 단락 급소 ↔ 논제 급소 연결·사족 (제시문이 오면) → 5단계 정교화 진단[봉인⑬]
+//     → 6단계 단락 급소 관계·6유형·추가/보완[봉인⑭ 초안] (제시문이 오면). 1차 필터는 타지 않는다
 //   사족: 제시문 없이 진단할 때 [{소문항, 급소}]
 // 엔진이 멈추면(SealedError·급소 실패) 그 자리와 사유를 그대로 싣고 끝낸다 — 어디서 멈췄는지가 곧 다음에 채울 봉인이다.
 // 루브릭·모범답안(generate_rubric)은 교사가 확인화면에서 ①로 승인한 문항만 받는다 (명세서-2 §6) — 여기서는 승인하지 않는다.
@@ -21,6 +22,7 @@ const { 봉인13_정교화진단 } = await load('src/filter/sealed/items.ts');
 const { split_thesis } = await load('src/thesis/split.ts');
 const { align_passage } = await load('src/thesis/align.ts');
 const { essay_pivot_chunks } = await load('src/thesis/chunk.ts');
+const { 급소단락들, 봉인14_단락관계 } = await load('src/thesis/relate.ts');
 
 const [reqPath, outPath] = process.argv.slice(2);
 const req = JSON.parse(readFileSync(reqPath, 'utf8'));
@@ -103,6 +105,8 @@ try {
           flag: passage.flag ?? null,
         };
         out.단계.정합 = { 연결: 정합.연결, 사족: 정합.사족, 소문항: 정합.소문항.map((x: any) => ({ 번호: x.번호, 배경: x.연결.background, 범위밖: x.연결.outOfScope })) };
+        // 6단계 — 단락 급소 관계 → 6유형 → 기존 논제와 비교 [봉인⑭ 초안, 오종래 2026-10-14]. 보완은 5단계로 넘긴다
+        out.단계.관계 = { 초안: true, 급소단락: 급소단락들(정합, passage), 관계: 봉인14_단락관계(정합, passage) };
       } catch (e) {
         stop('제시문', 멈춤of(e));
       }
