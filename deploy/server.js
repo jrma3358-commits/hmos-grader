@@ -436,5 +436,6 @@ ${rules}`;
 
 app.get('/dashboard',(req,res)=>res.sendFile(path.join(__dirname,'hmos_dashboard.html')));
 
-app.listen(PORT,()=>console.log('HMOS '+PORT));
+// nginx(https://hmos.hunminos.com)만 닿게 — 3000번을 밖에 열지 않는다 (2026-10-13)
+app.listen(PORT,'127.0.0.1',()=>console.log('HMOS 127.0.0.1:'+PORT));
 
