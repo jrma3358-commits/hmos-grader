@@ -10,9 +10,10 @@
 //   논제 급소가 제시문 어느 단락 급소와도 연결되지 않으면 사족 (단락 단위).
 //   연결선 = 그 논제 급소(노드)를 열쇠로 세워진 단락 급소. 논제의 다른 B를 열쇠로 선 단락 급소는 그 급소의 연결이 아니다.
 //   급소가 서지 않은 소문항은 사족을 가리지 않는다 (급소불명확은 ⑬ ③의 몫).
+// [오종래 2026-10-13] 논술 논제 급소 = Q 앞 B+C 덩어리 (thesis/chunk.ts). 제시문과는 덩어리의 B(실체)로 잇는다 — C는 방향·범위다.
 
 import type { V2Analysis } from '../fq/pipeline.ts';
-import type { Pivot } from '../fq/v2/pivot.ts';
+import { essay_pivot_chunks } from './chunk.ts';
 import { connectPassage, passageLabels, type PassageConnection, type PassageRecognition } from '../fq/v2/passage.ts';
 import type { 사족노드 } from '../filter/sealed/items.ts';
 
@@ -34,8 +35,11 @@ export interface 단락연결 {
 /** 논제 급소 하나의 연결 */
 export interface 급소연결 {
   소문항: string | null;
+  /** 덩어리의 B 실체 */
   급소: string;
-  /** 논제 급소 노드 id */
+  /** 덩어리 실체 (C · B · C) */
+  덩어리: string;
+  /** 덩어리 B 노드 id */
   노드: string;
   단락: 단락연결[];
 }
@@ -48,7 +52,6 @@ export interface 정합엔진 {
 }
 
 const clean = (s: string) => s.trim().replace(/^[\s,，]+/, '');
-const 급소들 = (a: V2Analysis): Pivot[] => (a.pivot.ok ? (a.pivot.pivots ?? [a.pivot.pivot]) : []);
 
 /** 4단계 엔진 — 논제 급소마다 이어진 단락 급소, 이어진 단락이 없는 급소는 사족 */
 export function align_passage(소문항들: 인식소문항[], passage: PassageRecognition): 정합엔진 {
@@ -60,12 +63,12 @@ export function align_passage(소문항들: 인식소문항[], passage: PassageR
   for (const s of 소문항들) {
     const c = connectPassage(s.인식, passage, s.참조);
     원본.push({ 번호: s.번호, 연결: c });
-    for (const p of 급소들(s.인식)) {
+    for (const d of essay_pivot_chunks(s.인식.graph)) {
       const 단락: 단락연결[] = [];
       c.pivots.forEach((pv, i) => {
-        if (pv && pv.questionNode === p.node.id) 단락.push({ 단락: 이름(i), 단락급소: clean(pv.entity), 자리: pv.place });
+        if (pv && pv.questionNode === d.B.id) 단락.push({ 단락: 이름(i), 단락급소: clean(pv.entity), 자리: pv.place });
       });
-      연결.push({ 소문항: s.번호, 급소: clean(p.keyword ?? p.node.entity), 노드: p.node.id, 단락 });
+      연결.push({ 소문항: s.번호, 급소: clean(d.B.entity), 덩어리: d.실체, 노드: d.B.id, 단락 });
     }
   }
 

@@ -3,6 +3,7 @@
 // 코드가 대신 판단하지 않는다. 비어 있으면 소리 내어 실패한다.
 // ⑬은 채워졌다 (오종래 2026-10-13) — C·논술 5단계 정교화 4갈래 진단 (조립설명서 C·논술 9단계).
 import type { V2Analysis } from '../../fq/pipeline.ts';
+import { essay_pivot_chunks } from '../../thesis/chunk.ts';
 import { SealedError } from '../../fq/sealed/index.ts';
 import type { 급소K } from '../../rubric/types.ts';
 import type { 서술형분석 } from '../descriptive.ts';
@@ -79,14 +80,12 @@ function 단위진단(u: 인식단위, 단위: string | null): 정교화진단[]
     진단.push({ 갈래: '서술복잡', 단위, 근거: `B 노드 ${bs.length}개 (${bs.map((n) => n.id).join('·')}), C-F 없음` });
   }
 
-  // ③ 급소불명확 — MULTIPLE_CONVERGENCE, 또는 수렴도(convergence) 0인 급소
+  // ③ 급소불명확 — MULTIPLE_CONVERGENCE, 또는 Q 앞에 B+C 덩어리가 서지 않음 (수렴도는 보지 않는다, 오종래 2026-10-13)
   if (!u.pivot.ok && u.pivot.flag === 'MULTIPLE_CONVERGENCE') {
     진단.push({ 갈래: '급소불명확', 단위, 근거: `MULTIPLE_CONVERGENCE — 후보 ${u.pivot.candidates.map((n) => `「${n.entity.trim()}」`).join(' ')}` });
   }
-  for (const p of pivots) {
-    if (p.convergence === 0) {
-      진단.push({ 갈래: '급소불명확', 단위, 근거: `급소「${p.node.entity.trim()}」(${p.node.id}) 수렴도 0 — ${p.reason}로 섬` });
-    }
+  if (!essay_pivot_chunks(u.graph).length) {
+    진단.push({ 갈래: '급소불명확', 단위, 근거: 'Q 앞에 B+C 덩어리가 서지 않음 — 무엇을(B) 묻는지 없음' });
   }
   return 진단;
 }
@@ -96,7 +95,8 @@ function 단위진단(u: 인식단위, 단위: string | null): 정교화진단[]
  * [오종래 2026-10-13]
  *   ① 일방흐름: 논제 B노드가 C노드 없이 Q로 바로 연결될 때 — 급소 B만 본다. 길 순서상 급소 B 바로 다음이 Q이고, 단위에 C 노드가 없다
  *   ② 서술복잡: B노드가 3개 이상이고 C-F 없을 때 — 소문항(단위)마다 센다
- *   ③ 급소불명확: pivot 수렴도가 낮거나 MULTIPLE_CONVERGENCE일 때 — 「낮다」 = convergence 0
+ *   ③ 급소불명확: MULTIPLE_CONVERGENCE이거나, Q 앞에 B+C 덩어리가 서지 않을 때 (thesis/chunk.ts).
+ *      [오종래 2026-10-13] 논술 논제의 Q는 형식, 급소는 Q 앞 B+C 덩어리 — 수렴도 0 기준은 거둔다
  *   ④ 사족: 논제가 요구하는 실체의 근거가 제시문에 없는 것 — 논제 급소가 제시문 어느 단락 급소와도 연결되지 않을 때.
  *      4단계(thesis/align.ts) 결과를 받아 그대로 싣는다 (생성 없음)
  * ①②③은 단위(소문항)마다 본다. C 논제는 split_thesis로 나눈 소문항, 그 밖은 엔진단위().

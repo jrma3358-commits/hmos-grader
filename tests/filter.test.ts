@@ -208,17 +208,17 @@ describe('봉인⑬ 정교화 4갈래 진단 (오종래 2026-10-13)', () => {
     assert.deepEqual(갈래들(a), ['급소불명확']);
   });
 
-  it('③ 급소불명확 — 수렴도 0인 급소마다', () => {
-    const b1 = node('b1', 'B');
-    const b2 = node('b2', 'B');
-    const a = 논제([b1, node('c', 'C'), node('q1', 'Q'), b2, node('q2', 'Q')], {
-      ok: true,
-      pivot: pv(b1, 0, 'Q 직전 B'),
-      pivots: [pv(b1, 0, 'Q 직전 B'), pv(b2, 1)],
-    });
-    const d = 봉인13_정교화진단(엔진단위(a), []);
+  it('③ 수렴도 0이어도 Q 앞 B+C 덩어리가 서면 급소불명확이 아니다 (오종래 2026-10-13)', () => {
+    const b = node('b', 'B');
+    const a = 논제([node('c', 'C'), b, node('q', 'Q')], { ok: true, pivot: pv(b, 0, 'Q 직전 B') });
+    assert.deepEqual(갈래들(a), []);
+  });
+
+  it('③ 급소불명확 — Q 앞에 B+C 덩어리가 서지 않는다', () => {
+    const c = node('c', 'C');
+    const d = 봉인13_정교화진단(엔진단위(논제([node('p', 'P'), c, node('q', 'Q')], { ok: true, pivot: pv(c, 0, '서술형태') })), []);
     assert.deepEqual(d.map((x) => x.갈래), ['급소불명확']);
-    assert.match(d[0].근거, /\(b1\) 수렴도 0/);
+    assert.match(d[0].근거, /B\+C 덩어리가 서지 않음/);
   });
 
   it('④ 사족 — 4단계 결과(연결선 없는 논제 급소)를 그 소문항 진단으로 싣는다', () => {

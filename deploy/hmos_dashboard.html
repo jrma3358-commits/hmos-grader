@@ -1922,8 +1922,9 @@ function nodesHtml(노드) {
   }).join('');
 }
 
-/** 급소 — 엔진 값 그대로. 서지 않았으면 그 사유 */
+/** 급소 — 논술은 Q 앞 B+C 덩어리(오종래 2026-10-13), 없으면 엔진 pivot. 서지 않았으면 그 사유 */
 function 급소글(s) {
+  if (s.급소덩어리 && s.급소덩어리.length) return s.급소덩어리.map(d => `「${esc(d.실체)}」`).join(' · ');
   if (s.급소 && s.급소.length) return s.급소.map(k => `「${esc(k.실체.trim())}」`).join(' · ');
   return `서지 않음 (${esc((s.급소실패 && s.급소실패.flag) || '—')})`;
 }
@@ -1969,7 +1970,8 @@ function renderC2() {
       <div class="question-box">${esc(s.텍스트)}</div>
       ${s.공통발문 ? `<div class="c-meta">공통 발문 — 인식에서 뗌: ${esc(s.공통발문)}</div>` : ''}
       <div class="c-meta">참조 제시문: ${s.참조.length ? s.참조.map(l => `[${esc(l)}]`).join(' ') : '전체'}</div>
-      <div class="pivot-box"><div class="pivot-label">급소 K</div><div class="pivot-value">${급소글(s)}</div></div>
+      <div class="pivot-box"><div class="pivot-label">급소 K<br>Q 앞 B+C</div><div class="pivot-value">${급소글(s)}</div></div>
+      <div class="c-meta">Q는 형식 표지 (${(s.급소덩어리 || []).flatMap(d => d.Q).map(id => esc(id)).join(' · ') || '—'}) · 엔진 pivot ${s.급소 && s.급소.length ? s.급소.map(k => `「${esc(k.실체.trim())}」(${esc(k.reason)})`).join(' · ') : '—'}</div>
       <div class="combo-display">${comboHtml(s.조합)}</div>
       <div class="nodes-grid">${nodesHtml(s.노드)}</div>
     </div>`).join('');
@@ -2009,7 +2011,7 @@ function renderC4() {
   const { 연결 } = C.분석.단계.정합;
   const rows = 연결.map(x => `<tr>
     <td><strong>${esc(단위이름(x.소문항))}</strong></td>
-    <td>「${esc(x.급소)}」</td>
+    <td>「${esc(x.덩어리 || x.급소)}」</td>
     <td>${x.단락.length ? x.단락.map(d => `<span class="badge ok">[${esc(d.단락)}] ${esc(d.단락급소)}</span>`).join('') : '—'}</td>
     <td><span class="badge muted">[봉인] 규칙 비어 있음</span></td>
     <td><span class="badge muted">엔진 규칙 미구현</span></td>
@@ -2019,7 +2021,7 @@ function renderC4() {
     <div class="card">
       <div class="card-title">${엔진배지}논제 급소 ↔ 제시문 단락 급소</div>
       <div class="c-table-wrap"><table class="rubric-table">
-        <thead><tr><th>소문항</th><th>논제 급소</th><th>① 타당 — 연결선</th><th>② 비약 (강약)</th><th>③ 불완전</th><th>④ 사족</th></tr></thead>
+        <thead><tr><th>소문항</th><th>논제 급소 (B+C)</th><th>① 타당 — 연결선</th><th>② 비약 (강약)</th><th>③ 불완전</th><th>④ 사족</th></tr></thead>
         <tbody>${rows || '<tr><td colspan="6" class="c-empty">급소가 선 소문항이 없습니다</td></tr>'}</tbody>
       </table></div>
     </div>

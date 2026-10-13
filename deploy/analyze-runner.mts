@@ -20,6 +20,7 @@ const { make_screen } = await load('src/filter/confirm.ts');
 const { 봉인13_정교화진단 } = await load('src/filter/sealed/items.ts');
 const { split_thesis } = await load('src/thesis/split.ts');
 const { align_passage } = await load('src/thesis/align.ts');
+const { essay_pivot_chunks } = await load('src/thesis/chunk.ts');
 
 const [reqPath, outPath] = process.argv.slice(2);
 const req = JSON.parse(readFileSync(reqPath, 'utf8'));
@@ -80,7 +81,11 @@ try {
       입력: '논제',
       전체: 인식of(전체),
       단위: [],
-      소문항: 소문항.map((s: any) => ({ 번호: s.번호, 텍스트: s.텍스트, 공통발문: s.공통발문, 참조: s.참조, ...인식of(s.a) })),
+      // 급소덩어리 — 논술 논제 급소 = Q 앞 B+C (오종래 2026-10-13). 급소(엔진 pivot)는 그대로 함께 싣는다
+      소문항: 소문항.map((s: any) => ({
+        번호: s.번호, 텍스트: s.텍스트, 공통발문: s.공통발문, 참조: s.참조, ...인식of(s.a),
+        급소덩어리: essay_pivot_chunks(s.a.graph).map((d: any) => ({ B: d.B.id, C: d.C.map((n: any) => n.id), Q: d.Q.map((n: any) => n.id), 실체: d.실체 })),
+      })),
     };
 
     // 3·4단계 — 제시문 단락 급소(엔진 connectPassage) ↔ 논제 급소 연결, 사족 (HMOS 절대 원칙: 엔진이 잡는다)
