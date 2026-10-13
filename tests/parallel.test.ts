@@ -107,3 +107,20 @@ describe('의문사 + 「방식으로」는 서술형태가 아니다 (오종래
     assert.deepEqual(cf('자유이고 평등인 방식으로 서술하시오.'), ['자유이고 평등']);
   });
 });
+
+describe('두 음절 용언 어간 — 「이루는」의 「는」은 관형형 (apply.verbStems, 오종래 2026-10-13)', () => {
+  const t: SealedTable = {
+    ...table(false),
+    switches: [...table(false).switches, sw('ST', ['~는'], 'B')],
+    apply: { ...table(false).apply, afterNounOnly: ['ST'], verbStems: ['하', '이루'] },
+  };
+  const 는 = (q: string) => build_path_graph(q, t).nodes.filter((n) => n.switchId === 'ST').map((n) => n.entity.trim());
+
+  it('어간 「이루」 뒤 「는」은 걸지 않는다', () => {
+    assert.deepEqual(는('목적을 이루는 데 설명하시오.'), []);
+  });
+
+  it('「하루는」은 그대로 주제 「는」 — 어간 앞이 한글이면 어간이 아니다', () => {
+    assert.deepEqual(는('하루는 철수를 설명하시오.'), ['하루']);
+  });
+});

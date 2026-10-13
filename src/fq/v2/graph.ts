@@ -221,7 +221,12 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
   //   [오종래 2026-10-01] 받침 없는 음절을 모두 용언으로 보던 간이 규칙은 폐기 — 「철수는」의 「는」을 놓쳤다.
   const afterNounOnly = table.apply.afterNounOnly ?? [];
   const verbStems = table.apply.verbStems ?? [];
-  const verbStemBefore = (ch: string | undefined) => ch !== undefined && verbStems.includes(ch);
+  //   [오종래 2026-10-13] 두 음절 이상 어간(「이루」)도 받는다 — 앞말이 그 어간으로 끝나고 어간 앞이 한글이 아닐 때(어절 머리).
+  //   한 음절 어간으로 넓히지 않는 까닭: 「루」를 넣으면 「하루는」의 주제 「는」까지 막는다 (「이루는 데」 → 관형형, 「하루는」 → 그대로)
+  const verbStemBefore = (at: number) => verbStems.some((stem) =>
+    stem.length === 1
+      ? question[at - 1] === stem
+      : question.slice(0, at).endsWith(stem) && !/[가-힣]/.test(question[at - stem.length - 1] ?? ''));
 
   // 수식 뒤에서만 [오종래 2026-10-04] — apply.afterMathOnly 스위치는 바로 앞 어절(사이 공백 허용, 줄바꿈 제외)이
   //   한글 없는 식일 때만 건다 (예: 주격 「이」「가」 — 「{b_n}이」·「(x > 0) 이」 ○, 「이차함수」·「길이가」 ✕).
@@ -333,7 +338,7 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
         if (inside && !chainsToMarker(c.sw, rest.slice(m[0].length))) {
           continue; // 어절 안 — 더 짧은 표지를 마저 본다
         }
-        if (afterNounOnly.includes(c.sw.id) && verbStemBefore(question[i - 1])) {
+        if (afterNounOnly.includes(c.sw.id) && verbStemBefore(i)) {
           continue; // 앞이 용언 어간 — 관형형 어미로 본다
         }
         if (afterMathOnly.includes(c.sw.id) && !afterMath(i) && !(c.surface.replace(/^~/, '').trim() === '이' && afterModifiedNoun(i))) {
