@@ -2192,7 +2192,7 @@ function renderC6() {
       <div class="question-box">${esc(p.논제)}</div>
       <div class="c-row"><strong>기존과 다른 점</strong> ${esc(p.기존과다른점)}</div>
       <div class="c-row"><strong>새로 측정하는 것</strong> ${esc(p.새로측정하는것)}</div>
-      <div class="c-row"><strong>쓰는 제시문</strong> ${p.제시문.map(l => `[${esc(l)}]`).join(' ') || '—'}</div>
+      <div class="c-row"><strong>쓰는 제시문</strong> ${p.제시문.map(l => `[${esc(String(l).trim().replace(/^[\[(<]\s*|\s*[\])>]$/g, ''))}]`).join(' ') || '—'}</div>
     </div>`).join('')}` : '';
   document.getElementById('c6-body').innerHTML = `
     <div class="card">
