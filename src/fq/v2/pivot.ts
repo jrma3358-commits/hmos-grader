@@ -266,6 +266,12 @@ export function analyze_pivot(graph: PathGraph, table?: SealedTable): PivotAnaly
       return { ok: true, pivot: pivots[pivots.length - 1], pivots };
     }
   }
+  // 수단 → 방향 [오종래 2026-10-13] — 서술형태 노드가 꼭 둘이면 앞은 서술 수단, 뒤는 서술 방향이다. 방향이 급소 → 뒤쪽 노드
+  //   (「사례를 들고 비교하는 방식으로」 → 「비교하는 방식으로」). 셋 이상이면 플래그 그대로.
+  //   둘 다 입장·관점 표지(apply.formPerspective)면 수단·방향이 아니다 — 2026-10-06 판정대로 플래그 그대로.
+  if (forms.length === 2 && table && !forms.every((n) => perspectives.includes(n.surface.trim()))) {
+    return { ok: true, pivot: atForm([...forms].sort((a, b) => a.index - b.index)[1], table) };
+  }
   if (forms.length > 1) {
     return {
       ok: false,

@@ -1131,11 +1131,18 @@ describe('서술형태 급소 — C-F 노드 안의 핵심어 (오종래 2026-10
     assert.ok(other.ok && other.pivot.reason === '서술형태', '나머지 C-F는 그대로 B보다 먼저');
   });
 
-  it('C-F 노드가 둘이면 문제 설계 오류로 플래그', () => {
+  it('C-F 노드가 둘이면 뒤쪽(서술 방향)이 급소 — 앞쪽은 서술 수단 (오종래 2026-10-13)', () => {
     const t = table(['SF']);
     const g = build_path_graph('형태 @B 논박@M 관점 @V 설명 @Q', t);
     const r = analyze_pivot(g, t);
-    assert.equal(r.ok, false);
+    assert.equal(r.ok && r.pivot.reason, '서술형태');
+    assert.equal(r.ok && r.pivot.keyword, '관점');
+  });
+
+  it('C-F 노드가 셋이면 플래그 그대로', () => {
+    const t = table(['SF']);
+    const g = build_path_graph('형태 @B 논박@M 관점 @V 내용 @V 설명 @Q', t);
+    const r = analyze_pivot(g, t);
     assert.equal(!r.ok && r.flag, 'MULTIPLE_CONVERGENCE');
   });
 
@@ -1194,19 +1201,23 @@ describe('서술형태 급소 — C-F 노드 안의 핵심어 (오종래 2026-10
     }
   });
 
-  it('「~하고」 뒤에 쉼표가 없으면 나누지 않는다 — 플래그 그대로', () => {
+  it('「~하고」 뒤에 쉼표가 없으면 나누지 않는다 — C-F 둘이라 뒤쪽 하나가 급소 (오종래 2026-10-13)', () => {
     const t = withHago();
     const g = build_path_graph('형태 @B 논박@M 설명하고 내용 @B 관점 @V 제안 @Q', t);
-    assert.equal(analyze_pivot(g, t).ok, false);
+    const r = analyze_pivot(g, t);
+    assert.equal(r.ok && r.pivots, undefined);
+    assert.equal(r.ok && r.pivot.keyword, '관점');
   });
 
-  it('한 절에 C-F가 둘이면 나누지 않는다 — 플래그 그대로', () => {
+  it('한 절에 C-F가 둘이면 나누지 않는다 — 뒤쪽 하나가 급소 (오종래 2026-10-13)', () => {
     const t = withHago();
     const g = build_path_graph('형태 @B 논박@M 관점 @V 설명하고, 내용 @B 제안 @Q', t);
-    assert.equal(analyze_pivot(g, t).ok, false);
+    const r = analyze_pivot(g, t);
+    assert.equal(r.ok && r.pivots, undefined);
+    assert.equal(r.ok && r.pivot.keyword, '관점');
   });
 
-  it('입장·관점 표지 노드만 둘이면 플래그 그대로', () => {
+  it('입장·관점 표지 노드만 둘이면 플래그 그대로 — 수단·방향이 아니다 (2026-10-06 판정 유지)', () => {
     const t = withPerspective(['~@V']);
     const g = build_path_graph('형태 @B 관점 @V 입장 @V 설명 @Q', t);
     const r = analyze_pivot(g, t);
