@@ -2104,6 +2104,9 @@ function 진단문장(d) {
   return esc(d.갈래);
 }
 
+/** 엔진 실체 목록 — 앞 쉼표를 떼고 같은 것은 한 번만 */
+const 하나씩 = 글들 => [...new Set((글들 || []).map(displayEntity).filter(Boolean))];
+
 const 남은신호 = { 일방흐름: '한 방향으로만 흐른다는', 서술복잡: '서술이 복잡하다는', 급소불명확: '핵심이 서지 않는다는' };
 
 /** 정교화안 재인식(엔진) → 문장 */
@@ -2111,7 +2114,7 @@ function 재인식문장(r) {
   if (r.재인식.오류) return [`엔진에 다시 넣었지만 읽지 못했습니다 (${esc(r.재인식.오류)}).`];
   const 여럿 = r.재인식.소문항.length > 1;
   const 줄 = r.재인식.소문항.map(s => `${여럿 ? esc(단위이름(s.번호)) + ' ' : ''}${s.급소.length
-    ? `엔진에 다시 넣으니 핵심이 ${s.급소.map(k => `「${esc(k)}」`).join(' · ')}${으로로(s.급소[s.급소.length - 1])} 섭니다.`
+    ? `엔진에 다시 넣으니 핵심이 ${하나씩(s.급소).map(k => `「${esc(k)}」`).join(' · ')}${으로로(하나씩(s.급소).at(-1))} 섭니다.`
     : `엔진에 다시 넣어도 핵심이 서지 않습니다 (${esc((s.급소실패 && s.급소실패.flag) || '—')}).`}`);
   const 남은 = [...new Set(r.재인식.진단.filter(d => d.갈래 !== '사족').map(d => d.갈래))];
   줄.push(...(남은.length ? 남은.map(g => `아직 ${남은신호[g] || esc(g)} 신호가 남아 있습니다.`) : ['남은 정교화 신호가 없습니다.']));
@@ -2131,7 +2134,7 @@ function renderC5() {
   const 결과 = C.정교화 ? C.정교화.정교화.map(r => `
     <div class="card">
       <div class="card-title">${AI배지}정교화안${여럿 ? ' · ' + esc(단위이름(r.단위)) : ''}</div>
-      ${r.원급소.length ? `<div class="c-meta">원래 핵심은 ${r.원급소.map(k => `「${esc(k)}」`).join(' · ')}${이었였(r.원급소[r.원급소.length - 1])}습니다.</div>` : ''}
+      ${r.원급소.length ? `<div class="c-meta">원래 핵심은 ${하나씩(r.원급소).map(k => `「${esc(k)}」`).join(' · ')}${이었였(하나씩(r.원급소).at(-1))}습니다.</div>` : ''}
       <div class="question-box">${esc(r.논제)}</div>
       <div class="c-row"><strong>바꾼 점</strong> ${esc(r.바꾼점)}</div>
       <div class="c-row"><strong>근거</strong> ${esc(r.근거)}</div>
