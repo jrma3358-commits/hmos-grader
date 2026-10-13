@@ -295,6 +295,18 @@
   .node-text { font-size: 13px; flex: 1; }
   .node-text .표지 { color: var(--text-sub); font-size: 12px; margin-left: 6px; }
 
+  /* 논제 인식 — 엔진 결과를 실체 문장으로 */
+  .reading-box {
+    padding: 16px 18px;
+    background: var(--accent-light);
+    border: 2px solid var(--accent);
+    border-radius: var(--radius);
+    margin-bottom: 12px;
+    font-size: 15px;
+    line-height: 1.9;
+  }
+  .reading-box p { margin: 0; }
+
   /* 급소 강조 */
   .pivot-box {
     padding: 16px 18px;
@@ -1844,7 +1856,7 @@ function confirmResult() {
 const C = { 논제: '', 제시문: [], 분석: null, 정교화: null, 추가: null, 후보: [], 확정: [] };
 
 const C화면 = {
-  2: { 제목: '논제 인식', 도구: 'make', 설명: '엔진 — 소문항마다 5색 · 급소 · C-F. 공통 발문은 떼어 내고 인식합니다' },
+  2: { 제목: '논제 인식', 도구: 'make', 설명: '엔진 — 소문항마다 핵심 · 서술 방식 · 조건 · 배경을 문장으로. 공통 발문은 떼어 내고 인식합니다' },
   3: { 제목: '제시문 분석', 도구: 'make', 설명: '엔진 — 단락마다 5색, 논제 급소와 닿는 단락 급소' },
   4: { 제목: '연결 평가 (4축)', 도구: 'make', 설명: '엔진 — 논제 급소 ↔ 제시문 단락 급소 대조' },
   5: { 제목: '논제 정교화', 도구: 'make', 설명: '엔진 진단 [봉인⑬] 4갈래 · 정교화안 문장은 Claude가 엔진 진단에서' },
@@ -1904,24 +1916,6 @@ const 단위이름 = u => (u ? `(${u})` : '논제');
 const 엔진배지 = '<span class="badge engine">엔진</span>';
 const AI배지 = '<span class="badge ai">Claude 문장</span>';
 
-function comboHtml(조합) {
-  return (조합 || []).map(c => `<span class="combo-chip ${esc(c)}">${esc(c)}</span>`).join('<span class="combo-arrow">→</span>');
-}
-
-function nodesHtml(노드) {
-  return (노드 || []).map(n => {
-    const colorKey = n.foldedFrom === 'C' ? 'B' : String(n.색 || '').split(' ')[0];
-    const tag = n.foldedFrom === 'C' ? 'B(C↓)' : colorKey || '?';
-    const 표지 = (n.표지 || '').trim();
-    return `<div class="node-row">
-      <span class="node-tag ${esc(colorKey)}">${esc(tag)}</span>
-      <div class="node-text"><strong>${esc(n.id)}</strong> ${esc(displayEntity(n.실체))}
-        ${표지 && 표지 !== String(n.실체 ?? '').trim() ? `<span class="표지">${esc(표지)}</span>` : ''}
-        ${n.스위치 === 'C-F' ? '<span class="badge muted" style="margin-left:6px;">C-F 서술형태</span>' : ''}
-      </div></div>`;
-  }).join('');
-}
-
 /** 급소 — 논술은 Q 앞 B+C 덩어리(오종래 2026-10-13), 없으면 엔진 pivot. 서지 않았으면 그 사유 */
 function 급소글(s) {
   if (s.급소덩어리 && s.급소덩어리.length) return s.급소덩어리.map(d => `「${esc(d.실체)}」`).join(' · ');
@@ -1961,19 +1955,52 @@ async function runC() {
   });
 }
 
+/** 받침 있으면 「을」, 없으면 「를」 — 한글이 아니면 「을(를)」 */
+function 을를(글) {
+  const c = String(글 ?? '').trim().slice(-1).charCodeAt(0) - 0xAC00;
+  if (!(c >= 0 && c <= 11171)) return '을(를)';
+  return c % 28 ? '을' : '를';
+}
+
+/**
+ * 엔진 노드 → 실체 문장 (오종래 2026-10-13). 5색 태그는 화면에 내지 않는다 — 분류는 엔진 안에서만.
+ * 핵심 = 급소(Q 앞 B+C 덩어리 / 엔진 pivot) · 서술 방식 = C-F 노드 · 조건 = C 노드(C-F·B로 접힌 것 제외) · 배경 = P 노드
+ */
+function 실체문장Html(s) {
+  const 노드 = s.노드 || [];
+  const 색 = n => String(n.색 || '').split(' ')[0];
+  const 묶음 = 글들 => 글들.map(t => `「${esc(t)}」`).join(' · ');
+  const 서술 = 노드.filter(n => n.스위치 === 'C-F').map(n => {
+    const 실체 = displayEntity(n.실체), 표지 = (n.표지 || '').trim();
+    return 표지 && !실체.endsWith(표지) ? 실체 + 표지 : 실체;
+  }).filter(Boolean);
+  const 조건 = 노드.filter(n => 색(n) === 'C' && n.스위치 !== 'C-F' && n.foldedFrom == null).map(n => displayEntity(n.실체)).filter(Boolean);
+  const 배경 = 노드.filter(n => 색(n) === 'P').map(n => displayEntity(n.실체)).filter(Boolean);
+
+  const 핵심 = (s.급소덩어리 && s.급소덩어리.length) ? s.급소덩어리.map(d => d.실체)
+    : (s.급소 && s.급소.length) ? s.급소.map(k => k.실체.trim()) : [];
+  const 줄 = [핵심.length
+    ? `이 논제의 핵심은 ${묶음(핵심)}입니다.`
+    : `엔진이 이 논제의 핵심을 세우지 못했습니다 (${esc((s.급소실패 && s.급소실패.flag) || '—')}).`];
+  if (서술.length) {
+    const 끝 = 서술[서술.length - 1];
+    줄.push(`${묶음(서술)}${/(으로|로)$/.test(끝) ? '' : ' 방식으로'} 서술할 것을 요구합니다.`);
+  }
+  if (조건.length) 줄.push(`${묶음(조건)} 조건 안에서 답해야 합니다.`);
+  if (배경.length) 줄.push(`${묶음(배경)}${을를(배경[배경.length - 1])} 배경으로 합니다.`);
+  return `<div class="reading-box">${줄.map(t => `<p>${t}</p>`).join('')}</div>`;
+}
+
 // ── 2단계 논제 인식 (엔진) ──
 function renderC2() {
   const 인식 = C.분석.단계.인식;
   document.getElementById('c2-body').innerHTML = 인식.소문항.map(s => `
     <div class="card">
       <div class="card-title">${엔진배지}소문항 ${esc(소문항이름(s))}</div>
+      ${실체문장Html(s)}
       <div class="question-box">${esc(s.텍스트)}</div>
       ${s.공통발문 ? `<div class="c-meta">공통 발문 — 인식에서 뗌: ${esc(s.공통발문)}</div>` : ''}
       <div class="c-meta">참조 제시문: ${s.참조.length ? s.참조.map(l => `[${esc(l)}]`).join(' ') : '전체'}</div>
-      <div class="pivot-box"><div class="pivot-label">급소 K<br>Q 앞 B+C</div><div class="pivot-value">${급소글(s)}</div></div>
-      <div class="c-meta">Q는 형식 표지 (${(s.급소덩어리 || []).flatMap(d => d.Q).map(id => esc(id)).join(' · ') || '—'}) · 엔진 pivot ${s.급소 && s.급소.length ? s.급소.map(k => `「${esc(k.실체.trim())}」(${esc(k.reason)})`).join(' · ') : '—'}</div>
-      <div class="combo-display">${comboHtml(s.조합)}</div>
-      <div class="nodes-grid">${nodesHtml(s.노드)}</div>
     </div>`).join('');
 }
 
