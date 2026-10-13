@@ -1857,8 +1857,8 @@ const C = { 논제: '', 제시문: [], 분석: null, 정교화: null, 추가: nu
 
 const C화면 = {
   2: { 제목: '논제 인식', 도구: 'make', 설명: '엔진 — 소문항마다 핵심 · 서술 방식 · 조건 · 배경을 문장으로. 공통 발문은 떼어 내고 인식합니다' },
-  3: { 제목: '제시문 분석', 도구: 'make', 설명: '엔진 — 단락마다 5색, 논제 급소와 닿는 단락 급소' },
-  4: { 제목: '연결 평가 (4축)', 도구: 'make', 설명: '엔진 — 논제 급소 ↔ 제시문 단락 급소 대조' },
+  3: { 제목: '제시문 분석', 도구: 'make', 설명: '엔진 — 제시문 무게중심과 단락마다 중심 실체를 문장으로' },
+  4: { 제목: '연결 평가 (4축)', 도구: 'make', 설명: '엔진 — 논제 핵심과 제시문 단락이 어디서 연결되는지 문장으로' },
   5: { 제목: '논제 정교화', 도구: 'make', 설명: '엔진 진단 [봉인⑬] 4갈래 · 정교화안 문장은 Claude가 엔진 진단에서' },
   6: { 제목: '추가 논제', 도구: 'make', 설명: 'F_인문사회 6유형 — 엔진이 잡은 연결 안에서 Claude가 문장으로' },
   7: { 제목: '교사 확정', 도구: 'grade', 설명: '논제를 선택·수정·확정합니다 — 확정 논제는 엔진이 다시 인식합니다' },
@@ -1955,12 +1955,15 @@ async function runC() {
   });
 }
 
-/** 받침 있으면 「을」, 없으면 「를」 — 한글이 아니면 「을(를)」 */
-function 을를(글) {
+/** 받침 있으면 앞 조사, 없으면 뒤 조사 — 끝 글자가 한글이 아니면 「을(를)」처럼 둘 다 */
+function 조사(글, 받침, 없음) {
   const c = String(글 ?? '').trim().slice(-1).charCodeAt(0) - 0xAC00;
-  if (!(c >= 0 && c <= 11171)) return '을(를)';
-  return c % 28 ? '을' : '를';
+  if (!(c >= 0 && c <= 11171)) return `${받침}(${없음})`;
+  return c % 28 ? 받침 : 없음;
 }
+const 을를 = 글 => 조사(글, '을', '를');
+const 이가 = 글 => 조사(글, '이', '가');
+const 과와 = 글 => 조사(글, '과', '와');
 
 /**
  * 엔진 노드 → 실체 문장 (오종래 2026-10-13). 5색 태그는 화면에 내지 않는다 — 분류는 엔진 안에서만.
@@ -2013,53 +2016,57 @@ function renderC3() {
     body.innerHTML = `<div class="card"><div class="flag-box">엔진이 제시문에서 멈춤 — ${esc((제 && 제.사유) || (C.분석.멈춘곳 && C.분석.멈춘곳.사유) || '알 수 없음')}</div></div>`;
     return;
   }
+  // 단락 급소는 논제 급소를 열쇠로만 선다 (align.ts) — 선 급소가 없으면 배경 단락
   const 연결 = C.분석.단계.정합.연결;
-  const 단락카드 = 제.단락.map(p => {
-    const 이은 = 연결.flatMap(x => x.단락.filter(d => d.단락 === p.label).map(d => ({ ...d, 소문항: x.소문항, 급소: x.급소 })));
-    const 색 = ['P', 'B', 'D', 'C'].map(c => (p.색 && p.색[c] && p.색[c].length)
-      ? `<div class="chip-list"><span class="node-tag ${c}" style="margin-right:6px;">${c}</span>${p.색[c].map(e => `<span class="badge muted">${esc(displayEntity(e))}</span>`).join('')}</div>` : '').join('');
+  // 같은 기호를 잇는 단락(엔진 라벨이 같음)은 한 카드로
+  const 묶음 = new Map();
+  제.단락.forEach((p, i) => { const l = 단락라벨(p, i); 묶음.set(l, [...(묶음.get(l) || []), p.텍스트]); });
+  const 단락카드 = [...묶음].map(([라벨, 텍스트들]) => {
+    const 급소들 = [...new Set(연결.flatMap(x => x.단락.filter(d => d.단락 === 라벨).map(d => d.단락급소)))];
+    const 줄 = 급소들.length
+      ? `${급소들.map(t => `「${esc(t)}」`).join(' · ')}${을를(급소들[급소들.length - 1])} 중심으로 서술합니다.`
+      : '배경 단락입니다.';
     return `<div class="card">
-      <div class="card-title">${엔진배지}제시문 [${esc(p.label || '—')}]</div>
-      <details class="c-text"><summary>원문 보기</summary><div>${esc(p.텍스트)}</div></details>
-      ${색}
-      <div style="margin-top:12px;">${이은.length
-        ? 이은.map(d => `<div class="c-row"><span class="badge ok">단락 급소</span>「${esc(d.단락급소)}」 (${esc(d.자리)}) ← ${esc(단위이름(d.소문항))} 논제 급소「${esc(d.급소)}」</div>`).join('')
-        : '<div class="c-row"><span class="badge muted">단락 급소 없음</span>어느 논제 급소와도 닿는 B가 서두·말미에 없음</div>'}</div>
+      <div class="card-title">${엔진배지}제시문 [${esc(라벨)}]</div>
+      <div class="reading-box"><p>${줄}</p></div>
+      <details class="c-text"><summary>원문 보기</summary><div>${esc(텍스트들.join('\n\n'))}</div></details>
     </div>`;
   }).join('');
-  const 전체 = 제.전체급소 ? `「${esc(제.전체급소.실체)}」` : `서지 않음 (${esc(제.flag || '—')})`;
-  body.innerHTML = `<div class="card"><div class="card-title">${엔진배지}제시문 전체 급소</div><div style="font-size:14px;">${전체}</div></div>` + 단락카드;
+  const 전체 = 제.전체급소
+    ? `이 제시문의 무게중심은 「${esc(displayEntity(제.전체급소.실체))}」입니다.`
+    : `엔진이 이 제시문의 무게중심을 세우지 못했습니다 (${esc(제.flag || '—')}).`;
+  body.innerHTML = `<div class="card"><div class="card-title">${엔진배지}제시문 전체</div><div class="reading-box"><p>${전체}</p></div></div>` + 단락카드;
 }
+
+/** 단락 라벨 — 엔진이 연결에 쓰는 이름(러너의 라벨). 옛 응답이면 기호, 없으면 「#순번」 */
+const 단락라벨 = (p, i) => p.라벨 ?? p.label ?? `#${i + 1}`;
 
 // ── 4단계 연결 평가 4축 (엔진) ──
 function renderC4() {
   const body = document.getElementById('c4-body');
   if (!C.제시문.length || !C.분석.단계.정합) { body.innerHTML = '<div class="card c-empty">제시문이 없어 연결을 평가하지 않았습니다</div>'; return; }
+  // 연결됨 = 엔진 연결선 · 어긋남 = 엔진 사족(논제 급소에 이어진 단락 없음, 오종래 2026-10-13).
+  // 제시문 쪽 사족(논제에 근거 없는 단락 급소)은 엔진 규칙이 없어 내지 않는다 (오종래 2026-10-13 보류)
   const { 연결 } = C.분석.단계.정합;
-  const rows = 연결.map(x => `<tr>
-    <td><strong>${esc(단위이름(x.소문항))}</strong></td>
-    <td>「${esc(x.덩어리 || x.급소)}」</td>
-    <td>${x.단락.length ? x.단락.map(d => `<span class="badge ok">[${esc(d.단락)}] ${esc(d.단락급소)}</span>`).join('') : '—'}</td>
-    <td><span class="badge muted">[봉인] 규칙 비어 있음</span></td>
-    <td><span class="badge muted">엔진 규칙 미구현</span></td>
-    <td>${x.단락.length ? '—' : '<span class="badge warn">사족 — 제시문에 근거 없음</span>'}</td>
-  </tr>`).join('');
+  const 단락들 = [...new Set((C.분석.단계.제시문 && C.분석.단계.제시문.단락 || []).map(단락라벨))];
+  const 소문항들 = C.분석.단계.인식.소문항;
+  const 여럿 = new Set(연결.map(x => x.소문항)).size > 1;
+  const 줄 = 연결.flatMap(x => {
+    const 앞 = 여럿 ? `${esc(단위이름(x.소문항))} ` : '';
+    const 핵심 = x.덩어리 || x.급소;
+    const 주어 = `${앞}논제 핵심 「${esc(핵심)}」${이가(핵심)}`;
+    // 같은 기호를 잇는 단락이 같은 급소로 이어지면 한 줄
+    if (x.단락.length) return [...new Set(x.단락.map(d => `${주어} 제시문 [${esc(d.단락)}]의 「${esc(d.단락급소)}」${과와(d.단락급소)} 연결됩니다.`))];
+    const s = 소문항들.find(s => s.번호 === x.소문항);
+    const 범위 = s && s.참조 && s.참조.length ? s.참조 : 단락들;
+    return [`${주어} 제시문 ${범위.map(l => `[${esc(l)}]`).join('·')}${과와(범위[범위.length - 1])} 연결되지 않습니다.`];
+  });
+  const N = new Set(연결.flatMap(x => x.단락.map(d => d.단락))).size;
   body.innerHTML = `
     <div class="card">
-      <div class="card-title">${엔진배지}논제 급소 ↔ 제시문 단락 급소</div>
-      <div class="c-table-wrap"><table class="rubric-table">
-        <thead><tr><th>소문항</th><th>논제 급소 (B+C)</th><th>① 타당 — 연결선</th><th>② 비약 (강약)</th><th>③ 불완전</th><th>④ 사족</th></tr></thead>
-        <tbody>${rows || '<tr><td colspan="6" class="c-empty">급소가 선 소문항이 없습니다</td></tr>'}</tbody>
-      </table></div>
-    </div>
-    <div class="card">
-      <div class="card-title">판정 기준</div>
-      <div class="note-list">
-        <div class="note-item">① 타당 — 논제 급소를 열쇠로 엔진이 세운 단락 급소가 있다</div>
-        <div class="note-item">② 비약(연관성 강약) — 엔진 판정 규칙이 비어 있다. AI로 채우지 않는다</div>
-        <div class="note-item">③ 불완전 — 제시문 급소 중 논제에 안 온 것. 지금 엔진의 단락 급소는 논제 열쇠로만 서므로 규칙이 아직 없다</div>
-        <div class="note-item">④ 사족 — 논제가 요구하는 실체의 근거가 제시문에 없는 것: 논제 급소가 어느 단락 급소와도 연결되지 않음 (오종래 2026-10-13)</div>
-      </div>
+      <div class="card-title">${엔진배지}논제 ↔ 제시문</div>
+      <div class="reading-box"><p>논제와 제시문이 ${N}개 단락에서 연결됩니다.</p></div>
+      ${줄.length ? `<div class="note-list">${줄.map(t => `<div class="note-item">${t}</div>`).join('')}</div>` : '<div class="c-empty">급소가 선 소문항이 없습니다</div>'}
     </div>`;
 }
 

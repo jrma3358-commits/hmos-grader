@@ -15,7 +15,7 @@ import { pathToFileURL } from 'node:url';
 const GRADER = process.env.HMOS_GRADER ?? join(import.meta.dirname, 'hmos-grader');
 const load = (p: string) => import(pathToFileURL(join(GRADER, p)).href);
 const fq = await load('src/fq/index.ts');
-const { recognizePassage } = await load('src/fq/v2/passage.ts');
+const { recognizePassage, passageLabels } = await load('src/fq/v2/passage.ts');
 const { make_screen } = await load('src/filter/confirm.ts');
 const { 봉인13_정교화진단 } = await load('src/filter/sealed/items.ts');
 const { split_thesis } = await load('src/thesis/split.ts');
@@ -95,8 +95,10 @@ try {
         const 본문 = 제시문목록.map((p) => (/^[가-하]$/.test(p.id) ? `[${p.id}] ${p.텍스트}` : p.텍스트)).join('\n\n');
         const passage = recognizePassage(본문, fq.markerTable());
         const 정합 = align_passage(소문항.map((s: any) => ({ 번호: s.번호, 참조: s.참조, 인식: s.a })), passage);
+        const 라벨들 = passageLabels(passage.paragraphs);
         out.단계.제시문 = {
-          단락: passage.paragraphs.map((p: any) => ({ label: p.label ?? null, 텍스트: p.text, 색: p.colors })),
+          // 라벨 = align_passage가 연결에 쓰는 단락 이름 (기호 없는 단락은 앞 기호를 잇고, 그것도 없으면 「#순번」)
+          단락: passage.paragraphs.map((p: any, i: number) => ({ label: p.label ?? null, 라벨: 라벨들[i] ?? `#${i + 1}`, 텍스트: p.text, 색: p.colors })),
           전체급소: passage.pivot ? { 실체: passage.pivot.node.entity, keyword: passage.pivot.keyword ?? '' } : null,
           flag: passage.flag ?? null,
         };
