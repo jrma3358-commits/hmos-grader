@@ -89,3 +89,21 @@ describe('병렬 나열 — 끝 표지 하나가 전체 색', () => {
     assert.deepEqual(노드('자유이고 평등인 것을 설명하시오.', false).map((n) => n[0]), ['P', 'C', 'B', 'Q']);
   });
 });
+
+describe('의문사 + 「방식으로」는 서술형태가 아니다 (오종래 2026-10-13)', () => {
+  const t: SealedTable = {
+    ...table(true),
+    switches: [...table(true).switches.filter((s) => s.id !== 'C-F'), sw('C-F', ['~인 방식으로', '~방식으로', '방식으로'], 'C', ['방식으로'])],
+    apply: { ...table(true).apply, formPivot: ['C-F'] },
+  };
+  const cf = (q: string) => build_path_graph(q, t).nodes.filter((n) => n.switchId === 'C-F').map((n) => n.entity.trim());
+
+  it('「어떤 방식으로」 · 「어떠한 방식으로」 · 「무슨 방식으로」는 C-F 노드가 서지 않는다', () => {
+    for (const w of ['어떤', '어떠한', '무슨']) assert.deepEqual(cf(`수출에 ${w} 방식으로 작용하는지 설명하시오.`), [], w);
+  });
+
+  it('의문사가 아니면 그대로 C-F', () => {
+    assert.deepEqual(cf('경제적 방식으로 서술하시오.'), ['경제적']);
+    assert.deepEqual(cf('자유이고 평등인 방식으로 서술하시오.'), ['자유이고 평등']);
+  });
+});

@@ -176,6 +176,9 @@ function isLexical(sw: SealedSwitch, marker: string): boolean {
 /** 노드가 되는 표지의 종류 — 나머지(연결어·부사)는 간선이 된다 */
 const NODE_KIND = '조사·어미' satisfies SwitchKind;
 
+/** 의문사 — 바로 뒤 「방식으로」는 서술 형태가 아니라 묻는 내용이다 [오종래 2026-10-13] */
+const INTERROGATIVE_HEADS = ['어떤', '어떠한', '무슨'];
+
 /** 발문 끝 — 첫 소문항 머리 (문단 머리의 (1) · 1) · ①). 발문 P 고정이 쓴다 */
 const STEM_END = /(?<=^|\n)[ \t]*(?:\(\d+\)|\d+\)|[①-⑳])/;
 /** 실체 머리에 붙은 소문항 머리 — 그래프를 만든 뒤 실체에서 뗀다 */
@@ -191,6 +194,7 @@ const SUB_HEAD_PREFIX = /^\s*(?:\(\d+\)|\d+\)|[①-⑳])\s*/;
  */
 export function build_path_graph(question: string, table: SealedTable): PathGraph {
   const cands = candidates(table);
+  const formIds = table.apply.formPivot ?? [];
   /** chained = 어절 안이지만 조사 연쇄로 걸린 표지 (예: 「것만을」의 「만」) */
   /** passage = 제시문 블록이면 발문 빈칸 표지가 걸린 자리 · caseHead = 케이스 머리 문단(P 머리) */
   /** quote = 인용 명제(apply.quotedPropositions)·대괄호 묶음(apply.bracketLabels)·따옴표 이름(apply.quotedNames) · proviso = 단서절(apply.provisoClauses) */
@@ -334,6 +338,12 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
         }
         if (afterMathOnly.includes(c.sw.id) && !afterMath(i) && !(c.surface.replace(/^~/, '').trim() === '이' && afterModifiedNoun(i))) {
           continue; // 바로 앞이 수식이 아니다
+        }
+        // 의문사 + 방식 [오종래 2026-10-13] — 「어떤 방식으로 작용하는지」의 「방식으로」는 묻는 내용이지 서술 형태가 아니다.
+        //   서술형태(apply.formPivot) 표지가 「방식으로」로 끝나고 바로 앞 어절이 의문사(「어떤」「어떠한」「무슨」)면 걸지 않는다.
+        if (formIds.includes(c.sw.id) && c.surface.trim().endsWith('방식으로')
+          && INTERROGATIVE_HEADS.includes(question.slice(0, i).match(/(\S+)\s*$/)?.[1] ?? '')) {
+          continue;
         }
         // 단독 어절 [오종래 2026-10-01] — 스위치의 standalone이면 앞에 한글 글자가 붙지 않을 때만 건다
         //   (「대표단」·「지표」의 「표」 ✕, 「표는」·「표가」·「표를」 ○). 뒤 조건은 두지 않는다.
