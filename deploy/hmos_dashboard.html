@@ -2167,15 +2167,24 @@ async function refineC() {
 }
 
 // ── 6단계 추가 논제 (엔진 연결 안에서 Claude 문장) ──
+/** 6유형 이름 묶음 — 「비교·대비」 · 「공통원리」 */
+const 유형묶음 = 유형들 => 유형들.map(t => `「${esc(t)}」`).join(' · ');
+
 function renderC6() {
   const a = C.추가;
   const 결과 = a ? `
     <div class="card">
+      <div class="card-title">${엔진배지}논제 핵심</div>
+      <div class="reading-box">${C.분석.단계.인식.소문항.map(s => `<p>${esc(단위이름(s.번호))} 핵심 ${급소글(s)}</p>`).join('')}</div>
+      ${엔진원본Html(C.분석.단계.정합 ? { 연결: C.분석.단계.정합.연결, 사족: C.분석.단계.정합.사족 } : null)}
+    </div>
+    <div class="card">
       <div class="card-title">${AI배지}문항 분석</div>
-      <div class="c-row"><strong>급소(k)</strong> ${esc(a.문항분석.급소)}</div>
+      <div class="reading-box">
+        <p>${a.문항분석.덮는유형.length ? `지금 논제가 덮는 유형은 ${유형묶음(a.문항분석.덮는유형)}입니다.` : '지금 논제가 덮는 유형이 없습니다.'}</p>
+        <p>${a.문항분석.빈곳.length ? `비어 있는 유형은 ${유형묶음(a.문항분석.빈곳)}입니다.` : '비어 있는 유형이 없습니다.'}</p>
+      </div>
       <div class="c-row"><strong>현재 측정 역량</strong> ${esc(a.문항분석.현재역량)}</div>
-      <div class="c-row"><strong>덮는 유형</strong> ${a.문항분석.덮는유형.map(t => `<span class="badge ok">${esc(t)}</span>`).join('') || '—'}</div>
-      <div class="c-row"><strong>빈 곳</strong> ${a.문항분석.빈곳.map(t => `<span class="badge warn">${esc(t)}</span>`).join('') || '—'}</div>
     </div>
     ${a.추가논제.map(p => `
     <div class="card">
@@ -2189,7 +2198,7 @@ function renderC6() {
     <div class="card">
       <div class="card-title">추가 논제 생성</div>
       <div class="c-meta">6유형 지도(비교·대비 / 공통원리 / 근거·주장 / 대안제시 / 선택·응용 / 인연·비판)에 대조해 빈 곳을 찾습니다.
-        엔진이 잡은 단락 급소 안에서만 짓고, 엔진이 사족으로 표시한 급소는 근거로 쓰지 않습니다 (명세서-2 §1·§4·§5).</div>
+        엔진이 제시문 단락과 이은 핵심 안에서만 짓고, 제시문에 근거가 없는 핵심은 근거로 쓰지 않습니다 (명세서-2 §1·§4·§5).</div>
       <button class="type-btn" id="c6-btn" onclick="proposeC()">추가 논제 문장 생성</button>
     </div>
     ${결과}`;
