@@ -48,6 +48,14 @@ HMOS 절대 원칙 (오종래 2026-10-13): 인식·제시문 급소 추출·연�
 - ④사족은 정교화안을 만들지 않는다 (`/api/refine` 응답의 `사족`으로 그대로).
 - 명세 md는 부를 때 읽는다 — 없으면 그 라우트만 500.
 
+## 도메인 · HTTPS (2026-10-13)
+
+- `https://hmos.hunminos.com` → nginx(80/443) → `127.0.0.1:3000`. 설정: `/etc/nginx/sites-available/hmos` = [`nginx/hmos.conf`](nginx/hmos.conf)
+- `/` 는 대시보드(`/hmos_dashboard.html`)를 그 자리에서 내준다. http는 https로 301
+- 인증서 Let's Encrypt (certbot --nginx, 만료 2027-01-11, certbot.timer 자동 갱신 — dry-run 통과)
+- 예전 자리표시 앱(root pm2 `nodeapp`, `/var/www/nodeapp/server.js`)은 pm2에서 지웠다. 파일은 남아 있다
+- 조립설명서(C·논술 9단계 원전): 서버 `~/hmos-spec/조립설명서.md` = [`hmos-spec/조립설명서.md`](hmos-spec/조립설명서.md)
+
 ## 배포
 
 ```
