@@ -4,7 +4,7 @@
 //   A·B 흐름: 인식 → 1차 필터 확인화면 → [교사 ① 승인 대기]
 //   C 흐름 (조립설명서 C·논술 9단계, HMOS 절대 원칙 — 엔진이 잡는다): 2단계 소문항별 인식
 //     → 3·4단계 제시문 단락 급소 ↔ 논제 급소 연결·사족 (제시문이 오면) → 5단계 정교화 진단[봉인⑬]
-//     → 6단계 단락 급소 관계·6유형·추가/보완[봉인⑭ 초안] (제시문이 오면). 1차 필터는 타지 않는다
+//     → 6단계 단락 급소 관계·6유형 뼈대·추가/보완[봉인⑭] (제시문이 오면) — 보완은 5단계 진단(갈래 「보완」)으로 넘긴다. 1차 필터는 타지 않는다
 //   사족: 제시문 없이 진단할 때 [{소문항, 급소}]
 // 엔진이 멈추면(SealedError·급소 실패) 그 자리와 사유를 그대로 싣고 끝낸다 — 어디서 멈췄는지가 곧 다음에 채울 봉인이다.
 // 루브릭·모범답안(generate_rubric)은 교사가 확인화면에서 ①로 승인한 문항만 받는다 (명세서-2 §6) — 여기서는 승인하지 않는다.
@@ -22,7 +22,7 @@ const { 봉인13_정교화진단 } = await load('src/filter/sealed/items.ts');
 const { split_thesis } = await load('src/thesis/split.ts');
 const { align_passage } = await load('src/thesis/align.ts');
 const { essay_pivot_chunks } = await load('src/thesis/chunk.ts');
-const { 급소단락들, 봉인14_단락관계 } = await load('src/thesis/relate.ts');
+const { 봉인14_6단계 } = await load('src/thesis/relate.ts');
 
 const [reqPath, outPath] = process.argv.slice(2);
 const req = JSON.parse(readFileSync(reqPath, 'utf8'));
@@ -104,9 +104,10 @@ try {
           전체급소: passage.pivot ? { 실체: passage.pivot.node.entity, keyword: passage.pivot.keyword ?? '' } : null,
           flag: passage.flag ?? null,
         };
-        out.단계.정합 = { 연결: 정합.연결, 사족: 정합.사족, 소문항: 정합.소문항.map((x: any) => ({ 번호: x.번호, 배경: x.연결.background, 범위밖: x.연결.outOfScope })) };
-        // 6단계 — 단락 급소 관계 → 6유형 → 기존 논제와 비교 [봉인⑭ 초안, 오종래 2026-10-14]. 보완은 5단계로 넘긴다
-        out.단계.관계 = { 초안: true, 급소단락: 급소단락들(정합, passage), 관계: 봉인14_단락관계(정합, passage) };
+        // 연결단락 = 그 소문항이 연결선(급소·지정·기호)을 가진 단락 기호 — 6단계 자가검증이 읽는다
+        out.단계.정합 = { 연결: 정합.연결, 사족: 정합.사족, 소문항: 정합.소문항.map((x: any) => ({ 번호: x.번호, 배경: x.연결.background, 범위밖: x.연결.outOfScope, 연결단락: [...new Set(x.연결.links.map((l: any) => 라벨들[l.paragraph] ?? `#${l.paragraph + 1}`))] })) };
+        // 6단계 — 단락 급소 관계 → 6유형 뼈대 → 기존 논제와 비교 [봉인⑭, 오종래 2026-10-14]. 보완은 5단계로 넘긴다
+        out.단계.관계 = 봉인14_6단계(정합, passage);
       } catch (e) {
         stop('제시문', 멈춤of(e));
       }
@@ -114,7 +115,8 @@ try {
 
     // 5단계 — 정교화 4갈래 진단 [봉인⑬]. ④사족은 4단계 결과, 제시문이 없으면 요청의 사족
     const 사족 = out.단계.정합?.사족 ?? (Array.isArray(req.사족) ? req.사족 : []);
-    out.단계.정교화 = { 진단: 봉인13_정교화진단(소문항.map((s: any) => ({ 이름: s.번호, 인식: s.a })), 사족) };
+    // 6단계 ⑤ 보완(참조 범위 안 단락을 끌어들일 수 있는 소문항)은 5단계 진단 「보완」으로 (오종래 2026-10-14)
+    out.단계.정교화 = { 진단: [...봉인13_정교화진단(소문항.map((s: any) => ({ 이름: s.번호, 인식: s.a })), 사족), ...(out.단계.관계?.보완 ?? [])] };
   } else {
     // ── A·B ──
     // ① 인식

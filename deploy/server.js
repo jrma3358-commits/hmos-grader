@@ -248,7 +248,27 @@ app.post('/api/generate',async(req,res)=>{
 // 진단은 엔진([봉인⑬], /analyze 응답의 단계.정교화.진단)이 한다. Claude는 진단된 ①②③ 갈래마다 정교화안만 쓴다.
 // ④사족은 표시만 — 생성하지 않는다. 정교화안은 다시 엔진에 태워 급소·진단을 돌려준다 (명세서-2 §3 자가검증 순환).
 const REFINE_SPEC=process.env.HMOS_REFINE_SPEC||path.join(__dirname,'..','hmos-spec','HMOS_논제생성_명세서-2.md');
-const 생성갈래=['일방흐름','서술복잡','급소불명확'];
+// 보완 = 6단계 ⑤에서 넘어온 진단 — 참조 범위 안 단락을 끌어들일 수 있는 소문항 (오종래 2026-10-14)
+const 생성갈래=['일방흐름','서술복잡','급소불명확','보완'];
+
+/**
+ * 갈래별 처방 — 진단마다 같은 처방을 싣는다 (오종래 2026-10-14: Claude가 매번 같은 근거로 판단하게).
+ * 핵심유지 = 정교화안에 엔진 핵심(B) 실체가 그대로 남아야 하는 갈래
+ */
+const 처방={
+  일방흐름:{글:'핵심은 그대로 두고, 핵심에서 묻는 말로 넘어가기 전에 조건(범위·관점·기준) 하나 이상을 더한다.',핵심유지:true},
+  서술복잡:{글:'핵심은 그대로 두고, 다룰 대상을 (1)(2)(3) 소문항 계단으로 나눈다. 각 계단은 대상 하나만 다룬다.',핵심유지:true},
+  급소불명확:{글:'묻는 말 바로 앞에 「무엇을(핵심 실체) + 어떻게(조건)」 덩어리가 서도록 다시 쓴다. 핵심 실체는 원 논제와 제시문에 있는 말로만 쓴다.',핵심유지:false},
+  보완:{글:'원 소문항의 핵심은 그대로 두고, 진단이 가리킨 제시문 단락과 그 단락의 실체를 조건으로 끌어들인다. 그 단락 기호([가] 꼴)를 논제에 쓴다. 참조 범위 밖 단락은 끌어들이지 않는다.',핵심유지:true},
+};
+
+/** 소문항의 엔진 핵심 — 급소덩어리(Q 앞 B+C)의 B 실체, 없으면 엔진 급소 실체 */
+function 핵심실체(s){
+  if(!s)return [];
+  const B=new Set((s.급소덩어리||[]).map(d=>d.B));
+  const 덩어리B=(s.노드||[]).filter(n=>B.has(n.id)).map(n=>n.실체.trim().replace(/^[\s,]+/,''));
+  return 덩어리B.length?덩어리B:(s.급소||[]).map(k=>k.실체.trim().replace(/^[\s,]+/,''));
+}
 
 /** 명세서-2 §3 원문 그대로 — 이론을 여기서 새로 쓰지 않는다. 파일이 없어도 서버는 뜨게, 부를 때 읽는다 */
 function loadRefineRules(){
@@ -258,7 +278,8 @@ function loadRefineRules(){
   return md.slice(a,b).trim();
 }
 
-const REFINE_FORMAT={
+/** 정교화 출력 — 진단 id마다 하나. 갈래·단위·근거는 서버가 엔진 진단에서 붙인다 (Claude가 다시 쓰지 않는다) */
+const refineFormat=ids=>({
   type:'json_schema',
   schema:{
     type:'object',
@@ -267,23 +288,49 @@ const REFINE_FORMAT={
     properties:{
       proposals:{
         type:'array',
-        description:'진단 하나당 정교화안 하나',
+        description:'작업 블록 하나당 정교화안 하나 — 블록의 id를 그대로',
         items:{
           type:'object',
           additionalProperties:false,
-          required:['branch','unit','refined','change','basis'],
+          required:['id','refined','change'],
           properties:{
-            branch:{type:'string',enum:생성갈래},
-            unit:{type:'string',description:'진단의 단위 그대로 (없으면 빈 문자열)'},
-            refined:{type:'string',description:'정교화한 논제 전문'},
-            change:{type:'string',description:'원 논제에서 무엇을 바꿨는가'},
-            basis:{type:'string',description:'엔진 진단 근거와 급소 — 이 정교화가 어느 진단·급소에서 나왔는가'},
+            id:{type:'string',enum:ids},
+            refined:{type:'string',description:'정교화한 소문항 논제 전문'},
+            change:{type:'string',description:'원 논제에서 무엇을 바꿨는가 — 교사가 읽는 문장'},
           },
         },
       },
     },
   },
-};
+});
+
+/** 정교화 작업 블록 — 진단 하나를 엔진 값(소문항·핵심·갈래·근거)과 처방으로 못 박는다 */
+function 정교화작업(대상,소문항){
+  return 대상.map((d,i)=>{
+    const s=소문항.find(x=>x.번호===d.단위)||(소문항.length===1?소문항[0]:null);
+    const 핵심=핵심실체(s);
+    return {id:'d'+(i+1),진단:d,소문항:s,핵심,
+      글:[
+        `[작업 d${i+1}]`,
+        `소문항: ${d.단위?`(${d.단위})`:'논제 전체'}`,
+        `원 논제: ${s?s.텍스트:'(소문항을 찾지 못함 — 논제 전체를 본다)'}`,
+        `엔진 핵심: ${핵심.length?핵심.map(k=>`「${k}」`).join(' · '):'서지 않음'}${s&&s.급소덩어리&&s.급소덩어리.length?` (핵심 덩어리 ${s.급소덩어리.map(x=>`「${x.실체}」`).join(' · ')})`:''}`,
+        `진단 갈래: ${d.갈래}`,
+        `엔진 근거: ${d.근거}`,
+        ...(d.갈래==='보완'?[`끌어들일 단락: [${d.단락}] 「${d.급소}」 (이미 연결된 단락 [${d.연결단락}] 「${d.연결급소}」, 두 단락은 ${d.관계} 관계)`]:[]),
+        `처방: ${처방[d.갈래].글}`,
+        ...(처방[d.갈래].핵심유지&&핵심.length?[`반드시 남길 말: ${핵심.map(k=>`「${k}」`).join(' · ')}${d.갈래==='보완'?` · 「[${d.단락}]」`:''}`]:[]),
+      ].join('\n')};
+  });
+}
+
+/** 정교화안 점검 — 처방이 핵심을 남기라 했는데 빠졌으면 교사 확인 (판정하지 않는다, 표시만) */
+function 정교화점검(w,refined){
+  const 점검=[];
+  if(처방[w.진단.갈래].핵심유지)for(const k of w.핵심)if(!refined.includes(k))점검.push(`핵심 「${k}」가 정교화안에 그대로 남지 않음`);
+  if(w.진단.갈래==='보완'&&!refined.includes(`[${w.진단.단락}]`))점검.push(`끌어들일 단락 [${w.진단.단락}] 기호가 정교화안에 없음`);
+  return 점검;
+}
 
 app.post('/api/refine',async(req,res)=>{
   // 소문항: /analyze 의 단계.인식.소문항 · 진단: /analyze 의 단계.정교화.진단 — 둘 다 엔진 값 그대로
@@ -296,39 +343,44 @@ app.post('/api/refine',async(req,res)=>{
 
   let rules;
   try{rules=loadRefineRules();}catch(e){res.status(500).json({error:'정교화 명세를 읽지 못함 — '+e.message});return;}
-  const system=`너는 HMOS 논제 정교화기다. 아래 「서술형 문제 정교화」 원문에 따라, HMOS 엔진이 진단한 갈래마다 정교화한 논제를 제안한다.
+  const 작업=정교화작업(대상,소문항);
+  const system=`너는 HMOS 논제 정교화기다. 아래 「서술형 문제 정교화」 원문에 따라, 작업 블록마다 정교화한 논제 하나를 쓴다.
 
 지킬 것:
-- 진단(갈래·근거)은 HMOS 엔진의 [봉인⑬] 산출이다. 다시 진단하지 않는다.
-- 진단 하나당 정교화안 하나. 진단에 없는 갈래를 만들지 않는다. 진단의 단위(소문항)를 정교화한다.
-- ① 일방흐름 → 제약 C를 더해 조인다. ② 서술복잡 → 급소는 그대로 두고 (1)(2)(3) 소문항 계단으로 나눈다. ③ 급소불명확 → 급소가 담긴 정의·식을 바꿔 급소를 선명하게 다시 쓴다.
-- 정교화는 새 문제를 만드는 것이 아니다. 원 논제가 겨눈 급소·의도를 더 정확하게 만든다.
+- 작업 블록의 소문항·엔진 핵심·진단 갈래·엔진 근거는 HMOS 엔진 산출이다. 다시 진단하거나 핵심을 바꾸지 않는다. 판단의 근거는 언제나 그 블록의 엔진 근거 하나다.
+- 블록 하나당 정교화안 하나. id는 블록의 id 그대로. 블록에 없는 갈래·소문항을 만들지 않는다.
+- 블록의 「처방」을 그대로 따른다. 「반드시 남길 말」이 있으면 그 말을 글자 그대로 정교화안에 남긴다.
+- 정교화는 새 문제를 만드는 것이 아니다. 원 논제가 겨눈 핵심·의도를 더 정확하게 만든다. 원 논제의 공통 발문·소문항 번호는 쓰지 않는다 — 소문항 본문만 쓴다.
 - 제시문이 주어지면 제시문 실체에서 벗어나지 않는다.
-- basis에는 어느 진단 근거·급소에서 나온 정교화인지 밝힌다.
-- change·basis는 교사가 읽는 문장이다 (오종래 2026-10-13). 5색 기호(B·C·P·D·Q), 노드 id(n2 등), 봉인 번호, 갈래 이름(일방흐름·서술복잡·급소불명확), C-F 같은 내부 표기를 쓰지 않는다. 근거는 실체 말로 밝힌다 — 예: 「급소 B「X」(n2)가 Q「인지」(n3)로 바로 이어지고 C 노드가 없다」 → 「핵심 「X」에서 조건 없이 바로 묻는 말로 넘어간다」, 「제약 C를 더했다」 → 「조건을 더했다」.
+- change는 교사가 읽는 문장이다 (오종래 2026-10-13). 5색 기호(B·C·P·D·Q), 노드 id(n2 등), 봉인 번호, 갈래 이름(일방흐름·서술복잡·급소불명확·보완), C-F 같은 내부 표기를 쓰지 않는다. 「제약 C를 더했다」 → 「조건을 더했다」처럼 실체 말로 쓴다.
 ${공통지킬것}
 
 === HMOS 논제생성 명세서-2 §3 (원문) ===
 ${rules}`;
 
   const user=[
-    `논제:\n${t}`,
     Array.isArray(제시문)&&제시문.length?`제시문:\n${제시문글(제시문)}`:'',
-    `소문항별 HMOS 인식 (그대로 받을 것):\n${소문항글(소문항)}`,
-    `HMOS 정교화 진단 [봉인⑬] (그대로 받을 것):\n${JSON.stringify(대상,null,2)}`,
+    `정교화 작업 (HMOS 엔진 진단 — 그대로 받을 것):\n\n${작업.map(w=>w.글).join('\n\n')}`,
   ].filter(Boolean).join('\n\n');
 
-  const r=await askClaude(res,system,user,REFINE_FORMAT,o=>Array.isArray(o.proposals));
+  const ids=작업.map(w=>w.id);
+  const r=await askClaude(res,system,user,refineFormat(ids),o=>Array.isArray(o.proposals));
   if(!r)return;
 
-  // 자가검증 — 정교화안을 엔진에 다시 태운다. 급소가 의도대로 잡혔는지는 교사가 본다 (판정하지 않는다)
-  const 정교화=await Promise.all(r.out.proposals.map(async p=>{
-    const a=await runAnalyze({파이프라인:'C',논제:p.refined});
+  // 자가검증 — 정교화안을 엔진에 다시 태운다. 보완은 제시문과 함께 태워 끌어들인 단락에 연결되는지 본다
+  const 정교화=await Promise.all(작업.map(async w=>{
+    const p=r.out.proposals.find(x=>x.id===w.id);
+    const 원급소=w.핵심;
+    if(!p)return {id:w.id,갈래:w.진단.갈래,단위:w.진단.단위,진단:w.진단,원급소,논제:'',바꾼점:'',점검:['Claude가 이 진단의 정교화안을 내지 않음'],재인식:{오류:'정교화안 없음'}};
+    const 보완=w.진단.갈래==='보완'&&Array.isArray(제시문)&&제시문.length;
+    const a=await runAnalyze({파이프라인:'C',논제:p.refined,...(보완?{제시문}:{})});
     const 재인식=a.ok&&a.단계&&a.단계.인식
-      ?{소문항:a.단계.인식.소문항.map(s=>({번호:s.번호,급소:s.급소.map(k=>k.실체.trim()),급소실패:s.급소실패})),진단:(a.단계.정교화&&a.단계.정교화.진단)||[]}
+      ?{소문항:a.단계.인식.소문항.map(s=>({번호:s.번호,급소:s.급소.map(k=>k.실체.trim()),급소실패:s.급소실패})),진단:(a.단계.정교화&&a.단계.정교화.진단)||[],
+        ...(보완?{연결단락:((a.단계.정합&&a.단계.정합.소문항)||[]).flatMap(x=>x.연결단락||[])}:{})}
       :{오류:(a.error&&a.error.사유)||'재인식 실패'};
-    const 원=소문항.find(s=>s.번호===(p.unit||null))||(소문항.length===1?소문항[0]:null);
-    return {갈래:p.branch,단위:p.unit||null,원급소:원?원.급소.map(k=>k.실체.trim()):[],논제:p.refined,바꾼점:p.change,근거:p.basis,재인식};
+    const 점검=정교화점검(w,p.refined);
+    if(보완&&재인식.연결단락&&!재인식.연결단락.includes(w.진단.단락))점검.push(`엔진에 다시 넣으니 [${w.진단.단락}]에 연결되지 않음`);
+    return {id:w.id,갈래:w.진단.갈래,단위:w.진단.단위,진단:w.진단,원급소,논제:p.refined,바꾼점:p.change,점검,재인식};
   }));
 
   res.json({model:r.msg.model,usage:r.msg.usage,정교화,사족});
@@ -380,60 +432,76 @@ async function askClaude(res,system,user,format,check){
   return {out,msg};
 }
 
-/** 소문항 인식(/analyze 단계.인식.소문항)을 프롬프트용으로 — 엔진 값 그대로 */
-// 급소덩어리 = 논술 논제 급소 (Q 앞 B+C, 오종래 2026-10-13) — Q는 형식이다
-const 소문항글=소문항=>JSON.stringify(소문항.map(s=>({소문항:s.번호,논제:s.텍스트,참조제시문:s.참조,조합:s.조합,노드:s.노드,급소덩어리:s.급소덩어리,급소_k:s.급소})),null,2);
 const 제시문글=제시문=>제시문.map(p=>`[${p.id}] ${p.텍스트}`).join('\n');
-// 6단계 — 추가 논제 생성 (F_인문사회 6유형). 출력: [문항분석]·[추가논제]·[근거]
-const 유형6=['비교·대비','공통원리','근거·주장','대안제시','선택·응용','인연·비판'];
-const PROPOSE_FORMAT={type:'json_schema',schema:{type:'object',additionalProperties:false,required:['analysis','proposals'],properties:{
-  analysis:{type:'object',additionalProperties:false,required:['pivot','current','covered','gaps'],properties:{
-    pivot:{type:'string',description:'급소(k) — 엔진 급소 그대로'},
-    current:{type:'string',description:'현재 측정 역량'},
-    covered:{type:'array',items:{type:'string',enum:유형6},description:'현재 논제가 덮는 유형 (유형 지도에 대조)'},
-    gaps:{type:'array',items:{type:'string',enum:유형6},description:'빈 곳 — 미측정 유형'},
-  }},
-  proposals:{type:'array',items:{type:'object',additionalProperties:false,required:['type','thesis','difference','measures','passages'],properties:{
-    type:{type:'string',enum:유형6},
-    thesis:{type:'string',description:'추가 논제 텍스트'},
-    difference:{type:'string',description:'기존과 다른 점'},
-    measures:{type:'string',description:'새로 측정하는 것'},
-    passages:{type:'array',items:{type:'string'},description:'쓰는 제시문 기호'},
+// 6단계 — 추가 논제 (조립설명서 6단계, 오종래 2026-10-14). 엔진(/analyze 단계.관계)이 단락 관계·6유형·추가 판단·논제 뼈대를 낸다.
+// Claude는 뼈대를 자연스러운 논제 문장으로 다듬고 「기존과 다른 점」·「새로 측정하는 것」만 쓴다. 뼈대의 실체·단락 기호는 바꾸지 않는다.
+// 쓴 논제는 제시문과 함께 엔진에 다시 넣어 두 단락에 연결되는지 본다 (자가검증).
+const proposeFormat=ids=>({type:'json_schema',schema:{type:'object',additionalProperties:false,required:['proposals'],properties:{
+  proposals:{type:'array',description:'후보 블록 하나당 하나 — 블록의 id를 그대로',items:{type:'object',additionalProperties:false,required:['id','thesis','difference','measures'],properties:{
+    id:{type:'string',enum:ids},
+    thesis:{type:'string',description:'뼈대를 다듬은 추가 논제 전문'},
+    difference:{type:'string',description:'기존과 다른 점 — 교사가 읽는 문장'},
+    measures:{type:'string',description:'새로 측정하는 것 — 교사가 읽는 문장'},
   }}},
-}}};
+}}});
 
 app.post('/api/propose',async(req,res)=>{
-  const {논제,소문항,제시문,정합}=req.body||{};
+  // 관계: /analyze 의 단계.관계 (엔진 [봉인⑭]) · 소문항: 단계.인식.소문항 — 엔진 값 그대로
+  const {논제,소문항,제시문,관계}=req.body||{};
   if(!(논제||'').trim()||!Array.isArray(소문항)||!소문항.length){res.status(400).json({error:'논제·소문항(2단계 인식)이 필요합니다'});return;}
+  if(!관계||!Array.isArray(관계.추가후보)){res.status(400).json({error:'6단계 엔진 결과(단계.관계)가 없습니다 — 제시문을 넣고 다시 분석하세요'});return;}
+  const 후보=관계.추가후보;
+  if(!후보.length){res.json({비교불가:!!관계.비교불가,추가논제:[],사유:'엔진이 추가할 단락 쌍을 찾지 못했습니다 — 모든 단락 쌍이 기존 논제에 이미 들어 있거나 5단계 보완으로 넘어갔습니다'});return;}
   let rules;
-  try{rules=[sliceSpec(REFINE_SPEC,'## 1. 공통 입출력','## 2.'),sliceSpec(REFINE_SPEC,'## 4. 추가 논제의 원칙','## 6.')].join('\n\n');}
+  try{rules=sliceSpec(REFINE_SPEC,'## 4. 추가 논제의 원칙','## 6.');}
   catch(e){res.status(500).json({error:'명세서-2를 읽지 못함 — '+e.message});return;}
-  const system=`너는 HMOS 추가 논제 생성기다. 아래 명세서-2 원문(§1 공통 출력, §4 추가 논제의 원칙, §5 F_인문사회)에 따라 빈 곳을 채우는 추가 논제를 제안한다.
+  const system=`너는 HMOS 추가 논제 문장가다. HMOS 엔진이 제시문 단락 관계에서 고른 후보마다, 엔진이 지은 논제 뼈대를 자연스러운 논제 문장으로 다듬는다.
 
 지킬 것:
-- 추가 논제는 자유 생성이 아니다. 현재 논제가 덮는 유형을 6유형 지도에 대조해 빈 유형을 찾고, 그 빈 곳을 채운다.
-- 유형 목록은 급소 판별기가 아니라 커버리지 지도다.
-- 엔진이 잡은 제시문 단락 급소 안에서만 논제를 짓는다. 쓰는 제시문 기호를 밝힌다.
-- 엔진이 사족으로 표시한 논제 급소(제시문에 근거 없음)를 근거로 삼지 않는다.
-- 「기존과 다른 점」과 「새로 측정하는 것」을 반드시 쓴다.
-- current·difference·measures는 교사가 읽는 문장이다 (오종래 2026-10-13). 5색 기호(B·C·P·D·Q), 노드 id(n2 등), 봉인 번호, 「급소(k)」·「급소_k」·「말미 급소」·「사족」 같은 내부 표기를 쓰지 않는다. 「급소」는 「핵심」으로, 「사족」은 「제시문에 근거가 없는 핵심」으로 쓰고, 근거는 실체 말로 밝힌다 — 예: 「1-2의 n2(B국이 시행한 대응조치)를 근거로」 → 「(1-2)의 핵심 「B국이 시행한 대응조치」를 근거로」.
+- 유형·관계·두 단락·실체·뼈대는 HMOS 엔진 산출이다. 다시 고르거나 바꾸지 않는다. 후보 블록 하나당 논제 하나, id는 블록의 id 그대로.
+- 뼈대의 「제시문 [A], [B]를 참고하여」 머리와 두 단락 기호, 「반드시 남길 말」은 글자 그대로 남긴다. 조사·어미·어순만 다듬는다.
+- 새 실체·새 조건·새 단락을 더하지 않는다. 묻는 말(설명하시오·논하시오·서술하시오·제시하시오)은 뼈대의 것을 쓴다.
+- difference는 기존 소문항과 무엇이 다른지, measures는 이 논제가 새로 재는 능력을 엔진 근거(관계·실체)에 기대어 쓴다.
+- difference·measures는 교사가 읽는 문장이다 (오종래 2026-10-13). 5색 기호(B·C·P·D·Q), 노드 id(n2 등), 봉인 번호, 「급소」·「사족」 같은 내부 표기를 쓰지 않는다. 「급소」는 「핵심」으로 쓴다.
 ${공통지킬것}
 
-=== 명세서-2 (원문) ===
+=== 명세서-2 §4·§5 (원문) ===
 ${rules}`;
+  const 블록=후보.map(c=>[
+    `[후보 ${c.id}]`,
+    `유형: ${c.유형} (단락 관계: ${c.관계})`,
+    `두 단락: [${c.단락[0]}] · [${c.단락[1]}]`,
+    `엔진 근거: ${c.근거}`,
+    `논제 뼈대: ${c.뼈대}`,
+    `반드시 남길 말: ${[...c.실체들.map(x=>`「${x}」`),...c.단락.map(l=>`「[${l}]」`)].join(' · ')}`,
+  ].join('\n'));
   const user=[
-    `논제:\n${논제}`,
-    `소문항별 HMOS 인식 (그대로 받을 것):\n${소문항글(소문항)}`,
+    `기존 논제 (비교 대상 — 그대로 받을 것):\n${소문항.map(s=>`${s.번호?`(${s.번호}) `:''}${s.텍스트}`).join('\n')}`,
     Array.isArray(제시문)&&제시문.length?`제시문:\n${제시문글(제시문)}`:'',
-    정합?`4단계 엔진 결과 — 논제 급소 ↔ 제시문 단락 급소 연결, 사족 (그대로 받을 것):\n${JSON.stringify({연결:정합.연결,사족:정합.사족},null,2)}`:'',
+    `추가 논제 후보 (HMOS 엔진 — 그대로 받을 것):\n\n${블록.join('\n\n')}`,
   ].filter(Boolean).join('\n\n');
-  const r=await askClaude(res,system,user,PROPOSE_FORMAT,o=>o.analysis&&Array.isArray(o.proposals));
+  const r=await askClaude(res,system,user,proposeFormat(후보.map(c=>c.id)),o=>Array.isArray(o.proposals));
   if(!r)return;
-  const a=r.out.analysis;
-  res.json({model:r.msg.model,usage:r.msg.usage,
-    문항분석:{급소:a.pivot,현재역량:a.current,덮는유형:a.covered,빈곳:a.gaps},
-    추가논제:r.out.proposals.map(p=>({유형:p.type,논제:p.thesis,기존과다른점:p.difference,새로측정하는것:p.measures,제시문:p.passages})),
-  });
+
+  const 추가논제=await Promise.all(후보.map(async c=>{
+    const p=r.out.proposals.find(x=>x.id===c.id);
+    const 기본={id:c.id,유형:c.유형,관계:c.관계,뼈대:c.뼈대,제시문:c.단락,근거:c.근거};
+    if(!p)return {...기본,논제:'',기존과다른점:'',새로측정하는것:'',점검:['Claude가 이 후보의 논제를 내지 않음'],자가검증:{통과:false,사유:'논제 없음'}};
+    const 점검=[...c.실체들.filter(x=>!p.thesis.includes(x)).map(x=>`실체 「${x}」가 논제에 그대로 남지 않음`),
+      ...c.단락.filter(l=>!p.thesis.includes(`[${l}]`)).map(l=>`단락 기호 [${l}]가 논제에 없음`)];
+    const a=await runAnalyze({파이프라인:'C',논제:p.thesis,...(Array.isArray(제시문)&&제시문.length?{제시문}:{})});
+    let 자가검증;
+    if(!a.ok||!a.단계||!a.단계.인식)자가검증={통과:false,사유:(a.error&&a.error.사유)||'재인식 실패'};
+    else{
+      const 연결단락=[...new Set(((a.단계.정합&&a.단계.정합.소문항)||[]).flatMap(x=>x.연결단락||[]))];
+      const 급소=a.단계.인식.소문항.flatMap(s=>s.급소.map(k=>k.실체.trim().replace(/^[\s,]+/,'')));
+      const 빠진=c.단락.filter(l=>!연결단락.includes(l));
+      자가검증={통과:!빠진.length&&급소.length>0,연결단락,급소,
+        ...(빠진.length?{사유:`[${빠진.join('], [')}]에 연결되지 않음`}:!급소.length?{사유:'핵심이 서지 않음'}:{})};
+    }
+    return {...기본,논제:p.thesis,기존과다른점:p.difference,새로측정하는것:p.measures,점검,자가검증};
+  }));
+  res.json({model:r.msg.model,usage:r.msg.usage,비교불가:!!관계.비교불가,추가논제});
 });
 
 app.get('/dashboard',(req,res)=>res.sendFile(path.join(__dirname,'hmos_dashboard.html')));
