@@ -1153,6 +1153,17 @@ describe('서술형태 급소 — C-F 노드 안의 핵심어 (오종래 2026-10
     assert.equal(only.ok && only.pivot.node.entity, '기업', '다른 B가 없으면 그대로');
   });
 
+  it('소유격 수식 B — 「의」 뒤가 B도 Q도 아니면 꾸미는 말, 그 앞 B가 급소 · 「의」 뒤가 Q면 그대로 (오종래 2026-10-13)', () => {
+    const t: SealedTable = {
+      ...table(),
+      switches: [sw('SB', ['~@B', '~의'], 'B'), sw('SP', ['~@P'], 'P'), sw('SQ', ['~@Q'], 'Q')],
+    };
+    const r = analyze_pivot(build_path_graph('조치 @B 기업의 경쟁력 @P 설명 @Q', t), t);
+    assert.equal(r.ok && r.pivot.node.entity.trim(), '조치');
+    const q = analyze_pivot(build_path_graph('조치 @B k의 설명 @Q', t), t);
+    assert.equal(q.ok && q.pivot.node.entity.trim(), 'k');
+  });
+
   it('C-F 노드가 둘이면 뒤쪽(서술 방향)이 급소 — 앞쪽은 서술 수단 (오종래 2026-10-13)', () => {
     const t = table(['SF']);
     const g = build_path_graph('형태 @B 논박@M 관점 @V 설명 @Q', t);

@@ -217,6 +217,22 @@ export function 관점앞B(nodes: readonly PathNode[], node: PathNode): boolean 
 }
 
 /**
+ * 소유격 수식 B [오종래 2026-10-13] — 「의」로 선 B 노드인데 바로 다음 노드가 B도 Q도 아니면(머리 명사가 P·C·D로 섰다)
+ * 그 B는 다른 말을 꾸미는 소유자지 묻는 대상이 아니다 (「각 조치가 B국 기업의 경쟁력과 수출에 어떤 방식으로 작용하는지」의 「B국 기업」).
+ * 다음 노드가 Q면(「k의 값은?」) 그 Q의 대상이라 그대로다.
+ */
+export function 소유격수식B(nodes: readonly PathNode[], node: PathNode): boolean {
+  if (node.color !== 'B' || !node.surface.trim().endsWith('의')) return false;
+  const next = nodes[nodes.indexOf(node) + 1];
+  return !!next && next.color !== 'B' && next.color !== 'Q';
+}
+
+/** 곁 B — 관점 앞 B · 소유격 수식 B. 급소에서 뺀다 — 다른 B가 없을 때만 남긴다 [오종래 2026-10-13] */
+export function 곁B(nodes: readonly PathNode[], node: PathNode): boolean {
+  return 관점앞B(nodes, node) || 소유격수식B(nodes, node);
+}
+
+/**
  * 복합 Q 절 나누기 — 「~하고,」「~나타내고,」「~고르고,」「~쓰고,」 Q(바로 뒤 쉼표)에서 물음을 절로 자른다.
  * 절마다 서술형태 노드가 꼭 하나씩이고 마지막 절에도 Q가 있으면 절 순서대로 그 노드들을, 아니면 undefined.
  */
@@ -385,15 +401,16 @@ export function analyze_pivot(graph: PathGraph, table?: SealedTable): PivotAnaly
       break;
     }
   }
-  const hasOtherThanAspect = graph.nodes.some((n) => n.color === 'B' && n.foldedFrom == null && !관점앞B(graph.nodes, n));
+  const hasOtherThanAspect = graph.nodes.some((n) => n.color === 'B' && n.foldedFrom == null && !곁B(graph.nodes, n));
   const eligible = (node: PathNode) => {
     if (node.color !== 'B' || node.foldedFrom === 'C' || node.foldedFrom === 'D') return false;
     if (pointsBack && node.entity.trim() === '이') return false; // 지시어 자체는 급소가 아니다
     // 형식 명사 「값」 [오종래 2026-10-02] — 「값」은 급소가 될 수 없다. Q 직전 B로 잡히면 그 앞 B가 급소다
     //   (예: 수리논술_문_4 「lim_{m→1-} f(m)/g(m)의 값을 구하시오」 → 「lim_{m→1-} f(m)/g(m)」).
     if (node.entity.trim() === '값') return false;
-    // 관점 앞 B [오종래 2026-10-13] — 「…의 경쟁력 측면에서」의 B는 관점이다. 다른 B가 있으면 그 B가 급소다
-    if (hasOtherThanAspect && 관점앞B(graph.nodes, node)) return false;
+    // 곁 B [오종래 2026-10-13] — 관점 앞 B(「…의 경쟁력 측면에서」)·소유격 수식 B(「B국 기업의 경쟁력과」)는 묻는 대상이 아니다.
+    //   다른 B가 있으면 그 B가 급소다
+    if (hasOtherThanAspect && 곁B(graph.nodes, node)) return false;
     // 작성 형식 블록 [오종래 2026-10-05] — 「풀이 과정과 답을 서술하시오」의 「풀이 과정」(P)과 「답」(B)은 한 묶음의 작성 형식이라
     //   급소가 될 수 없다. 그 앞 B가 급소다 (예: 수학서술형 12 「일반항 a_n을 구하는 풀이 과정과 답을」 → 「일반항 a_n」).
     return !isWritingForm(graph, node);
