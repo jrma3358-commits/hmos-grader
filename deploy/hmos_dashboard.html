@@ -307,6 +307,33 @@
   }
   .reading-box p { margin: 0; }
 
+  /* 엔진 원본 JSON — 기본 접힘, 검증할 때만 펼친다 */
+  .engine-raw { margin-top: 12px; }
+  .engine-raw summary {
+    display: inline-block;
+    list-style: none;
+    cursor: pointer;
+    padding: 4px 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    font-size: 12px;
+    color: var(--text-sub);
+  }
+  .engine-raw summary::-webkit-details-marker { display: none; }
+  .engine-raw summary::before { content: '▸ '; }
+  .engine-raw[open] summary::before { content: '▾ '; }
+  .engine-raw pre {
+    margin: 8px 0 0;
+    padding: 12px;
+    max-height: 420px;
+    overflow: auto;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    font-size: 12px;
+    line-height: 1.5;
+  }
+
   /* 급소 강조 */
   .pivot-box {
     padding: 16px 18px;
@@ -1911,6 +1938,8 @@ function fillCSample() {
 }
 
 // ── 공통 조각 ──
+/** 엔진 원본 — 교사 화면에서는 접어 두고 검증할 때만 펼친다 */
+const 엔진원본Html = 값 => `<details class="engine-raw"><summary>엔진 결과 보기</summary><pre>${esc(JSON.stringify(값, null, 2))}</pre></details>`;
 const 소문항이름 = s => (s && s.번호 ? `(${s.번호})` : '논제');
 const 단위이름 = u => (u ? `(${u})` : '논제');
 const 엔진배지 = '<span class="badge engine">엔진</span>';
@@ -2004,6 +2033,7 @@ function renderC2() {
       <div class="question-box">${esc(s.텍스트)}</div>
       ${s.공통발문 ? `<div class="c-meta">공통 발문 — 인식에서 뗌: ${esc(s.공통발문)}</div>` : ''}
       <div class="c-meta">참조 제시문: ${s.참조.length ? s.참조.map(l => `[${esc(l)}]`).join(' ') : '전체'}</div>
+      ${엔진원본Html(s)}
     </div>`).join('');
 }
 
@@ -2035,7 +2065,7 @@ function renderC3() {
   const 전체 = 제.전체급소
     ? `이 제시문의 무게중심은 「${esc(displayEntity(제.전체급소.실체))}」입니다.`
     : `엔진이 이 제시문의 무게중심을 세우지 못했습니다 (${esc(제.flag || '—')}).`;
-  body.innerHTML = `<div class="card"><div class="card-title">${엔진배지}제시문 전체</div><div class="reading-box"><p>${전체}</p></div></div>` + 단락카드;
+  body.innerHTML = `<div class="card"><div class="card-title">${엔진배지}제시문 전체</div><div class="reading-box"><p>${전체}</p></div>${엔진원본Html(제)}</div>` + 단락카드;
 }
 
 /** 단락 라벨 — 엔진이 연결에 쓰는 이름(러너의 라벨). 옛 응답이면 기호, 없으면 「#순번」 */
@@ -2067,6 +2097,7 @@ function renderC4() {
       <div class="card-title">${엔진배지}논제 ↔ 제시문</div>
       <div class="reading-box"><p>논제와 제시문이 ${N}개 단락에서 연결됩니다.</p></div>
       ${줄.length ? `<div class="note-list">${줄.map(t => `<div class="note-item">${t}</div>`).join('')}</div>` : '<div class="c-empty">급소가 선 소문항이 없습니다</div>'}
+      ${엔진원본Html(C.분석.단계.정합)}
     </div>`;
 }
 
