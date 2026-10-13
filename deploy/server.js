@@ -72,6 +72,13 @@ function runAnalyze(body){
   });
 }
 
+/** 러너를 하나씩 — 서버가 작아 러너 여럿을 한꺼번에 띄우면 멈춘다 (2026-10-14 스테이징에서 재인식 4개 병렬로 서버가 먹통) */
+async function 하나씩(목록,fn){
+  const out=[];
+  for(const x of 목록)out.push(await fn(x));
+  return out;
+}
+
 app.post('/analyze',async(req,res)=>{
   const out=await runAnalyze(req.body);
   res.status(out.러너실패?500:out.ok?200:400).json(out);
@@ -368,7 +375,7 @@ ${rules}`;
   if(!r)return;
 
   // 자가검증 — 정교화안을 엔진에 다시 태운다. 보완은 제시문과 함께 태워 끌어들인 단락에 연결되는지 본다
-  const 정교화=await Promise.all(작업.map(async w=>{
+  const 정교화=await 하나씩(작업,async w=>{
     const p=r.out.proposals.find(x=>x.id===w.id);
     const 원급소=w.핵심;
     if(!p)return {id:w.id,갈래:w.진단.갈래,단위:w.진단.단위,진단:w.진단,원급소,논제:'',바꾼점:'',점검:['Claude가 이 진단의 정교화안을 내지 않음'],재인식:{오류:'정교화안 없음'}};
@@ -381,7 +388,7 @@ ${rules}`;
     const 점검=정교화점검(w,p.refined);
     if(보완&&재인식.연결단락&&!재인식.연결단락.includes(w.진단.단락))점검.push(`엔진에 다시 넣으니 [${w.진단.단락}]에 연결되지 않음`);
     return {id:w.id,갈래:w.진단.갈래,단위:w.진단.단위,진단:w.진단,원급소,논제:p.refined,바꾼점:p.change,점검,재인식};
-  }));
+  });
 
   res.json({model:r.msg.model,usage:r.msg.usage,정교화,사족});
 });
@@ -483,7 +490,7 @@ ${rules}`;
   const r=await askClaude(res,system,user,proposeFormat(후보.map(c=>c.id)),o=>Array.isArray(o.proposals));
   if(!r)return;
 
-  const 추가논제=await Promise.all(후보.map(async c=>{
+  const 추가논제=await 하나씩(후보,async c=>{
     const p=r.out.proposals.find(x=>x.id===c.id);
     const 기본={id:c.id,유형:c.유형,관계:c.관계,뼈대:c.뼈대,제시문:c.단락,근거:c.근거};
     if(!p)return {...기본,논제:'',기존과다른점:'',새로측정하는것:'',점검:['Claude가 이 후보의 논제를 내지 않음'],자가검증:{통과:false,사유:'논제 없음'}};
@@ -500,7 +507,7 @@ ${rules}`;
         ...(빠진.length?{사유:`[${빠진.join('], [')}]에 연결되지 않음`}:!급소.length?{사유:'핵심이 서지 않음'}:{})};
     }
     return {...기본,논제:p.thesis,기존과다른점:p.difference,새로측정하는것:p.measures,점검,자가검증};
-  }));
+  });
   res.json({model:r.msg.model,usage:r.msg.usage,비교불가:!!관계.비교불가,추가논제});
 });
 
