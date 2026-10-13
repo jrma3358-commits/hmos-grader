@@ -203,6 +203,9 @@ const CLAUSE_ENDS = ['하고', '기술하고', '요약하고', '나타내고', '
  *  [오종래 2026-10-13] 「측면에서」 추가 — 정교화안 「B국 기업의 경쟁력 측면에서 설명하시오」가 B 대신 급소를 가져감 */
 const METHOD_MARKERS = ['비판적으로', '비판하여', '입장에서', '관점에서', '참고하여', '참조하여', '바탕으로', '근거하여', '경제주체별로', '측면에서'];
 
+/** 주격 표지 — 간접의문 절의 주어를 찾는다 [오종래 2026-10-13] */
+const SUBJECT_MARKERS = ['가', '이', '께서'];
+
 /** 관점 표지 — 바로 앞 B는 관점(어느 쪽에서 보나)이지 묻는 대상이 아니다 [오종래 2026-10-13] */
 const ASPECT_MARKERS = ['측면에서'];
 
@@ -435,19 +438,36 @@ export function analyze_pivot(graph: PathGraph, table?: SealedTable): PivotAnaly
     //   「~고 있는」 서술어(윤리13 「설명하고 있는」), 공통 발문 「답하시오」(논서술형1)는 세지 않는다.
     const blockAt = writingBlockStart(graph.question);
     const counted = (n: PathNode) => n.color === 'Q' && !isIndirectQ(n) && !isProgressive(graph.question, n) && !COMMON_Q.includes(n.surface.trim()) && n.index < blockAt;
+    // 간접의문 절의 주어 [오종래 2026-10-13] — 물음 구간(앞 직접 Q 뒤부터 이 Q 앞까지)에 간접의문 Q(「~는지」「~인지」)가 있고
+    //   그 앞에 주격(「가」「이」「께서」) B가 있으면, 구간의 첫 주격 B가 급소다 — 간접의문이 묻는 대상은 그 절의 주어다
+    //   (「그 조치가 … 목적을 이루는 데 각각 어떻게 기여하는지 설명하시오」 → 「그 조치」, Q 직전 B 「목적」 ✕).
+    //   주어가 없으면 Q 직전 B 그대로. 곁 B·형식 명사 등 eligible에서 빠지는 B는 주어로도 세지 않는다.
+    const subjectOf = (from: number, to: number): PathNode | undefined => {
+      const iq = graph.nodes.findIndex((n, k) => k >= from && k < to && n.color === 'Q' && isIndirectQ(n));
+      if (iq < 0) return undefined;
+      return graph.nodes.slice(from, iq).find((n) => SUBJECT_MARKERS.includes(n.surface.trim()) && eligible(n));
+    };
     const pivots: Pivot[] = [];
     let from = 0;
     for (let q = 0; q <= lastQ; q++) {
       if (!counted(graph.nodes[q])) continue;
-      for (let j = q - 1; j >= from; j--) {
-        if (eligible(graph.nodes[j])) {
-          pivots.push(atQ(graph.nodes[j]));
-          break;
+      const subject = subjectOf(from, q);
+      if (subject) pivots.push(atQ(subject));
+      else {
+        for (let j = q - 1; j >= from; j--) {
+          if (eligible(graph.nodes[j])) {
+            pivots.push(atQ(graph.nodes[j]));
+            break;
+          }
         }
       }
       from = q + 1;
     }
-    return pivots.length > 1 ? { ok: true, pivot: atQ(node), pivots } : { ok: true, pivot: atQ(node) };
+    // 마지막 물음 구간 — 앞 직접 Q 뒤부터 lastQ까지
+    let lastFrom = 0;
+    for (let q = 0; q < lastQ; q++) if (counted(graph.nodes[q])) lastFrom = q + 1;
+    const main = subjectOf(lastFrom, lastQ + 1) ?? node;
+    return pivots.length > 1 ? { ok: true, pivot: atQ(main), pivots } : { ok: true, pivot: atQ(main) };
   }
 
   const scored = bs.map((node) => ({ node, convergence: convergenceOf(graph, node, table) }));

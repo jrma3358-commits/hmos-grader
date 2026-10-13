@@ -1164,6 +1164,28 @@ describe('서술형태 급소 — C-F 노드 안의 핵심어 (오종래 2026-10
     assert.equal(q.ok && q.pivot.node.entity.trim(), 'k');
   });
 
+  it('간접의문 절의 주어가 급소 — Q 직전 B가 아니라 구간의 첫 주격 B (오종래 2026-10-13)', () => {
+    const t: SealedTable = {
+      ...table(),
+      switches: [sw('SB', ['~@B', '~가', '~을'], 'B'), sw('SI', ['~는지'], 'Q'), sw('SQ', ['~@Q'], 'Q')],
+    };
+    const r = analyze_pivot(build_path_graph('그 조치가 목적을 이루는 데 기여하는지 설명 @Q', t), t);
+    assert.equal(r.ok && r.pivot.node.entity.trim(), '그 조치');
+    const noIndirect = analyze_pivot(build_path_graph('그 조치가 목적을 설명 @Q', t), t);
+    assert.equal(noIndirect.ok && noIndirect.pivot.node.entity.trim(), '목적', '간접의문이 없으면 Q 직전 B 그대로');
+    const noSubject = analyze_pivot(build_path_graph('목적을 이루는 데 기여하는지 설명 @Q', t), t);
+    assert.equal(noSubject.ok && noSubject.pivot.node.entity.trim(), '목적', '주어가 없으면 Q 직전 B 그대로');
+  });
+
+  it('간접의문 주어는 물음 구간마다 — 앞 직접 Q 뒤부터 센다', () => {
+    const t: SealedTable = {
+      ...table(),
+      switches: [sw('SB', ['~@B', '~가', '~을', '~를'], 'B'), sw('SI', ['~는지'], 'Q'), sw('SQ', ['~@Q', '~하고'], 'Q')],
+    };
+    const r = analyze_pivot(build_path_graph('대응조치를 제시하고, 그 조치가 목적을 이루는 데 기여하는지 설명 @Q', t), t);
+    assert.deepEqual(r.ok && r.pivots?.map((p) => p.node.entity.replace(/^[s,]+/, '').trim()), ['대응조치', '그 조치']);
+  });
+
   it('C-F 노드가 둘이면 뒤쪽(서술 방향)이 급소 — 앞쪽은 서술 수단 (오종래 2026-10-13)', () => {
     const t = table(['SF']);
     const g = build_path_graph('형태 @B 논박@M 관점 @V 설명 @Q', t);
