@@ -13,7 +13,7 @@
 //   - B가 없는 구간의 Q(「무엇」 뒤 「설명하시오」)는 앞 덩어리의 형식 표지다 — 덩어리를 새로 세우지 않는다
 
 import type { PathGraph, PathNode } from '../fq/v2/graph.ts';
-import { 곁B } from '../fq/v2/pivot.ts';
+import { 곁B, isIndirectQ, SUBJECT_MARKERS } from '../fq/v2/pivot.ts';
 
 export interface 급소덩어리 {
   B: PathNode;
@@ -39,7 +39,12 @@ export function essay_pivot_chunks(graph: Pick<PathGraph, 'nodes'>): 급소덩�
     // 곁 B(관점 앞 B 「…의 경쟁력 측면에서」 · 소유격 수식 B 「B국 기업의 경쟁력과」)는 덩어리의 B가 아니다 — 구간에 다른 B가 있으면 그 B [오종래 2026-10-13]
     const bs = 구간.flatMap((n, k) => (n.color === 'B' ? [k] : []));
     const 대상 = bs.filter((k) => !곁B(nodes, 구간[k]));
-    const bi = (대상.length ? 대상 : bs).at(-1) ?? -1;
+    // 간접의문 절의 주어 [오종래 2026-10-13] — 구간에 간접의문 Q(「~는지」「~인지」)가 있고 그 앞에 주격 B가 있으면 첫 주격 B가 덩어리의 B
+    //   (pivot.ts 「Q 직전 B」와 같은 판정 — 「그 조치가 … 목적을 이루는 데 기여하는지 설명하시오」 → 「그 조치」)
+    //   덩어리는 Q마다 끊으므로 간접의문 Q가 이 구간을 닫는 Q 자신일 수 있다 — 그때는 구간 전체가 그 절이다
+    const iq = isIndirectQ(q) ? 구간.length : 구간.findIndex((n) => n.color === 'Q' && isIndirectQ(n));
+    const 주어 = iq < 0 ? -1 : 대상.find((k) => k < iq && SUBJECT_MARKERS.includes(구간[k].surface.trim())) ?? -1;
+    const bi = 주어 >= 0 ? 주어 : (대상.length ? 대상 : bs).at(-1) ?? -1;
     if (bi < 0) {
       덩어리.at(-1)?.Q.push(q);
       return;

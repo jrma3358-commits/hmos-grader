@@ -138,7 +138,7 @@ function antecedent(graph: PathGraph, node: PathNode): string | undefined {
 }
 
 /** 간접의문 Q — 간접의문형 표지(인지·는지·은지·을지·ㄴ지·ㄹ지)가 건 노드. 표층이 「~지」 두 글자 이하다 */
-function isIndirectQ(node: PathNode): boolean {
+export function isIndirectQ(node: PathNode): boolean {
   const s = node.surface.trim();
   return s.length <= 2 && s.endsWith('지');
 }
@@ -204,7 +204,7 @@ const CLAUSE_ENDS = ['하고', '기술하고', '요약하고', '나타내고', '
 const METHOD_MARKERS = ['비판적으로', '비판하여', '입장에서', '관점에서', '참고하여', '참조하여', '바탕으로', '근거하여', '경제주체별로', '측면에서'];
 
 /** 주격 표지 — 간접의문 절의 주어를 찾는다 [오종래 2026-10-13] */
-const SUBJECT_MARKERS = ['가', '이', '께서'];
+export const SUBJECT_MARKERS = ['가', '이', '께서'];
 
 /** 관점 표지 — 바로 앞 B는 관점(어느 쪽에서 보나)이지 묻는 대상이 아니다 [오종래 2026-10-13] */
 const ASPECT_MARKERS = ['측면에서'];
