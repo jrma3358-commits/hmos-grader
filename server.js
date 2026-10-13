@@ -56,18 +56,25 @@ res.json({parsed:{nodes,pivot:pv,colors,급소:{color:pv.color||pv.node&&pv.node
 });
 
 // POST /analyze — 엔진 러너(analyze-runner.mts)를 따로 띄워 인식 → 필터까지 돌린다. 멈춘 자리는 응답의 멈춘곳에 있다
-app.post('/analyze',(req,res)=>{
-  const id=Date.now()+'-'+Math.random().toString(36).slice(2);
-  const reqf=path.join(os.tmpdir(),'hmos-req-'+id+'.json');
-  const outf=path.join(os.tmpdir(),'hmos-out-'+id+'.json');
-  fs.writeFileSync(reqf,JSON.stringify(req.body||{}),'utf8');
-  execFile(process.execPath,[path.join(__dirname,'analyze-runner.mts'),reqf,outf],{cwd:__dirname,timeout:60000,maxBuffer:10*1024*1024},(err,stdout,stderr)=>{
-    let out=null;
-    try{out=JSON.parse(fs.readFileSync(outf,'utf8'));}catch(_){}
-    for(const f of [reqf,outf]){try{fs.unlinkSync(f);}catch(_){}}
-    if(!out){res.status(500).json({ok:false,error:{멈춤:'러너 실패',사유:(err&&err.message)||String(stderr).slice(-2000)}});return;}
-    res.status(out.ok?200:400).json(out);
+/** 러너 한 번 — 결과 JSON, 러너가 결과를 못 쓰면 {ok:false, error} */
+function runAnalyze(body){
+  return new Promise(resolve=>{
+    const id=Date.now()+'-'+Math.random().toString(36).slice(2);
+    const reqf=path.join(os.tmpdir(),'hmos-req-'+id+'.json');
+    const outf=path.join(os.tmpdir(),'hmos-out-'+id+'.json');
+    fs.writeFileSync(reqf,JSON.stringify(body||{}),'utf8');
+    execFile(process.execPath,[path.join(__dirname,'analyze-runner.mts'),reqf,outf],{cwd:__dirname,timeout:60000,maxBuffer:10*1024*1024},(err,stdout,stderr)=>{
+      let out=null;
+      try{out=JSON.parse(fs.readFileSync(outf,'utf8'));}catch(_){}
+      for(const f of [reqf,outf]){try{fs.unlinkSync(f);}catch(_){}}
+      resolve(out||{ok:false,러너실패:true,error:{멈춤:'러너 실패',사유:(err&&err.message)||String(stderr).slice(-2000)}});
+    });
   });
+}
+
+app.post('/analyze',async(req,res)=>{
+  const out=await runAnalyze(req.body);
+  res.status(out.러너실패?500:out.ok?200:400).json(out);
 });
 
 // ── POST /api/generate — HMOS 이론 기반 제안 (루브릭·모범답안·해설) ──────────
@@ -235,6 +242,117 @@ app.post('/api/generate',async(req,res)=>{
       해설:out.commentary,
     },
   });
+});
+
+// ── POST /api/refine — C 5단계 논제 정교화 (조립설명서 C·논술 9단계) ──────────
+// 진단은 엔진([봉인⑬], /analyze 응답의 단계.정교화.진단)이 한다. Claude는 진단된 ①②③ 갈래마다 정교화안만 쓴다.
+// ④사족은 표시만 — 생성하지 않는다. 정교화안은 다시 엔진에 태워 급소·진단을 돌려준다 (명세서-2 §3 자가검증 순환).
+const REFINE_SPEC=process.env.HMOS_REFINE_SPEC||path.join(__dirname,'..','hmos-spec','HMOS_논제생성_명세서-2.md');
+const 생성갈래=['일방흐름','서술복잡','급소불명확'];
+
+/** 명세서-2 §3 원문 그대로 — 이론을 여기서 새로 쓰지 않는다. 파일이 없어도 서버는 뜨게, 부를 때 읽는다 */
+function loadRefineRules(){
+  const md=fs.readFileSync(REFINE_SPEC,'utf8');
+  const a=md.indexOf('## 3. 서술형 문제 정교화'),b=md.indexOf('## 3-5.');
+  if(a<0||b<0)throw new Error('명세서-2에서 §3 정교화 절을 찾지 못함');
+  return md.slice(a,b).trim();
+}
+
+const REFINE_FORMAT={
+  type:'json_schema',
+  schema:{
+    type:'object',
+    additionalProperties:false,
+    required:['proposals'],
+    properties:{
+      proposals:{
+        type:'array',
+        description:'진단 하나당 정교화안 하나',
+        items:{
+          type:'object',
+          additionalProperties:false,
+          required:['branch','unit','refined','change','basis'],
+          properties:{
+            branch:{type:'string',enum:생성갈래},
+            unit:{type:'string',description:'진단의 단위 그대로 (없으면 빈 문자열)'},
+            refined:{type:'string',description:'정교화한 논제 전문'},
+            change:{type:'string',description:'원 논제에서 무엇을 바꿨는가'},
+            basis:{type:'string',description:'엔진 진단 근거와 급소 — 이 정교화가 어느 진단·급소에서 나왔는가'},
+          },
+        },
+      },
+    },
+  },
+};
+
+app.post('/api/refine',async(req,res)=>{
+  // 인식: /analyze 의 단계.인식.전체 · 진단: /analyze 의 단계.정교화.진단 — 둘 다 엔진 값 그대로
+  const {논제,제시문,인식,진단}=req.body||{};
+  const t=(논제||'').trim();
+  if(!t||!인식||!Array.isArray(진단)){res.status(400).json({error:'논제·인식·진단이 필요합니다'});return;}
+  const 사족=진단.filter(d=>d.갈래==='사족');
+  const 대상=진단.filter(d=>생성갈래.includes(d.갈래));
+  if(!대상.length){res.json({정교화:[],사족});return;}
+
+  let rules;
+  try{rules=loadRefineRules();}catch(e){res.status(500).json({error:'정교화 명세를 읽지 못함 — '+e.message});return;}
+  const system=`너는 HMOS 논제 정교화기다. 아래 「서술형 문제 정교화」 원문에 따라, HMOS 엔진이 진단한 갈래마다 정교화한 논제를 제안한다.
+
+지킬 것:
+- 진단(갈래·근거)과 급소·5색 노드는 HMOS 엔진의 산출이다. 다시 진단하거나 바꾸지 말고 그대로 받는다.
+- 진단 하나당 정교화안 하나. 진단에 없는 갈래를 만들지 않는다.
+- ① 일방흐름 → 제약 C를 더해 조인다. ② 서술복잡 → 급소는 그대로 두고 (1)(2)(3) 소문항 계단으로 나눈다. ③ 급소불명확 → 급소가 담긴 정의·식을 바꿔 급소를 선명하게 다시 쓴다.
+- 정교화는 새 문제를 만드는 것이 아니다. 원 논제가 겨눈 급소·의도를 더 정확하게 만든다.
+- 제시문이 주어지면 제시문 실체에서 벗어나지 않는다.
+- basis에는 어느 진단 근거·급소에서 나온 정교화인지 밝힌다.
+- 모든 출력은 한국어.
+
+=== HMOS 논제생성 명세서-2 §3 (원문) ===
+${rules}`;
+
+  const user=[
+    `논제:\n${t}`,
+    Array.isArray(제시문)&&제시문.length?`제시문:\n${제시문.map(p=>`[${p.id}] ${p.텍스트}`).join('\n')}`:'',
+    `HMOS 인식 결과 (그대로 받을 것):\n${JSON.stringify({조합:인식.조합,노드:인식.노드,급소_k:인식.급소},null,2)}`,
+    `HMOS 정교화 진단 [봉인⑬] (그대로 받을 것):\n${JSON.stringify(대상,null,2)}`,
+  ].filter(Boolean).join('\n\n');
+
+  let msg;
+  try{
+    msg=await client.beta.messages.create({
+      model:MODEL,
+      max_tokens:16000,
+      betas:['server-side-fallback-2026-07-01'],
+      fallbacks:'default',
+      system,
+      output_config:{format:REFINE_FORMAT},
+      messages:[{role:'user',content:user}],
+    });
+  }catch(e){
+    if(e instanceof Anthropic.AuthenticationError){res.status(500).json({error:'API 키 인증 실패 — .env의 ANTHROPIC_API_KEY 확인'});return;}
+    if(e instanceof Anthropic.RateLimitError){res.status(429).json({error:'API 요청 한도 초과 — 잠시 뒤 다시'});return;}
+    if(e instanceof Anthropic.APIError){res.status(502).json({error:`Claude API 오류 ${e.status}: ${e.message}`});return;}
+    res.status(502).json({error:'Claude API 연결 실패: '+e.message});
+    return;
+  }
+
+  if(msg.stop_reason==='refusal'){res.status(502).json({error:`모델이 거절함 (${(msg.stop_details&&msg.stop_details.category)||'분류 없음'})`});return;}
+  if(msg.stop_reason==='max_tokens'){res.status(502).json({error:'응답이 max_tokens에서 잘림'});return;}
+  const text=msg.content.filter(b=>b.type==='text').map(b=>b.text).join('');
+  let out=null;
+  try{out=JSON.parse(text);}catch(_){}
+  if(!out||!Array.isArray(out.proposals)){res.status(502).json({error:`정교화안을 받지 못함 (stop_reason: ${msg.stop_reason})`});return;}
+
+  // 자가검증 — 정교화안을 엔진에 다시 태운다. 급소가 의도대로 잡혔는지는 교사가 본다 (판정하지 않는다)
+  const 정교화=await Promise.all(out.proposals.map(async p=>{
+    const r=await runAnalyze({파이프라인:'C',논제:p.refined});
+    const 재인식=r.ok&&r.단계&&r.단계.인식
+      ?{급소:r.단계.인식.전체.급소.map(k=>k.실체.trim()),급소실패:r.단계.인식.전체.급소실패,진단:(r.단계.정교화&&r.단계.정교화.진단)||[]}
+      :{오류:(r.error&&r.error.사유)||'재인식 실패'};
+    return {갈래:p.branch,단위:p.unit||null,논제:p.refined,바꾼점:p.change,근거:p.basis,재인식};
+  }));
+
+  res.json({model:msg.model,usage:msg.usage,원급소:(인식.급소||[]).map(k=>(k.실체||'').trim()),정교화,사족});
 });
 
 app.get('/dashboard',(req,res)=>res.sendFile(path.join(__dirname,'hmos_dashboard.html')));

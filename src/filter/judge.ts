@@ -6,9 +6,10 @@
 //   · 관계 적절(논술형) — 연결점이 하나라도 false면 거르기(악문 신호, 초석2), null이 있으면 재판정
 //   · 계단식 단계형 — 소문항 중 하나라도 거르기면 전체 거르기
 //   · 전부 통과해도 «통과(교사 확인 대기)»까지만. 루브릭창으로 넘기는 것은 교사 승인(§6)이다
+import { recognizeV2Analysis } from '../fq/pipeline.ts';
 import { analyze_descriptive, type 급소불명거르기, type 서술형분석 } from './descriptive.ts';
 import { analyze_essay, type 논술문항, type 논술형분석 } from './essay.ts';
-import { 봉인10_관계적절, 봉인11_요소결손, 봉인12_중의성, 봉인13_정교화필요 } from './sealed/items.ts';
+import { 봉인10_관계적절, 봉인11_요소결손, 봉인12_중의성, 봉인13_정교화진단 } from './sealed/items.ts';
 import type { 소문항 } from './sealed/stepwise.ts';
 import { analyze_stepwise } from './stepwise.ts';
 
@@ -57,8 +58,8 @@ function 급소불명(r: 급소불명거르기): 필터판정 {
   };
 }
 
-/** 공통 뒷부분 — 요소 결손·중의성(봉인⑪⑫) → 정교화 필요(봉인⑬) */
-function 공통항목(분석: 서술형분석 | 논술형분석, 앞: 항목결과[]): 항목결과[] {
+/** 공통 뒷부분 — 요소 결손·중의성(봉인⑪⑫) → 정교화 필요(봉인⑬ 4갈래 진단. 필터에는 4단계가 없어 사족은 비워 넘긴다) */
+function 공통항목(분석: 서술형분석 | 논술형분석, 앞: 항목결과[], 텍스트: string): 항목결과[] {
   const 결손 = 봉인11_요소결손(분석);
   const 겹침 = 봉인12_중의성(분석);
   const 항목: 항목결과[] = [
@@ -70,17 +71,17 @@ function 공통항목(분석: 서술형분석 | 논술형분석, 앞: 항목결�
       ? { 증상: '중의성', 판정: '거르기', 사유: `두 조각에 걸친 실체: ${겹침.join(', ')}` }
       : { 증상: '중의성', 판정: '통과', 사유: '겹침 없음' },
   ];
-  const 정교화 = 봉인13_정교화필요(항목);
+  const 정교화 = 봉인13_정교화진단(recognizeV2Analysis(텍스트), []);
   항목.push(
-    정교화
-      ? { 증상: '정교화 필요', 판정: '거르기', 사유: '정교화/추가논제 신호' }
+    정교화.length
+      ? { 증상: '정교화 필요', 판정: '거르기', 사유: 정교화.map((d) => `${d.단위 ? d.단위 + ' ' : ''}${d.갈래}: ${d.근거}`).join('; ') }
       : { 증상: '정교화 필요', 판정: '통과', 사유: '신호 없음' },
   );
   return 항목;
 }
 
 /** 서술형(단독문제·계단식 소문항 하나) 판정 */
-function judge_descriptive(r: 서술형분석 | 급소불명거르기): 필터판정 {
+function judge_descriptive(r: 서술형분석 | 급소불명거르기, 텍스트: string): 필터판정 {
   if (r.판정 === '거르기') return 급소불명(r);
   const 앞: 항목결과[] = [
     { 증상: '급소 명확', 판정: '통과', 초석: 1, 사유: `급소 「${r.k.실체}」` },
@@ -88,7 +89,7 @@ function judge_descriptive(r: 서술형분석 | 급소불명거르기): 필터�
       ? { 증상: '관계 적절', 판정: '통과', 사유: r.실체.요약 }
       : { 증상: '관계 적절', 판정: '거르기', 사유: r.실체.요약 },
   ];
-  const 항목 = 공통항목(r, 앞);
+  const 항목 = 공통항목(r, 앞, 텍스트);
   return { 판정: 묶기(항목.map((x) => x.판정)), 항목, 분석: r };
 }
 
@@ -130,7 +131,7 @@ function judge_essay(문항: 논술문항): 필터판정 {
     재료,
     관계,
   ];
-  const 항목 = 공통항목(r, 앞);
+  const 항목 = 공통항목(r, 앞, 문항.논제);
   return { 판정: 묶기(항목.map((x) => x.판정)), 항목, 분석: r };
 }
 
@@ -141,9 +142,9 @@ function judge_essay(문항: 논술문항): 필터판정 {
 export function judge_item(입력: 필터입력): 필터판정 | 계단식필터판정 {
   switch (입력.유형) {
     case '단독문제':
-      return judge_descriptive(analyze_descriptive(입력.텍스트));
+      return judge_descriptive(analyze_descriptive(입력.텍스트), 입력.텍스트);
     case '계단식 단계형': {
-      const 소문항 = analyze_stepwise(입력.텍스트).map((s) => ({ 소문항: s.소문항, 판정: judge_descriptive(s.결과) }));
+      const 소문항 = analyze_stepwise(입력.텍스트).map((s) => ({ 소문항: s.소문항, 판정: judge_descriptive(s.결과, s.소문항.텍스트) }));
       return { 판정: 묶기(소문항.map((s) => s.판정.판정)), 소문항 };
     }
     case '인문사회논술':

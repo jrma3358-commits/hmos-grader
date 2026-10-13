@@ -1,7 +1,8 @@
 // /analyze 러너 — 엔진(hmos-grader/)을 부르기만 한다. 엔진에 없는 판단은 하지 않는다 (안 1, 오종래 2026-10-11).
 // 사용: node analyze-runner.mts <요청.json> <결과.json>
-//   요청: { 문항원문, 파이프라인: 'A'|'B'|'C', 논제?, 제시문? }
-//   흐름: 인식 → (C) 제시문 인식·연결 → 1차 필터 확인화면 → [교사 ① 승인 대기]
+//   요청: { 문항원문, 파이프라인: 'A'|'B'|'C', 논제?, 제시문?, 사족? }
+//   흐름: 인식 → (C) 정교화 진단[봉인⑬] → (C) 제시문 인식·연결 → 1차 필터 확인화면 → [교사 ① 승인 대기]
+//   사족: 4단계 ④ 결과 [{단락, 실체}] — 없으면 빈 배열로 진단한다
 // 엔진이 멈추면(SealedError·급소 실패) 그 자리와 사유를 그대로 싣고 끝낸다 — 어디서 멈췄는지가 곧 다음에 채울 봉인이다.
 // 루브릭·모범답안(generate_rubric)은 교사가 확인화면에서 ①로 승인한 문항만 받는다 (명세서-2 §6) — 여기서는 승인하지 않는다.
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -14,6 +15,7 @@ const load = (p: string) => import(pathToFileURL(join(GRADER, p)).href);
 const fq = await load('src/fq/index.ts');
 const { recognizePassage, connectPassage } = await load('src/fq/v2/passage.ts');
 const { make_screen } = await load('src/filter/confirm.ts');
+const { 봉인13_정교화진단 } = await load('src/filter/sealed/items.ts');
 
 const [reqPath, outPath] = process.argv.slice(2);
 const req = JSON.parse(readFileSync(reqPath, 'utf8'));
@@ -67,6 +69,9 @@ try {
   // ① 인식
   const a = fq.recognizeV2Analysis(인식텍스트);
   out.단계.인식 = { 입력: 파이프라인 === 'C' && req.논제 ? '논제' : '문항원문', 전체: 인식of(a), 단위: (a.units ?? []).map(인식of) };
+
+  // C 5단계 — 정교화 4갈래 진단 [봉인⑬] (오종래 2026-10-13). 엔진이 진단하고, 정교화안은 /api/refine이 만든다
+  if (파이프라인 === 'C') out.단계.정교화 = { 진단: 봉인13_정교화진단(a, Array.isArray(req.사족) ? req.사족 : []) };
 
   // 타입 — 1단계 겉모습 판정 (C에 제시문이 있으면 2단계 확정까지)
   let passage: any;

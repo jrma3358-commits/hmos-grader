@@ -1,16 +1,18 @@
 // 1차 필터[a] — 문항분석 명세서-2 §2·§3·§5를 기준으로 한 테스트.
 // 기대값은 엔진 출력이 아니라 **명세와 2026-09-30 오종래 확정**에서 온다. 봉인 값은 쓰지 않는다(노드를 손으로 세운다).
-// 봉인⑦~⑬은 비어 있으므로 «소리 내어 실패하는지»만 본다.
+// 봉인⑦~⑫는 비어 있으므로 «소리 내어 실패하는지»만 본다. 봉인⑬은 오종래 2026-10-13 기준으로 채워졌다.
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
+import type { V2Analysis } from '../src/fq/pipeline.ts';
 import { SealedError } from '../src/fq/sealed/index.ts';
 import type { Color } from '../src/fq/types.ts';
 import type { PathNode } from '../src/fq/v2/graph.ts';
+import type { Pivot } from '../src/fq/v2/pivot.ts';
 import { analyze_descriptive } from '../src/filter/descriptive.ts';
 import { judge_item, 제시문상한 } from '../src/filter/judge.ts';
-import { 봉인10_관계적절, 봉인11_요소결손, 봉인12_중의성, 봉인13_정교화필요 } from '../src/filter/sealed/items.ts';
+import { 봉인10_관계적절, 봉인11_요소결손, 봉인12_중의성, 봉인13_정교화진단 } from '../src/filter/sealed/items.ts';
 import { 봉인8_관계대조 } from '../src/filter/sealed/relation.ts';
 import { 봉인7_소문항분리 } from '../src/filter/sealed/stepwise.ts';
 import { 봉인9_논제요구 } from '../src/filter/sealed/thesis.ts';
@@ -151,12 +153,91 @@ describe('비어 있는 봉인은 소리 내어 실패한다 (⑦~⑬)', () => {
     assert.throws(() => 봉인9_논제요구(k, ['가', '나']), /\[봉인⑨\]/);
   });
 
-  it('⑩~⑬ 필터 항목', () => {
+  it('⑩~⑫ 필터 항목', () => {
     const 실체 = summarize_substance(k, { 조합: [], nodes: [k.node] }, []);
     const 분석 = { 판정: null, k, 조각들: [], 실체 };
     assert.throws(() => 봉인10_관계적절(실체, k), /\[봉인⑩\]/);
     assert.throws(() => 봉인11_요소결손(분석), /\[봉인⑪\]/);
     assert.throws(() => 봉인12_중의성(분석), /\[봉인⑫\]/);
-    assert.throws(() => 봉인13_정교화필요([]), /\[봉인⑬\]/);
+  });
+});
+
+describe('봉인⑬ 정교화 4갈래 진단 (오종래 2026-10-13)', () => {
+  const pv = (n: PathNode, convergence: number, reason: Pivot['reason'] = '최수렴 B'): Pivot => ({ node: n, reason, convergence, sameAsDeepest: false });
+  // 길 순서 = 배열 순서 (index를 다시 매긴다)
+  const 논제 = (nodes: PathNode[], pivot: V2Analysis['pivot'], question = '논제'): V2Analysis =>
+    ({
+      question,
+      graph: { question, nodes: nodes.map((n, index) => ({ ...n, index })), edges: [], combination: [], undecided: [] },
+      form: null,
+      pivot,
+    }) as unknown as V2Analysis;
+  const 갈래들 = (a: V2Analysis) => 봉인13_정교화진단(a, []).map((d) => d.갈래);
+
+  it('① 일방흐름 — 급소 B 바로 다음이 Q이고 C 노드가 없다', () => {
+    const b = node('b', 'B');
+    assert.deepEqual(갈래들(논제([node('p', 'P'), b, node('q', 'Q')], { ok: true, pivot: pv(b, 1) })), ['일방흐름']);
+  });
+
+  it('① C 노드가 하나라도 있으면 일방흐름이 아니다', () => {
+    const b = node('b', 'B');
+    assert.deepEqual(갈래들(논제([node('c', 'C'), b, node('q', 'Q')], { ok: true, pivot: pv(b, 1) })), []);
+  });
+
+  it('① 급소가 아닌 B는 보지 않는다', () => {
+    const b1 = node('b1', 'B');
+    const b2 = node('b2', 'B');
+    assert.deepEqual(갈래들(논제([b1, node('q1', 'Q'), b2, node('d', 'D'), node('q2', 'Q')], { ok: true, pivot: pv(b2, 1) })), []);
+  });
+
+  it('② 서술복잡 — B 3개 이상이고 C-F 노드가 없다', () => {
+    const bs = [node('b1', 'B'), node('b2', 'B'), node('b3', 'B')];
+    assert.deepEqual(갈래들(논제([...bs, node('c', 'C'), node('q', 'Q')], { ok: true, pivot: pv(bs[2], 2) })), ['서술복잡']);
+  });
+
+  it('② C-F 노드가 있으면 서술복잡이 아니다', () => {
+    const bs = [node('b1', 'B'), node('b2', 'B'), node('b3', 'B')];
+    const cf = { ...node('cf', 'C'), switchId: 'C-F' };
+    assert.deepEqual(갈래들(논제([...bs, cf, node('q', 'Q')], { ok: true, pivot: pv(bs[2], 2) })), []);
+  });
+
+  it('③ 급소불명확 — MULTIPLE_CONVERGENCE', () => {
+    const b1 = node('b1', 'B');
+    const b2 = node('b2', 'B');
+    const a = 논제([b1, b2, node('c', 'C'), node('q', 'Q')], { ok: false, flag: 'MULTIPLE_CONVERGENCE', candidates: [b1, b2], message: '' });
+    assert.deepEqual(갈래들(a), ['급소불명확']);
+  });
+
+  it('③ 급소불명확 — 수렴도 0인 급소마다', () => {
+    const b1 = node('b1', 'B');
+    const b2 = node('b2', 'B');
+    const a = 논제([b1, node('c', 'C'), node('q1', 'Q'), b2, node('q2', 'Q')], {
+      ok: true,
+      pivot: pv(b1, 0, 'Q 직전 B'),
+      pivots: [pv(b1, 0, 'Q 직전 B'), pv(b2, 1)],
+    });
+    const d = 봉인13_정교화진단(a, []);
+    assert.deepEqual(d.map((x) => x.갈래), ['급소불명확']);
+    assert.match(d[0].근거, /\(b1\) 수렴도 0/);
+  });
+
+  it('④ 사족 — 4단계 결과를 논제 전체 진단으로 싣는다', () => {
+    const b = node('b', 'B');
+    const d = 봉인13_정교화진단(논제([b, node('c', 'C'), node('q', 'Q')], { ok: true, pivot: pv(b, 1) }), [{ 단락: '[나]', 실체: '세계무역기구' }]);
+    assert.deepEqual(d, [{ 갈래: '사족', 단위: null, 근거: '제시문 [나]의 「세계무역기구」 — 논제와 연결선 없음' }]);
+  });
+
+  it('소문항으로 나뉘면 단위마다 진단한다', () => {
+    const b1 = node('b1', 'B');
+    const b2 = node('b2', 'B');
+    const u1 = 논제([b1, node('q1', 'Q')], { ok: true, pivot: pv(b1, 1) }, '(1-1) 첫 물음');
+    const u2 = 논제([b2, node('c', 'C'), node('q2', 'Q')], { ok: true, pivot: pv(b2, 1) }, '(1-2) 둘째 물음');
+    const d = 봉인13_정교화진단({ ...논제([], { ok: true, pivot: pv(b1, 1) }), units: [u1, u2] }, []);
+    assert.deepEqual(d.map((x) => [x.단위, x.갈래]), [['(1-1)', '일방흐름']]);
+  });
+
+  it('신호가 없으면 빈 배열', () => {
+    const b = node('b', 'B');
+    assert.deepEqual(갈래들(논제([b, node('c', 'C'), node('q', 'Q')], { ok: true, pivot: pv(b, 1) })), []);
   });
 });
