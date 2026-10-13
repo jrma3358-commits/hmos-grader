@@ -44,10 +44,16 @@ export interface 정교화진단 {
 
 type 인식단위 = Pick<V2Analysis, 'question' | 'graph' | 'pivot'>;
 
-/** 단위 이름 — 소문항 번호 「(1-1)」이 앞에 있으면 그것, 없으면 순번 */
-function 단위이름(u: 인식단위, i: number, 여럿: boolean): string | null {
-  const m = /^\s*(\(\d+(?:-\d+)?\))/.exec(u.question);
-  return m ? m[1] : 여럿 ? `단위 ${i + 1}` : null;
+/** 진단 단위 — 소문항 하나의 인식. C 논제는 split_thesis가 나눈 소문항마다 (오종래 2026-10-13) */
+export interface 진단단위 {
+  이름: string | null;
+  인식: 인식단위;
+}
+
+/** 엔진이 나눈 단위(split_units)로 — 나누지 않았으면 전체가 한 단위 */
+export function 엔진단위(a: V2Analysis & { units?: V2Analysis[] }): 진단단위[] {
+  if (!a.units?.length) return [{ 이름: null, 인식: a }];
+  return a.units.map((u, i) => ({ 이름: `단위 ${i + 1}`, 인식: u }));
 }
 
 /** 소문항(단위) 하나의 ①②③ */
@@ -92,11 +98,10 @@ function 단위진단(u: 인식단위, 단위: string | null): 정교화진단[]
  *   ② 서술복잡: B노드가 3개 이상이고 C-F 없을 때 — 소문항(단위)마다 센다
  *   ③ 급소불명확: pivot 수렴도가 낮거나 MULTIPLE_CONVERGENCE일 때 — 「낮다」 = convergence 0
  *   ④ 사족: 제시문 노드 중 논제와 연결선 없는 것 — 4단계 결과를 받아 그대로 싣는다 (생성 없음)
- * 엔진이 소문항으로 나누면 ①②③은 단위마다, 나누지 않으면 논제 전체를 한 단위로 본다.
+ * ①②③은 단위(소문항)마다 본다. C 논제는 split_thesis로 나눈 소문항, 그 밖은 엔진단위().
  */
-export function 봉인13_정교화진단(논제: V2Analysis & { units?: V2Analysis[] }, 사족: 사족노드[]): 정교화진단[] {
-  const units: 인식단위[] = 논제.units?.length ? 논제.units : [논제];
-  const 진단 = units.flatMap((u, i) => 단위진단(u, 단위이름(u, i, units.length > 1)));
+export function 봉인13_정교화진단(단위들: 진단단위[], 사족: 사족노드[]): 정교화진단[] {
+  const 진단 = 단위들.flatMap((u) => 단위진단(u.인식, u.이름));
   for (const s of 사족) {
     진단.push({ 갈래: '사족', 단위: null, 근거: `제시문 ${s.단락}의 「${s.실체}」 — 논제와 연결선 없음` });
   }

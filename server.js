@@ -286,10 +286,10 @@ const REFINE_FORMAT={
 };
 
 app.post('/api/refine',async(req,res)=>{
-  // 인식: /analyze 의 단계.인식.전체 · 진단: /analyze 의 단계.정교화.진단 — 둘 다 엔진 값 그대로
-  const {논제,제시문,인식,진단}=req.body||{};
+  // 소문항: /analyze 의 단계.인식.소문항 · 진단: /analyze 의 단계.정교화.진단 — 둘 다 엔진 값 그대로
+  const {논제,제시문,소문항,진단}=req.body||{};
   const t=(논제||'').trim();
-  if(!t||!인식||!Array.isArray(진단)){res.status(400).json({error:'논제·인식·진단이 필요합니다'});return;}
+  if(!t||!Array.isArray(소문항)||!소문항.length||!Array.isArray(진단)){res.status(400).json({error:'논제·소문항·진단이 필요합니다'});return;}
   const 사족=진단.filter(d=>d.갈래==='사족');
   const 대상=진단.filter(d=>생성갈래.includes(d.갈래));
   if(!대상.length){res.json({정교화:[],사족});return;}
@@ -299,24 +299,59 @@ app.post('/api/refine',async(req,res)=>{
   const system=`너는 HMOS 논제 정교화기다. 아래 「서술형 문제 정교화」 원문에 따라, HMOS 엔진이 진단한 갈래마다 정교화한 논제를 제안한다.
 
 지킬 것:
-- 진단(갈래·근거)과 급소·5색 노드는 HMOS 엔진의 산출이다. 다시 진단하거나 바꾸지 말고 그대로 받는다.
-- 진단 하나당 정교화안 하나. 진단에 없는 갈래를 만들지 않는다.
+- 진단(갈래·근거)은 HMOS 엔진의 [봉인⑬] 산출이다. 다시 진단하지 않는다.
+- 진단 하나당 정교화안 하나. 진단에 없는 갈래를 만들지 않는다. 진단의 단위(소문항)를 정교화한다.
 - ① 일방흐름 → 제약 C를 더해 조인다. ② 서술복잡 → 급소는 그대로 두고 (1)(2)(3) 소문항 계단으로 나눈다. ③ 급소불명확 → 급소가 담긴 정의·식을 바꿔 급소를 선명하게 다시 쓴다.
 - 정교화는 새 문제를 만드는 것이 아니다. 원 논제가 겨눈 급소·의도를 더 정확하게 만든다.
 - 제시문이 주어지면 제시문 실체에서 벗어나지 않는다.
 - basis에는 어느 진단 근거·급소에서 나온 정교화인지 밝힌다.
-- 모든 출력은 한국어.
+${공통지킬것}
 
 === HMOS 논제생성 명세서-2 §3 (원문) ===
 ${rules}`;
 
   const user=[
     `논제:\n${t}`,
-    Array.isArray(제시문)&&제시문.length?`제시문:\n${제시문.map(p=>`[${p.id}] ${p.텍스트}`).join('\n')}`:'',
-    `HMOS 인식 결과 (그대로 받을 것):\n${JSON.stringify({조합:인식.조합,노드:인식.노드,급소_k:인식.급소},null,2)}`,
+    Array.isArray(제시문)&&제시문.length?`제시문:\n${제시문글(제시문)}`:'',
+    `소문항별 HMOS 인식 (그대로 받을 것):\n${소문항글(소문항)}`,
     `HMOS 정교화 진단 [봉인⑬] (그대로 받을 것):\n${JSON.stringify(대상,null,2)}`,
   ].filter(Boolean).join('\n\n');
 
+  const r=await askClaude(res,system,user,REFINE_FORMAT,o=>Array.isArray(o.proposals));
+  if(!r)return;
+
+  // 자가검증 — 정교화안을 엔진에 다시 태운다. 급소가 의도대로 잡혔는지는 교사가 본다 (판정하지 않는다)
+  const 정교화=await Promise.all(r.out.proposals.map(async p=>{
+    const a=await runAnalyze({파이프라인:'C',논제:p.refined});
+    const 재인식=a.ok&&a.단계&&a.단계.인식
+      ?{소문항:a.단계.인식.소문항.map(s=>({번호:s.번호,급소:s.급소.map(k=>k.실체.trim()),급소실패:s.급소실패})),진단:(a.단계.정교화&&a.단계.정교화.진단)||[]}
+      :{오류:(a.error&&a.error.사유)||'재인식 실패'};
+    const 원=소문항.find(s=>s.번호===(p.unit||null))||(소문항.length===1?소문항[0]:null);
+    return {갈래:p.branch,단위:p.unit||null,원급소:원?원.급소.map(k=>k.실체.trim()):[],논제:p.refined,바꾼점:p.change,근거:p.basis,재인식};
+  }));
+
+  res.json({model:r.msg.model,usage:r.msg.usage,정교화,사족});
+});
+
+// ── C·논술 9단계 Claude 몫 — 3단계 /api/passage · 4단계② /api/leap · 6단계 /api/propose ──────────
+// 프롬프트는 원전 md의 해당 절을 그대로 잘라 싣는다. 엔진 산출(급소·노드·4축 ①③④)은 바꾸지 말고 받게 한다.
+const ASSEMBLY_SPEC=process.env.HMOS_ASSEMBLY_SPEC||path.join(__dirname,'..','hmos-spec','조립설명서.md');
+
+/** md에서 「from」 머리부터 「to」 머리 앞까지 — 머리를 못 찾으면 던진다 */
+function sliceSpec(file,from,to){
+  const md=fs.readFileSync(file,'utf8');
+  const a=md.indexOf(from),b=to?md.indexOf(to,a+1):md.length;
+  if(a<0||b<0)throw new Error(`${path.basename(file)}에서 「${from}」 절을 찾지 못함`);
+  return md.slice(a,b).trim();
+}
+
+const 공통지킬것=`- HMOS 엔진 산출(소문항별 급소·5색 노드, 4축 ①③④)은 다시 계산하거나 바꾸지 말고 그대로 받는다.
+- 출력마다 근거(단락 기호·근거 문장·엔진 노드)를 밝힌다.
+- AI는 제안만 한다. 확정은 교사가 한다.
+- 모든 출력은 한국어.`;
+
+/** Claude 한 번 — 성공이면 {out, msg}, 실패면 res에 오류를 쓰고 null */
+async function askClaude(res,system,user,format,check){
   let msg;
   try{
     msg=await client.beta.messages.create({
@@ -325,34 +360,155 @@ ${rules}`;
       betas:['server-side-fallback-2026-07-01'],
       fallbacks:'default',
       system,
-      output_config:{format:REFINE_FORMAT},
+      output_config:{format},
       messages:[{role:'user',content:user}],
     });
   }catch(e){
-    if(e instanceof Anthropic.AuthenticationError){res.status(500).json({error:'API 키 인증 실패 — .env의 ANTHROPIC_API_KEY 확인'});return;}
-    if(e instanceof Anthropic.RateLimitError){res.status(429).json({error:'API 요청 한도 초과 — 잠시 뒤 다시'});return;}
-    if(e instanceof Anthropic.APIError){res.status(502).json({error:`Claude API 오류 ${e.status}: ${e.message}`});return;}
+    if(e instanceof Anthropic.AuthenticationError){res.status(500).json({error:'API 키 인증 실패 — .env의 ANTHROPIC_API_KEY 확인'});return null;}
+    if(e instanceof Anthropic.RateLimitError){res.status(429).json({error:'API 요청 한도 초과 — 잠시 뒤 다시'});return null;}
+    if(e instanceof Anthropic.APIError){res.status(502).json({error:`Claude API 오류 ${e.status}: ${e.message}`});return null;}
     res.status(502).json({error:'Claude API 연결 실패: '+e.message});
-    return;
+    return null;
   }
-
-  if(msg.stop_reason==='refusal'){res.status(502).json({error:`모델이 거절함 (${(msg.stop_details&&msg.stop_details.category)||'분류 없음'})`});return;}
-  if(msg.stop_reason==='max_tokens'){res.status(502).json({error:'응답이 max_tokens에서 잘림'});return;}
-  const text=msg.content.filter(b=>b.type==='text').map(b=>b.text).join('');
+  if(msg.stop_reason==='refusal'){res.status(502).json({error:`모델이 거절함 (${(msg.stop_details&&msg.stop_details.category)||'분류 없음'})`});return null;}
+  if(msg.stop_reason==='max_tokens'){res.status(502).json({error:'응답이 max_tokens에서 잘림'});return null;}
   let out=null;
-  try{out=JSON.parse(text);}catch(_){}
-  if(!out||!Array.isArray(out.proposals)){res.status(502).json({error:`정교화안을 받지 못함 (stop_reason: ${msg.stop_reason})`});return;}
+  try{out=JSON.parse(msg.content.filter(b=>b.type==='text').map(b=>b.text).join(''));}catch(_){}
+  if(!out||!check(out)){res.status(502).json({error:`응답을 받지 못함 (stop_reason: ${msg.stop_reason})`});return null;}
+  return {out,msg};
+}
 
-  // 자가검증 — 정교화안을 엔진에 다시 태운다. 급소가 의도대로 잡혔는지는 교사가 본다 (판정하지 않는다)
-  const 정교화=await Promise.all(out.proposals.map(async p=>{
-    const r=await runAnalyze({파이프라인:'C',논제:p.refined});
-    const 재인식=r.ok&&r.단계&&r.단계.인식
-      ?{급소:r.단계.인식.전체.급소.map(k=>k.실체.trim()),급소실패:r.단계.인식.전체.급소실패,진단:(r.단계.정교화&&r.단계.정교화.진단)||[]}
-      :{오류:(r.error&&r.error.사유)||'재인식 실패'};
-    return {갈래:p.branch,단위:p.unit||null,논제:p.refined,바꾼점:p.change,근거:p.basis,재인식};
-  }));
+/** 소문항 인식(/analyze 단계.인식.소문항)을 프롬프트용으로 — 엔진 값 그대로 */
+const 소문항글=소문항=>JSON.stringify(소문항.map(s=>({소문항:s.번호,논제:s.텍스트,참조제시문:s.참조,조합:s.조합,노드:s.노드,급소_k:s.급소})),null,2);
+const 제시문글=제시문=>제시문.map(p=>`[${p.id}] ${p.텍스트}`).join('\n');
+const strArr={type:'array',items:{type:'string'}};
 
-  res.json({model:msg.model,usage:msg.usage,원급소:(인식.급소||[]).map(k=>(k.실체||'').trim()),정교화,사족});
+// 3단계 — 제시문 분석. 논제 급소를 기준으로 단락별 P·B·D·C·급소 + 논제 급소 관련 실체 (2026-10-13 확정 2: 둘 다)
+const PASSAGE_FORMAT={type:'json_schema',schema:{type:'object',additionalProperties:false,required:['paragraphs'],properties:{
+  paragraphs:{type:'array',items:{type:'object',additionalProperties:false,required:['label','P','B','D','C','pivot','related'],properties:{
+    label:{type:'string',description:'제시문 기호 그대로 (가·나…)'},
+    P:strArr,B:strArr,D:strArr,C:strArr,
+    pivot:{type:'string',description:'이 단락 자체의 무게중심 B — 언제나 하나, B 목록 안의 것'},
+    related:{type:'array',items:{type:'object',additionalProperties:false,required:['item','entity','sentence'],properties:{
+      item:{type:'string',description:'이어지는 소문항 번호 (번호 없는 논제면 빈 문자열)'},
+      entity:{type:'string',description:'이 단락에서 그 소문항 급소와 관련된 실체'},
+      sentence:{type:'string',description:'근거 문장 — 제시문 원문 그대로'},
+    }}},
+  }}},
+}}};
+
+app.post('/api/passage',async(req,res)=>{
+  const {소문항,제시문}=req.body||{};
+  if(!Array.isArray(소문항)||!소문항.length||!Array.isArray(제시문)||!제시문.length){res.status(400).json({error:'소문항(2단계 인식)·제시문이 필요합니다'});return;}
+  let rules;
+  try{rules=sliceSpec(ASSEMBLY_SPEC,'## 3단계','## 4단계');}catch(e){res.status(500).json({error:'조립설명서를 읽지 못함 — '+e.message});return;}
+  const system=`너는 HMOS 제시문 분석기다. 아래 조립설명서 3단계 원문에 따라, 논제 급소를 기준으로 제시문을 단락별로 읽는다.
+
+지킬 것:
+- 논제를 먼저 읽었다. 소문항별 급소는 엔진이 확정했다 — 그 급소를 방향으로 삼아 제시문을 읽는다.
+- 단락마다 P·B·D·C를 낱말·구로 뽑는다. 제시문 원문의 표현을 그대로 쓴다.
+- pivot은 그 단락 자체의 무게중심 B다 (논제와 이어지든 아니든). 언제나 하나, 언제나 B.
+- related에는 그 단락에서 소문항 급소와 관련된 실체를 근거 문장과 함께 적는다. 관련이 없으면 빈 배열.
+- 풀지 마라. 급소와 실체를 잡으면 멈춘다.
+${공통지킬것}
+
+=== 조립설명서 3단계 (원문) ===
+${rules}`;
+  const user=`소문항별 HMOS 인식 (그대로 받을 것):\n${소문항글(소문항)}\n\n제시문:\n${제시문글(제시문)}`;
+  const r=await askClaude(res,system,user,PASSAGE_FORMAT,o=>Array.isArray(o.paragraphs));
+  if(!r)return;
+  res.json({model:r.msg.model,usage:r.msg.usage,제시문분석:r.out.paragraphs.map(p=>({
+    단락:p.label,P:p.P,B:p.B,D:p.D,C:p.C,급소:p.pivot,
+    관련:p.related.map(x=>({소문항:x.item||null,실체:x.entity,근거문장:x.sentence})),
+  }))});
+});
+
+// 4단계 ② 비약 — 엔진이 이은 ①타당 연결마다 근거 강도·자연스러움을 Claude가 판단
+const LEAP_FORMAT={type:'json_schema',schema:{type:'object',additionalProperties:false,required:['judgments'],properties:{
+  judgments:{type:'array',items:{type:'object',additionalProperties:false,required:['index','leap','strength','reason'],properties:{
+    index:{type:'integer',description:'엔진 ①타당 연결의 번호 (0부터)'},
+    leap:{type:'boolean',description:'비약인가 — 연결은 되나 제시문 근거가 약하거나 억지'},
+    strength:{type:'string',enum:['강','중','약']},
+    reason:{type:'string',description:'근거 문장을 들어 판단 이유'},
+  }}},
+}}};
+
+app.post('/api/leap',async(req,res)=>{
+  const {소문항,제시문,정합}=req.body||{};
+  if(!Array.isArray(소문항)||!Array.isArray(제시문)||!정합||!Array.isArray(정합.타당)){res.status(400).json({error:'소문항·제시문·정합(4단계 엔진 결과)이 필요합니다'});return;}
+  if(!정합.타당.length){res.json({비약:[]});return;}
+  let rules;
+  try{rules=sliceSpec(REFINE_SPEC,'## 3-5.','## 4.');}catch(e){res.status(500).json({error:'명세서-2를 읽지 못함 — '+e.message});return;}
+  const system=`너는 HMOS 논제·제시문 정합성 판정기다. 아래 명세서-2 §3-5 원문의 4축 중 ② 비약만 판단한다.
+
+지킬 것:
+- ① 타당·③ 불완전·④ 사족은 엔진이 냈다. 다시 판정하지 않는다.
+- 엔진이 이은 연결(논제 B노드 ↔ 제시문 단락 급소)마다 하나씩, 제시문 원문을 읽어 근거 강도와 자연스러움을 판단한다.
+- 학생 답안을 보는 것이 아니다. 논제와 제시문의 관계를 본다.
+${공통지킬것}
+
+=== 명세서-2 §3-5 (원문) ===
+${rules}`;
+  const user=[
+    `소문항별 HMOS 인식 (그대로 받을 것):\n${소문항글(소문항)}`,
+    `제시문:\n${제시문글(제시문)}`,
+    `엔진 ① 타당 연결 (번호: 내용):\n${정합.타당.map((t,i)=>`${i}: (${t.소문항||'—'}) 논제 B「${t.실체}」(${t.노드}) ↔ 제시문 [${t.단락}] 급소「${t.단락급소}」`).join('\n')}`,
+  ].join('\n\n');
+  const r=await askClaude(res,system,user,LEAP_FORMAT,o=>Array.isArray(o.judgments));
+  if(!r)return;
+  res.json({model:r.msg.model,usage:r.msg.usage,비약:r.out.judgments.filter(j=>정합.타당[j.index]).map(j=>({...정합.타당[j.index],비약:j.leap,강도:j.strength,이유:j.reason}))});
+});
+
+// 6단계 — 추가 논제 생성 (F_인문사회 6유형). 출력: [문항분석]·[추가논제]·[근거]
+const 유형6=['비교·대비','공통원리','근거·주장','대안제시','선택·응용','인연·비판'];
+const PROPOSE_FORMAT={type:'json_schema',schema:{type:'object',additionalProperties:false,required:['analysis','proposals'],properties:{
+  analysis:{type:'object',additionalProperties:false,required:['pivot','current','covered','gaps'],properties:{
+    pivot:{type:'string',description:'급소(k) — 엔진 급소 그대로'},
+    current:{type:'string',description:'현재 측정 역량'},
+    covered:{type:'array',items:{type:'string',enum:유형6},description:'현재 논제가 덮는 유형 (유형 지도에 대조)'},
+    gaps:{type:'array',items:{type:'string',enum:유형6},description:'빈 곳 — 미측정 유형'},
+  }},
+  proposals:{type:'array',items:{type:'object',additionalProperties:false,required:['type','thesis','difference','measures','passages'],properties:{
+    type:{type:'string',enum:유형6},
+    thesis:{type:'string',description:'추가 논제 텍스트'},
+    difference:{type:'string',description:'기존과 다른 점'},
+    measures:{type:'string',description:'새로 측정하는 것'},
+    passages:{type:'array',items:{type:'string'},description:'쓰는 제시문 기호'},
+  }}},
+}}};
+
+app.post('/api/propose',async(req,res)=>{
+  const {논제,소문항,제시문,제시문분석,정합}=req.body||{};
+  if(!(논제||'').trim()||!Array.isArray(소문항)||!소문항.length){res.status(400).json({error:'논제·소문항(2단계 인식)이 필요합니다'});return;}
+  let rules;
+  try{rules=[sliceSpec(REFINE_SPEC,'## 1. 공통 입출력','## 2.'),sliceSpec(REFINE_SPEC,'## 4. 추가 논제의 원칙','## 6.')].join('\n\n');}
+  catch(e){res.status(500).json({error:'명세서-2를 읽지 못함 — '+e.message});return;}
+  const system=`너는 HMOS 추가 논제 생성기다. 아래 명세서-2 원문(§1 공통 출력, §4 추가 논제의 원칙, §5 F_인문사회)에 따라 빈 곳을 채우는 추가 논제를 제안한다.
+
+지킬 것:
+- 추가 논제는 자유 생성이 아니다. 현재 논제가 덮는 유형을 6유형 지도에 대조해 빈 유형을 찾고, 그 빈 곳을 채운다.
+- 유형 목록은 급소 판별기가 아니라 커버리지 지도다.
+- 4단계 ③ 불완전(논제가 끌어오지 않은 제시문 급소)이 있으면 그 실체를 우선 쓴다.
+- 제시문 실체에서 벗어나지 않는다. 쓰는 제시문 기호를 밝힌다.
+- 「기존과 다른 점」과 「새로 측정하는 것」을 반드시 쓴다.
+${공통지킬것}
+
+=== 명세서-2 (원문) ===
+${rules}`;
+  const user=[
+    `논제:\n${논제}`,
+    `소문항별 HMOS 인식 (그대로 받을 것):\n${소문항글(소문항)}`,
+    Array.isArray(제시문)&&제시문.length?`제시문:\n${제시문글(제시문)}`:'',
+    Array.isArray(제시문분석)?`3단계 제시문 분석:\n${JSON.stringify(제시문분석,null,2)}`:'',
+    정합?`4단계 엔진 결과 (①타당·③불완전·④사족):\n${JSON.stringify({타당:정합.타당,불완전:정합.불완전,사족:정합.사족},null,2)}`:'',
+  ].filter(Boolean).join('\n\n');
+  const r=await askClaude(res,system,user,PROPOSE_FORMAT,o=>o.analysis&&Array.isArray(o.proposals));
+  if(!r)return;
+  const a=r.out.analysis;
+  res.json({model:r.msg.model,usage:r.msg.usage,
+    문항분석:{급소:a.pivot,현재역량:a.current,덮는유형:a.covered,빈곳:a.gaps},
+    추가논제:r.out.proposals.map(p=>({유형:p.type,논제:p.thesis,기존과다른점:p.difference,새로측정하는것:p.measures,제시문:p.passages})),
+  });
 });
 
 app.get('/dashboard',(req,res)=>res.sendFile(path.join(__dirname,'hmos_dashboard.html')));

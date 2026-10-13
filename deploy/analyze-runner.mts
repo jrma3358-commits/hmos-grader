@@ -1,8 +1,10 @@
 // /analyze 러너 — 엔진(hmos-grader/)을 부르기만 한다. 엔진에 없는 판단은 하지 않는다 (안 1, 오종래 2026-10-11).
 // 사용: node analyze-runner.mts <요청.json> <결과.json>
-//   요청: { 문항원문, 파이프라인: 'A'|'B'|'C', 논제?, 제시문?, 사족? }
-//   흐름: 인식 → (C) 정교화 진단[봉인⑬] → (C) 제시문 인식·연결 → 1차 필터 확인화면 → [교사 ① 승인 대기]
-//   사족: 4단계 ④ 결과 [{단락, 실체}] — 없으면 빈 배열로 진단한다
+//   요청: { 문항원문, 파이프라인: 'A'|'B'|'C', 논제?, 제시문?, 제시문분석?, 사족? }
+//   A·B 흐름: 인식 → 1차 필터 확인화면 → [교사 ① 승인 대기]
+//   C 흐름 (조립설명서 C·논술 9단계): 2단계 소문항별 인식 → 4단계 ①③④(제시문분석이 오면) → 5단계 정교화 진단[봉인⑬]
+//     → 엔진 표지 기반 제시문 연결(대조용). 1차 필터는 타지 않는다
+//   제시문분석: 3단계(/api/passage) 산출 [{단락, P, B, D, C, 급소, 관련}] · 사족: 4단계 없이 진단할 때 [{단락, 실체}]
 // 엔진이 멈추면(SealedError·급소 실패) 그 자리와 사유를 그대로 싣고 끝낸다 — 어디서 멈췄는지가 곧 다음에 채울 봉인이다.
 // 루브릭·모범답안(generate_rubric)은 교사가 확인화면에서 ①로 승인한 문항만 받는다 (명세서-2 §6) — 여기서는 승인하지 않는다.
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -16,6 +18,8 @@ const fq = await load('src/fq/index.ts');
 const { recognizePassage, connectPassage } = await load('src/fq/v2/passage.ts');
 const { make_screen } = await load('src/filter/confirm.ts');
 const { 봉인13_정교화진단 } = await load('src/filter/sealed/items.ts');
+const { split_thesis } = await load('src/thesis/split.ts');
+const { align_passage } = await load('src/thesis/align.ts');
 
 const [reqPath, outPath] = process.argv.slice(2);
 const req = JSON.parse(readFileSync(reqPath, 'utf8'));
@@ -62,62 +66,66 @@ try {
   if (!문항원문 && !req.논제) throw Object.assign(new Error('문항원문이 비어 있습니다'), { name: '입력오류' });
   if (!['A', 'B', 'C'].includes(파이프라인)) throw Object.assign(new Error(`파이프라인은 A·B·C 중 하나여야 합니다 (받은 값: ${req.파이프라인})`), { name: '입력오류' });
 
-  // C는 논제를 따로 받으면 논제로 인식한다 (조립설명서: 논제를 먼저 읽는다). 아니면 원문 전체
   const 제시문목록: { id: string; 텍스트: string }[] | null = Array.isArray(req.제시문) ? req.제시문 : typeof req.제시문 === 'string' && req.제시문.trim() ? [{ id: '제시문', 텍스트: req.제시문 }] : null;
-  const 인식텍스트 = 파이프라인 === 'C' && req.논제 ? String(req.논제) : 문항원문;
 
-  // ① 인식
-  const a = fq.recognizeV2Analysis(인식텍스트);
-  out.단계.인식 = { 입력: 파이프라인 === 'C' && req.논제 ? '논제' : '문항원문', 전체: 인식of(a), 단위: (a.units ?? []).map(인식of) };
+  if (파이프라인 === 'C') {
+    // ── C·논술 (조립설명서 C·논술 9단계) — 논제를 먼저 읽는다. 1차 필터는 타지 않는다 (2026-10-13 확정 4) ──
+    const 논제글 = String(req.논제 ?? 문항원문);
 
-  // C 5단계 — 정교화 4갈래 진단 [봉인⑬] (오종래 2026-10-13). 엔진이 진단하고, 정교화안은 /api/refine이 만든다
-  if (파이프라인 === 'C') out.단계.정교화 = { 진단: 봉인13_정교화진단(a, Array.isArray(req.사족) ? req.사족 : []) };
+    // 2단계 — 소문항마다 따로 인식. 공통 발문은 떼어 낸다 (오종래 2026-10-13)
+    const 소문항 = split_thesis(논제글).map((s: any) => ({ ...s, a: fq.recognizeV2Analysis(s.텍스트) }));
+    if (!소문항.length) throw Object.assign(new Error('논제가 비어 있습니다'), { name: '입력오류' });
+    const 전체 = 소문항.length === 1 ? 소문항[0].a : fq.recognizeV2Analysis(논제글);
+    out.단계.인식 = {
+      입력: '논제',
+      전체: 인식of(전체),
+      단위: [],
+      소문항: 소문항.map((s: any) => ({ 번호: s.번호, 텍스트: s.텍스트, 공통발문: s.공통발문, 참조: s.참조, ...인식of(s.a) })),
+    };
 
-  // 타입 — 1단계 겉모습 판정 (C에 제시문이 있으면 2단계 확정까지)
-  let passage: any;
-  if (파이프라인 === 'C' && 제시문목록) {
-    try {
-      // 제시문 id가 한 글자 라벨(가·나…)이면 [가] 머리를 붙여 단락 라벨로 읽히게 한다
-      const 본문 = 제시문목록.map((p) => (/^[가-하]$/.test(p.id) ? `[${p.id}] ${p.텍스트}` : p.텍스트)).join('\n\n');
-      passage = recognizePassage(본문, fq.markerTable());
-      const 연결 = connectPassage(a, passage);
-      out.단계.제시문 = {
-        단락: passage.paragraphs.map((p: any) => ({ label: p.label ?? null, 텍스트: p.text, 색: p.colors })),
-        전체급소: passage.pivot ? { 실체: passage.pivot.node.entity, keyword: passage.pivot.keyword ?? '' } : null,
-        flag: passage.flag ?? null,
-        연결,
-      };
-    } catch (e) {
-      stop('제시문', 멈춤of(e));
-    }
-  }
-  out.단계.타입 = 문항원문 ? fq.confirmType(문항원문, a, passage) : null;
+    // 4단계 엔진 몫 ①③④ — 3단계(Claude) 제시문 분석이 오면
+    const 단락들 = Array.isArray(req.제시문분석) ? req.제시문분석 : null;
+    if (단락들) out.단계.정합 = align_passage(소문항.map((s: any) => ({ 번호: s.번호, 참조: s.참조, 인식: s.a })), 단락들);
 
-  // ② 1차 필터 → 확인화면. 필터 유형: C=인문사회논술, A·B는 소문항 번호 구조(detectType subType 단계형)면 계단식 단계형
-  if (!out.멈춘곳) {
-    let 입력: any;
-    if (파이프라인 === 'C') {
-      if (!req.논제 || !제시문목록) {
-        stop('필터', { 멈춤: '입력 부족', 종류: '입력오류', 사유: '인문사회논술 필터는 논제와 제시문을 따로 받아야 합니다 — 요청에 논제·제시문 필드가 없습니다' });
-      } else {
-        입력 = { 유형: '인문사회논술', 논제: String(req.논제), 제시문: 제시문목록 };
-      }
-    } else {
-      const 단계형 = fq.detectType(문항원문).subType === '단계형';
-      입력 = { 유형: 단계형 ? '계단식 단계형' : '단독문제', 텍스트: 문항원문 };
-    }
-    if (입력) {
+    // 5단계 — 정교화 4갈래 진단 [봉인⑬]. 사족은 4단계 결과, 없으면 요청의 사족
+    const 사족 = out.단계.정합?.사족 ?? (Array.isArray(req.사족) ? req.사족 : []);
+    out.단계.정교화 = { 진단: 봉인13_정교화진단(소문항.map((s: any) => ({ 이름: s.번호, 인식: s.a })), 사족) };
+
+    // 엔진의 표지 기반 제시문 연결 — 3단계 Claude 분석 옆에 대조용으로 (2026-10-13 확정 1)
+    if (제시문목록) {
       try {
-        const 화면 = make_screen(입력);
-        out.단계.필터 = { 유형: 입력.유형, 필터판정: 화면.필터판정, 급소: 화면.급소, 실체요약: 화면.실체요약, 선택지: 화면.선택지 };
-        stop('루브릭', { 멈춤: '교사 ① 승인 대기', 종류: '승인대기', 사유: '루브릭·모범답안은 교사가 확인화면에서 ①로 승인한 문항만 생성합니다 (명세서-2 §6)' });
+        const 본문 = 제시문목록.map((p) => (/^[가-하]$/.test(p.id) ? `[${p.id}] ${p.텍스트}` : p.텍스트)).join('\n\n');
+        const passage = recognizePassage(본문, fq.markerTable());
+        out.단계.제시문 = {
+          단락: passage.paragraphs.map((p: any) => ({ label: p.label ?? null, 텍스트: p.text, 색: p.colors })),
+          전체급소: passage.pivot ? { 실체: passage.pivot.node.entity, keyword: passage.pivot.keyword ?? '' } : null,
+          flag: passage.flag ?? null,
+          소문항: 소문항.map((s: any) => ({ 번호: s.번호, 연결: connectPassage(s.a, passage) })),
+        };
       } catch (e) {
-        stop('필터', { 유형: 입력.유형, ...멈춤of(e) });
+        out.단계.제시문 = 멈춤of(e);
       }
     }
+  } else {
+    // ── A·B ──
+    // ① 인식
+    const a = fq.recognizeV2Analysis(문항원문);
+    out.단계.인식 = { 입력: '문항원문', 전체: 인식of(a), 단위: (a.units ?? []).map(인식of) };
+    out.단계.타입 = fq.confirmType(문항원문, a, undefined);
+
+    // ② 1차 필터 → 확인화면. A·B는 소문항 번호 구조(detectType subType 단계형)면 계단식 단계형
+    const 단계형 = fq.detectType(문항원문).subType === '단계형';
+    const 입력 = { 유형: 단계형 ? '계단식 단계형' : '단독문제', 텍스트: 문항원문 };
+    try {
+      const 화면 = make_screen(입력);
+      out.단계.필터 = { 유형: 입력.유형, 필터판정: 화면.필터판정, 급소: 화면.급소, 실체요약: 화면.실체요약, 선택지: 화면.선택지 };
+      stop('루브릭', { 멈춤: '교사 ① 승인 대기', 종류: '승인대기', 사유: '루브릭·모범답안은 교사가 확인화면에서 ①로 승인한 문항만 생성합니다 (명세서-2 §6)' });
+    } catch (e) {
+      stop('필터', { 유형: 입력.유형, ...멈춤of(e) });
+    }
+    out.단계.루브릭 ??= { 멈춤: `앞 단계(${out.멈춘곳?.단계})에서 멈춤` };
+    out.단계.모범답안 = { 멈춤: `앞 단계(${out.멈춘곳?.단계})에서 멈춤 — 모범답안은 루브릭과 함께 생성됩니다 (assemble.ts)` };
   }
-  out.단계.루브릭 ??= { 멈춤: `앞 단계(${out.멈춘곳?.단계})에서 멈춤` };
-  out.단계.모범답안 = { 멈춤: `앞 단계(${out.멈춘곳?.단계})에서 멈춤 — 모범답안은 루브릭과 함께 생성됩니다 (assemble.ts)` };
 } catch (e: any) {
   out.ok = false;
   out.error = 멈춤of(e);

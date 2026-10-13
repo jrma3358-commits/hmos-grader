@@ -12,7 +12,7 @@ import type { PathNode } from '../src/fq/v2/graph.ts';
 import type { Pivot } from '../src/fq/v2/pivot.ts';
 import { analyze_descriptive } from '../src/filter/descriptive.ts';
 import { judge_item, 제시문상한 } from '../src/filter/judge.ts';
-import { 봉인10_관계적절, 봉인11_요소결손, 봉인12_중의성, 봉인13_정교화진단 } from '../src/filter/sealed/items.ts';
+import { 봉인10_관계적절, 봉인11_요소결손, 봉인12_중의성, 봉인13_정교화진단, 엔진단위 } from '../src/filter/sealed/items.ts';
 import { 봉인8_관계대조 } from '../src/filter/sealed/relation.ts';
 import { 봉인7_소문항분리 } from '../src/filter/sealed/stepwise.ts';
 import { 봉인9_논제요구 } from '../src/filter/sealed/thesis.ts';
@@ -172,7 +172,7 @@ describe('봉인⑬ 정교화 4갈래 진단 (오종래 2026-10-13)', () => {
       form: null,
       pivot,
     }) as unknown as V2Analysis;
-  const 갈래들 = (a: V2Analysis) => 봉인13_정교화진단(a, []).map((d) => d.갈래);
+  const 갈래들 = (a: V2Analysis) => 봉인13_정교화진단(엔진단위(a), []).map((d) => d.갈래);
 
   it('① 일방흐름 — 급소 B 바로 다음이 Q이고 C 노드가 없다', () => {
     const b = node('b', 'B');
@@ -216,24 +216,31 @@ describe('봉인⑬ 정교화 4갈래 진단 (오종래 2026-10-13)', () => {
       pivot: pv(b1, 0, 'Q 직전 B'),
       pivots: [pv(b1, 0, 'Q 직전 B'), pv(b2, 1)],
     });
-    const d = 봉인13_정교화진단(a, []);
+    const d = 봉인13_정교화진단(엔진단위(a), []);
     assert.deepEqual(d.map((x) => x.갈래), ['급소불명확']);
     assert.match(d[0].근거, /\(b1\) 수렴도 0/);
   });
 
   it('④ 사족 — 4단계 결과를 논제 전체 진단으로 싣는다', () => {
     const b = node('b', 'B');
-    const d = 봉인13_정교화진단(논제([b, node('c', 'C'), node('q', 'Q')], { ok: true, pivot: pv(b, 1) }), [{ 단락: '[나]', 실체: '세계무역기구' }]);
+    const d = 봉인13_정교화진단(엔진단위(논제([b, node('c', 'C'), node('q', 'Q')], { ok: true, pivot: pv(b, 1) })), [{ 단락: '[나]', 실체: '세계무역기구' }]);
     assert.deepEqual(d, [{ 갈래: '사족', 단위: null, 근거: '제시문 [나]의 「세계무역기구」 — 논제와 연결선 없음' }]);
   });
 
-  it('소문항으로 나뉘면 단위마다 진단한다', () => {
+  it('소문항(단위)마다 진단하고 단위 이름을 단다', () => {
     const b1 = node('b1', 'B');
     const b2 = node('b2', 'B');
-    const u1 = 논제([b1, node('q1', 'Q')], { ok: true, pivot: pv(b1, 1) }, '(1-1) 첫 물음');
-    const u2 = 논제([b2, node('c', 'C'), node('q2', 'Q')], { ok: true, pivot: pv(b2, 1) }, '(1-2) 둘째 물음');
-    const d = 봉인13_정교화진단({ ...논제([], { ok: true, pivot: pv(b1, 1) }), units: [u1, u2] }, []);
-    assert.deepEqual(d.map((x) => [x.단위, x.갈래]), [['(1-1)', '일방흐름']]);
+    const u1 = 논제([b1, node('q1', 'Q')], { ok: true, pivot: pv(b1, 1) });
+    const u2 = 논제([b2, node('c', 'C'), node('q2', 'Q')], { ok: true, pivot: pv(b2, 1) });
+    const d = 봉인13_정교화진단([{ 이름: '1-1', 인식: u1 }, { 이름: '1-2', 인식: u2 }], []);
+    assert.deepEqual(d.map((x) => [x.단위, x.갈래]), [['1-1', '일방흐름']]);
+  });
+
+  it('엔진단위 — 엔진이 나눈 단위는 순번, 안 나눴으면 전체 하나', () => {
+    const b = node('b', 'B');
+    const a = 논제([b, node('c', 'C'), node('q', 'Q')], { ok: true, pivot: pv(b, 1) });
+    assert.deepEqual(엔진단위(a).map((u) => u.이름), [null]);
+    assert.deepEqual(엔진단위({ ...a, units: [a, a] }).map((u) => u.이름), ['단위 1', '단위 2']);
   });
 
   it('신호가 없으면 빈 배열', () => {

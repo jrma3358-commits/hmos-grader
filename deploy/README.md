@@ -7,7 +7,7 @@
 
 ```
 ~/hmos/                     ← pm2 앱 hmos (cwd), 정적 서빙 폴더
-  server.js                 POST /analyze · /api/analyze · /api/generate
+  server.js                 POST /analyze · /api/analyze · /api/generate · /api/passage · /api/leap · /api/refine · /api/propose
   analyze-runner.mts        /analyze 러너 — 엔진(hmos-grader/)을 부르기만 한다
   hmos_dashboard.html       /dashboard
   hmos-grader/              엔진 사본 (이 폴더에는 없음)
@@ -29,13 +29,22 @@
 - 모델 `claude-sonnet-5-5`, 구조화 출력, 거절 시 서버 측 fallback (`fallbacks: 'default'`).
 - 배점은 모델이 아니라 서버가 명세 F5 파트 지수 2:3:2:2:1로 계산한다.
 
-## /api/refine — C 5단계 논제 정교화
+## C·논술 9단계 (조립설명서 `~/hmos-spec/조립설명서.md`)
 
-- 진단은 엔진이 한다: `/analyze`(파이프라인 C)의 `단계.정교화.진단` = [봉인⑬] 4갈래 (오종래 2026-10-13).
-  요청에 `사족: [{단락, 실체}]`(4단계 ④)를 넣으면 ④사족 진단에 실린다.
-- 입력: `{ 논제, 제시문?, 인식, 진단 }` — `인식`·`진단`은 `/analyze` 응답 그대로.
-- ①일방흐름·②서술복잡·③급소불명확만 Claude가 정교화안을 쓴다. ④사족은 `사족`으로 그대로 돌려줄 뿐 생성하지 않는다.
-- 정교화안은 러너에 다시 태워 `재인식`(급소·급소실패·진단)을 붙인다. 급소가 의도대로 잡혔는지는 교사가 본다.
+| 단계 | 호출 | 담당 |
+|---|---|---|
+| 2 논제 인식 | `POST /analyze` `{파이프라인:'C', 논제, 제시문?}` → `단계.인식.소문항` | 엔진 (소문항마다, 공통 발문 분리) |
+| 3 제시문 분석 | `POST /api/passage` `{소문항, 제시문}` → `제시문분석` | Claude (조립설명서 3단계 원문) |
+| 4 ①③④ | `POST /analyze` 에 `제시문분석`을 실어 → `단계.정합` | 엔진 (`src/thesis/align.ts`) |
+| 4 ② 비약 | `POST /api/leap` `{소문항, 제시문, 정합}` | Claude (명세서-2 §3-5 원문) |
+| 5 정교화 | 진단 = `/analyze` 의 `단계.정교화.진단` [봉인⑬] · 정교화안 = `POST /api/refine` `{논제, 소문항, 진단, 제시문?}` | 엔진 진단 · Claude 정교화안 (명세서-2 §3 원문) → 러너로 재인식 |
+| 6 추가 논제 | `POST /api/propose` `{논제, 소문항, 제시문?, 제시문분석?, 정합?}` | Claude (명세서-2 §1·§4·§5 원문) |
+| 7 교사 확정 | 확정 논제마다 `POST /analyze` 로 재인식 | 교사 · 엔진 |
+| 8·9 루브릭·모범답안 | `POST /api/generate` | Claude (루브릭 구현명세 F2~F6) |
+
+- C는 1차 필터를 타지 않는다. 엔진의 표지 기반 제시문 연결은 `단계.제시문.소문항`에 대조용으로 남는다.
+- ④사족은 정교화안을 만들지 않는다 (`/api/refine` 응답의 `사족`으로 그대로).
+- 명세 md는 부를 때 읽는다 — 없으면 그 라우트만 500.
 
 ## 배포
 

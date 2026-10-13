@@ -9,7 +9,7 @@
 import { recognizeV2Analysis } from '../fq/pipeline.ts';
 import { analyze_descriptive, type 급소불명거르기, type 서술형분석 } from './descriptive.ts';
 import { analyze_essay, type 논술문항, type 논술형분석 } from './essay.ts';
-import { 봉인10_관계적절, 봉인11_요소결손, 봉인12_중의성, 봉인13_정교화진단 } from './sealed/items.ts';
+import { 봉인10_관계적절, 봉인11_요소결손, 봉인12_중의성, 봉인13_정교화진단, 엔진단위 } from './sealed/items.ts';
 import type { 소문항 } from './sealed/stepwise.ts';
 import { analyze_stepwise } from './stepwise.ts';
 
@@ -71,7 +71,7 @@ function 공통항목(분석: 서술형분석 | 논술형분석, 앞: 항목결�
       ? { 증상: '중의성', 판정: '거르기', 사유: `두 조각에 걸친 실체: ${겹침.join(', ')}` }
       : { 증상: '중의성', 판정: '통과', 사유: '겹침 없음' },
   ];
-  const 정교화 = 봉인13_정교화진단(recognizeV2Analysis(텍스트), []);
+  const 정교화 = 봉인13_정교화진단(엔진단위(recognizeV2Analysis(텍스트)), []);
   항목.push(
     정교화.length
       ? { 증상: '정교화 필요', 판정: '거르기', 사유: 정교화.map((d) => `${d.단위 ? d.단위 + ' ' : ''}${d.갈래}: ${d.근거}`).join('; ') }

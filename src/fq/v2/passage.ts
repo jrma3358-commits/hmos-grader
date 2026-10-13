@@ -182,7 +182,7 @@ const CIRCLED = /[㉠-㉻]/g;
 const LABEL_ORDER = '가나다라마바사아자차카타파하';
 
 /** 노드 실체 속 제시문 지정 기호의 글자들 — [가]·<가>·(가), 나열과 범위 포함 */
-function designatedLabels(entity: string): string[] {
+export function designatedLabels(entity: string): string[] {
   const out: string[] = [];
   const re = /[[<(]([가-힣])[\]>)](?:\s*[~∼～]\s*[[<(]([가-힣])[\]>)])?/g;
   for (const m of entity.matchAll(re)) {
@@ -195,7 +195,7 @@ function designatedLabels(entity: string): string[] {
 }
 
 /** 논제의 제시문 참조 — 「제시문」 뒤 기호 나열·범위 ([가], [나], [다] · (나)~(라) · <가>·<나>) */
-const PASSAGE_REFERENCE = /제시문\s*((?:[[<(][가-힣][\]>)](?:\s*(?:[,·~∼～]|및|와|과)\s*)?)+)/g;
+export const PASSAGE_REFERENCE = /제시문\s*((?:[[<(][가-힣][\]>)](?:\s*(?:[,·~∼～]|및|와|과)\s*)?)+)/g;
 
 /**
  * 논제가 참조한 제시문 기호 — 마지막 참조를 쓴다 (공통 발문의 「제시문 [가]~[마]」 뒤에 소문항 자신의 참조가 온다).
@@ -209,7 +209,7 @@ function referencedLabels(question: string): string[] | undefined {
 
 const clean = (s: string) => s.trim().replace(/^[\s,]+/, '');
 /** keyword 포함 (원칙 ②) — 한쪽이 다른 쪽을 품는다. 품기는 쪽은 두 글자 이상 (한 글자 조각은 어디에나 들어 있다) */
-const contains = (a: string, b: string) => (b.length >= 2 && a.includes(b)) || (a.length >= 2 && b.includes(a));
+export const contains = (a: string, b: string) => (b.length >= 2 && a.includes(b)) || (a.length >= 2 && b.includes(a));
 
 /**
  * 논제 방향의 열쇠 — 논제 급소 keyword가 먼저, 관련 정보(논제의 다른 B 노드 실체)가 다음 (원칙 ②).
