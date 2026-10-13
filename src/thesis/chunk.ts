@@ -13,6 +13,7 @@
 //   - B가 없는 구간의 Q(「무엇」 뒤 「설명하시오」)는 앞 덩어리의 형식 표지다 — 덩어리를 새로 세우지 않는다
 
 import type { PathGraph, PathNode } from '../fq/v2/graph.ts';
+import { 관점앞B } from '../fq/v2/pivot.ts';
 
 export interface 급소덩어리 {
   B: PathNode;
@@ -35,7 +36,10 @@ export function essay_pivot_chunks(graph: Pick<PathGraph, 'nodes'>): 급소덩�
     if (q.color !== 'Q') return;
     const 구간 = nodes.slice(from, qi);
     from = qi + 1;
-    const bi = 구간.map((n) => n.color).lastIndexOf('B');
+    // 관점 앞 B(「…의 경쟁력 측면에서」의 B)는 덩어리의 B가 아니다 — 구간에 다른 B가 있으면 그 B [오종래 2026-10-13]
+    const bs = 구간.flatMap((n, k) => (n.color === 'B' ? [k] : []));
+    const 대상 = bs.filter((k) => !관점앞B(nodes, 구간[k]));
+    const bi = (대상.length ? 대상 : bs).at(-1) ?? -1;
     if (bi < 0) {
       덩어리.at(-1)?.Q.push(q);
       return;

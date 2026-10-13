@@ -1142,6 +1142,17 @@ describe('서술형태 급소 — C-F 노드 안의 핵심어 (오종래 2026-10
     assert.ok(noB.ok && noB.pivot.reason === '서술형태');
   });
 
+  it('「측면에서」 바로 앞 B는 관점 — Q 직전 B에서 빠지고 그 앞 B가 급소 (오종래 2026-10-13)', () => {
+    const t: SealedTable = {
+      ...table(['SF']),
+      switches: [sw('SF', ['측면에서'], 'C', ['측면에서']), sw('SB', ['~@B'], 'B'), sw('SQ', ['~@Q'], 'Q')],
+    };
+    const r = analyze_pivot(build_path_graph('대응조치 @B 기업 @B 측면에서 설명 @Q', t), t);
+    assert.equal(r.ok && r.pivot.node.entity, '대응조치');
+    const only = analyze_pivot(build_path_graph('기업 @B 측면에서 설명 @Q', t), t);
+    assert.equal(only.ok && only.pivot.node.entity, '기업', '다른 B가 없으면 그대로');
+  });
+
   it('C-F 노드가 둘이면 뒤쪽(서술 방향)이 급소 — 앞쪽은 서술 수단 (오종래 2026-10-13)', () => {
     const t = table(['SF']);
     const g = build_path_graph('형태 @B 논박@M 관점 @V 설명 @Q', t);

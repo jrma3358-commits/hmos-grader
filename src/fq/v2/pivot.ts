@@ -203,6 +203,19 @@ const CLAUSE_ENDS = ['하고', '기술하고', '요약하고', '나타내고', '
  *  [오종래 2026-10-13] 「측면에서」 추가 — 정교화안 「B국 기업의 경쟁력 측면에서 설명하시오」가 B 대신 급소를 가져감 */
 const METHOD_MARKERS = ['비판적으로', '비판하여', '입장에서', '관점에서', '참고하여', '참조하여', '바탕으로', '근거하여', '경제주체별로', '측면에서'];
 
+/** 관점 표지 — 바로 앞 B는 관점(어느 쪽에서 보나)이지 묻는 대상이 아니다 [오종래 2026-10-13] */
+const ASPECT_MARKERS = ['측면에서'];
+
+/**
+ * 관점 앞 B [오종래 2026-10-13] — 길 순서에서 바로 다음 노드가 관점 표지(「측면에서」) C인 B 노드
+ * (「대응조치를 B국 기업의 경쟁력 측면에서 설명하시오」의 「B국 기업」). 급소에서 뺀다 — 다른 B가 없을 때만 남긴다.
+ */
+export function 관점앞B(nodes: readonly PathNode[], node: PathNode): boolean {
+  if (node.color !== 'B') return false;
+  const next = nodes[nodes.indexOf(node) + 1];
+  return !!next && next.color === 'C' && ASPECT_MARKERS.some((m) => next.surface.trim().endsWith(m));
+}
+
 /**
  * 복합 Q 절 나누기 — 「~하고,」「~나타내고,」「~고르고,」「~쓰고,」 Q(바로 뒤 쉼표)에서 물음을 절로 자른다.
  * 절마다 서술형태 노드가 꼭 하나씩이고 마지막 절에도 Q가 있으면 절 순서대로 그 노드들을, 아니면 undefined.
@@ -372,12 +385,15 @@ export function analyze_pivot(graph: PathGraph, table?: SealedTable): PivotAnaly
       break;
     }
   }
+  const hasOtherThanAspect = graph.nodes.some((n) => n.color === 'B' && n.foldedFrom == null && !관점앞B(graph.nodes, n));
   const eligible = (node: PathNode) => {
     if (node.color !== 'B' || node.foldedFrom === 'C' || node.foldedFrom === 'D') return false;
     if (pointsBack && node.entity.trim() === '이') return false; // 지시어 자체는 급소가 아니다
     // 형식 명사 「값」 [오종래 2026-10-02] — 「값」은 급소가 될 수 없다. Q 직전 B로 잡히면 그 앞 B가 급소다
     //   (예: 수리논술_문_4 「lim_{m→1-} f(m)/g(m)의 값을 구하시오」 → 「lim_{m→1-} f(m)/g(m)」).
     if (node.entity.trim() === '값') return false;
+    // 관점 앞 B [오종래 2026-10-13] — 「…의 경쟁력 측면에서」의 B는 관점이다. 다른 B가 있으면 그 B가 급소다
+    if (hasOtherThanAspect && 관점앞B(graph.nodes, node)) return false;
     // 작성 형식 블록 [오종래 2026-10-05] — 「풀이 과정과 답을 서술하시오」의 「풀이 과정」(P)과 「답」(B)은 한 묶음의 작성 형식이라
     //   급소가 될 수 없다. 그 앞 B가 급소다 (예: 수학서술형 12 「일반항 a_n을 구하는 풀이 과정과 답을」 → 「일반항 a_n」).
     return !isWritingForm(graph, node);
