@@ -1,10 +1,10 @@
 // /analyze 러너 — 엔진(hmos-grader/)을 부르기만 한다. 엔진에 없는 판단은 하지 않는다 (안 1, 오종래 2026-10-11).
 // 사용: node analyze-runner.mts <요청.json> <결과.json>
-//   요청: { 문항원문, 파이프라인: 'A'|'B'|'C', 논제?, 제시문?, 제시문분석?, 사족? }
+//   요청: { 문항원문, 파이프라인: 'A'|'B'|'C', 논제?, 제시문?, 사족? }
 //   A·B 흐름: 인식 → 1차 필터 확인화면 → [교사 ① 승인 대기]
-//   C 흐름 (조립설명서 C·논술 9단계): 2단계 소문항별 인식 → 4단계 ①③④(제시문분석이 오면) → 5단계 정교화 진단[봉인⑬]
-//     → 엔진 표지 기반 제시문 연결(대조용). 1차 필터는 타지 않는다
-//   제시문분석: 3단계(/api/passage) 산출 [{단락, P, B, D, C, 급소, 관련}] · 사족: 4단계 없이 진단할 때 [{단락, 실체}]
+//   C 흐름 (조립설명서 C·논술 9단계, HMOS 절대 원칙 — 엔진이 잡는다): 2단계 소문항별 인식
+//     → 3·4단계 제시문 단락 급소 ↔ 논제 급소 연결·사족 (제시문이 오면) → 5단계 정교화 진단[봉인⑬]. 1차 필터는 타지 않는다
+//   사족: 제시문 없이 진단할 때 [{소문항, 급소}]
 // 엔진이 멈추면(SealedError·급소 실패) 그 자리와 사유를 그대로 싣고 끝낸다 — 어디서 멈췄는지가 곧 다음에 채울 봉인이다.
 // 루브릭·모범답안(generate_rubric)은 교사가 확인화면에서 ①로 승인한 문항만 받는다 (명세서-2 §6) — 여기서는 승인하지 않는다.
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -15,7 +15,7 @@ import { pathToFileURL } from 'node:url';
 const GRADER = process.env.HMOS_GRADER ?? join(import.meta.dirname, 'hmos-grader');
 const load = (p: string) => import(pathToFileURL(join(GRADER, p)).href);
 const fq = await load('src/fq/index.ts');
-const { recognizePassage, connectPassage } = await load('src/fq/v2/passage.ts');
+const { recognizePassage } = await load('src/fq/v2/passage.ts');
 const { make_screen } = await load('src/filter/confirm.ts');
 const { 봉인13_정교화진단 } = await load('src/filter/sealed/items.ts');
 const { split_thesis } = await load('src/thesis/split.ts');
@@ -83,29 +83,27 @@ try {
       소문항: 소문항.map((s: any) => ({ 번호: s.번호, 텍스트: s.텍스트, 공통발문: s.공통발문, 참조: s.참조, ...인식of(s.a) })),
     };
 
-    // 4단계 엔진 몫 ①③④ — 3단계(Claude) 제시문 분석이 오면
-    const 단락들 = Array.isArray(req.제시문분석) ? req.제시문분석 : null;
-    if (단락들) out.단계.정합 = align_passage(소문항.map((s: any) => ({ 번호: s.번호, 참조: s.참조, 인식: s.a })), 단락들);
-
-    // 5단계 — 정교화 4갈래 진단 [봉인⑬]. 사족은 4단계 결과, 없으면 요청의 사족
-    const 사족 = out.단계.정합?.사족 ?? (Array.isArray(req.사족) ? req.사족 : []);
-    out.단계.정교화 = { 진단: 봉인13_정교화진단(소문항.map((s: any) => ({ 이름: s.번호, 인식: s.a })), 사족) };
-
-    // 엔진의 표지 기반 제시문 연결 — 3단계 Claude 분석 옆에 대조용으로 (2026-10-13 확정 1)
+    // 3·4단계 — 제시문 단락 급소(엔진 connectPassage) ↔ 논제 급소 연결, 사족 (HMOS 절대 원칙: 엔진이 잡는다)
     if (제시문목록) {
       try {
+        // 제시문 id가 한 글자 라벨(가·나…)이면 [가] 머리를 붙여 단락 라벨로 읽히게 한다
         const 본문 = 제시문목록.map((p) => (/^[가-하]$/.test(p.id) ? `[${p.id}] ${p.텍스트}` : p.텍스트)).join('\n\n');
         const passage = recognizePassage(본문, fq.markerTable());
+        const 정합 = align_passage(소문항.map((s: any) => ({ 번호: s.번호, 참조: s.참조, 인식: s.a })), passage);
         out.단계.제시문 = {
           단락: passage.paragraphs.map((p: any) => ({ label: p.label ?? null, 텍스트: p.text, 색: p.colors })),
           전체급소: passage.pivot ? { 실체: passage.pivot.node.entity, keyword: passage.pivot.keyword ?? '' } : null,
           flag: passage.flag ?? null,
-          소문항: 소문항.map((s: any) => ({ 번호: s.번호, 연결: connectPassage(s.a, passage) })),
         };
+        out.단계.정합 = { 연결: 정합.연결, 사족: 정합.사족, 소문항: 정합.소문항.map((x: any) => ({ 번호: x.번호, 배경: x.연결.background, 범위밖: x.연결.outOfScope })) };
       } catch (e) {
-        out.단계.제시문 = 멈춤of(e);
+        stop('제시문', 멈춤of(e));
       }
     }
+
+    // 5단계 — 정교화 4갈래 진단 [봉인⑬]. ④사족은 4단계 결과, 제시문이 없으면 요청의 사족
+    const 사족 = out.단계.정합?.사족 ?? (Array.isArray(req.사족) ? req.사족 : []);
+    out.단계.정교화 = { 진단: 봉인13_정교화진단(소문항.map((s: any) => ({ 이름: s.번호, 인식: s.a })), 사족) };
   } else {
     // ── A·B ──
     // ① 인식

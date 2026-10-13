@@ -1,101 +1,74 @@
-// C·논술 4단계 — 논제↔제시문 연결 평가 중 엔진 몫 ①타당 ③불완전 ④사족 (논제생성 명세서-2 §3-5-1).
-// ②비약은 의미 판단이라 Claude 몫이다 (/api/leap). 여기서는 하지 않는다.
+// C·논술 4단계 — 논제 급소 ↔ 제시문 단락 급소 연결 (엔진).
 //
-// 입력: 2단계 소문항 인식(엔진) + 3단계 제시문 분석(Claude, 단락별 P·B·D·C·급소·관련 실체)
-// 연결선 = keyword 포함 (passage.ts 원칙 ②의 contains — 한쪽이 다른 쪽을 품는다, 품기는 쪽은 두 글자 이상)
-// 소문항은 참조 제시문 범위 안의 단락하고만 이어진다. 참조가 없으면 모든 단락.
+// HMOS 절대 원칙 (오종래 2026-10-13): 제시문에서 논제 급소와 닿는 급소를 엔진이 추출하고, 엔진이 대조한다.
+//   AI는 엔진이 잡은 연결을 문장으로 구성할 뿐이다. 엔진이 못 잡은 것은 AI로 채우지 않는다.
 //
-// [오종래 2026-10-13]
-//   ① 타당: 논제 B노드 ↔ 제시문 급소 매칭
-//   ③ 불완전: 제시문 급소 중 논제에 안 온 것
-//   ④ 사족: 제시문 노드 중 논제와 연결 없는 것
-// [구현 2026-10-13] ④의 「연결」 = 범위 안 소문항의 노드(Q 제외) 실체·급소 keyword와 keyword 포함, 또는 3단계가 그 단락에서
-//   논제 급소 관련으로 뽑은 실체와 keyword 포함. 단락 급소는 ④에 넣지 않는다 — 이어지지 않은 급소는 ③이다.
+// 단락 급소는 엔진의 connectPassage가 세운다 (제시문 급소 규칙 — 논제가 방향, 서두·말미 B, keyword 포함).
+// 소문항마다 따로 잇는다. 참조 범위는 소문항이 들고 온 참조(공통 발문에서 물려받은 것)다.
+//
+// [오종래 2026-10-13] 사족 = 논제가 요구하는 실체의 근거가 제시문에 없는 것.
+//   논제 급소가 제시문 어느 단락 급소와도 연결되지 않으면 사족 (단락 단위).
+//   연결선 = 그 논제 급소(노드)를 열쇠로 세워진 단락 급소. 논제의 다른 B를 열쇠로 선 단락 급소는 그 급소의 연결이 아니다.
+//   급소가 서지 않은 소문항은 사족을 가리지 않는다 (급소불명확은 ⑬ ③의 몫).
 
 import type { V2Analysis } from '../fq/pipeline.ts';
-import { contains } from '../fq/v2/passage.ts';
+import type { Pivot } from '../fq/v2/pivot.ts';
+import { connectPassage, passageLabels, type PassageConnection, type PassageRecognition } from '../fq/v2/passage.ts';
 import type { 사족노드 } from '../filter/sealed/items.ts';
-
-/** 3단계 산출 — 단락 하나 (Claude) */
-export interface 단락분석 {
-  /** 제시문 기호 (「가」) — 기호 없는 제시문이면 「제시문」 */
-  단락: string;
-  P: string[];
-  B: string[];
-  D: string[];
-  C: string[];
-  /** 단락 자체의 무게중심 B */
-  급소: string;
-  /** 논제 급소와 관련된 실체 — 어느 소문항의 급소와 이어지는가 */
-  관련: { 소문항: string | null; 실체: string; 근거문장: string }[];
-}
 
 /** 2단계 산출 — 소문항 하나 (엔진) */
 export interface 인식소문항 {
   번호: string | null;
   참조: string[];
-  인식: Pick<V2Analysis, 'graph' | 'pivot'>;
+  인식: V2Analysis;
 }
 
-export interface 타당연결 {
+export interface 단락연결 {
+  /** 제시문 기호 (기호 없는 단락이면 단락 순번 「#1」) */
+  단락: string;
+  /** 단락 급소 실체 */
+  단락급소: string;
+  자리: '서두' | '말미';
+}
+
+/** 논제 급소 하나의 연결 */
+export interface 급소연결 {
   소문항: string | null;
-  /** 논제 B노드 id·실체 */
+  급소: string;
+  /** 논제 급소 노드 id */
   노드: string;
-  실체: string;
-  단락: string;
-  단락급소: string;
-}
-
-export interface 불완전 {
-  단락: string;
-  단락급소: string;
+  단락: 단락연결[];
 }
 
 export interface 정합엔진 {
-  타당: 타당연결[];
-  불완전: 불완전[];
+  연결: 급소연결[];
   사족: 사족노드[];
+  /** 엔진 connectPassage 원본 — 소문항마다 */
+  소문항: { 번호: string | null; 연결: PassageConnection }[];
 }
 
 const clean = (s: string) => s.trim().replace(/^[\s,，]+/, '');
-const inScope = (s: 인식소문항, 단락: string) => !s.참조.length || s.참조.includes(단락);
+const 급소들 = (a: V2Analysis): Pivot[] => (a.pivot.ok ? (a.pivot.pivots ?? [a.pivot.pivot]) : []);
 
-/** 소문항의 열쇠 — Q가 아닌 노드 실체 + 급소 keyword */
-function 열쇠(s: 인식소문항): string[] {
-  const keys = s.인식.graph.nodes.filter((n) => n.color !== 'Q').map((n) => clean(n.entity));
-  if (s.인식.pivot.ok) for (const p of s.인식.pivot.pivots ?? [s.인식.pivot.pivot]) keys.push(clean(p.keyword ?? p.node.entity));
-  return [...new Set(keys.filter(Boolean))];
-}
+/** 4단계 엔진 — 논제 급소마다 이어진 단락 급소, 이어진 단락이 없는 급소는 사족 */
+export function align_passage(소문항들: 인식소문항[], passage: PassageRecognition): 정합엔진 {
+  const labels = passageLabels(passage.paragraphs);
+  const 이름 = (i: number) => labels[i] ?? `#${i + 1}`;
+  const 연결: 급소연결[] = [];
+  const 원본: 정합엔진['소문항'] = [];
 
-/** 4단계 엔진 몫 — ①타당 ③불완전 ④사족 */
-export function align_passage(소문항들: 인식소문항[], 단락들: 단락분석[]): 정합엔진 {
-  const 타당: 타당연결[] = [];
   for (const s of 소문항들) {
-    for (const n of s.인식.graph.nodes) {
-      if (n.color !== 'B') continue;
-      const e = clean(n.entity);
-      for (const d of 단락들) {
-        if (inScope(s, d.단락) && clean(d.급소) && contains(e, clean(d.급소))) {
-          타당.push({ 소문항: s.번호, 노드: n.id, 실체: e, 단락: d.단락, 단락급소: clean(d.급소) });
-        }
-      }
+    const c = connectPassage(s.인식, passage, s.참조);
+    원본.push({ 번호: s.번호, 연결: c });
+    for (const p of 급소들(s.인식)) {
+      const 단락: 단락연결[] = [];
+      c.pivots.forEach((pv, i) => {
+        if (pv && pv.questionNode === p.node.id) 단락.push({ 단락: 이름(i), 단락급소: clean(pv.entity), 자리: pv.place });
+      });
+      연결.push({ 소문항: s.번호, 급소: clean(p.keyword ?? p.node.entity), 노드: p.node.id, 단락 });
     }
   }
 
-  const 불완전 = 단락들
-    .filter((d) => clean(d.급소) && !타당.some((t) => t.단락 === d.단락))
-    .map((d) => ({ 단락: d.단락, 단락급소: clean(d.급소) }));
-
-  const 사족: 사족노드[] = [];
-  for (const d of 단락들) {
-    const keys = 소문항들.filter((s) => inScope(s, d.단락)).flatMap(열쇠);
-    const 관련 = d.관련.map((r) => clean(r.실체)).filter(Boolean);
-    const 급소 = clean(d.급소);
-    for (const 실체 of new Set([...d.P, ...d.B, ...d.D, ...d.C].map(clean).filter(Boolean))) {
-      if (실체 === 급소) continue;
-      const 이어짐 = keys.some((k) => contains(실체, k)) || 관련.some((r) => contains(실체, r));
-      if (!이어짐) 사족.push({ 단락: d.단락, 실체 });
-    }
-  }
-  return { 타당, 불완전, 사족 };
+  const 사족 = 연결.filter((x) => !x.단락.length).map((x) => ({ 소문항: x.소문항, 급소: x.급소 }));
+  return { 연결, 사족, 소문항: 원본 };
 }

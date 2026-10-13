@@ -265,11 +265,12 @@ export function passageLabels(paragraphs: PassageParagraph[]): (string | undefin
  * 논제-제시문 연결 (§4·§5·제시문 급소 규칙) — 논제가 방향을 잡고, 단락마다 서두·말미에서 닿는 B를 급소로 정한다.
  * 급소가 없는 단락은 배경지식 단락이다. 기호·지정 연결은 급소와 따로 본다.
  * 논제가 참조 제시문을 밝혔으면(「제시문 [가], [나], [다]를 참고하여」) 그 단락만 연결 후보다 — keyword만으로는 논제별 참조 범위를 모른다.
+ * `참조`를 넘기면 논제 글 대신 그 범위를 쓴다 — 공통 발문을 떼어 낸 소문항(thesis/split.ts)은 참조를 따로 들고 온다.
  */
-export function connectPassage(question: V2Analysis, passage: PassageRecognition): PassageConnection {
+export function connectPassage(question: V2Analysis, passage: PassageRecognition, 참조?: string[]): PassageConnection {
   const exceptions = passage.keyExceptions;
   const keys = questionKeys(question).filter((k) => !exceptions.includes(k.key));
-  const scope = referencedLabels(question.question);
+  const scope = 참조?.length ? 참조 : referencedLabels(question.question);
   const labels = passageLabels(passage.paragraphs);
   const inScope = (i: number) => !scope || (labels[i] !== undefined && scope.includes(labels[i]!));
   const outOfScope = passage.paragraphs.flatMap((_, i) => (inScope(i) ? [] : [i]));

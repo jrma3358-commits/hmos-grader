@@ -1,79 +1,75 @@
-// C·논술 4단계 엔진 몫 ①타당 ③불완전 ④사족 (오종래 2026-10-13). 노드는 손으로 세운다 — 봉인 값은 쓰지 않는다.
+// C·논술 4단계 — 논제 급소 ↔ 제시문 단락 급소 연결, 사족 (오종래 2026-10-13: 논제 급소가 어느 단락 급소와도 연결되지 않으면 사족)
+// 표지는 봉인 값이 아니라 테스트용 가짜 표지다 (passage.test.ts와 같다). B = SB(~를), Q = SQ(설명하시오)
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
+import { analyze_pivot, build_path_graph, describeCombination, recognizePassage } from '../src/fq/index.ts';
+import type { V2Analysis } from '../src/fq/pipeline.ts';
+import type { SealedSwitch, SealedTable } from '../src/fq/sealed/schema.ts';
 import type { Color } from '../src/fq/types.ts';
-import type { PathNode } from '../src/fq/v2/graph.ts';
-import { align_passage, type 단락분석, type 인식소문항 } from '../src/thesis/align.ts';
+import { align_passage } from '../src/thesis/align.ts';
 
-let seq = 0;
-const node = (id: string, color: Color, entity: string): PathNode => ({ id, surface: '·', switchId: `SW-${id}`, index: seq++, color, entity });
+const sw = (id: string, markers: string[], color: Color, lexical?: string[]) =>
+  ({ id, kind: '조사·어미', markers, intent: '', color, lexical }) as SealedSwitch;
+const table: SealedTable = {
+  version: 1,
+  source: { document: '(테스트)', sections: [] },
+  switches: [sw('SB', ['~를'], 'B'), sw('SQ', ['설명하시오'], 'Q', ['설명하시오'])],
+  lights: [],
+  matrix: [],
+  symbols: [],
+  forms: [],
+  apply: { longestMatchFirst: true, precedence: [], endOfWord: true },
+  pending: [],
+};
 
-const 소문항 = (번호: string, 참조: string[], nodes: PathNode[], 급소: PathNode): 인식소문항 => ({
-  번호,
-  참조,
-  인식: {
-    graph: { question: '', nodes, edges: [], combination: [], undecided: [] },
-    pivot: { ok: true, pivot: { node: 급소, reason: 'Q 직전 B', convergence: 0, sameAsDeepest: false } },
-  },
-});
-
-const 단락 = (label: string, 급소: string, more: Partial<단락분석> = {}): 단락분석 => ({
-  단락: label,
-  P: [],
-  B: [급소],
-  D: [],
-  C: [],
-  급소,
-  관련: [],
-  ...more,
-});
+const 인식 = (q: string): V2Analysis => {
+  const graph = build_path_graph(q, table);
+  return { question: q, graph, form: describeCombination(graph.combination, table), pivot: analyze_pivot(graph, table) };
+};
+const 제시문 = recognizePassage('[가] 다수결 원칙를 본다.\n\n[나] 만장일치 제도를 본다.\n\n[다] 날씨를 본다.', table);
 
 describe('align_passage', () => {
-  const b = node('n2', 'B', 'B국이 시행한 대응조치');
-  const s12 = 소문항('1-2', ['가', '나', '다'], [node('n1', 'B', '으로 인한 손실'), b, node('n3', 'Q', '무엇')], b);
-
-  it('① 타당 — 논제 B노드가 단락 급소를 품는다', () => {
-    const r = align_passage([s12], [단락('다', '대응조치')]);
-    assert.deepEqual(r.타당, [{ 소문항: '1-2', 노드: 'n2', 실체: 'B국이 시행한 대응조치', 단락: '다', 단락급소: '대응조치' }]);
-    assert.deepEqual(r.불완전, []);
+  it('논제 급소를 열쇠로 선 단락 급소가 그 급소의 연결이다', () => {
+    const r = align_passage([{ 번호: '1-1', 참조: [], 인식: 인식('다수결를 설명하시오.') }], 제시문);
+    assert.deepEqual(r.연결, [{ 소문항: '1-1', 급소: '다수결', 노드: r.연결[0].노드, 단락: [{ 단락: '가', 단락급소: '다수결 원칙', 자리: '서두' }] }]);
+    assert.deepEqual(r.사족, []);
   });
 
-  it('① 참조 범위 밖 단락과는 잇지 않는다', () => {
-    const r = align_passage([s12], [단락('라', '대응조치')]);
-    assert.deepEqual(r.타당, []);
-    assert.deepEqual(r.불완전, [{ 단락: '라', 단락급소: '대응조치' }]);
+  it('사족 — 논제 급소가 어느 단락 급소와도 연결되지 않는다', () => {
+    const r = align_passage([{ 번호: '1-2', 참조: [], 인식: 인식('국민투표를 설명하시오.') }], 제시문);
+    assert.deepEqual(r.연결[0].단락, []);
+    assert.deepEqual(r.사족, [{ 소문항: '1-2', 급소: '국민투표' }]);
   });
 
-  it('③ 불완전 — 어느 논제 B노드와도 이어지지 않은 단락 급소', () => {
-    const r = align_passage([s12], [단락('다', '대응조치'), 단락('가', '빈부 격차')]);
-    assert.deepEqual(r.불완전, [{ 단락: '가', 단락급소: '빈부 격차' }]);
+  it('참조 범위 밖 단락의 급소는 연결이 아니다', () => {
+    const r = align_passage([{ 번호: '2-1', 참조: ['나', '다'], 인식: 인식('다수결를 설명하시오.') }], 제시문);
+    assert.deepEqual(r.사족, [{ 소문항: '2-1', 급소: '다수결' }]);
+    assert.deepEqual(r.소문항[0].연결.outOfScope, [0]);
   });
 
-  it('④ 사족 — 논제 노드와도 관련 실체와도 이어지지 않은 단락 노드', () => {
-    const d = 단락('나', '보호무역 정책', {
-      P: ['A국'],
-      B: ['보호무역 정책', '세계무역기구'],
-      D: ['실업률 상승'],
-      관련: [{ 소문항: '1-2', 실체: '실업률', 근거문장: '…실업률이 상승하였다' }],
-    });
-    const r = align_passage([s12], [d]);
-    // 「A국」: 논제 실체에 없음 / 「세계무역기구」: 없음 / 「실업률 상승」: 관련 실체 「실업률」을 품음 / 급소는 ④에서 뺀다
-    assert.deepEqual(r.사족, [
-      { 단락: '나', 실체: 'A국' },
-      { 단락: '나', 실체: '세계무역기구' },
-    ]);
+  it('소문항마다 따로 잇는다', () => {
+    const r = align_passage(
+      [
+        { 번호: '1-1', 참조: [], 인식: 인식('다수결를 설명하시오.') },
+        { 번호: '1-2', 참조: [], 인식: 인식('만장일치를 설명하시오.') },
+      ],
+      제시문,
+    );
+    assert.deepEqual(
+      r.연결.map((x) => [x.소문항, x.단락.map((d) => d.단락)]),
+      [
+        ['1-1', ['가']],
+        ['1-2', ['나']],
+      ],
+    );
+    assert.deepEqual(r.사족, []);
   });
 
-  it('④ 논제 노드 실체를 품으면 사족이 아니다 (Q는 열쇠가 아니다)', () => {
-    const d = 단락('다', '대응조치', { C: ['손실', '무엇'] });
-    const r = align_passage([s12], [d]);
-    assert.deepEqual(r.사족, [{ 단락: '다', 실체: '무엇' }]);
-  });
-
-  it('참조가 없는 소문항은 모든 단락과 잇는다', () => {
-    const s = 소문항('1-1', [], [b], b);
-    assert.equal(align_passage([s], [단락('마', '대응조치')]).타당.length, 1);
+  it('급소가 서지 않은 소문항은 사족을 가리지 않는다', () => {
+    const r = align_passage([{ 번호: null, 참조: [], 인식: 인식('설명하시오.') }], 제시문);
+    assert.deepEqual(r.연결, []);
+    assert.deepEqual(r.사족, []);
   });
 });

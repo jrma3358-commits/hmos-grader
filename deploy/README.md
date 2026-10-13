@@ -7,7 +7,7 @@
 
 ```
 ~/hmos/                     ← pm2 앱 hmos (cwd), 정적 서빙 폴더
-  server.js                 POST /analyze · /api/analyze · /api/generate · /api/passage · /api/leap · /api/refine · /api/propose
+  server.js                 POST /analyze · /api/analyze · /api/generate · /api/refine · /api/propose
   analyze-runner.mts        /analyze 러너 — 엔진(hmos-grader/)을 부르기만 한다
   hmos_dashboard.html       /dashboard
   hmos-grader/              엔진 사본 (이 폴더에는 없음)
@@ -31,18 +31,20 @@
 
 ## C·논술 9단계 (조립설명서 `~/hmos-spec/조립설명서.md`)
 
+HMOS 절대 원칙 (오종래 2026-10-13): 인식·제시문 급소 추출·연결 대조는 엔진이 한다. AI는 엔진이 잡은 결과를 문장으로 구성할 뿐, 엔진이 못 잡은 것을 채우지 않는다.
+
 | 단계 | 호출 | 담당 |
 |---|---|---|
-| 2 논제 인식 | `POST /analyze` `{파이프라인:'C', 논제, 제시문?}` → `단계.인식.소문항` | 엔진 (소문항마다, 공통 발문 분리) |
-| 3 제시문 분석 | `POST /api/passage` `{소문항, 제시문}` → `제시문분석` | Claude (조립설명서 3단계 원문) |
-| 4 ①③④ | `POST /analyze` 에 `제시문분석`을 실어 → `단계.정합` | 엔진 (`src/thesis/align.ts`) |
-| 4 ② 비약 | `POST /api/leap` `{소문항, 제시문, 정합}` | Claude (명세서-2 §3-5 원문) |
-| 5 정교화 | 진단 = `/analyze` 의 `단계.정교화.진단` [봉인⑬] · 정교화안 = `POST /api/refine` `{논제, 소문항, 진단, 제시문?}` | 엔진 진단 · Claude 정교화안 (명세서-2 §3 원문) → 러너로 재인식 |
-| 6 추가 논제 | `POST /api/propose` `{논제, 소문항, 제시문?, 제시문분석?, 정합?}` | Claude (명세서-2 §1·§4·§5 원문) |
+| 2 논제 인식 | `POST /analyze` `{파이프라인:'C', 논제, 제시문?}` → `단계.인식.소문항` | 엔진 (`src/thesis/split.ts` 소문항마다, 공통 발문 분리) |
+| 3·4 제시문 급소·연결·사족 | 같은 `/analyze` 응답 → `단계.정합` `{연결, 사족, 소문항}` | 엔진 (`connectPassage` 단락 급소 → `src/thesis/align.ts`) |
+| 5 정교화 | 진단 = `단계.정교화.진단` [봉인⑬] · 정교화안 = `POST /api/refine` `{논제, 소문항, 진단, 제시문?}` | 엔진 진단 · Claude 문장 (명세서-2 §3 원문) → 러너로 재인식 |
+| 6 추가 논제 | `POST /api/propose` `{논제, 소문항, 제시문?, 정합?}` | Claude 문장 (명세서-2 §1·§4·§5 원문), 엔진 연결 안에서만 |
 | 7 교사 확정 | 확정 논제마다 `POST /analyze` 로 재인식 | 교사 · 엔진 |
 | 8·9 루브릭·모범답안 | `POST /api/generate` | Claude (루브릭 구현명세 F2~F6) |
 
-- C는 1차 필터를 타지 않는다. 엔진의 표지 기반 제시문 연결은 `단계.제시문.소문항`에 대조용으로 남는다.
+- 사족 (오종래 2026-10-13) = 논제 급소가 제시문 어느 단락 급소와도 연결되지 않은 것 (단락 단위).
+- 연관성 강약 판정은 엔진 몫이다 — 아직 규칙이 없다.
+- C는 1차 필터를 타지 않는다.
 - ④사족은 정교화안을 만들지 않는다 (`/api/refine` 응답의 `사족`으로 그대로).
 - 명세 md는 부를 때 읽는다 — 없으면 그 라우트만 500.
 
