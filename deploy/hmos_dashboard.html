@@ -738,7 +738,7 @@
 
       <!-- 샘플 로드 -->
       <div class="card">
-        <div class="card-title">저장된 결과 불러오기</div>
+        <div class="card-title">샘플 문항 — 지금 엔진으로 다시 분석</div>
         <div class="type-selector">
           <button class="type-btn" onclick="loadSample('수능수학4')">수능 수학 4번 (객관식)</button>
           <button class="type-btn" onclick="loadSample('수능수학17')">수능 수학 17번 (주관식)</button>
@@ -752,24 +752,14 @@
     <div class="tab-pane" id="tab-1">
       <div class="section-header">
         <div class="section-title">인식 결과</div>
-        <div class="section-sub">5색 분해 · 급소 · 조합</div>
+        <div class="section-sub">엔진 — 핵심 · 서술 방식 · 조건 · 배경을 문장으로</div>
       </div>
 
       <div class="card">
-        <div class="card-title">문항 원문</div>
+        <div class="card-title"><span class="badge engine">엔진</span>문항 인식</div>
+        <div id="result-reading"></div>
         <div class="question-box" id="result-question">—</div>
-      </div>
-
-      <div class="pivot-box">
-        <div class="pivot-label">급소 K</div>
-        <div class="pivot-value" id="result-pivot">—</div>
-      </div>
-
-      <div class="card">
-        <div class="card-title">5색 조합</div>
-        <div class="combo-display" id="result-combo"></div>
-        <div class="card-title" style="margin-top: 8px;">노드 분해</div>
-        <div class="nodes-grid" id="result-nodes"></div>
+        <div id="result-raw"></div>
       </div>
 
       <div class="card">
@@ -1475,20 +1465,13 @@ function selectType(type, btn) {
 function loadSample(key) {
   // 사회논술은 저장된 결과 대신 9단계 입력으로 — 엔진을 다시 돌린다
   if (key === '논술') { fillCSample(); return; }
+  // A·B도 저장된 결과 대신 문항만 넣고 엔진을 다시 돌린다 — 지금 엔진 규칙(병렬 나열·C-F 뒤쪽 급소 등)이 그대로 보인다
   const data = SAMPLES[key];
   if (!data) return;
-  currentData = data;
   document.getElementById('question-input').value = data.문항원문;
-  renderAll(data);
-
-  // 타입 버튼 선택
-  document.querySelectorAll('.type-btn').forEach(b => {
-    if (b.textContent.trim().replace(' · ', '-') === data.파이프라인) b.click();
-    else if (data.파이프라인 === 'A-객관식' && b.textContent.includes('객관식')) b.click();
-    else if (data.파이프라인 === 'A-주관식' && b.textContent.includes('주관식')) b.click();
-    else if (data.파이프라인 === 'B-서술형' && b.textContent.includes('서술형')) b.click();
-    else if (data.파이프라인 === 'C-논술' && b.textContent.includes('논술')) b.click();
-  });
+  const btn = [...document.querySelectorAll('.type-btn')].find(b => b.getAttribute('onclick') === `selectType('${data.파이프라인}', this)`);
+  if (btn) selectType(data.파이프라인, btn);
+  return runAnalysis();
 }
 
 /** 제시문 칸 → [{id, 텍스트}] — [가]·<가>·(가) 단락 머리로 나눈다. 머리가 없으면 한 덩어리 */
@@ -1554,7 +1537,7 @@ function fromEngine(out, 원문, 파이프라인) {
     `엔진 타입 판정: ${s.타입 ? s.타입.type + (s.타입.subType ? ` (${s.타입.subType})` : '') : '—'}`,
     `엔진: ${out.엔진 ? `${out.엔진.commit}${out.엔진.수정된파일 ? ` (+수정 ${out.엔진.수정된파일}파일)` : ''}` : '—'} · 인식 입력: ${s.인식.입력}`,
     ...(전체.급소실패 ? [`급소 서지 않음 — ${전체.급소실패.flag}`] : []),
-    ...(s.인식.단위 || []).map((u, i) => `단위 ${i + 1}: ${u.조합.join('-')} · 급소 ${u.급소.map(p => p.실체).join(' / ') || '없음'}`),
+    ...(s.인식.단위 || []).map((u, i) => `단위 ${i + 1}: 핵심 ${u.급소.map(p => `「${p.실체.trim()}」`).join(' · ') || '서지 않음'}`),
   ];
 
   const 남은점 = [];
@@ -1569,7 +1552,7 @@ function fromEngine(out, 원문, 파이프라인) {
     문항원문: 원문,
     파이프라인,
     단계2: {
-      '5색조합': 전체.조합.join('-'),
+      인식: 전체,
       노드: 전체.노드,
       급소: 전체.급소.map(p => p.실체.trim()).join(' / ') || '(서지 않음)',
       한계,
@@ -1577,10 +1560,8 @@ function fromEngine(out, 원문, 파이프라인) {
     단계3: {
       평가: 평가.length ? `엔진 평가: ${평가.map(e => e.결론).join(' · ')}` : '엔진 평가 없음',
       ok: 통과,
-      근거: 평가.map(e => {
-        const c = e.정합;
-        return `급소「${e.급소.trim()}」 실체 ${e.실체 ? '✓' : '✗ 형식어'} · Q 연결 ${c.linked ? '✓' : '✗'} · P에만 있음 ${c.passageOnly ? '⚠' : '✓'} · 지시대상 ${c.deictic ? '⚠' : '✓'} → ${e.결론}`;
-      }).join('\n') || '—',
+      근거문장: 평가.map(평가문장),
+      원본: 전체.평가,
       남은점,
     },
     단계4: { 멈춤: 멈춤문(out.멈춘곳) || 멈춤문(s.루브릭) },
@@ -1648,46 +1629,11 @@ function renderAll(data) {
 
 function renderTab2(data) {
   document.getElementById('result-question').textContent = data.문항원문;
-
+  // 엔진 인식 → 실체 문장 (C 2단계와 같은 문장 틀). 5색 태그는 화면에 내지 않는다
   const d2 = data.단계2;
-  document.getElementById('result-pivot').textContent = d2.급소;
-
-  // 조합
-  const comboEl = document.getElementById('result-combo');
-  comboEl.innerHTML = '';
-  d2['5색조합'].split('-').forEach((c, i, arr) => {
-    const chip = document.createElement('span');
-    chip.className = 'combo-chip ' + c;
-    chip.textContent = c;
-    comboEl.appendChild(chip);
-    if (i < arr.length - 1) {
-      const arrow = document.createElement('span');
-      arrow.className = 'combo-arrow';
-      arrow.textContent = '→';
-      comboEl.appendChild(arrow);
-    }
-  });
-
-  // 노드
-  const nodesEl = document.getElementById('result-nodes');
-  nodesEl.innerHTML = '';
-  d2.노드.forEach(n => {
-    // C에서 접힌 B는 B 색 그대로, 태그만 「B(C↓)」
-    const colorKey = n.foldedFrom === 'C' ? 'B' : n.색.split(' ')[0];
-    const tag = n.foldedFrom === 'C' ? 'B(C↓)' : colorKey;
-    const 실체 = displayEntity(n.실체);
-    const 표지 = (n.표지 || '').trim();
-    const row = document.createElement('div');
-    row.className = 'node-row';
-    row.innerHTML = `
-      <span class="node-tag ${esc(colorKey)}">${esc(tag)}</span>
-      <div class="node-text">
-        <strong>${esc(n.id)}</strong> ${esc(실체)}
-        ${표지 && 표지 !== String(n.실체 ?? '').trim() ? `<span class="표지">${esc(표지)}</span>` : ''}
-      </div>
-    `;
-    nodesEl.appendChild(row);
-  });
+  const 인식 = d2.인식 || { 노드: d2.노드 || [], 급소: (d2.급소 || '').split(' / ').filter(Boolean).map(실체 => ({ 실체 })) };
+  document.getElementById('result-reading').innerHTML = 실체문장Html(인식, '문항');
+  document.getElementById('result-raw').innerHTML = 엔진원본Html(d2.인식 || d2);
 
   // 한계
   const limEl = document.getElementById('result-limits');
@@ -1709,7 +1655,12 @@ function renderTab3(data) {
   box.className = 'eval-result ' + (ok ? 'ok' : 'warn');
   document.getElementById('eval-icon').textContent = ok ? '✓' : '⚑';
   txt.textContent = d3.평가;
-  document.getElementById('eval-reason').textContent = d3.근거;
+  const reason = document.getElementById('eval-reason');
+  if (d3.근거문장) {
+    reason.innerHTML = (d3.근거문장.length ? `<div class="reading-box">${d3.근거문장.map(t => `<p>${t}</p>`).join('')}</div>` : '—') + 엔진원본Html(d3.원본);
+  } else {
+    reason.textContent = d3.근거;
+  }
 
   const notesEl = document.getElementById('eval-notes');
   notesEl.innerHTML = '';
@@ -1999,24 +1950,28 @@ const 으로로 = 글 => (String(글 ?? '').trim().slice(-1).charCodeAt(0) - 0xA
 
 /**
  * 엔진 노드 → 실체 문장 (오종래 2026-10-13). 5색 태그는 화면에 내지 않는다 — 분류는 엔진 안에서만.
- * 핵심 = 급소(Q 앞 B+C 덩어리 / 엔진 pivot) · 서술 방식 = C-F 노드 · 조건 = C 노드(C-F·B로 접힌 것 제외) · 배경 = P 노드
+ * 핵심 = 급소(Q 앞 B+C 덩어리 / 엔진 pivot) · 서술 방식 = C-F 노드
+ * 조건 = C 노드(C-F 제외) + 판단기준으로 접힌 C(foldedFrom C, 급소 노드 제외) · 배경 = P 노드. 같은 실체는 한 번만
  */
-function 실체문장Html(s) {
+function 실체문장Html(s, 대상 = '논제') {
   const 노드 = s.노드 || [];
   const 색 = n => String(n.색 || '').split(' ')[0];
+  const 하나씩 = 글들 => [...new Set(글들.filter(Boolean))];
   const 묶음 = 글들 => 글들.map(t => `「${esc(t)}」`).join(' · ');
-  const 서술 = 노드.filter(n => n.스위치 === 'C-F').map(n => {
+  const 급소노드 = new Set((s.급소 || []).map(k => k.노드).filter(Boolean));
+  const 서술 = 하나씩(노드.filter(n => n.스위치 === 'C-F').map(n => {
     const 실체 = displayEntity(n.실체), 표지 = (n.표지 || '').trim();
     return 표지 && !실체.endsWith(표지) ? 실체 + 표지 : 실체;
-  }).filter(Boolean);
-  const 조건 = 노드.filter(n => 색(n) === 'C' && n.스위치 !== 'C-F' && n.foldedFrom == null).map(n => displayEntity(n.실체)).filter(Boolean);
-  const 배경 = 노드.filter(n => 색(n) === 'P').map(n => displayEntity(n.실체)).filter(Boolean);
+  }));
+  const 조건 = 하나씩(노드.filter(n => n.스위치 !== 'C-F' && !급소노드.has(n.id)
+    && ((색(n) === 'C' && n.foldedFrom == null) || n.foldedFrom === 'C')).map(n => displayEntity(n.실체)));
+  const 배경 = 하나씩(노드.filter(n => 색(n) === 'P').map(n => displayEntity(n.실체)));
 
-  const 핵심 = (s.급소덩어리 && s.급소덩어리.length) ? s.급소덩어리.map(d => d.실체)
-    : (s.급소 && s.급소.length) ? s.급소.map(k => k.실체.trim()) : [];
+  const 핵심 = 하나씩((s.급소덩어리 && s.급소덩어리.length) ? s.급소덩어리.map(d => displayEntity(d.실체))
+    : (s.급소 && s.급소.length) ? s.급소.map(k => displayEntity(k.실체)) : []);
   const 줄 = [핵심.length
-    ? `이 논제의 핵심은 ${묶음(핵심)}입니다.`
-    : `엔진이 이 논제의 핵심을 세우지 못했습니다 (${esc((s.급소실패 && s.급소실패.flag) || '—')}).`];
+    ? `이 ${대상}의 핵심은 ${묶음(핵심)}입니다.`
+    : `엔진이 이 ${대상}의 핵심을 세우지 못했습니다 (${esc((s.급소실패 && s.급소실패.flag) || '—')}).`];
   if (서술.length) {
     const 끝 = 서술[서술.length - 1];
     줄.push(`${묶음(서술)}${/(으로|로)$/.test(끝) ? '' : ' 방식으로'} 서술할 것을 요구합니다.`);
@@ -2024,6 +1979,19 @@ function 실체문장Html(s) {
   if (조건.length) 줄.push(`${묶음(조건)} 조건 안에서 답해야 합니다.`);
   if (배경.length) 줄.push(`${묶음(배경)}${을를(배경[배경.length - 1])} 배경으로 합니다.`);
   return `<div class="reading-box">${줄.map(t => `<p>${t}</p>`).join('')}</div>`;
+}
+
+/** A·B 문제 평가(엔진 evaluate_pivot) 한 항목 → 문장. 판정은 엔진 결론 그대로 */
+function 평가문장(e) {
+  const 핵심 = displayEntity(e.급소);
+  const c = e.정합 || {};
+  return [
+    `핵심 「${esc(핵심)}」${조사(핵심, '은', '는')} ${e.실체 ? '실체를 가리킵니다' : '형식어라 실체를 가리키지 않습니다'}.`,
+    c.linked ? '묻는 말과 이어져 있습니다.' : '묻는 말과 이어져 있지 않습니다.',
+    c.passageOnly ? '제시문에만 나오는 말입니다 — 확인이 필요합니다.' : '',
+    c.deictic ? '지시어라 가리키는 대상을 확인해야 합니다.' : '',
+    `엔진 판정: ${esc(e.결론)}.`,
+  ].filter(Boolean).join(' ');
 }
 
 // ── 2단계 논제 인식 (엔진) ──
