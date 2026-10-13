@@ -41,6 +41,8 @@ export interface PathNode {
   passageOf?: string;
   /** 발문 P 고정으로 B에서 P가 된 노드 — 같은 실체를 처음 P로 잡은 발문 노드의 id. 아닌 노드에는 없다 */
   stemPinnedBy?: string;
+  /** 병렬 나열(apply.parallelChains)로 이 끝 노드에 흡수된 노드들 — 흡수 전 id·색·표지. 흡수가 없으면 없다 */
+  parallelOf?: { id: string; color: Color | null; surface: string }[];
 }
 
 export interface PathEdge {
@@ -795,6 +797,10 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
       prev.color = sw.color;
     }
 
+    // 단독 항목 [오종래 2026-10-13] — 「~경우에」처럼 앞말을 끄는 표지가 앞말을 못 찾았어도, 같은 스위치에 표층형 그대로의
+    //   어휘형 항목(「경우에」·「방식으로」)이 있으면 그 표층형이 실체로 선다 (앞말 없이도 C·C-F).
+    if (entity === '' && !isLexical(sw, hit.c.surface) && isLexical(sw, surface.trim())) entity = surface.trim();
+
     // 빈 노드 무시 [오종래 2026-09-30] — 끌고 나올 실체가 없는 표지(예: 어휘형 「(가)」 바로 뒤의 「의」)는
     //   노드를 세우지 않는다. 앞 간선은 다음 노드로 넘긴다.
     if (entity === '') {
@@ -852,6 +858,50 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
         break;
       }
     }
+  }
+
+  // 병렬 나열 [오종래 2026-10-13] — apply.parallelChains: 나열 고리(「~이고」「~이며」「~이거나」「~하고」「~며」「~거나」)로 이어진
+  //   노드 사슬 전체는 마지막에 붙는 기능표지 하나로 색이 정해진다 (「A이고 B인 것을」 → B, 「A이고 B인 경우에」 → C,
+  //   「A이고 B인 방식으로」 → C-F, 수학 「f'(x)=…이고 f(1)=6일 때」 → C). 사슬 안의 관형 표지(「~인」)는 끝 표지가 아니다.
+  //   사슬은 이웃 노드의 실체가 앞 표지 바로 뒤에서 시작할 때만 잇는다(쉼표 허용) — 연결어·문장 경계·떨어진 실체가 끼면 끊는다.
+  //   끝 노드가 id·표지·스위치·색을 지니고, 실체는 사슬 첫 실체부터 끝 표지 앞까지 원문 그대로다. 흡수된 노드는 parallelOf에 남긴다.
+  //   이 뒤의 자리 규칙·접기(Q→B)·결과 묶기는 합쳐진 끝 노드에 그대로 건다.
+  const parallel = table.apply.parallelChains;
+  if (parallel) {
+    const 맨 = (m: string) => m.replace(/~/g, '').replace(/s+/g, '');
+    const linkSet = new Set(parallel.links.map(맨));
+    const adnominalSet = new Set(parallel.adnominal.map(맨));
+    const touching = (a: PathNode, b: PathNode) =>
+      question.slice(a.index + a.surface.length, b.index).replace(/^[\s,]+/, '').trim() === b.entity.replace(/^[\s,]+/, '').trim();
+    const merged: PathNode[] = [];
+    for (let i = 0; i < nodes.length; i++) {
+      const first = nodes[i];
+      if (!linkSet.has(맨(first.surface)) || passageLabelAt.has(first.id)) { merged.push(first); continue; }
+      // 고리 → (고리 | 관형)* → 끝 노드
+      let j = i;
+      while (j + 1 < nodes.length && touching(nodes[j], nodes[j + 1]) && !passageLabelAt.has(nodes[j + 1].id)) {
+        j++;
+        const s = 맨(nodes[j].surface);
+        if (!linkSet.has(s) && !adnominalSet.has(s)) break;
+      }
+      if (j === i) { merged.push(first); continue; }
+      const last = nodes[j];
+      const absorbed = nodes.slice(i, j);
+      const ids = new Set(absorbed.map((x) => x.id));
+      merged.push({
+        ...last,
+        entity: (first.entity + question.slice(first.index, last.index)).trim(),
+        parallelOf: absorbed.map((x) => ({ id: x.id, color: x.color, surface: x.surface })),
+      });
+      // 사슬 안 간선은 버리고, 사슬로 들어오는 간선은 끝 노드로 옮긴다
+      for (let k = edges.length - 1; k >= 0; k--) {
+        const e = edges[k];
+        if (ids.has(e.from)) edges.splice(k, 1);
+        else if (ids.has(e.to)) edges[k] = { ...e, to: last.id };
+      }
+      i = j;
+    }
+    nodes.splice(0, nodes.length, ...merged);
   }
 
   // 빈칸 수렴 [오종래 2026-10-02] — 제시문 블록이 선 문항(「(가)에 대한 설명으로 옳은 것은?」)에서
