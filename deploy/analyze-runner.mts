@@ -47,7 +47,7 @@ function 인식of(a: any) {
   const pivots = a.pivot.ok ? (a.pivot.pivots ?? [a.pivot.pivot]) : [];
   return {
     조합: a.graph.combination,
-    노드: a.graph.nodes.map((n: any) => ({ id: n.id, 색: n.color, 실체: n.entity, 표지: n.surface ?? '', ...(n.foldedFrom != null ? { foldedFrom: n.foldedFrom } : {}) })),
+    노드: a.graph.nodes.map((n: any) => ({ id: n.id, 색: n.color, 실체: n.entity, 표지: n.surface ?? '', 스위치: n.switchId, ...(n.foldedFrom != null ? { foldedFrom: n.foldedFrom } : {}) })),
     급소: pivots.map((p: any) => ({ 노드: p.node.id, 색: p.node.color, 실체: p.node.entity, keyword: p.keyword ?? '', reason: p.reason })),
     급소실패: a.pivot.ok ? null : { flag: a.pivot.flag },
     평가: ev.ok

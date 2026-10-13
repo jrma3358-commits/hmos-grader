@@ -23,6 +23,11 @@
     --warn: #B07A00;
     --radius: 6px;
     --font: 'Noto Sans KR', 'Apple SD Gothic Neo', sans-serif;
+    /* C·논술 9단계 — 출제도구(1~6) 초록 · 채점도구(7~9) 파랑 */
+    --tool-make: #2A7A4B;
+    --tool-make-light: #E8F5EE;
+    --tool-grade: #2B5BA8;
+    --tool-grade-light: #EEF2FA;
   }
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -530,6 +535,55 @@
   .match-label { font-weight: 600; width: 80px; flex-shrink: 0; }
   .match-text { color: var(--text-sub); flex: 1; }
 
+  /* C·논술 9단계 */
+  .tool-group { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
+  .tool-label {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 4px;
+    letter-spacing: 0.04em;
+  }
+  .tool-make .tool-label { color: var(--tool-make); background: var(--tool-make-light); }
+  .tool-grade .tool-label { color: var(--tool-grade); background: var(--tool-grade-light); }
+  .tool-make .nav-item.active { background: var(--tool-make-light); color: var(--tool-make); }
+  .tool-make .nav-item.active .nav-num { background: var(--tool-make); }
+  .tool-grade .nav-item.active { background: var(--tool-grade-light); color: var(--tool-grade); }
+  .tool-grade .nav-item.active .nav-num { background: var(--tool-grade); }
+  .tool-tag { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 4px; margin-right: 8px; vertical-align: 2px; }
+  .tool-tag.make { color: var(--tool-make); background: var(--tool-make-light); }
+  .tool-tag.grade { color: var(--tool-grade); background: var(--tool-grade-light); }
+
+  .badge {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 10px;
+    margin: 0 6px 4px 0;
+    white-space: nowrap;
+    text-transform: none;
+    letter-spacing: 0;
+  }
+  .badge.ok { background: #E8F5EE; color: var(--ok); }
+  .badge.warn { background: #FEF9E7; color: var(--warn); border: 1px solid #F0D060; }
+  .badge.muted { background: var(--bg); color: var(--text-sub); border: 1px solid var(--border); }
+  .badge.engine { background: var(--text); color: #fff; }
+  .badge.ai { background: #F1EBFA; color: var(--P); }
+
+  .c-nav { display: flex; justify-content: space-between; gap: 8px; margin-top: 8px; }
+  .c-empty { color: var(--text-sub); font-size: 13px; text-align: center; padding: 24px; }
+  .c-meta { font-size: 12px; color: var(--text-sub); margin-bottom: 10px; }
+  .c-row { padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .c-row:last-child { border-bottom: none; }
+  .c-cand { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 12px; }
+  .c-cand input[type="checkbox"] { margin-top: 4px; width: 16px; height: 16px; accent-color: var(--tool-grade); flex-shrink: 0; }
+  .c-cand .input-area { min-height: 72px; }
+  .c-table-wrap { overflow-x: auto; }
+  .chip-list { display: flex; flex-wrap: wrap; gap: 4px 0; margin-top: 6px; }
+  details.c-text summary { cursor: pointer; font-size: 12px; color: var(--text-sub); }
+  details.c-text div { font-size: 13px; line-height: 1.7; margin-top: 6px; white-space: pre-wrap; }
+
   /* 반응형 */
   @media (max-width: 768px) {
     .layout { grid-template-columns: 1fr; }
@@ -551,6 +605,26 @@
   <aside class="sidebar">
     <div class="sidebar-label">분석 단계</div>
 
+    <!-- C·논술 9단계 (조립설명서) — C를 고르면 A·B 탭 대신 보인다 -->
+    <div id="nav-c" style="display:none;">
+      <div class="tool-group tool-make">
+        <div class="tool-label">출제도구 · 1~6</div>
+        <button class="nav-item" data-step="1" onclick="showCStep(1)"><div class="nav-num">1</div>문항 입력</button>
+        <button class="nav-item" data-step="2" onclick="showCStep(2)"><div class="nav-num">2</div>논제 인식</button>
+        <button class="nav-item" data-step="3" onclick="showCStep(3)"><div class="nav-num">3</div>제시문 분석</button>
+        <button class="nav-item" data-step="4" onclick="showCStep(4)"><div class="nav-num">4</div>연결 평가 (4축)</button>
+        <button class="nav-item" data-step="5" onclick="showCStep(5)"><div class="nav-num">5</div>논제 정교화</button>
+        <button class="nav-item" data-step="6" onclick="showCStep(6)"><div class="nav-num">6</div>추가 논제</button>
+      </div>
+      <div class="tool-group tool-grade">
+        <div class="tool-label">채점도구 · 7~9</div>
+        <button class="nav-item" data-step="7" onclick="showCStep(7)"><div class="nav-num">7</div>교사 확정</button>
+        <button class="nav-item" data-step="8" onclick="showCStep(8)"><div class="nav-num">8</div>루브릭</button>
+        <button class="nav-item" data-step="9" onclick="showCStep(9)"><div class="nav-num">9</div>모범답안</button>
+      </div>
+    </div>
+
+    <div id="nav-ab">
     <button class="nav-item active" onclick="showTab(0, this)">
       <div class="nav-num">1</div>
       문항 입력
@@ -575,6 +649,7 @@
       <div class="nav-num">6</div>
       교사 확정
     </button>
+    </div>
 
     <div class="pipeline-badge">
       <strong id="pipeline-display">— 파이프라인 미선택</strong>
@@ -593,8 +668,10 @@
       </div>
 
       <div class="card">
+        <div id="question-block">
         <div class="card-title">문항 원문</div>
         <textarea class="input-area" id="question-input" placeholder="문항 원문을 붙여넣으세요.&#10;예) 4. 함수 f(x) = ... 가 실수 전체에서 연속일 때, 상수 a의 값은? [3점]"></textarea>
+        </div>
 
         <div style="margin-top: 16px;">
           <div class="card-title">파이프라인 선택</div>
@@ -612,6 +689,9 @@
           <textarea class="input-area" id="thesis-input" style="min-height: 90px;" placeholder="논제만 붙여넣으세요.&#10;예) [문항 1] 제시문 [가], [나], [다]를 참고하여 …&#10;(1-1) …설명하시오."></textarea>
           <div class="card-title" style="margin-top: 12px;">제시문</div>
           <textarea class="input-area" id="passage-input" placeholder="제시문을 [가] [나] … 라벨과 함께 붙여넣으세요.&#10;[가] …&#10;[나] …"></textarea>
+          <div class="type-selector">
+            <button class="type-btn" onclick="fillCSample()">사회논술 샘플 넣기</button>
+          </div>
         </div>
 
         <button class="run-btn" id="run-btn" onclick="runAnalysis()">분석 시작</button>
@@ -785,6 +865,9 @@
         ✓ 확정 완료
       </div>
     </div>
+
+    <!-- C·논술 9단계 2~9 화면 (1단계는 탭 1 문항 입력) — buildCPanes()가 채운다 -->
+    <div id="c-panes"></div>
 
   </main>
 </div>
@@ -1329,7 +1412,7 @@ function esc(s) {
 
 function showTab(idx, btn) {
   document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('#nav-ab .nav-item').forEach(b => b.classList.remove('active'));
   document.getElementById('tab-' + idx).classList.add('active');
   btn.classList.add('active');
 }
@@ -1340,10 +1423,19 @@ function selectType(type, btn) {
   document.getElementById('pipeline-display').textContent = '파이프라인 ' + type;
   document.getElementById('type-display').textContent = type;
   selectedType = type;
-  document.getElementById('essay-inputs').style.display = type === 'C-논술' ? 'block' : 'none';
+  // C·논술은 논제·제시문만 받고 9단계 메뉴로 바뀐다. A·B는 문항 원문 + 6탭
+  const isC = type === 'C-논술';
+  document.getElementById('essay-inputs').style.display = isC ? 'block' : 'none';
+  document.getElementById('question-block').style.display = isC ? 'none' : 'block';
+  document.getElementById('nav-c').style.display = isC ? '' : 'none';
+  document.getElementById('nav-ab').style.display = isC ? 'none' : '';
+  if (isC) showCStep(1);
+  else showTab(0, document.querySelector('#nav-ab .nav-item'));
 }
 
 function loadSample(key) {
+  // 사회논술은 저장된 결과 대신 9단계 입력으로 — 엔진을 다시 돌린다
+  if (key === '논술') { fillCSample(); return; }
   const data = SAMPLES[key];
   if (!data) return;
   currentData = data;
@@ -1371,6 +1463,7 @@ function splitPassages(text) {
 }
 
 async function runAnalysis() {
+  if (selectedType === 'C-논술') return runC();
   const q = document.getElementById('question-input').value.trim();
   if (!q) { alert('문항 원문을 입력하세요.'); return; }
   if (!selectedType) { alert('파이프라인을 선택하세요.'); return; }
@@ -1739,6 +1832,433 @@ function confirmResult() {
   if (!name) { alert('확정자 이름을 입력하세요.'); return; }
   document.getElementById('confirm-btn').style.display = 'none';
   document.getElementById('confirm-done').style.display = 'block';
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// C·논술 9단계 (조립설명서 ~/hmos-spec/조립설명서.md)
+// HMOS 절대 원칙 (오종래 2026-10-13): 인식·제시문 급소 추출·연결 대조는 엔진(/analyze)이 한다.
+// Claude는 엔진이 잡은 결과를 문장으로 구성할 뿐이다 (정교화안 /api/refine · 추가 논제 /api/propose · 루브릭 /api/generate).
+// 엔진 규칙이 비어 있는 자리는 비어 있다고 보이고, AI로 채우지 않는다.
+// ════════════════════════════════════════════════════════════════════════
+
+const C = { 논제: '', 제시문: [], 분석: null, 정교화: null, 추가: null, 후보: [], 확정: [] };
+
+const C화면 = {
+  2: { 제목: '논제 인식', 도구: 'make', 설명: '엔진 — 소문항마다 5색 · 급소 · C-F. 공통 발문은 떼어 내고 인식합니다' },
+  3: { 제목: '제시문 분석', 도구: 'make', 설명: '엔진 — 단락마다 5색, 논제 급소와 닿는 단락 급소' },
+  4: { 제목: '연결 평가 (4축)', 도구: 'make', 설명: '엔진 — 논제 급소 ↔ 제시문 단락 급소 대조' },
+  5: { 제목: '논제 정교화', 도구: 'make', 설명: '엔진 진단 [봉인⑬] 4갈래 · 정교화안 문장은 Claude가 엔진 진단에서' },
+  6: { 제목: '추가 논제', 도구: 'make', 설명: 'F_인문사회 6유형 — 엔진이 잡은 연결 안에서 Claude가 문장으로' },
+  7: { 제목: '교사 확정', 도구: 'grade', 설명: '논제를 선택·수정·확정합니다 — 확정 논제는 엔진이 다시 인식합니다' },
+  8: { 제목: '루브릭', 도구: 'grade', 설명: '확정 논제 급소(엔진)에서 채점 축 · C-F가 있으면 서술 방향 축' },
+  9: { 제목: '모범답안', 도구: 'grade', 설명: '조각을 파트 순서로 전개 · 급소 포함 역검증(GJ)' },
+};
+
+function buildCPanes() {
+  const box = document.getElementById('c-panes');
+  box.innerHTML = Object.entries(C화면).map(([n, s]) => `
+    <div class="tab-pane" id="c-${n}">
+      <div class="section-header">
+        <div class="section-title"><span class="tool-tag ${s.도구}">${s.도구 === 'make' ? '출제도구' : '채점도구'}</span>${n} · ${s.제목}</div>
+        <div class="section-sub">${s.설명}</div>
+      </div>
+      <div id="c${n}-body"><div class="card c-empty">1단계에서 분석을 시작하면 표시됩니다</div></div>
+      <div class="c-nav">
+        <button class="type-btn" onclick="showCStep(${+n - 1})">← 이전</button>
+        ${+n < 9 ? `<button class="type-btn" onclick="showCStep(${+n + 1})">다음 →</button>` : ''}
+      </div>
+    </div>`).join('');
+}
+buildCPanes();
+
+function showCStep(n) {
+  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+  document.getElementById(n === 1 ? 'tab-0' : 'c-' + n).classList.add('active');
+  document.querySelectorAll('#nav-c .nav-item').forEach(b => b.classList.toggle('active', +b.dataset.step === n));
+  document.querySelector('.main').scrollTop = 0;
+}
+
+function markCDone(...steps) {
+  steps.forEach(n => document.querySelector(`#nav-c .nav-item[data-step="${n}"]`).classList.add('done'));
+}
+
+function resetCDone() {
+  document.querySelectorAll('#nav-c .nav-item').forEach(b => b.classList.remove('done'));
+}
+
+/** 1단계 — 사회논술 샘플을 논제·제시문 칸에 나눠 넣는다 */
+function fillCSample() {
+  const 원문 = SAMPLES['논술'].문항원문;
+  const 제시문끝 = 원문.indexOf('<주의사항');
+  document.getElementById('thesis-input').value = 원문.slice(원문.indexOf('[문항 1]')).trim();
+  document.getElementById('passage-input').value = 원문.slice(원문.indexOf('\n[가]') + 1, 제시문끝 > 0 ? 제시문끝 : undefined).trim().replace(/\n(?=\[[가-하]\])/g, '\n\n');
+  if (selectedType !== 'C-논술') {
+    const btn = [...document.querySelectorAll('.type-btn')].find(b => b.textContent.includes('논술') && b.getAttribute('onclick')?.startsWith('selectType'));
+    if (btn) btn.click();
+  }
+}
+
+// ── 공통 조각 ──
+const 소문항이름 = s => (s && s.번호 ? `(${s.번호})` : '논제');
+const 단위이름 = u => (u ? `(${u})` : '논제');
+const 엔진배지 = '<span class="badge engine">엔진</span>';
+const AI배지 = '<span class="badge ai">Claude 문장</span>';
+
+function comboHtml(조합) {
+  return (조합 || []).map(c => `<span class="combo-chip ${esc(c)}">${esc(c)}</span>`).join('<span class="combo-arrow">→</span>');
+}
+
+function nodesHtml(노드) {
+  return (노드 || []).map(n => {
+    const colorKey = n.foldedFrom === 'C' ? 'B' : String(n.색 || '').split(' ')[0];
+    const tag = n.foldedFrom === 'C' ? 'B(C↓)' : colorKey || '?';
+    const 표지 = (n.표지 || '').trim();
+    return `<div class="node-row">
+      <span class="node-tag ${esc(colorKey)}">${esc(tag)}</span>
+      <div class="node-text"><strong>${esc(n.id)}</strong> ${esc(displayEntity(n.실체))}
+        ${표지 && 표지 !== String(n.실체 ?? '').trim() ? `<span class="표지">${esc(표지)}</span>` : ''}
+        ${n.스위치 === 'C-F' ? '<span class="badge muted" style="margin-left:6px;">C-F 서술형태</span>' : ''}
+      </div></div>`;
+  }).join('');
+}
+
+/** 급소 — 엔진 값 그대로. 서지 않았으면 그 사유 */
+function 급소글(s) {
+  if (s.급소 && s.급소.length) return s.급소.map(k => `「${esc(k.실체.trim())}」`).join(' · ');
+  return `서지 않음 (${esc((s.급소실패 && s.급소실패.flag) || '—')})`;
+}
+
+async function postJSON(url, body) {
+  const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const out = await res.json().catch(() => ({ error: `응답을 읽지 못함 (${res.status})` }));
+  return { status: res.status, out };
+}
+
+async function withBusy(btn, 글, fn) {
+  const 원래 = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 글;
+  try { return await fn(); }
+  catch (e) { alert('서버 연결 실패: ' + e.message); }
+  finally { btn.disabled = false; btn.textContent = 원래; }
+}
+
+// ── 1단계 → 엔진 ──
+async function runC() {
+  const 논제 = document.getElementById('thesis-input').value.trim();
+  if (!논제) { alert('논제를 입력하세요.'); return; }
+  const 제시문 = splitPassages(document.getElementById('passage-input').value);
+  await withBusy(document.getElementById('run-btn'), '엔진 분석 중…', async () => {
+    const { out } = await postJSON('/analyze', { 파이프라인: 'C', 논제, ...(제시문.length ? { 제시문 } : {}) });
+    if (!out.ok) { alert('분석 실패: ' + ((out.error && out.error.사유) || '알 수 없음')); return; }
+    Object.assign(C, { 논제, 제시문, 분석: out, 정교화: null, 추가: null, 후보: [], 확정: [] });
+    resetCDone();
+    renderC2(); renderC3(); renderC4(); renderC5(); renderC6(); renderC7(); renderC8(); renderC9();
+    markCDone(1, 2, 5);
+    if (제시문.length) markCDone(3, 4);
+    showCStep(2);
+  });
+}
+
+// ── 2단계 논제 인식 (엔진) ──
+function renderC2() {
+  const 인식 = C.분석.단계.인식;
+  document.getElementById('c2-body').innerHTML = 인식.소문항.map(s => `
+    <div class="card">
+      <div class="card-title">${엔진배지}소문항 ${esc(소문항이름(s))}</div>
+      <div class="question-box">${esc(s.텍스트)}</div>
+      ${s.공통발문 ? `<div class="c-meta">공통 발문 — 인식에서 뗌: ${esc(s.공통발문)}</div>` : ''}
+      <div class="c-meta">참조 제시문: ${s.참조.length ? s.참조.map(l => `[${esc(l)}]`).join(' ') : '전체'}</div>
+      <div class="pivot-box"><div class="pivot-label">급소 K</div><div class="pivot-value">${급소글(s)}</div></div>
+      <div class="combo-display">${comboHtml(s.조합)}</div>
+      <div class="nodes-grid">${nodesHtml(s.노드)}</div>
+    </div>`).join('');
+}
+
+// ── 3단계 제시문 분석 (엔진) ──
+function renderC3() {
+  const body = document.getElementById('c3-body');
+  const 제 = C.분석.단계.제시문;
+  if (!C.제시문.length) { body.innerHTML = '<div class="card c-empty">제시문이 없습니다 — 1단계에 제시문을 넣으면 엔진이 단락 급소를 잡습니다</div>'; return; }
+  if (!제 || 제.사유) {
+    body.innerHTML = `<div class="card"><div class="flag-box">엔진이 제시문에서 멈춤 — ${esc((제 && 제.사유) || (C.분석.멈춘곳 && C.분석.멈춘곳.사유) || '알 수 없음')}</div></div>`;
+    return;
+  }
+  const 연결 = C.분석.단계.정합.연결;
+  const 단락카드 = 제.단락.map(p => {
+    const 이은 = 연결.flatMap(x => x.단락.filter(d => d.단락 === p.label).map(d => ({ ...d, 소문항: x.소문항, 급소: x.급소 })));
+    const 색 = ['P', 'B', 'D', 'C'].map(c => (p.색 && p.색[c] && p.색[c].length)
+      ? `<div class="chip-list"><span class="node-tag ${c}" style="margin-right:6px;">${c}</span>${p.색[c].map(e => `<span class="badge muted">${esc(displayEntity(e))}</span>`).join('')}</div>` : '').join('');
+    return `<div class="card">
+      <div class="card-title">${엔진배지}제시문 [${esc(p.label || '—')}]</div>
+      <details class="c-text"><summary>원문 보기</summary><div>${esc(p.텍스트)}</div></details>
+      ${색}
+      <div style="margin-top:12px;">${이은.length
+        ? 이은.map(d => `<div class="c-row"><span class="badge ok">단락 급소</span>「${esc(d.단락급소)}」 (${esc(d.자리)}) ← ${esc(단위이름(d.소문항))} 논제 급소「${esc(d.급소)}」</div>`).join('')
+        : '<div class="c-row"><span class="badge muted">단락 급소 없음</span>어느 논제 급소와도 닿는 B가 서두·말미에 없음</div>'}</div>
+    </div>`;
+  }).join('');
+  const 전체 = 제.전체급소 ? `「${esc(제.전체급소.실체)}」` : `서지 않음 (${esc(제.flag || '—')})`;
+  body.innerHTML = `<div class="card"><div class="card-title">${엔진배지}제시문 전체 급소</div><div style="font-size:14px;">${전체}</div></div>` + 단락카드;
+}
+
+// ── 4단계 연결 평가 4축 (엔진) ──
+function renderC4() {
+  const body = document.getElementById('c4-body');
+  if (!C.제시문.length || !C.분석.단계.정합) { body.innerHTML = '<div class="card c-empty">제시문이 없어 연결을 평가하지 않았습니다</div>'; return; }
+  const { 연결 } = C.분석.단계.정합;
+  const rows = 연결.map(x => `<tr>
+    <td><strong>${esc(단위이름(x.소문항))}</strong></td>
+    <td>「${esc(x.급소)}」</td>
+    <td>${x.단락.length ? x.단락.map(d => `<span class="badge ok">[${esc(d.단락)}] ${esc(d.단락급소)}</span>`).join('') : '—'}</td>
+    <td><span class="badge muted">[봉인] 규칙 비어 있음</span></td>
+    <td><span class="badge muted">엔진 규칙 미구현</span></td>
+    <td>${x.단락.length ? '—' : '<span class="badge warn">사족 — 제시문에 근거 없음</span>'}</td>
+  </tr>`).join('');
+  body.innerHTML = `
+    <div class="card">
+      <div class="card-title">${엔진배지}논제 급소 ↔ 제시문 단락 급소</div>
+      <div class="c-table-wrap"><table class="rubric-table">
+        <thead><tr><th>소문항</th><th>논제 급소</th><th>① 타당 — 연결선</th><th>② 비약 (강약)</th><th>③ 불완전</th><th>④ 사족</th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="6" class="c-empty">급소가 선 소문항이 없습니다</td></tr>'}</tbody>
+      </table></div>
+    </div>
+    <div class="card">
+      <div class="card-title">판정 기준</div>
+      <div class="note-list">
+        <div class="note-item">① 타당 — 논제 급소를 열쇠로 엔진이 세운 단락 급소가 있다</div>
+        <div class="note-item">② 비약(연관성 강약) — 엔진 판정 규칙이 비어 있다. AI로 채우지 않는다</div>
+        <div class="note-item">③ 불완전 — 제시문 급소 중 논제에 안 온 것. 지금 엔진의 단락 급소는 논제 열쇠로만 서므로 규칙이 아직 없다</div>
+        <div class="note-item">④ 사족 — 논제가 요구하는 실체의 근거가 제시문에 없는 것: 논제 급소가 어느 단락 급소와도 연결되지 않음 (오종래 2026-10-13)</div>
+      </div>
+    </div>`;
+}
+
+// ── 5단계 논제 정교화 (엔진 진단 → Claude 문장) ──
+const 갈래번호 = { 일방흐름: '①', 서술복잡: '②', 급소불명확: '③', 사족: '④' };
+
+function renderC5() {
+  const 진단 = C.분석.단계.정교화.진단;
+  const 단위들 = [...new Set([...C.분석.단계.인식.소문항.map(s => s.번호), ...진단.map(d => d.단위)])];
+  const 진단카드 = 단위들.map(u => {
+    const ds = 진단.filter(d => d.단위 === u);
+    return `<div class="c-row"><strong>${esc(단위이름(u))}</strong> ${ds.length
+      ? ds.map(d => `<div style="margin-top:6px;"><span class="badge ${d.갈래 === '사족' ? 'warn' : 'muted'}">${갈래번호[d.갈래]} ${esc(d.갈래)}</span>${esc(d.근거)}</div>`).join('')
+      : ' <span class="badge ok">신호 없음</span>'}</div>`;
+  }).join('');
+  const 생성대상 = 진단.filter(d => d.갈래 !== '사족').length;
+  const 결과 = C.정교화 ? C.정교화.정교화.map(r => `
+    <div class="card">
+      <div class="card-title">${AI배지}${갈래번호[r.갈래]} ${esc(r.갈래)} · ${esc(단위이름(r.단위))}</div>
+      <div class="c-meta">원 급소(엔진): ${r.원급소.map(k => `「${esc(k)}」`).join(' · ') || '—'}</div>
+      <div class="question-box">${esc(r.논제)}</div>
+      <div class="c-row"><strong>바꾼 점</strong> ${esc(r.바꾼점)}</div>
+      <div class="c-row"><strong>근거</strong> ${esc(r.근거)}</div>
+      <div class="c-row">${엔진배지}<strong>재인식</strong> ${r.재인식.오류 ? esc(r.재인식.오류)
+        : r.재인식.소문항.map(s => `${esc(단위이름(s.번호))} 급소 ${s.급소.length ? s.급소.map(k => `「${esc(k)}」`).join(' · ') : `서지 않음 (${esc((s.급소실패 && s.급소실패.flag) || '—')})`}`).join(' / ')
+          + ` · 남은 진단 ${r.재인식.진단.filter(d => d.갈래 !== '사족').map(d => 갈래번호[d.갈래] + d.갈래).join(' ') || '없음'}`}</div>
+    </div>`).join('') : '';
+  document.getElementById('c5-body').innerHTML = `
+    <div class="card">
+      <div class="card-title">${엔진배지}정교화 진단 [봉인⑬]</div>
+      ${진단카드}
+    </div>
+    <div class="card">
+      <div class="card-title">정교화안</div>
+      <div class="c-meta">①②③ 진단마다 Claude가 정교화한 논제를 문장으로 씁니다 (명세서-2 §3). ④ 사족은 표시만 — 교사 확인.
+        정교화안은 엔진에 다시 넣어 급소를 확인합니다.</div>
+      ${생성대상 ? `<button class="type-btn" id="c5-btn" onclick="refineC()">정교화안 문장 생성 (${생성대상}건)</button>` : '<div class="c-meta">①②③ 진단이 없어 만들 정교화안이 없습니다</div>'}
+    </div>
+    ${결과}`;
+}
+
+async function refineC() {
+  await withBusy(document.getElementById('c5-btn'), '정교화안 생성 중… (약 1분)', async () => {
+    const 단계 = C.분석.단계;
+    const { out } = await postJSON('/api/refine', { 논제: C.논제, 소문항: 단계.인식.소문항, 진단: 단계.정교화.진단, ...(C.제시문.length ? { 제시문: C.제시문 } : {}) });
+    if (out.error) { alert('정교화안 생성 실패: ' + out.error); return; }
+    C.정교화 = out;
+    renderC5(); renderC7();
+  });
+}
+
+// ── 6단계 추가 논제 (엔진 연결 안에서 Claude 문장) ──
+function renderC6() {
+  const a = C.추가;
+  const 결과 = a ? `
+    <div class="card">
+      <div class="card-title">${AI배지}문항 분석</div>
+      <div class="c-row"><strong>급소(k)</strong> ${esc(a.문항분석.급소)}</div>
+      <div class="c-row"><strong>현재 측정 역량</strong> ${esc(a.문항분석.현재역량)}</div>
+      <div class="c-row"><strong>덮는 유형</strong> ${a.문항분석.덮는유형.map(t => `<span class="badge ok">${esc(t)}</span>`).join('') || '—'}</div>
+      <div class="c-row"><strong>빈 곳</strong> ${a.문항분석.빈곳.map(t => `<span class="badge warn">${esc(t)}</span>`).join('') || '—'}</div>
+    </div>
+    ${a.추가논제.map(p => `
+    <div class="card">
+      <div class="card-title">${AI배지}추가 논제 · ${esc(p.유형)}</div>
+      <div class="question-box">${esc(p.논제)}</div>
+      <div class="c-row"><strong>기존과 다른 점</strong> ${esc(p.기존과다른점)}</div>
+      <div class="c-row"><strong>새로 측정하는 것</strong> ${esc(p.새로측정하는것)}</div>
+      <div class="c-row"><strong>쓰는 제시문</strong> ${p.제시문.map(l => `[${esc(l)}]`).join(' ') || '—'}</div>
+    </div>`).join('')}` : '';
+  document.getElementById('c6-body').innerHTML = `
+    <div class="card">
+      <div class="card-title">추가 논제 생성</div>
+      <div class="c-meta">6유형 지도(비교·대비 / 공통원리 / 근거·주장 / 대안제시 / 선택·응용 / 인연·비판)에 대조해 빈 곳을 찾습니다.
+        엔진이 잡은 단락 급소 안에서만 짓고, 엔진이 사족으로 표시한 급소는 근거로 쓰지 않습니다 (명세서-2 §1·§4·§5).</div>
+      <button class="type-btn" id="c6-btn" onclick="proposeC()">추가 논제 문장 생성</button>
+    </div>
+    ${결과}`;
+}
+
+async function proposeC() {
+  await withBusy(document.getElementById('c6-btn'), '추가 논제 생성 중… (약 1분)', async () => {
+    const 단계 = C.분석.단계;
+    const { out } = await postJSON('/api/propose', {
+      논제: C.논제, 소문항: 단계.인식.소문항,
+      ...(C.제시문.length ? { 제시문: C.제시문 } : {}), ...(단계.정합 ? { 정합: 단계.정합 } : {}),
+    });
+    if (out.error) { alert('추가 논제 생성 실패: ' + out.error); return; }
+    C.추가 = out;
+    renderC6(); renderC7();
+  });
+}
+
+// ── 7단계 교사 확정 ──
+/** 후보 = 원 소문항 + 정교화안 + 추가 논제. 교사가 고친 글과 선택은 다시 그려도 남긴다 */
+function C후보목록() {
+  const 소문항 = C.분석.단계.인식.소문항;
+  const 머리 = s => (s && s.공통발문 ? s.공통발문 + '\n' : '') + (s && s.번호 ? `(${s.번호}) ` : '');
+  const 새 = [
+    ...소문항.map(s => ({ id: 'o:' + s.번호, 출처: `원 논제 ${소문항이름(s)}`, 텍스트: 머리(s) + s.텍스트 })),
+    ...(C.정교화 ? C.정교화.정교화.map((r, i) => {
+      const s = 소문항.find(x => x.번호 === r.단위);
+      return { id: 'r:' + i, 출처: `정교화 ${갈래번호[r.갈래]} ${r.갈래} · ${단위이름(r.단위)}`, 텍스트: 머리(s) + r.논제 };
+    }) : []),
+    ...(C.추가 ? C.추가.추가논제.map((p, i) => ({ id: 'a:' + i, 출처: `추가 논제 · ${p.유형}`, 텍스트: p.논제 })) : []),
+  ];
+  return 새.map(x => C.후보.find(y => y.id === x.id) || { ...x, 선택: false });
+}
+
+function renderC7() {
+  C.후보 = C후보목록();
+  const 확정 = C.확정.length ? `
+    <div class="card">
+      <div class="card-title">${엔진배지}확정 논제 — 엔진 재인식</div>
+      ${C.확정.map((x, i) => `<div class="c-row"><strong>${i + 1}. ${esc(x.출처)}</strong>
+        <div style="white-space:pre-wrap; margin:4px 0;">${esc(x.텍스트)}</div>
+        ${x.분석.단계.인식.소문항.map(s => `${esc(단위이름(s.번호))} 급소 ${급소글(s)}`).join(' / ')}
+        ${(x.분석.단계.정합 ? x.분석.단계.정합.사족 : []).map(s => `<span class="badge warn" style="margin-left:6px;">사족 ${esc(단위이름(s.소문항))} 「${esc(s.급소)}」</span>`).join('')}
+      </div>`).join('')}
+    </div>` : '';
+  document.getElementById('c7-body').innerHTML = `
+    <div class="card">
+      <div class="card-title">논제 선택 · 수정</div>
+      <div class="c-meta">확정할 논제를 고르고 필요하면 고쳐 쓰세요. 확정하면 엔진이 다시 인식해 8단계 급소로 씁니다.</div>
+      ${C.후보.map((x, i) => `
+        <div class="c-cand">
+          <input type="checkbox" ${x.선택 ? 'checked' : ''} onchange="C.후보[${i}].선택 = this.checked">
+          <div style="flex:1;">
+            <div class="c-meta" style="margin-bottom:4px;"><strong>${esc(x.출처)}</strong></div>
+            <textarea class="input-area" oninput="C.후보[${i}].텍스트 = this.value">${esc(x.텍스트)}</textarea>
+          </div>
+        </div>`).join('')}
+      <button class="confirm-btn" id="c7-btn" style="background: var(--tool-grade);" onclick="confirmC()">선택한 논제 확정 → 엔진 재인식</button>
+    </div>
+    ${확정}`;
+}
+
+async function confirmC() {
+  const 고른 = C.후보.filter(x => x.선택 && x.텍스트.trim());
+  if (!고른.length) { alert('확정할 논제를 고르세요.'); return; }
+  await withBusy(document.getElementById('c7-btn'), '엔진 재인식 중…', async () => {
+    const 결과 = [];
+    for (const x of 고른) {
+      const { out } = await postJSON('/analyze', { 파이프라인: 'C', 논제: x.텍스트.trim(), ...(C.제시문.length ? { 제시문: C.제시문 } : {}) });
+      if (!out.ok) { alert(`재인식 실패 (${x.출처}): ` + ((out.error && out.error.사유) || '알 수 없음')); return; }
+      결과.push({ 출처: x.출처, 텍스트: x.텍스트.trim(), 분석: out, 생성: null, 교사GJ: null });
+    }
+    C.확정 = 결과;
+    renderC7(); renderC8(); renderC9();
+    markCDone(7);
+  });
+}
+
+// ── 8단계 루브릭 (확정 논제 급소 → Claude 문장 · C-F 서술 방향 축은 엔진 노드) ──
+function renderC8() {
+  const body = document.getElementById('c8-body');
+  if (!C.확정.length) { body.innerHTML = '<div class="card c-empty">7단계에서 논제를 확정하면 표시됩니다</div>'; return; }
+  body.innerHTML = C.확정.map((x, i) => {
+    const 인식 = x.분석.단계.인식;
+    const 여럿 = 인식.소문항.length > 1;
+    const cf = 인식.소문항.flatMap(s => s.노드.filter(n => n.스위치 === 'C-F').map(n => ({ s, n })));
+    const g = x.생성;
+    const 축 = g ? g.단계4.축.map(r => `<tr><td>${esc(r.소문항)}</td><td><strong>${esc(r.이름)}</strong></td><td>${esc(r.배점)}</td><td>${esc(r.판정)}</td></tr>`).join('') : '';
+    const 방향 = cf.map(({ s, n }) => `<tr><td>서술 방향</td><td><strong>C-F「${esc((n.표지 || n.실체).trim())}」</strong></td><td>—</td><td>${esc(단위이름(s.번호))} 「${esc((n.표지 || n.실체).trim())}」의 방식으로 서술했는가 (엔진 C-F 노드)</td></tr>`).join('');
+    return `<div class="card">
+      <div class="card-title">${i + 1}. ${esc(x.출처)}</div>
+      <div class="question-box">${esc(x.텍스트)}</div>
+      <div class="c-row">${엔진배지}<strong>급소</strong> ${인식.소문항.map(s => `${esc(단위이름(s.번호))} ${급소글(s)}`).join(' / ')}</div>
+      <div class="c-row"><strong>C-F 서술 방향 축</strong> ${cf.length ? cf.map(({ n }) => `<span class="badge muted">「${esc((n.표지 || n.실체).trim())}」</span>`).join('') : '엔진이 잡은 C-F 노드 없음 — 서술 방향 축 없음'}</div>
+      ${여럿 ? '<div class="flag-box">소문항이 여럿입니다 — 루브릭은 논제 전체 인식으로 만듭니다. 소문항별 루브릭은 7단계에서 하나씩 확정하세요</div>' : ''}
+      <div style="margin:12px 0 8px; font-size:13px;">계열
+        <label style="margin-left: 8px;"><input type="radio" name="c-gy-${i}" value="수리"> 수리 (완전 일치)</label>
+        <label style="margin-left: 8px;"><input type="radio" name="c-gy-${i}" value="인문사회국어"> 인문사회국어 (급소 도달)</label>
+      </div>
+      <button class="type-btn" id="c8-btn-${i}" onclick="genC(${i})">루브릭 문장 생성</button>
+      ${g ? `<div class="c-table-wrap" style="margin-top:16px;"><table class="rubric-table">
+        <thead><tr><th>파트</th><th>축</th><th>배점</th><th>판정 (충족조건)</th></tr></thead>
+        <tbody>${축}${방향}</tbody></table></div>
+        <div class="note-list" style="margin-top:12px;">${g.단계4.공통정책.map(p => `<div class="note-item">${esc(p)}</div>`).join('')}</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+async function genC(i) {
+  const x = C.확정[i];
+  const 고른 = document.querySelector(`input[name="c-gy-${i}"]:checked`);
+  if (!고른) { alert('계열(수리·인문사회국어)을 고르세요.'); return; }
+  await withBusy(document.getElementById('c8-btn-' + i), '루브릭 생성 중… (약 1분)', async () => {
+    const 인식 = x.분석.단계.인식;
+    const { out } = await postJSON('/api/generate', {
+      문항원문: x.텍스트, 파이프라인: 'C', 계열: 고른.value, 논제: x.텍스트,
+      ...(C.제시문.length ? { 제시문: C.제시문 } : {}),
+      인식: 인식.소문항.length === 1 ? 인식.소문항[0] : 인식.전체,
+    });
+    if (out.error) { alert('루브릭 생성 실패: ' + out.error); return; }
+    x.생성 = out;
+    renderC8(); renderC9();
+    if (C.확정.every(y => y.생성)) markCDone(8);
+  });
+}
+
+// ── 9단계 모범답안 (조각 전개 · GJ는 봉인 → 판정불가는 교사 판정) ──
+function renderC9() {
+  const body = document.getElementById('c9-body');
+  const 있음 = C.확정.filter(x => x.생성);
+  if (!있음.length) { body.innerHTML = '<div class="card c-empty">8단계에서 루브릭을 만들면 표시됩니다</div>'; return; }
+  body.innerHTML = C.확정.map((x, i) => {
+    if (!x.생성) return '';
+    const d5 = x.생성.단계5;
+    const 조각 = d5.조각.map((s, k) => `
+      <div class="answer-step">
+        <div class="step-line"><div class="step-dot">${k + 1}</div>${k < d5.조각.length - 1 ? '<div class="step-connector"></div>' : ''}</div>
+        <div class="step-content"><div class="step-name">${esc(s.이름)}</div><div class="step-body">${esc(s.내용)}</div></div>
+      </div>`).join('');
+    const gj = x.교사GJ;
+    return `<div class="card">
+      <div class="card-title">${AI배지}${i + 1}. ${esc(x.출처)}</div>
+      <div class="answer-steps">${조각}</div>
+      <div class="c-row"><strong>이어 읽기</strong><div style="white-space:pre-wrap; margin-top:4px;">${esc(d5.조각.map(s => s.내용).join(' '))}</div></div>
+      <div class="c-row"><strong>급소 포함</strong> ${d5.인식대조.급소포함 ? '<span class="badge ok">급소가 글자로 들어 있음</span>' : `<span class="badge warn">${esc(d5.인식대조.플래그 || '급소 미포함')}</span>`}</div>
+      <div class="c-row"><strong>급소 역검증 (GJ)</strong> <span class="badge muted">[봉인⑤⑥] 비어 있음 — 교사 판정</span>
+        <button class="type-btn${gj === 'O' ? ' selected' : ''}" onclick="C.확정[${i}].교사GJ='O'; renderC9();">O 급소에 닿음</button>
+        <button class="type-btn${gj === 'X' ? ' selected' : ''}" onclick="C.확정[${i}].교사GJ='X'; renderC9();">X 닿지 않음</button>
+      </div>
+      ${d5.해설 ? `<div class="c-row"><strong>해설</strong><div style="white-space:pre-wrap; margin-top:4px;">${esc(d5.해설)}</div></div>` : ''}
+    </div>`;
+  }).join('');
+  if (C.확정.every(x => x.생성 && x.교사GJ)) markCDone(9);
 }
 </script>
 
