@@ -833,7 +833,7 @@
           <div class="card-title" style="margin-top: 12px;">제시문</div>
           <textarea class="input-area" id="passage-input" placeholder="제시문을 [가] [나] … 라벨과 함께 붙여넣으세요.&#10;[가] …&#10;[나] …"></textarea>
           <div class="type-selector">
-            <button class="type-btn" onclick="fillCSample()">사회논술 샘플 넣기</button>
+            <button class="type-btn" id="c-sample-btn" onclick="fillCSample()">사회논술 샘플 넣기</button>
           </div>
         </div>
 
@@ -1633,8 +1633,11 @@ function selectType(type, btn) {
   selectedType = type;
   // C·논술은 논제·제시문만 받고 9단계 메뉴로 바뀐다. A·B는 문항 원문 + 6탭
   const isC = type === 'C-논술';
-  document.getElementById('essay-inputs').style.display = isC ? 'block' : 'none';
-  document.getElementById('question-block').style.display = isC ? 'none' : 'block';
+  // 서술형 B도 C처럼 「논제」·「제시문」 두 칸 (오종래 2026-10-14 — 제시문 1개 + 논제 1개 기본)
+  const isB = !!type && type.startsWith('B');
+  document.getElementById('essay-inputs').style.display = isC || isB ? 'block' : 'none';
+  document.getElementById('question-block').style.display = isC || isB ? 'none' : 'block';
+  document.getElementById('c-sample-btn').style.display = isC ? '' : 'none';
   document.getElementById('nav-c').style.display = isC ? '' : 'none';
   document.getElementById('nav-ab').style.display = isC ? 'none' : '';
   // A(객관식·주관식)는 4 루브릭 · 5 모범답안을 사이드바에서 숨긴다 — B·C는 그대로 (오종래 2026-10-14)
@@ -1645,7 +1648,9 @@ function selectType(type, btn) {
   document.getElementById('reg-tool-tag').style.display = isC ? '' : 'none';
   document.getElementById('reg-sub').textContent = isC
     ? '논제와 제시문을 한 번에 넣으세요 — 등록하면 1단계에서 논제·제시문으로 나눈 결과를 확인합니다'
-    : '문항 원문을 넣으세요 — 등록하면 1단계 문항 입력으로 넘어갑니다';
+    : isB
+      ? '문항 원문을 넣으세요 — 등록하면 1단계에서 논제(발문 + 소문항)·제시문(대화·자료)으로 나눈 결과를 확인합니다'
+      : '문항 원문을 넣으세요 — 등록하면 1단계 문항 입력으로 넘어갑니다';
   document.getElementById('reg-title').textContent = isC ? '논제 + 제시문' : '문항 원문';
   document.getElementById('reg-input').dataset.placeholder = isC
     ? '논제와 제시문을 한꺼번에 붙여넣으세요. 순서는 상관없습니다.\n[가] …\n[나] …\n\n[문항 1] 제시문 [가], [나]를 참고하여 …\n(1-1) …설명하시오.'
@@ -1674,8 +1679,11 @@ function splitPassages(text) {
 
 async function runAnalysis() {
   if (selectedType === 'C-논술') return runC();
-  const q = document.getElementById('question-input').value.trim();
-  if (!q) { alert('문항 원문을 입력하세요.'); return; }
+  // 서술형 B — 논제 칸만 인식에 넣고(C처럼), 제시문 칸은 4 루브릭이 쓴다 (오종래 2026-10-14)
+  const isB = !!selectedType && selectedType.startsWith('B');
+  const B입력 = isB ? { 논제: document.getElementById('thesis-input').value.trim(), 제시문: document.getElementById('passage-input').value.trim() } : null;
+  const q = isB ? B입력.논제 : document.getElementById('question-input').value.trim();
+  if (!q) { alert(isB ? '논제를 입력하세요.' : '문항 원문을 입력하세요.'); return; }
   if (!selectedType) { alert('파이프라인을 선택하세요.'); return; }
 
   const body = { 문항원문: q, 파이프라인: selectedType.charAt(0) };
@@ -1704,8 +1712,9 @@ async function runAnalysis() {
     }
     currentData = fromEngine(out, q, selectedType);
     if (currentData.생성입력) Object.assign(currentData.생성입력, { 논제: body.논제, 제시문: body.제시문 });
+    if (B입력) currentData.B입력 = B입력;
     renderAll(currentData);
-    목록완료({ AB: currentData }, q);
+    목록완료({ AB: currentData }, B입력 ? [B입력.제시문, B입력.논제].filter(Boolean).join('\n\n') : q);
     showTab(1);
   } catch (e) {
     목록실패('서버 연결 실패: ' + e.message, q);
@@ -1748,6 +1757,8 @@ function fromEngine(out, 원문, 파이프라인) {
       노드: 전체.노드,
       급소: 전체.급소.map(p => p.실체.trim()).join(' / ') || '(서지 않음)',
       한계,
+      // 서술형 B 단계형 — 소문항(계단)마다 엔진 인식 (2026-10-14)
+      ...(s.인식.소문항 ? { 소문항: s.인식.소문항 } : {}),
     },
     단계3: {
       // 같은 결론은 한 번만 (「통과 · 통과」 → 「통과」). 결론이 갈리면 각각 보인다
@@ -1826,7 +1837,9 @@ function renderTab2(data) {
   // 엔진 인식 → 실체 문장 (C 2단계와 같은 문장 틀). 5색 태그는 화면에 내지 않는다
   const d2 = data.단계2;
   const 인식 = d2.인식 || { 노드: d2.노드 || [], 급소: (d2.급소 || '').split(' / ').filter(Boolean).map(실체 => ({ 실체 })) };
-  document.getElementById('result-reading').innerHTML = 실체문장Html(인식, '문항');
+  document.getElementById('result-reading').innerHTML = 실체문장Html(인식, '문항')
+    // 서술형 B 단계형 — 소문항(계단) 순서대로 인식 (2026-10-14)
+    + (d2.소문항 && d2.소문항.length ? d2.소문항.map(s => `<div class="c-row"><strong>${esc(단위이름(s.번호))}</strong> ${esc(s.텍스트)}${실체문장Html(s, '소문항')}</div>`).join('') : '');
   document.getElementById('result-raw').innerHTML = 엔진원본Html(d2.인식 || d2);
 
   // 한계
@@ -2382,10 +2395,36 @@ function splitRegistration(text) {
 }
 
 /** 분석 시작 → — A·B는 1단계 문항 원문 칸에 그대로. 파이프라인을 아직 안 골랐으면 1단계에서 고른다 */
+/**
+ * 서술형 B 한 칸 → {논제, 제시문} (오종래 2026-10-14 — 제시문 1개 + 논제 1개 기본).
+ * 논제 = 발문 첫 문단 + 소문항 「(1)」부터 끝, 제시문 = 그 사이 글(대화·자료). 「(1)」이 없으면 첫 문단이 논제, 나머지가 제시문
+ */
+function splitB(text) {
+  const t = text.replace(/\r\n?/g, '\n');
+  const 첫 = t.search(/(^|\n)[ \t]*\(1\)/);
+  const 앞 = 첫 < 0 ? t : t.slice(0, 첫);
+  const 문단 = 앞.split(/\n[ \t]*\n/).map(x => x.trim()).filter(Boolean);
+  const 발문 = 문단[0] || '';
+  return {
+    논제: (첫 < 0 ? 발문 : [발문, t.slice(첫).trim()].filter(Boolean).join('\n\n')).trim(),
+    제시문: 문단.slice(1).join('\n\n').trim(),
+  };
+}
+
 function registerReg() {
   if (selectedType === 'C-논술') return registerC();
   const 글 = regText().trim();
   if (!글) { alert('문항 원문을 넣으세요.'); return; }
+  if (selectedType && selectedType.startsWith('B')) {
+    const 나눔 = splitB(글);
+    document.getElementById('thesis-input').value = 나눔.논제;
+    document.getElementById('passage-input').value = 나눔.제시문;
+    document.getElementById('reg-notice').innerHTML = 나눔.제시문 ? '' : '<div class="flag-box" style="margin: 0 0 12px;">제시문(대화·자료)을 찾지 못했습니다 — 있으면 제시문 칸에 옮기세요.</div>';
+    renderRegFigs(글);
+    document.querySelector('#nav-ab .nav-item[data-tab="reg"]').classList.add('done');
+    showTab(0);
+    return;
+  }
   document.getElementById('question-input').value = 글;
   renderRegFigs(글);
   document.querySelector('#nav-ab .nav-item[data-tab="reg"]').classList.add('done');
@@ -2868,7 +2907,7 @@ function 루브릭소문항Html(s, i, j) {
       <td style="white-space:nowrap;">${파트번호[c.파트] || ''} ${esc(c.파트)}</td>
       <td>${esc(c.id)}${c.is_중심 ? ' <span class="badge ok">중심</span>' : ''}</td>
       <td style="white-space:nowrap;">${c.요소 ? esc(c.요소) : `<span class="c-meta">${esc(c.수행질 || '—')}</span>`}</td>
-      <td>「${esc(displayEntity(c.실체 ?? s.급소.실체))}」${c.근거 ? `<div class="c-meta" style="margin:4px 0 0;">근거 [${esc(c.근거.단락)}] ${esc(c.근거.문장)}</div>` : ''}${c.경로 ? `<div class="c-meta" style="margin:4px 0 0;">경로 ${경로글(c.경로)}</div>` : ''}${c.제시문 ? `<div class="c-meta" style="margin:4px 0 0;">제시문 [${esc(c.제시문.단락)}] 연결 단락 급소 — 제시문에서 실제 가져온 것</div>` : ''}</td>
+      <td>「${esc(displayEntity(c.실체 ?? s.급소.실체))}」${c.근거 ? `<div class="c-meta" style="margin:4px 0 0;">근거 [${esc(c.근거.단락)}] ${esc(c.근거.문장)}</div>` : ''}${c.경로 ? `<div class="c-meta" style="margin:4px 0 0;">경로 ${경로글(c.경로)}</div>` : ''}${c.제시문 ? `<div class="c-meta" style="margin:4px 0 0;">제시문 [${esc(c.제시문.단락)}] 연결 단락 급소 — 제시문에서 실제 가져온 것</div>` : ''}${c.앞결과 ? `<div class="c-meta" style="margin:4px 0 0;">앞 결과 — ${esc(단위이름(c.앞결과.번호))}의 급소를 이어받음</div>` : ''}</td>
       <td>${esc(c.확인물음)}</td>
       <td>${esc(c.충족조건)}</td>
       <td style="white-space:nowrap;">${배점글(c.배점)}</td>
@@ -2905,7 +2944,11 @@ function 루브릭소문항Html(s, i, j) {
 const 판정of = (rec, x) => rec.교사[x.조각id] ?? x.결과;
 
 /** 채점 집계 — 엔진 g1 grade와 같은 계산 (득점 = O 배점, 게이트 = 엔진 사슬 · 상한비, 소수 첫째 자리) */
-function 채점집계(rec) {
+/**
+ * 채점 집계 — 앞rec가 있으면 단계 게이트 (서술형 B 단계형, 오종래 2026-10-14):
+ * 같은 학생(이름)의 앞 소문항 ④ 답구하기가 X면 이 소문항 부분점수에 상한 (만점 × 엔진 상한비)
+ */
+function 채점집계(rec, 앞rec = null) {
   const 조각 = rec.엔진.조각별.map(x => ({ ...x, 판정: 판정of(rec, x) }));
   const 파트들 = ['근거대기', '세우기', '풀기', '답구하기'];
   const 합 = (xs, f) => xs.reduce((a, x) => a + f(x), 0);
@@ -2919,10 +2962,14 @@ function 채점집계(rec) {
     return [p, { 배점합: 파트배점[p], 원점수: 원, 상한: 상한[p] ?? null, 점수: 상한[p] != null ? Math.min(원, 상한[p]) : 원 }];
   }));
   const X = 조각.filter(x => x.판정 === 'X');
+  const 원부분 = Math.round(합(파트들, p => 파트별[p].점수) * 100) / 100;
+  const 만점 = Math.round(합(조각, x => x.배점) * 100) / 100;
+  const 앞X = !!앞rec && 앞rec.엔진.조각별.some(x => x.파트 === '답구하기' && 판정of(앞rec, x) === 'X');
+  const 단계상한 = 앞X ? Math.round(만점 * rec.엔진.게이트.상한비 * 10) / 10 : null;
   return {
-    조각, 파트별,
-    부분점수: Math.round(합(파트들, p => 파트별[p].점수) * 100) / 100,
-    만점: Math.round(합(조각, x => x.배점) * 100) / 100,
+    조각, 파트별, 단계상한,
+    부분점수: 단계상한 != null ? Math.min(원부분, 단계상한) : 원부분,
+    만점,
     무너진지점: 파트들.find(p => X.some(x => x.파트 === p)) ?? null,
     약점: X.map(x => `${x.파트}${x.요소 ? '·' + x.요소 : ''}`),
     판정불가: 조각.filter(x => x.판정 === '판정불가').map(x => x.조각id),
@@ -2930,7 +2977,9 @@ function 채점집계(rec) {
 }
 
 function 채점기록Html(rec, i, j, k) {
-  const a = 채점집계(rec);
+  // 서술형 B 단계형 — 같은 이름의 앞 소문항 채점 기록 (단계 게이트)
+  const 앞rec = i < 0 && j > 0 && rec.이름 ? ((루브릭홀더(i).루브릭.소문항[j - 1] || {}).채점목록 || []).find(r => r.이름 === rec.이름) || null : null;
+  const a = 채점집계(rec, 앞rec);
   const OX = (x, v) => `<button class="type-btn${판정of(rec, x) === v ? ' selected' : ''}" style="padding:2px 10px;" onclick="교사판정(${i}, ${j}, ${k}, '${esc(x.조각id)}', '${v}')">${v}</button>`;
   const 행 = a.조각.map(x => `<tr>
       <td style="white-space:nowrap;">${파트번호[x.파트] || ''} ${esc(x.파트)}</td>
@@ -2952,7 +3001,7 @@ function 채점기록Html(rec, i, j, k) {
       <thead><tr><th>파트</th><th>조각</th><th>엔진</th><th>판정 (교사 수정)</th><th>득점</th><th>판단 근거</th></tr></thead>
       <tbody>${행}</tbody></table></div>
     <div class="note-list" style="margin-top:8px;">
-      <div class="note-item"><strong>부분점수 ${배점글(a.부분점수)} / ${배점글(a.만점)}</strong> — ${파트줄}</div>
+      <div class="note-item"><strong>부분점수 ${배점글(a.부분점수)} / ${배점글(a.만점)}</strong> — ${파트줄}${a.단계상한 != null ? ` · <span class="badge warn">단계 상한 ${배점글(a.단계상한)} — 앞 소문항 답구하기 X</span>` : ''}</div>
       <div class="note-item">무너진 지점: ${a.무너진지점 ? esc(a.무너진지점) : '없음'} · 약점: ${a.약점.length ? a.약점.map(esc).join(', ') : '없음'}${a.판정불가.length ? ` · 교사 판정이 필요한 조각: ${a.판정불가.map(esc).join(', ')}` : ''}</div>
     </div>
     <div style="display:flex; gap:8px; margin-top:8px;">
@@ -3005,7 +3054,12 @@ async function genB() {
   if (data.B루브릭 && data.B루브릭.루브릭 && !confirm('다시 만들면 이 문항의 학생 채점과 모범답안이 지워집니다. 다시 만들까요?')) return;
   const 총 = (data.문항원문.match(/\[\s*총\s*(\d+(?:\.\d+)?)\s*점\s*\]/) || [])[1];
   await withBusy(document.getElementById('b-gen'), '엔진 조각 → 조각 문장 생성 중… (1~2분)', async () => {
-    const { out } = await postJSON('/api/rubric', { 논제: data.문항원문, 계열: '인문사회국어', 총배점: 총 ? Number(총) : 10, 공통자료: true });
+    // 제시문 칸이 있으면 그것(1단계 두 칸), 없으면 엔진이 공통발문에서 뽑는다 · 단계형 이어받기 (2026-10-14)
+    const 제시문 = data.B입력 && data.B입력.제시문;
+    const { out } = await postJSON('/api/rubric', {
+      논제: data.문항원문, 계열: '인문사회국어', 총배점: 총 ? Number(총) : 10, 이어받기: true,
+      ...(제시문 ? { 제시문: [{ id: '제시문', 텍스트: 제시문 }] } : { 공통자료: true }),
+    });
     if (out.error) { alert('루브릭 생성 실패: ' + out.error); return; }
     data.B루브릭 = { 출처: '서술형', 텍스트: data.문항원문, 루브릭: out };
     renderB4(); renderB5();
@@ -3198,9 +3252,16 @@ function renderC9() {
 /** 확정 논제 i의 소문항 j — 조각 문장을 Claude가 한 문단으로 잇는다 */
 async function 답안잇기(i, j) {
   const x = 루브릭홀더(i), s = x.루브릭.소문항[j];
+  // 서술형 B 단계형 — (n)은 (n-1) 모범답안(확정본이 있으면 확정본)을 이어받는다. 순서대로 잇는다 (오종래 2026-10-14)
+  let 앞답안 = null;
+  if (i < 0 && j > 0) {
+    const 앞 = x.루브릭.소문항[j - 1];
+    앞답안 = 앞 && 앞.답안 ? (앞.답안.확정 ? 앞.답안.확정.글 : 지금답안(앞)) : null;
+    if (앞 && 앞.조각 && !앞답안) { alert(`${단위이름(앞.번호)} 모범답안을 먼저 이으세요 — 단계형은 앞 결과를 이어받아 순서대로 잇습니다.`); return; }
+  }
   if (s.답안 && s.답안.교사 != null && !confirm('교사가 고친 글이 있습니다. 다시 이으면 고친 글이 사라집니다. 다시 이을까요?')) return;
   await withBusy(document.getElementById(`c9-btn-${i}-${j}`), '모범답안 잇는 중… (수십 초)', async () => {
-    const { out } = await postJSON('/api/answer', { 소문항: s, 논제: x.텍스트, 계열: x.루브릭.계열 });
+    const { out } = await postJSON('/api/answer', { 소문항: s, 논제: x.텍스트, 계열: x.루브릭.계열, ...(앞답안 ? { 앞답안 } : {}) });
     if (out.error) { alert('모범답안 잇기 실패: ' + out.error); return; }
     s.답안 = { 글: out.모범답안, 시도: out.시도, 교사: null, 확정: null };
     다시그림9(i);
@@ -3384,6 +3445,10 @@ function 문항열기(id) {
       목록.보이는결과 = r;
       currentData = r.AB;
       document.getElementById('question-input').value = r.AB.문항원문;
+      if (r.AB.B입력) { // 서술형 B 두 칸 되살리기
+        document.getElementById('thesis-input').value = r.AB.B입력.논제;
+        document.getElementById('passage-input').value = r.AB.B입력.제시문;
+      }
       renderRegFigs(m.원문);
       renderAll(currentData);
       document.querySelector('#nav-ab .nav-item[data-tab="reg"]').classList.add('done');

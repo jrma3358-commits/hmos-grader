@@ -336,3 +336,28 @@ describe('화자 지정 — 「~의 방법으로」', () => {
     assert.deepEqual(speaker_lines('수지의 방법으로 증명하시오.', 대화), []);
   });
 });
+
+// 단계형 이어받기 (오종래 2026-10-14) — (n)의 ① 근거대기에 (n-1)의 급소 K를 「앞 결과」 조각으로
+describe('단계형 — 앞 급소를 ① 「앞 결과」 조각으로', () => {
+  const 입력 = f2_input_from_v2(recognizeV2Analysis("영희의 방법으로 '0 ≤ x < π/2일 때 부등식 sinx ≥ xcosx가 성립한다.'를 증명하시오."));
+  assert.ok(입력.ok);
+  const 조각 = derive_pieces(입력.물음, 입력.k, { ...입력.인식, 앞급소: [{ 번호: '1', 실체: ', f(x) ≥ 0' }] }, '인문사회국어');
+  const 앞 = 조각.filter((c) => c.앞결과);
+
+  it('① 끝에 앞 결과 조각 하나 — 노드 없음 · 요소 b · 머리 쉼표 뗌', () => {
+    assert.equal(앞.length, 1);
+    assert.equal(앞[0].파트, '근거대기');
+    assert.deepEqual(앞[0].앞결과, { 번호: '1', 실체: 'f(x) ≥ 0' });
+    assert.equal(judge_element(앞[0], '인문사회국어'), 'b');
+  });
+
+  it('F4 · F6 {실체} = 앞 급소', () => {
+    assert.equal(specify_condition(앞[0], '인문사회국어'), '「f(x) ≥ 0」의 개념·근거를 서술했는가');
+    assert.equal(spread_piece(앞[0], 입력.k, '인문사회국어'), 'f(x) ≥ 0에 대하여 이해하고 있다.');
+  });
+
+  it('수리는 앞 급소를 받지 않는다', () => {
+    const 수리 = derive_pieces(입력.물음, 입력.k, { ...입력.인식, 앞급소: [{ 번호: '1', 실체: 'x' }] }, '수리');
+    assert.ok(!수리.some((c) => c.앞결과));
+  });
+});

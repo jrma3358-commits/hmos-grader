@@ -81,7 +81,7 @@ const 파트순서 = ['근거대기', '세우기', '풀기', '답구하기'];
  * 대시보드는 7단계에서 확정한 논제만 보낸다. 소문항 하나가 멈춰도 나머지는 낸다
  * 인문논술(계열 인문사회국어) ② 세우기 = 소문항 급소와 엔진이 연결한 제시문 단락(정합 연결)의 문장 수 — 3·4단계와 같은 정합을 다시 돌려 연결을 얻는다 (봉인②, 오종래 2026-10-14)
  */
-function 루브릭작업(논제글: string, 계열: string, 총배점: number, 제시문목록: { id: string; 텍스트: string }[] | null, 공통자료 = false) {
+function 루브릭작업(논제글: string, 계열: string, 총배점: number, 제시문목록: { id: string; 텍스트: string }[] | null, 공통자료 = false, 이어받기 = false) {
   const 소문항들 = split_thesis(논제글).map((s: any) => ({ ...s, a: fq.recognizeV2Analysis(s.텍스트) }));
   // 서술형 B (오종래 2026-10-14) — 제시문을 따로 받지 않는다. 소문항 공통발문의 첫 빈 줄 뒤 글(대화·자료)을 제시문으로 본다
   if (공통자료 && !제시문목록) {
@@ -117,7 +117,9 @@ function 루브릭작업(논제글: string, 계열: string, 총배점: number, �
       }
     }
   }
-  return 소문항들.map((s: any) => {
+  // 단계형 이어받기 (서술형 B, 오종래 2026-10-14) — (n)은 (n-1)의 급소 K를 ① 「앞 결과」 조각으로 받는다
+  const 급소들of = (s: any) => (s.a.pivot.ok ? (s.a.pivot.pivots ?? [s.a.pivot.pivot]).map((p: any) => ({ 번호: s.번호, 실체: p.node.entity })) : []);
+  return 소문항들.map((s: any, n: number) => {
     // 소문항 배점 — 소문항 글에 「[N점]」이 있으면 그 값, 없으면 요청 총배점 (2026-10-14)
     const 점 = String(s.텍스트).match(/\[\s*(\d+(?:\.\d+)?)\s*점\s*\]/);
     const 소배점 = 점 ? Number(점[1]) : 총배점;
@@ -136,15 +138,16 @@ function 루브릭작업(논제글: string, 계열: string, 총배점: number, �
         연결문장 = [...(연결문장 ?? []), ...link_sentences(화자.map((l: any) => ({ 라벨: l.라벨, 텍스트: l.텍스트 })), 화자.map((l: any) => ({ 단락: l.라벨, 단락급소: l.단락급소 })), thesis_polarity(s.텍스트))];
         단락연결 = [...단락연결, ...화자.flatMap((l: any) => K노드.map((id: string) => ({ 노드: id, 단락: l.라벨, 단락급소: l.단락급소 })))];
       }
-      const 인식 = 연결문장 ? { ...입력.인식, 연결문장, 단락연결 } : 입력.인식;
+      const 앞급소 = 이어받기 && n > 0 ? 급소들of(소문항들[n - 1]) : [];
+      const 인식 = { ...입력.인식, ...(연결문장 ? { 연결문장, 단락연결 } : {}), ...(앞급소.length ? { 앞급소 } : {}) };
       // 계열이 ④ 답구하기를 가른다 — 인문사회국어 = 급소 K마다 경로 추적, 수리 = Q 대상 값 일치
       const 뼈대 = derive_pieces(물음, k, 인식, 계열).map((c: any) => ({ ...c, 요소: judge_element(c, 계열) }));
       const 배점 = allocate_points(뼈대, 소배점, 계열);
       const 조각 = 배점.조각들.map((c: any) => ({
         id: c.id, 파트: c.파트, 요소: c.요소, 수행질: c.수행질, is_중심: c.is_중심, 확인물음: c.확인물음,
         // ④ 경로가 있으면 실체 = 경로의 K (엔진 급소 핵심어)
-        실체: c.경로 ? c.경로[c.경로.length - 1].실체 : c.node ? c.node.entity : c.근거 ? c.근거.단락급소 : c.제시문 ? c.제시문.단락급소 : null,
-        노드: c.node ? c.node.id : null, 근거: c.근거 ?? null, 경로: c.경로 ?? null, 제시문: c.제시문 ?? null, 배점: c.배점,
+        실체: c.경로 ? c.경로[c.경로.length - 1].실체 : c.node ? c.node.entity : c.근거 ? c.근거.단락급소 : c.제시문 ? c.제시문.단락급소 : c.앞결과 ? c.앞결과.실체 : null,
+        노드: c.node ? c.node.id : null, 근거: c.근거 ?? null, 경로: c.경로 ?? null, 제시문: c.제시문 ?? null, 앞결과: c.앞결과 ?? null, 배점: c.배점,
         충족조건: specify_condition(c, 계열), 모범조각틀: spread_piece(c, k, 계열),
       }));
       조각.sort((a: any, b: any) => 파트순서.indexOf(a.파트) - 파트순서.indexOf(b.파트));
@@ -203,7 +206,7 @@ try {
     // ── 8단계 루브릭만 ── 인식·제시문·정교화는 다시 돌리지 않는다
     const 계열 = req.계열 === '수리' ? '수리' : '인문사회국어';
     const 총배점 = Number(req.총배점) > 0 ? Number(req.총배점) : 10;
-    out.단계.루브릭 = { 계열, 총배점, 소문항: 루브릭작업(String(req.논제 ?? 문항원문), 계열, 총배점, 제시문목록, !!req.공통자료) };
+    out.단계.루브릭 = { 계열, 총배점, 소문항: 루브릭작업(String(req.논제 ?? 문항원문), 계열, 총배점, 제시문목록, !!req.공통자료, !!req.이어받기) };
   } else if (파이프라인 === 'C') {
     // ── C·논술 (조립설명서 C·논술 9단계) — 논제를 먼저 읽는다. 1차 필터는 타지 않는다 (2026-10-13 확정 4) ──
     const 논제글 = String(req.논제 ?? 문항원문);
@@ -256,6 +259,10 @@ try {
     // ① 인식
     const a = fq.recognizeV2Analysis(문항원문);
     out.단계.인식 = { 입력: '문항원문', 전체: 인식of(a), 단위: (a.units ?? []).map(인식of) };
+    // 서술형 B 단계형 (오종래 2026-10-14) — 소문항(계단 (1)(2)(3))마다 따로 인식해 2 인식 결과에 순서대로 보인다 (C 2단계와 같은 split_thesis)
+    if (파이프라인 === 'B') {
+      out.단계.인식.소문항 = split_thesis(문항원문).map((s: any) => ({ 번호: s.번호, 텍스트: s.텍스트, 공통발문: s.공통발문, ...인식of(fq.recognizeV2Analysis(s.텍스트)) }));
+    }
     out.단계.타입 = fq.confirmType(문항원문, a, undefined);
 
     // ② 1차 필터 → 확인화면. A·B는 소문항 번호 구조(detectType subType 단계형)면 계단식 단계형

@@ -12,7 +12,7 @@ export function 봉인3_요소판정(조각: 조각뼈대, 후보: 요소[], _�
     const 색 = 조각.node?.color?.toLowerCase() as 요소 | undefined;
     if (색 && 후보.includes(색)) return 색;
     // 인문논술 ① 제시문 단락 급소 조각 — 단락 급소는 B (2026-10-14)
-    if (!조각.node && 조각.제시문 && 후보.includes('b')) return 'b';
+    if (!조각.node && (조각.제시문 || 조각.앞결과) && 후보.includes('b')) return 'b'; // 앞 결과(앞 급소)도 b (2026-10-14)
   }
   if (조각.파트 === '답구하기') {
     if (후보.includes('k')) return 'k';

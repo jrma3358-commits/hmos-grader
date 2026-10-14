@@ -449,7 +449,7 @@ async function 소문항모범답안(s,{논제,제시문,계열}){
 
 app.post('/api/rubric',async(req,res)=>{
   // 논제: 7단계에서 교사가 확정한 논제 글 · 계열: 교사가 8단계에서 고른 값 · 총배점: 소문항 하나의 배점 (교사 입력)
-  const {논제,계열,총배점,제시문,공통자료}=req.body||{};
+  const {논제,계열,총배점,제시문,공통자료,이어받기}=req.body||{};
   const t=String(논제||'').trim();
   if(!t){res.status(400).json({error:'확정 논제가 필요합니다'});return;}
   if(!['수리','인문사회국어'].includes(계열)){res.status(400).json({error:'계열(수리·인문사회국어)을 골라야 합니다'});return;}
@@ -458,7 +458,7 @@ app.post('/api/rubric',async(req,res)=>{
 
   // 제시문 — 인문논술 세우기 조각(연결 단락의 문장)을 엔진이 세는 데 쓴다
   // 공통자료: 서술형 B — 소문항 공통발문의 대화·자료를 제시문으로 (오종래 2026-10-14)
-  const r=await runAnalyze({파이프라인:'C',작업:'루브릭',논제:t,계열,총배점:배점,...(Array.isArray(제시문)&&제시문.length?{제시문}:{}),...(공통자료?{공통자료:true}:{})});
+  const r=await runAnalyze({파이프라인:'C',작업:'루브릭',논제:t,계열,총배점:배점,...(Array.isArray(제시문)&&제시문.length?{제시문}:{}),...(공통자료?{공통자료:true}:{}),...(이어받기?{이어받기:true}:{})});
   if(!r.ok||!r.단계||!r.단계.루브릭){res.status(r.러너실패?500:400).json({error:'엔진 루브릭 실패: '+((r.error&&r.error.사유)||'알 수 없음')});return;}
   const 소문항=[];
   try{
@@ -531,7 +531,8 @@ async function 답안잇기(user){
 
 app.post('/api/answer',async(req,res)=>{
   // 소문항: /api/rubric 응답의 소문항 하나 그대로 (조각마다 표현·실체·경로) · 논제·제시문·계열은 바탕으로만
-  const {소문항:s,논제,계열}=req.body||{};
+  // 앞답안: 단계형(서술형 B) — 앞 소문항 모범답안. 이어받아 쓴다 (오종래 2026-10-14)
+  const {소문항:s,논제,계열,앞답안}=req.body||{};
   if(!s||!Array.isArray(s.조각)||!s.조각.length){res.status(400).json({error:'루브릭 조각이 있는 소문항이 필요합니다 — 8단계에서 루브릭을 먼저 만드세요'});return;}
   if(s.조각.some(c=>!String(c.표현||'').trim())){res.status(400).json({error:'문장이 없는 조각이 있습니다 — 8단계에서 루브릭을 다시 만드세요'});return;}
   const 순서=['근거대기','세우기','풀기','답구하기'];
@@ -540,6 +541,7 @@ app.post('/api/answer',async(req,res)=>{
     계열?`계열: ${계열}`:'',
     `이 소문항:\n${s.공통발문?s.공통발문+'\n':''}${s.번호?`(${s.번호}) `:''}${s.텍스트||''}`,
     논제?`전체 논제:\n${논제}`:'',
+    앞답안?`앞 소문항 모범답안 (단계형 — 앞에서 보인 결과를 이어받아 쓴다. 앞 답을 되풀이하지 말고 「앞에서 보인 바와 같이」처럼 받아 잇는다):\n${앞답안}`:'',
     `조각 문장 (이 순서로 잇는다):\n${조각.map((c,i)=>`${i+1}. [${c.파트}] ${c.표현}\n   반드시 남길 글자: 「${K글자(c,s.급소)}」${c.경로&&c.경로.length>1?` · 경로 흔적 하나 이상: ${c.경로.slice(0,-1).map(p=>`「${p.실체}」`).join(' ')}`:''}`).join('\n')}`,
   ].filter(Boolean).join('\n\n');
   const 사용=[];
