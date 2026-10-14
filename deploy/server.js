@@ -15,7 +15,8 @@ const PORT=3000;
 
 const GRADER=path.join(__dirname,'hmos-grader');
 
-app.use(express.json());
+// 0단계 문항 등록이 이미지·PDF를 base64로 보낸다 — nginx client_max_body_size 20m과 맞춘다
+app.use(express.json({limit:'20mb'}));
 
 app.use(express.static(__dirname));
 
@@ -580,6 +581,36 @@ ${rules}`;
     return {...기본,논제:p.thesis,기존과다른점:p.difference,새로측정하는것:p.measures,점검,자가검증};
   });
   res.json({model:r.msg.model,usage:r.msg.usage,비교불가:!!관계.비교불가,추가논제});
+});
+
+// ── POST /api/ocr — C 0단계 문항 등록: 이미지(1~2장)·PDF → 원문 텍스트 (오종래 2026-10-14) ──
+// 글자를 옮겨 적기만 한다. 인식·분석은 엔진이 하므로 Claude는 고치거나 요약하지 않는다.
+const OCR_이미지=['image/jpeg','image/png','image/webp','image/gif'];
+app.post('/api/ocr',async(req,res)=>{
+  const 파일=(req.body&&req.body.파일)||[];
+  if(!Array.isArray(파일)||!파일.length){res.status(400).json({error:'파일이 없습니다'});return;}
+  const pdf=파일.filter(f=>f.종류==='application/pdf');
+  if(pdf.length?파일.length!==1:파일.length>2){res.status(400).json({error:'이미지는 1~2장, PDF는 한 개만 보낼 수 있습니다'});return;}
+  const 틀린=파일.find(f=>f.종류!=='application/pdf'&&!OCR_이미지.includes(f.종류));
+  if(틀린){res.status(400).json({error:`읽을 수 없는 형식: ${틀린.종류||'알 수 없음'}`});return;}
+  const content=[
+    ...파일.map(f=>f.종류==='application/pdf'
+      ?{type:'document',source:{type:'base64',media_type:'application/pdf',data:f.데이터}}
+      :{type:'image',source:{type:'base64',media_type:f.종류,data:f.데이터}}),
+    {type:'text',text:'위 자료에 있는 논술 문항(논제와 제시문)의 글자를 그대로 옮겨 적어라.'},
+  ];
+  const system=`너는 시험 문항 원문을 옮겨 적는 전사기다.
+- 보이는 글자를 그대로 옮긴다. 고치거나 요약하거나 설명을 붙이지 않는다. 맞춤법·띄어쓰기도 원문대로.
+- 제시문 라벨([가]·<가>·(가) 등), 문항 번호([문항 1]·(1-1) 등), 배점 표기는 원문 모양 그대로 둔다.
+- 단락 사이는 빈 줄 하나로 나눈다. 쪽 머리말·쪽 번호·워터마크는 뺀다.
+- 여러 장이면 순서대로 이어 적는다.
+- 표·그림은 글자로 옮길 수 있는 만큼만 옮기고, 그림 자체는 [그림]으로 적는다.
+- 읽을 수 없는 글자는 □로 적는다.`;
+  const r=await askClaude(res,system,content,
+    {type:'json_schema',schema:{type:'object',additionalProperties:false,required:['text'],properties:{text:{type:'string',description:'옮겨 적은 원문 전체'}}}},
+    o=>typeof o.text==='string');
+  if(!r)return;
+  res.json({model:r.msg.model,usage:r.msg.usage,텍스트:r.out.text});
 });
 
 app.get('/dashboard',(req,res)=>res.sendFile(path.join(__dirname,'hmos_dashboard.html')));
