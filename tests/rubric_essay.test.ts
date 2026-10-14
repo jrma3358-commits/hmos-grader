@@ -8,6 +8,7 @@ import { describe, it } from 'node:test';
 import { recognizeV2Analysis } from '../src/fq/pipeline.ts';
 import { derive_pieces, f2_input_from_v2, link_sentences, split_sentences } from '../src/rubric/f2.ts';
 import { judge_element } from '../src/rubric/f3.ts';
+import { 마지막명사 } from '../src/rubric/sealed/f2.ts';
 import { allocate_points } from '../src/rubric/f5.ts';
 import { spread_piece } from '../src/rubric/f6.ts';
 import { specify_condition } from '../src/rubric/f4.ts';
@@ -142,9 +143,19 @@ describe('④ 답구하기 서술·논술형 (계열 인문사회국어)', () =>
     const c = { ...조각[0], 요소: 'k' as const };
     assert.equal(
       specify_condition(c, '인문사회국어'),
-      '급소 「B국이 시행한 대응조치」에 닿았다 — 경로 b「A국의 보호무역 정책으로 인한 손실」 → k「B국이 시행한 대응조치」 위에서 급소 흔적과 경로 표지 흔적 하나 이상이 답안에 남아 있다.',
+      '급소 「B국이 시행한 대응조치」(핵심어 「대응조치」)에 닿았다 — 경로 b「A국의 보호무역 정책으로 인한 손실」 → k「B국이 시행한 대응조치」 위에서 급소 흔적과 경로 표지 흔적 하나 이상이 답안에 남아 있다.',
     );
     assert.ok(입력.ok);
+  });
+
+  it('K 핵심어 = 급소 실체의 마지막 명사 (마지막 어절, 앞뒤 문장부호 뗌)', () => {
+    assert.equal(조각of(논제).조각[0].경로!.at(-1)!.핵심어, '대응조치');
+    const 둘 = 조각of('C국과 같은 원자재 중심의 수출국이 국제무역 환경의 변화 때문에 겪는 구조적 약점을 제시하고, 국내 물가 상승의 이유를 설명하시오.').조각;
+    assert.deepEqual(둘.map((c) => c.경로!.at(-1)!.핵심어), ['약점', '이유']);
+    assert.equal(마지막명사('영향'), '영향');
+    assert.equal(마지막명사(", 'A의 값'"), '값');
+    assert.equal(마지막명사(' (가) '), '가');
+    assert.equal(마지막명사('…'), '…');
   });
 
   it('수리는 Q 대상 규칙(값 일치) 그대로 — 계열을 주지 않아도 같다', () => {
