@@ -2200,7 +2200,7 @@ function renderC6() {
   const g = C.분석.단계.관계;
   if (!C.제시문.length || !g) { body.innerHTML = '<div class="card c-empty">제시문이 없어 단락 관계를 보지 않았습니다 — 1단계에 제시문을 넣으면 엔진이 추가 논제 후보를 냅니다</div>'; return; }
   const 비교 = g.비교불가
-    ? `<div class="flag-box">비교 불가 — 엔진이 잡은 단락 핵심 사이에 유사·대비 관계가 없습니다. 비교·대비·공통원리 유형의 논제는 내지 않습니다.</div>`
+    ? `<div class="flag-box">비교 불가 — 엔진이 잡은 단락 핵심 사이에 유사·대비 관계가 없습니다. 비교·대비·수용·반론 유형의 논제는 내지 않습니다.</div>`
     : '';
   const 관계카드 = `
     <div class="card">
