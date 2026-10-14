@@ -2055,7 +2055,7 @@ const C화면 = {
   5: { 제목: '논제 정교화', 도구: 'make', 설명: '엔진 — 정교화할 곳을 문장으로 · 정교화안 문장은 Claude가 엔진 진단에서' },
   6: { 제목: '추가 논제', 도구: 'make', 설명: '엔진 — 단락 핵심 관계(유사·대비·보완·병렬) → 6유형 논제 뼈대 · 문장은 Claude가 다듬음' },
   7: { 제목: '교사 확정', 도구: 'grade', 설명: '논제를 선택·수정·확정합니다 — 확정 논제는 엔진이 다시 인식합니다' },
-  8: { 제목: '루브릭', 도구: 'grade', 설명: '엔진 — 확정 논제 소문항마다 파트 × 요소 조각 · 채점기준(충족조건) · 배점 · 부분채점기준 · 문항평가' },
+  8: { 제목: '루브릭', 도구: 'grade', 설명: '엔진 — 확정 논제 소문항마다 파트 × 요소 조각 · 채점기준(충족조건) · 배점 · 문항평가 · 부분점수는 학생 답안 채점에서' },
   9: { 제목: '모범답안', 도구: 'grade', 설명: '8단계 조각 문장을 Claude가 경로 순서(근거대기 → 세우기 → 답구하기)로 한 문단으로 잇고 · 조각 흔적 확인 · 교사가 고쳐 확정' },
 };
 
@@ -2912,11 +2912,7 @@ function 루브릭소문항Html(s, i, j) {
       <td>${esc(c.충족조건)}</td>
       <td style="white-space:nowrap;">${배점글(c.배점)}</td>
     </tr>`).join('');
-  const 부분 = 파트순서C.map(p => {
-    const b = s.부분채점기준[p];
-    if (!b) return '';
-    return `<div class="note-item"><strong>${파트번호[p]} ${p}</strong> — ${b.조각수 ? `${b.조각수}조각 · ${배점글(b.배점합)}점 (${b.조각배점.map(배점글).join(' + ')})` : '조각 없음 · 배점 다른 파트로 (봉인④ 결손재분배)'}</div>`;
-  }).join('');
+  // 부분채점(맞춘 조각 배점의 합)은 문항 분석에서 뽑지 않는다 — 학생 답안 채점에서만 (오종래 2026-10-14)
   const 경고 = s.문항평가 && s.문항평가.경고 && s.문항평가.경고.length
     ? s.문항평가.경고.map(t => `<div class="note-item">${esc(t)}</div>`).join('')
     : '<div class="note-item">경고 없음</div>';
@@ -2928,8 +2924,6 @@ function 루브릭소문항Html(s, i, j) {
       <div class="c-table-wrap" style="margin-top:8px;"><table class="rubric-table">
         <thead><tr><th>파트</th><th>조각</th><th>요소</th><th>실체</th><th>확인물음</th><th>채점기준 (충족조건 · O/X)</th><th>배점</th></tr></thead>
         <tbody>${행}</tbody></table></div>
-      <div class="card-title" style="margin:12px 0 6px;">부분채점기준 — 맞춘 조각 배점의 합</div>
-      <div class="note-list">${부분}</div>
       <div class="card-title" style="margin:12px 0 6px;">${엔진배지}문항평가</div>
       <div class="note-list">${경고}</div>
       ${i != null ? 채점칸Html(s, i, j) : ''}

@@ -157,10 +157,7 @@ function 루브릭작업(논제글: string, 계열: string, 총배점: number, �
         물음,
         ...(연결문장 ? { 연결단락: [...new Set(연결문장.map((x: any) => x.단락))] } : {}),
         조각,
-        부분채점기준: Object.fromEntries(파트순서.map((p) => {
-          const 안 = 조각.filter((c: any) => c.파트 === p);
-          return [p, { 조각수: 안.length, 배점합: 배점.파트배점[p], 조각배점: 안.map((c: any) => c.배점) }];
-        })),
+        // 부분채점기준은 문항 분석에서 뽑지 않는다 — 부분점수는 학생 답안 채점(작업 '채점')에서만 (오종래 2026-10-14)
         문항평가: evaluate_item(뼈대, 배점.미배정),
       };
     } catch (e) {
