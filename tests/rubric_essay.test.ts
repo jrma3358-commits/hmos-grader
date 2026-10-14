@@ -8,7 +8,7 @@ import { describe, it } from 'node:test';
 import { recognizeV2Analysis } from '../src/fq/pipeline.ts';
 import { derive_pieces, f2_input_from_v2, link_sentences, split_sentences } from '../src/rubric/f2.ts';
 import { judge_element } from '../src/rubric/f3.ts';
-import { 마지막명사 } from '../src/rubric/sealed/f2.ts';
+import { K핵심어, 마지막명사 } from '../src/rubric/sealed/f2.ts';
 import { allocate_points } from '../src/rubric/f5.ts';
 import { spread_piece } from '../src/rubric/f6.ts';
 import { specify_condition } from '../src/rubric/f4.ts';
@@ -151,11 +151,27 @@ describe('④ 답구하기 서술·논술형 (계열 인문사회국어)', () =>
   it('K 핵심어 = 급소 실체의 마지막 명사 (마지막 어절, 앞뒤 문장부호 뗌)', () => {
     assert.equal(조각of(논제).조각[0].경로!.at(-1)!.핵심어, '대응조치');
     const 둘 = 조각of('C국과 같은 원자재 중심의 수출국이 국제무역 환경의 변화 때문에 겪는 구조적 약점을 제시하고, 국내 물가 상승의 이유를 설명하시오.').조각;
-    assert.deepEqual(둘.map((c) => c.경로!.at(-1)!.핵심어), ['약점', '이유']);
+    assert.deepEqual(둘.map((c) => c.경로!.at(-1)!.핵심어), ['약점', '국내 물가 상승']);
     assert.equal(마지막명사('영향'), '영향');
     assert.equal(마지막명사(", 'A의 값'"), '값');
     assert.equal(마지막명사(' (가) '), '가');
     assert.equal(마지막명사('…'), '…');
+  });
+
+  it('K 핵심어 — 질문 표지어(이유·영향·방안·차이·공통점)는 떼고 지목 대상 실체', () => {
+    assert.equal(K핵심어('국내 물가 상승의 이유'), '국내 물가 상승');
+    assert.equal(K핵심어('두 정책의 차이'), '두 정책');
+    assert.equal(K핵심어('갈등을 줄일 방안'), '갈등을 줄일');
+    assert.equal(K핵심어('영향'), '영향'); // 앞에 남는 말이 없으면 그대로
+    assert.equal(K핵심어('B국이 시행한 대응조치'), '대응조치'); // 표지어가 아니면 마지막 명사
+  });
+
+  it('K 핵심어 — 서술형 끝은 서술 어미를 떼고 마지막 명사구', () => {
+    assert.equal(K핵심어("'0 ≤ x < π/2일 때 부등식 sinx ≥ xcosx가 성립한다.'"), '부등식 sinx ≥ xcosx');
+    assert.equal(K핵심어('B국의 대응은 기술 경쟁력 강화이다'), '기술 경쟁력 강화');
+    assert.equal(K핵심어('두 사건의 원인이 같다'), '같다'); // 목록 밖 서술어(같다)는 서술형으로 보지 않는다 — 마지막 명사 규칙
+    // 알려진 한계 — 관형형 「-는」(오르는)을 조사 「는」으로 읽어 경계가 서서 명사구가 「이유」만 남고, 표지어를 떼면 남는 말이 없어 「이유」 그대로
+    assert.equal(K핵심어('물가가 오르는 이유이다'), '이유');
   });
 
   it('수리는 Q 대상 규칙(값 일치) 그대로 — 계열을 주지 않아도 같다', () => {
