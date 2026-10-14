@@ -7,6 +7,7 @@ import { describe, it } from 'node:test';
 
 import { recognizeV2Analysis } from '../src/fq/pipeline.ts';
 import { derive_pieces, f2_input_from_v2, link_sentences, split_sentences } from '../src/rubric/f2.ts';
+import { judge_element } from '../src/rubric/f3.ts';
 import { allocate_points } from '../src/rubric/f5.ts';
 import { spread_piece } from '../src/rubric/f6.ts';
 import { specify_condition } from '../src/rubric/f4.ts';
@@ -153,14 +154,45 @@ describe('④ 답구하기 서술·논술형 (계열 인문사회국어)', () =>
   });
 });
 
-describe('연결문장이 없으면 노드 규칙 그대로 (수리·서술형)', () => {
-  it('세우기 = C·P 노드, 풀기 = 세우기와 1:1', () => {
-    const 입력 = f2_input_from_v2(recognizeV2Analysis('17. 다항함수 f(x)에 대하여 f\'(x)=9x²+4x이고 f(1)=6일 때, f(2)의 값을 구하시오. [3점]'));
+// ① 근거대기 — 봉인② (오종래 2026-10-14): K 조각을 뺀다 (K는 ④에서만), 조각 = b·d·c·p 노드.
+// C·P가 ①로 가므로 수리·서술형 ② 세우기는 노드에서 세지 않는다 (규칙 미정 — 조각 없음, ③ 풀기도 없음)
+describe('① 근거대기 = b·d·c·p, 급소 K 제외', () => {
+  const 수능17 = "17. 다항함수 f(x)에 대하여 f'(x)=9x²+4x이고 f(1)=6일 때, f(2)의 값을 구하시오. [3점]";
+
+  it('급소 K는 ①에 없고 ④에만 — 수리', () => {
+    const 입력 = f2_input_from_v2(recognizeV2Analysis(수능17));
     assert.ok(입력.ok);
-    const 조각 = derive_pieces(입력.물음, 입력.k, 입력.인식);
-    const 세우기 = 조각.filter((c) => c.파트 === '세우기');
-    const 풀기 = 조각.filter((c) => c.파트 === '풀기');
-    assert.ok(세우기.length > 0 && 세우기.every((c) => c.node !== null && !c.근거));
-    assert.deepEqual(풀기.map((c) => c.node?.id), 세우기.map((c) => c.node?.id));
+    const 조각 = derive_pieces(입력.물음, 입력.k, 입력.인식, '수리');
+    const 근거 = 조각.filter((c) => c.파트 === '근거대기');
+    assert.ok(근거.every((c) => c.node?.id !== 입력.k.node.id && !c.is_중심));
+    assert.ok(조각.some((c) => c.파트 === '답구하기' && c.node?.id === 입력.k.node.id));
+  });
+
+  it('C·P 노드도 ① 조각 — F3 요소는 노드 색 그대로 (P→p, 접힌 C는 B라 b)', () => {
+    const 입력 = f2_input_from_v2(recognizeV2Analysis(수능17));
+    assert.ok(입력.ok);
+    const 근거 = derive_pieces(입력.물음, 입력.k, 입력.인식, '수리')
+      .filter((c) => c.파트 === '근거대기')
+      .map((c) => ({ ...c, 요소: judge_element(c, '수리') }));
+    assert.deepEqual(근거.map((c) => `${c.node?.color}:${c.요소}`), ['P:p', 'B:b']);
+  });
+
+  it('급소가 여럿이면 전부 ①에서 뺀다 — 논술 (2-1)', () => {
+    const 입력 = f2_input_from_v2(recognizeV2Analysis('C국과 같은 원자재 중심의 수출국이 국제무역 환경의 변화 때문에 겪는 구조적 약점을 제시하고, 국내 물가 상승의 이유를 설명하시오.'));
+    assert.ok(입력.ok);
+    const 급소 = new Set(입력.인식.급소들!.map((g) => g.node.id));
+    assert.equal(급소.size, 2);
+    const 근거 = derive_pieces(입력.물음, 입력.k, 입력.인식, '인문사회국어').filter((c) => c.파트 === '근거대기');
+    assert.ok(근거.length > 0 && 근거.every((c) => !급소.has(c.node!.id)));
+    assert.ok(근거.some((c) => c.node?.color === 'C') && 근거.some((c) => c.node?.color === 'P'));
+  });
+
+  it('수리·서술형(연결문장 없음) ② 세우기·③ 풀기 없음 — 배점은 봉인④ 결손재분배', () => {
+    const 입력 = f2_input_from_v2(recognizeV2Analysis(수능17));
+    assert.ok(입력.ok);
+    const 조각 = derive_pieces(입력.물음, 입력.k, 입력.인식, '수리');
+    assert.equal(조각.filter((c) => c.파트 === '세우기' || c.파트 === '풀기').length, 0);
+    const 배점 = allocate_points(조각, 10, '수리');
+    assert.deepEqual([...배점.미배정].sort(), ['세우기', '풀기'].sort());
   });
 });

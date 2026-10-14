@@ -1,6 +1,6 @@
 // [봉인③] 조각이 어느 요소인지 — 파트가 좁힌 후보 중에서 고른다. 오종래가 채운다.
 // [오종래 2026-09-28] 후보가 하나면 그것, 여럿이면 미결로 멈춘다.
-//                     단 ① 근거대기는 노드 색으로 — B이면 b, D이면 d.
+//                     단 ① 근거대기는 노드 색으로 — B이면 b, D이면 d (2026-10-14부터 C이면 c, P이면 p도).
 //                        ④ 답구하기는 k 우선 — 후보에 k가 있으면 k, 없으면 q.
 import { SealedError } from '../../fq/sealed/index.ts';
 import type { 계열, 요소, 조각뼈대 } from '../types.ts';
@@ -8,8 +8,9 @@ import type { 계열, 요소, 조각뼈대 } from '../types.ts';
 export function 봉인3_요소판정(조각: 조각뼈대, 후보: 요소[], _계열: 계열): 요소 {
   if (후보.length === 1) return 후보[0];
   if (조각.파트 === '근거대기') {
-    if (조각.node?.color === 'B' && 후보.includes('b')) return 'b';
-    if (조각.node?.color === 'D' && 후보.includes('d')) return 'd';
+    // 노드 색 그대로 — B→b · D→d · C→c · P→p (c·p는 2026-10-14부터 ① 후보)
+    const 색 = 조각.node?.color?.toLowerCase() as 요소 | undefined;
+    if (색 && 후보.includes(색)) return 색;
   }
   if (조각.파트 === '답구하기') {
     if (후보.includes('k')) return 'k';

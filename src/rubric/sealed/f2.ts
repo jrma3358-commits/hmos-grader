@@ -18,6 +18,11 @@
 //   대상 = 엔진 급소 K. 급소가 여럿(pivots)이면 조각마다 하나.
 //   경로 = 제시문 단락급소(엔진 정합이 그 급소 노드와 이은 단락) → 논제에서 K 앞 노드(앞 물음 Q 뒤부터) → K
 //   충족 = K 흔적 + 경로 노드 흔적 하나 이상 (봉인⑥ 틀이 적는다). 수리는 위의 Q 대상 규칙(값 일치) 그대로
+//
+// [오종래 2026-10-14] ① 근거대기에서 K 조각을 뺀다 — K는 ④ 답구하기에서만 (경로 수렴 확인).
+//   ① 근거대기 = nodes 중 B·D·C·P 노드 수 — 급소 K(급소가 여럿이면 전부)는 빼고. 모든 계열 (위 2026-09-28 ①을 바꾼다)
+//   ② 세우기   = C·P는 ①로 갔으므로 노드에서 세지 않는다 (위 2026-09-28 ②를 바꾼다). 인문논술은 연결 단락 문장 그대로.
+//                수리·서술형 ② 세우기 규칙은 미정 — 정해질 때까지 조각 없음 (③ 풀기도 ②와 1:1이라 없음)
 import type { Color } from '../../fq/types.ts';
 import type { PathNode } from '../../fq/v2/graph.ts';
 import type { 경로표지, 계열, 급소K, 인식결과, 조각뼈대, 파트, 파트별물음, 요소 } from '../types.ts';
@@ -36,8 +41,9 @@ function piecesFromNodes(
   인식: 인식결과,
   exclude: PathNode[] = [],
 ): 조각뼈대[] {
+  const 뺄 = new Set(exclude.map((n) => n.id));
   return 인식.nodes
-    .filter((n) => n.color !== null && colors.includes(n.color) && !exclude.includes(n))
+    .filter((n) => n.color !== null && colors.includes(n.color) && !뺄.has(n.id))
     .map((n, i) => ({
       id: `${파트}-${i + 1}`,
       파트,
@@ -49,12 +55,12 @@ function piecesFromNodes(
     }));
 }
 
-/** ① 근거대기 = B·D 노드 수 */
+/** ① 근거대기 = B·D·C·P 노드 수 — 급소 K는 빼서 ④에만 (2026-10-14) */
 export function 봉인2_근거대기(물음: 파트별물음 | null, k: 급소K, 인식: 인식결과): 조각뼈대[] {
-  return piecesFromNodes('근거대기', ['B', 'D'], 물음, k, 인식);
+  return piecesFromNodes('근거대기', ['B', 'D', 'C', 'P'], 물음, k, 인식, (인식.급소들 ?? [k]).map((g) => g.node));
 }
 
-/** ② 세우기 = C·P 노드 수 (Q의 대상은 빼서 ④로). 인문논술은 연결 단락 문장 수 */
+/** ② 세우기 — 인문논술은 연결 단락 문장 수. 그 밖(수리·서술형)은 규칙 미정이라 조각 없음 (C·P는 ①로, 2026-10-14) */
 export function 봉인2_세우기(물음: 파트별물음 | null, k: 급소K, 인식: 인식결과): 조각뼈대[] {
   if (인식.연결문장) {
     return 인식.연결문장.map((근거, i) => ({
@@ -68,7 +74,7 @@ export function 봉인2_세우기(물음: 파트별물음 | null, k: 급소K, �
       근거,
     }));
   }
-  return piecesFromNodes('세우기', ['C', 'P'], 물음, k, 인식, qTargets(인식));
+  return [];
 }
 
 /**
