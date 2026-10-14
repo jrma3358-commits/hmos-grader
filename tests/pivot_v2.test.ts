@@ -1793,6 +1793,46 @@ describe('제시문 지정 — 「제시문」이 붙은 괄호 기호·범위�
     assert.equal(entities('@P 내용을', ['SP']).some((e) => e.startsWith('P:')), false);
     assert.equal(entities('@P (마)의 설명을').includes('P:(마)'), false);
   });
+
+  it('「@P」 없는 한글 기호 나열도 P 하나 — 기호마다 B로 서지 않는다 (오종래 2026-10-14, 논서술형1 (3))', () => {
+    assert.deepEqual(entities('견해을 (가), (다), (라)의 설명에', ['SP']), ['B:견해', 'P:(가), (다), (라)', 'B:설명']);
+    assert.deepEqual(entities('견해을 (가)~(바)의 설명에', ['SP']), ['B:견해', 'P:(가)~(바)', 'B:설명']);
+  });
+
+  it('기호 나열 규칙은 한글 기호 둘 이상만 — 숫자 나열·기호 하나·어절 안은 그대로', () => {
+    assert.deepEqual(entities('(1), (2)의 설명을', ['SP']).filter((e) => e.startsWith('P:')), []);
+    assert.deepEqual(entities('(가)의 설명을', ['SP']), ['B:(가)', 'B:설명']);
+    assert.deepEqual(entities('f(가), (나)의 설명을', ['SP']).filter((e) => e.startsWith('P:')), []);
+  });
+
+  it('지정이 없으면 기호 나열 규칙도 적용하지 않는다', () => {
+    assert.equal(entities('(가), (다)의 설명을').some((e) => e.startsWith('P:')), false);
+  });
+});
+
+describe('논서술형1 (3) — 제시문 기호 나열 뒤 「활용하여」 앞의 급소 (오종래 2026-10-14)', () => {
+  // B = SB(~를·~을), 지정 = SP(어휘형 「제시문」 P), 수단 C = SC(어휘형 「활용하여」), Q = SQ(어휘형 「논술하시오」)
+  const sw = (id: string, markers: string[], color: Color, lexical?: boolean) =>
+    ({ id, kind: '조사·어미', markers, intent: '', color, lexical }) as SealedSwitch;
+  const t: SealedTable = {
+    version: 1,
+    source: { document: '(테스트)', sections: [] },
+    switches: [sw('SB', ['~를', '~을'], 'B'), sw('SP', ['제시문'], 'P', true), sw('SC', ['활용하여'], 'C', true), sw('SQ', ['논술하시오'], 'Q', true)],
+    lights: [],
+    matrix: [],
+    symbols: [],
+    forms: [],
+    apply: { longestMatchFirst: true, precedence: [], endOfWord: true, designatedPassages: ['SP'] },
+    pending: [],
+  };
+
+  it('급소는 마지막 기호 「(바)」가 아니라 기호 앞의 B 「자신의 견해」', () => {
+    const g = build_path_graph('주장에 대한 자신의 견해를 (가), (다), (라), (마), (바)를 활용하여 논술하시오.', t);
+    const r = analyze_pivot(g, t);
+    assert.ok(r.ok);
+    assert.equal(r.ok && r.pivot.node.entity, '주장에 대한 자신의 견해');
+    assert.ok(g.nodes.some((n) => n.color === 'P' && n.entity === '(가), (다), (라), (마), (바)'));
+  });
 });
 
 describe('지시어 B 급소 — 실체값이 지시어면 앞 명사구 (오종래 2026-10-07)', () => {

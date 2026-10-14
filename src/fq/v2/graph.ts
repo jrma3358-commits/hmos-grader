@@ -280,6 +280,11 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
   //   「(가)·(나)·(다)」「(가)~(라)」 전체가 P 노드 하나다 (사회 논제3-2).
   const designatedIds = table.apply.designatedPassages ?? [];
   const PASSAGE_LABEL = /^\s*(\([가-힣0-9]+\)(?:\s*[,·ㆍ・~∼～-]\s*\([가-힣0-9]+\))*)/;
+  //   [오종래 2026-10-14] 「제시문」 없이 선 기호 나열도 — 어절 머리에서 한글 괄호 기호가 둘 이상 쉼표·가운뎃점·물결로 이어지면
+  //   (「(가), (다), (라), (마), (바)를 활용하여」 「(가)~(바)의」) 같은 P 노드 하나다. 기호 하나하나가 B로 서서
+  //   마지막 기호가 Q 직전 B 급소가 되던 문제 (논서술형1 (3) 급소 「(바)」). 기호 하나(「(가)」)는 보기 기호일 수 있어 그대로 둔다.
+  const BARE_LABEL_LIST = /^\([가-힣]\)(?:\s*[,·ㆍ・~∼～-]\s*\([가-힣]\))+/;
+  const designatedC = designatedIds[0] ? cands.find((c) => c.sw.id === designatedIds[0]) : undefined;
   //   원문자 기호(㉠~㉻, 나열 포함) + 뒤에 붙은 조사. m[1] = 기호 (아래 원문자 기호 묶음)
   const CIRCLED_LABEL = /(?<=^|[\s(])([㉠-㉻](?:\s*[,·ㆍ・~∼～-]\s*[㉠-㉻])*)[가-힣]*/g;
   //   식 끝의 공백·쉼표는 소비한다(end) — 다음 노드의 실체로 넘어가지 않는다. 실체(text)에서는 뗀다.
@@ -329,7 +334,9 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
       continue;
     }
     let matched: { len: number; c: Candidate; inner: string; chained: boolean; math?: true; designated?: true } | undefined;
-    for (const c of cands) {
+    const bareList = designatedC && (i === 0 || /[\s(]/.test(question[i - 1])) ? rest.match(BARE_LABEL_LIST) : null;
+    if (bareList) matched = { len: bareList[0].length, c: designatedC!, inner: bareList[0], chained: false, designated: true };
+    for (const c of matched ? [] : cands) {
       const m = rest.match(c.re);
       if (m && m.index === 0) {
         if (c.sw.kind === NODE_KIND && inException(i)) continue; // 어절 예외 — 낱말 안의 조사·어미가 아니다
