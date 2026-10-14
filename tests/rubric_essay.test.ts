@@ -214,8 +214,15 @@ describe('인문 ① 근거대기 — 논제 노드 + 제시문 연결 단락 �
 
   it('F4 충족조건 · F6 모범조각의 {실체} = 단락 급소', () => {
     const c = 근거of('인문사회국어').find((x) => x.제시문)!;
-    assert.equal(specify_condition(c, '인문사회국어'), 'B국에 담긴 핵심논리를 정확히 이해하고 있다.');
+    assert.equal(specify_condition(c, '인문사회국어'), '「B국」의 개념·근거를 서술했는가');
     assert.equal(spread_piece(c, k, '인문사회국어'), 'B국에 대하여 이해하고 있다.');
+  });
+
+  it('F4 ① 문구 계열별 · F4·F6 실체 머리 쉼표 제거 (오종래 2026-10-14)', () => {
+    const 쉼표 = { ...근거of('인문사회국어').find((x) => x.제시문)!, 제시문: { 단락: '나', 단락급소: ', 보호무역' } };
+    assert.equal(specify_condition(쉼표, '인문사회국어'), '「보호무역」의 개념·근거를 서술했는가');
+    assert.equal(specify_condition(쉼표, '수리'), '「보호무역」의 조건·정의를 제시했는가');
+    assert.equal(spread_piece(쉼표, k, '인문사회국어'), '보호무역에 대하여 이해하고 있다.');
   });
 
   it('수리는 제시문 단락 급소를 ①에 넣지 않는다', () => {
