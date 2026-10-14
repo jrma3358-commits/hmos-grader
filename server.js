@@ -597,7 +597,9 @@ app.post('/api/ocr',async(req,res)=>{
     ...파일.map(f=>f.종류==='application/pdf'
       ?{type:'document',source:{type:'base64',media_type:'application/pdf',data:f.데이터}}
       :{type:'image',source:{type:'base64',media_type:f.종류,data:f.데이터}}),
-    {type:'text',text:'위 자료에 있는 논술 문항(논제와 제시문)의 글자를 그대로 옮겨 적어라.'},
+    {type:'text',text:['A','B'].includes(req.body.유형)
+      ?'위 자료에 있는 시험 문항(문항 번호·발문·조건·보기·배점)의 글자를 그대로 옮겨 적어라.'
+      :'위 자료에 있는 논술 문항(논제와 제시문)의 글자를 그대로 옮겨 적어라.'},
   ];
   const system=`너는 시험 문항 원문을 옮겨 적는 전사기다.
 - 보이는 글자를 그대로 옮긴다. 고치거나 요약하거나 설명을 붙이지 않는다. 맞춤법·띄어쓰기도 원문대로.
@@ -605,7 +607,9 @@ app.post('/api/ocr',async(req,res)=>{
 - 단락 사이는 빈 줄 하나로 나눈다. 쪽 머리말·쪽 번호·워터마크는 뺀다.
 - 여러 장이면 순서대로 이어 적는다.
 - 표·그림은 글자로 옮길 수 있는 만큼만 옮기고, 그림 자체는 [그림]으로 적는다.
-- 읽을 수 없는 글자는 □로 적는다.`;
+- 읽을 수 없는 글자는 □로 적는다.
+- 수식은 LaTeX를 쓰지 않고 평문으로 적는다 (엔진이 읽는 꼴): 거듭제곱 x², 분수 a/b, 근호 √(…), 그리스 문자 π·θ 그대로, 미분 f'(x), 부등호 ≤ ≥, 적분 ∫, 구간별 함수 { 5x+a (x < -2) / x²-a (x ≥ -2) }.
+- 객관식 보기 번호 ①~⑤와 배점 [3점]은 원문 모양 그대로 둔다.`;
   const r=await askClaude(res,system,content,
     {type:'json_schema',schema:{type:'object',additionalProperties:false,required:['text'],properties:{text:{type:'string',description:'옮겨 적은 원문 전체'}}}},
     o=>typeof o.text==='string');

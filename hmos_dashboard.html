@@ -667,7 +667,7 @@
     background: var(--surface);
     cursor: pointer;
   }
-  #c-0 .run-btn { background: var(--tool-make); }
+  #tab-reg.c .run-btn { background: var(--tool-make); }
 
   /* 반응형 */
   @media (max-width: 768px) {
@@ -712,27 +712,31 @@
     </div>
 
     <div id="nav-ab">
-    <button class="nav-item active" onclick="showTab(0, this)">
+    <button class="nav-item" data-tab="reg" onclick="showTab('reg', this)">
+      <div class="nav-num">0</div>
+      문항 등록
+    </button>
+    <button class="nav-item active" data-tab="0" onclick="showTab(0, this)">
       <div class="nav-num">1</div>
       문항 입력
     </button>
-    <button class="nav-item" onclick="showTab(1, this)">
+    <button class="nav-item" data-tab="1" onclick="showTab(1, this)">
       <div class="nav-num">2</div>
       인식 결과
     </button>
-    <button class="nav-item" onclick="showTab(2, this)">
+    <button class="nav-item" data-tab="2" onclick="showTab(2, this)">
       <div class="nav-num">3</div>
       문제 평가
     </button>
-    <button class="nav-item" onclick="showTab(3, this)">
+    <button class="nav-item" data-tab="3" onclick="showTab(3, this)">
       <div class="nav-num">4</div>
       루브릭
     </button>
-    <button class="nav-item" onclick="showTab(4, this)">
+    <button class="nav-item" data-tab="4" onclick="showTab(4, this)">
       <div class="nav-num">5</div>
       모범답안
     </button>
-    <button class="nav-item" onclick="showTab(5, this)">
+    <button class="nav-item" data-tab="5" onclick="showTab(5, this)">
       <div class="nav-num">6</div>
       교사 확정
     </button>
@@ -786,11 +790,11 @@
       </div>
     </div>
 
-    <!-- C 0단계: 문항 등록 — 논제+제시문을 한 칸에 받아 1단계 두 칸으로 나눠 넘긴다 -->
-    <div class="tab-pane" id="c-0">
+    <!-- 0단계: 문항 등록 (A·B·C 같이 씀) — C는 논제+제시문을 한 칸에 받아 1단계 두 칸으로 나누고, A·B는 1단계 문항 원문 칸에 그대로 넘긴다 -->
+    <div class="tab-pane" id="tab-reg">
       <div class="section-header">
-        <div class="section-title"><span class="tool-tag make">출제도구</span>0 · 문항 등록</div>
-        <div class="section-sub">논제와 제시문을 한 번에 넣으세요 — 등록하면 1단계에서 논제·제시문으로 나눈 결과를 확인합니다</div>
+        <div class="section-title"><span class="tool-tag make" id="reg-tool-tag" style="display:none;">출제도구</span>0 · 문항 등록</div>
+        <div class="section-sub" id="reg-sub">문항 원문을 넣으세요 — 등록하면 1단계 문항 입력으로 넘어갑니다</div>
       </div>
 
       <div class="card">
@@ -817,8 +821,8 @@
           <div class="reg-status" id="reg-status-load"></div>
         </div>
 
-        <div class="card-title">논제 + 제시문</div>
-        <textarea class="input-area" id="reg-input" placeholder="논제와 제시문을 한꺼번에 붙여넣으세요. 순서는 상관없습니다.&#10;[가] …&#10;[나] …&#10;&#10;[문항 1] 제시문 [가], [나]를 참고하여 …&#10;(1-1) …설명하시오."></textarea>
+        <div class="card-title" id="reg-title">문항 원문</div>
+        <textarea class="input-area" id="reg-input" placeholder="문항 원문을 붙여넣으세요.&#10;예) 4. 함수 f(x) = ... 가 실수 전체에서 연속일 때, 상수 a의 값은? [3점]"></textarea>
 
         <div class="reg-row">
           <select id="reg-sample" onchange="startSample(this)">
@@ -831,7 +835,7 @@
           <button class="type-btn" onclick="saveReg()">저장 (.txt)</button>
         </div>
 
-        <button class="run-btn" onclick="registerC()">분석 시작 →</button>
+        <button class="run-btn" onclick="registerReg()">분석 시작 →</button>
       </div>
     </div>
 
@@ -1526,11 +1530,12 @@ function esc(s) {
   return String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 }
 
+/** A·B 탭 — idx는 0~5 또는 'reg'(0단계 문항 등록). btn을 안 주면 사이드바에서 찾는다 */
 function showTab(idx, btn) {
   document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('#nav-ab .nav-item').forEach(b => b.classList.remove('active'));
   document.getElementById('tab-' + idx).classList.add('active');
-  btn.classList.add('active');
+  (btn || document.querySelector(`#nav-ab .nav-item[data-tab="${idx}"]`)).classList.add('active');
 }
 
 function selectType(type, btn) {
@@ -1545,20 +1550,25 @@ function selectType(type, btn) {
   document.getElementById('question-block').style.display = isC ? 'none' : 'block';
   document.getElementById('nav-c').style.display = isC ? '' : 'none';
   document.getElementById('nav-ab').style.display = isC ? 'none' : '';
+  // 0단계 문항 등록은 A·B·C가 같이 쓴다 — C만 출제도구 표시·논제/제시문 안내
+  document.getElementById('tab-reg').classList.toggle('c', isC);
+  document.getElementById('reg-tool-tag').style.display = isC ? '' : 'none';
+  document.getElementById('reg-sub').textContent = isC
+    ? '논제와 제시문을 한 번에 넣으세요 — 등록하면 1단계에서 논제·제시문으로 나눈 결과를 확인합니다'
+    : '문항 원문을 넣으세요 — 등록하면 1단계 문항 입력으로 넘어갑니다';
+  document.getElementById('reg-title').textContent = isC ? '논제 + 제시문' : '문항 원문';
+  document.getElementById('reg-input').placeholder = isC
+    ? '논제와 제시문을 한꺼번에 붙여넣으세요. 순서는 상관없습니다.\n[가] …\n[나] …\n\n[문항 1] 제시문 [가], [나]를 참고하여 …\n(1-1) …설명하시오.'
+    : '문항 원문을 붙여넣으세요.\n예) 4. 함수 f(x) = ... 가 실수 전체에서 연속일 때, 상수 a의 값은? [3점]';
   if (isC) showCStep(0);
-  else showTab(0, document.querySelector('#nav-ab .nav-item'));
+  else showTab('reg');
 }
 
-function loadSample(key) {
-  // 사회논술은 저장된 결과 대신 9단계 입력으로 — 엔진을 다시 돌린다
-  if (key === '논술') { fillCSample(); return; }
-  // A·B도 저장된 결과 대신 문항만 넣고 엔진을 다시 돌린다 — 지금 엔진 규칙(병렬 나열·C-F 뒤쪽 급소 등)이 그대로 보인다
-  const data = SAMPLES[key];
-  if (!data) return;
-  document.getElementById('question-input').value = data.문항원문;
-  const btn = [...document.querySelectorAll('.type-btn')].find(b => b.getAttribute('onclick') === `selectType('${data.파이프라인}', this)`);
-  if (btn) selectType(data.파이프라인, btn);
-  return runAnalysis();
+/** 파이프라인 버튼을 눌러 준다 — 샘플이 다른 파이프라인 것이면 그쪽으로 바꾼다 */
+function pickType(type) {
+  if (selectedType === type) return;
+  const btn = [...document.querySelectorAll('.type-btn')].find(b => b.getAttribute('onclick') === `selectType('${type}', this)`);
+  if (btn) selectType(type, btn);
 }
 
 /** 제시문 칸 → [{id, 텍스트}] — [가]·<가>·(가) 단락 머리로 나눈다. 머리가 없으면 한 덩어리 */
@@ -1602,7 +1612,7 @@ async function runAnalysis() {
     currentData = fromEngine(out, q, selectedType);
     if (currentData.생성입력) Object.assign(currentData.생성입력, { 논제: body.논제, 제시문: body.제시문 });
     renderAll(currentData);
-    showTab(1, document.querySelectorAll('.nav-item')[1]);
+    showTab(1);
   } catch (e) {
     alert('서버 연결 실패: ' + e.message);
   } finally {
@@ -1952,7 +1962,7 @@ buildCPanes();
 
 function showCStep(n) {
   document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
-  document.getElementById(n === 1 ? 'tab-0' : 'c-' + n).classList.add('active');
+  document.getElementById(n === 0 ? 'tab-reg' : n === 1 ? 'tab-0' : 'c-' + n).classList.add('active');
   document.querySelectorAll('#nav-c .nav-item').forEach(b => b.classList.toggle('active', +b.dataset.step === n));
   document.querySelector('.main').scrollTop = 0;
 }
@@ -1979,9 +1989,10 @@ function fillCSample() {
   }
 }
 
-// ── 0단계 문항 등록 (오종래 2026-10-14) ──
-// 논제+제시문을 한 칸에 받는다. 텍스트·이미지(Claude가 옮겨 적기 /api/ocr)·파일(.txt 그대로 · .pdf는 /api/ocr)·불러오기(.txt).
-// 「분석 시작 →」은 한 칸을 논제·제시문으로 기계적으로 나눠 1단계 두 칸에 넣고 1단계로 간다 — 엔진은 1단계에서 돈다.
+// ── 0단계 문항 등록 (오종래 2026-10-14, A·B도 같은 화면) ──
+// 문항을 한 칸에 받는다. 텍스트·이미지(Claude가 옮겨 적기 /api/ocr)·파일(.txt 그대로 · .pdf는 /api/ocr)·불러오기(.txt).
+// 「분석 시작 →」 — C는 한 칸을 논제·제시문으로 기계적으로 나눠 1단계 두 칸에, A·B는 1단계 문항 원문 칸에 그대로 넣고 1단계로 간다.
+// 엔진은 1단계에서 돈다.
 
 function showRegSrc(src) {
   document.querySelectorAll('.reg-tab').forEach(b => b.classList.toggle('active', b.dataset.src === src));
@@ -2022,7 +2033,7 @@ async function regOcr(src, 파일) {
   regStatus(src, 'Claude가 글자를 옮겨 적는 중… (수십 초 걸릴 수 있습니다)');
   try {
     const 보낼 = await Promise.all(파일.map(async f => ({ 종류: f.type || (/\.pdf$/i.test(f.name) ? 'application/pdf' : ''), 데이터: await 파일base64(f) })));
-    const { status, out } = await postJSON('/api/ocr', { 파일: 보낼 });
+    const { status, out } = await postJSON('/api/ocr', { 파일: 보낼, ...(selectedType ? { 유형: selectedType.charAt(0) } : {}) });
     if (status !== 200 || typeof out.텍스트 !== 'string') { regStatus(src, '추출 실패: ' + (out.error || status), true); return; }
     if (setRegText(out.텍스트)) regStatus(src, `옮겨 적었습니다 (${파일.map(f => f.name).join(', ')}) — 원문과 대조해 고치세요`);
     else regStatus(src, '편집창을 그대로 두었습니다');
@@ -2068,13 +2079,13 @@ function saveReg() {
   setTimeout(() => URL.revokeObjectURL(a.href), 0);
 }
 
-/** 샘플로 시작하기 — 사회논술은 원문 전체를 편집창에. A·B 샘플은 예전처럼 그 파이프라인으로 바로 분석 */
+/** 샘플로 시작하기 — 그 샘플의 파이프라인으로 바꾸고 원문 전체를 편집창에. 분석은 등록 → 1단계에서 */
 function startSample(sel) {
-  const key = sel.value;
+  const data = SAMPLES[sel.value];
   sel.value = '';
-  if (!key) return;
-  if (key === '논술') { setRegText(SAMPLES['논술'].문항원문); return; }
-  loadSample(key);
+  if (!data) return;
+  pickType(data.파이프라인);
+  setRegText(data.문항원문);
 }
 
 /**
@@ -2110,6 +2121,16 @@ function splitRegistration(text) {
 }
 
 /** 분석 시작 → — 나눠서 1단계 두 칸에 넣고 1단계로 */
+/** 분석 시작 → — A·B는 1단계 문항 원문 칸에 그대로. 파이프라인을 아직 안 골랐으면 1단계에서 고른다 */
+function registerReg() {
+  if (selectedType === 'C-논술') return registerC();
+  const 글 = document.getElementById('reg-input').value.trim();
+  if (!글) { alert('문항 원문을 넣으세요.'); return; }
+  document.getElementById('question-input').value = 글;
+  document.querySelector('#nav-ab .nav-item[data-tab="reg"]').classList.add('done');
+  showTab(0);
+}
+
 function registerC() {
   const 글 = document.getElementById('reg-input').value;
   if (!글.trim()) { alert('논제와 제시문을 넣으세요.'); return; }
