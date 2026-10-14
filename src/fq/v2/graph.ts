@@ -228,6 +228,29 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
       ? question[at - 1] === stem
       : question.slice(0, at).endsWith(stem) && !/[가-힣]/.test(question[at - stem.length - 1] ?? ''));
 
+  // 관형절 덩이 [오종래 2026-10-14] — 관형형 「(용언 어간)는 」(apply.verbStems)이 꾸미는 명사구는 관형절째 한 덩이다
+  //   (사회논술 1-1 「자유무역이 국가의 경제에 미치는 긍정적인 영향을」 → B 하나).
+  //   · 관형형 앞: 바로 앞 어절부터 거슬러 「의」「에」「이」로 끝나는 어절이 이어지는 동안은 같은 관형절 — 그 안의 「의」「에」 표지는 걸지 않는다.
+  //     다른 조사(을·를·은·는·가·로·와·과 …)·문장부호로 끝나는 어절에서 멈춘다 (「…'를 증명하는」의 「를」은 그대로 경계).
+  //   · 관형형 뒤: 바로 다음 어절이 관형형 「~인」(긍정적인)이면 그 「인」도 걸지 않는다 — 명사구가 뒤 표지까지 이어진다.
+  //   다른 표지(긴 표지 「때문에」 등)와 관형형 「~는」 자체는 그대로다. 관형형 수식어 떼기(B 실체 머리의 「~는」 어절)는 그대로 건다.
+  const 관형절안 = new Set<number>(); // 걸지 않을 「의」「에」「인」 표지 자리 (그 글자의 index)
+  {
+    const 어절들 = [...question.matchAll(/\S+/g)].map((m) => ({ 글: m[0], at: m.index! }));
+    어절들.forEach((w, k) => {
+      const m = w.글.match(/^(.+)는$/);
+      if (!m || !verbStems.some((stem) => (stem.length === 1 ? m[1].endsWith(stem) : m[1] === stem || (m[1].endsWith(stem) && !/[가-힣]/.test(m[1][m[1].length - stem.length - 1] ?? ''))))) return;
+      if (!/[가-힣]/.test(question[w.at + w.글.length + 1] ?? '')) return; // 「는」 뒤에 명사가 와야 관형형
+      for (let j = k - 1; j >= 0; j--) {
+        const 앞 = 어절들[j];
+        if (/의$/.test(앞.글) || /에$/.test(앞.글)) 관형절안.add(앞.at + 앞.글.length - 1);
+        else if (!/[가-힣]이$/.test(앞.글)) break;
+      }
+      const 뒤 = 어절들[k + 1];
+      if (뒤 && /[가-힣]인$/.test(뒤.글)) 관형절안.add(뒤.at + 뒤.글.length - 1);
+    });
+  }
+
   // 수식 뒤에서만 [오종래 2026-10-04] — apply.afterMathOnly 스위치는 바로 앞 어절(사이 공백 허용, 줄바꿈 제외)이
   //   한글 없는 식일 때만 건다 (예: 주격 「이」「가」 — 「{b_n}이」·「(x > 0) 이」 ○, 「이차함수」·「길이가」 ✕).
   const afterMathOnly = table.apply.afterMathOnly ?? [];
@@ -239,10 +262,12 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
   //   「시행한」「주어진」)이고 붙은 명사가 두 음절 이상이면 건다 — 관형절이 꾸민 명사구가 B다
   //   (경제 2-2 「D국이 시행한 정책이 자국의」 → B「D국이 시행한 정책」). 받침 ㄴ 전부로 넓히면 명사(「동전 앞면이」)·
   //   관형사(「어떤 도움이」)·주제 조사(「동전은 뒷면이」)에도 걸린다. 한 음절 명사(「높이」「길이」「차이」)는 걸지 않는다.
+  //   [오종래 2026-10-14] 관형격 「의」 뒤 명사도 — 앞 어절이 「…의」로 끝나면(「원자재 중심의 수출국이」) 주어 「이」에서 끊는다.
+  //   두 음절 이상 명사 조건은 그대로 — 「변의 길이가」의 「길이」(한 음절 명사+이)는 걸지 않는다.
   const afterModifiedNoun = (at: number) => {
     const noun = question.slice(0, at).match(/(\S*)$/)![1];
     const prev = question.slice(0, at - noun.length).match(/(\S+)[ \t]+$/)?.[1];
-    return /^[가-힣]{2,}$/.test(noun) && prev !== undefined && /[가-힣][한된진던]$/.test(prev);
+    return /^[가-힣]{2,}$/.test(noun) && prev !== undefined && /[가-힣]([한된진던]|의)$/.test(prev);
   };
 
   // 문장 종결 [오종래 2026-10-04] — apply.sentenceEnds(예: 「이다.」「만족시킨다.」「~하다.」)가 걸리면 절 경계다.
@@ -344,6 +369,9 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
           endOfWord && c.sw.kind === NODE_KIND && !isLexical(c.sw, c.surface) && insideWord(rest[m[0].length]);
         if (inside && !chainsToMarker(c.sw, rest.slice(m[0].length))) {
           continue; // 어절 안 — 더 짧은 표지를 마저 본다
+        }
+        if (관형절안.has(i) && ['의', '에', '인'].includes(c.surface.replace(/^~/, '').trim())) {
+          continue; // 관형절 덩이 안 — 「의」「에」「인」에서 끊지 않는다 (2026-10-14)
         }
         if (afterNounOnly.includes(c.sw.id) && verbStemBefore(i)) {
           continue; // 앞이 용언 어간 — 관형형 어미로 본다

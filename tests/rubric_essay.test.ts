@@ -271,7 +271,8 @@ describe('계열별 파트 구조 · ① 급소 K 제외', () => {
     const 근거 = derive_pieces(입력.물음, 입력.k, 입력.인식, '인문사회국어')
       .filter((c) => c.파트 === '근거대기')
       .map((c) => ({ ...c, 요소: judge_element(c, '인문사회국어') }));
-    assert.deepEqual(근거.map((c) => `${c.node?.color}:${c.요소}`), ['P:p', 'B:b', 'C:c']);
+    // 「A국과 C국의 …손실」은 와/과 병렬 덩이 하나 (2026-10-14) — B, 「자국의 경제」 C
+    assert.deepEqual(근거.map((c) => `${c.node?.color}:${c.요소}`), ['B:b', 'C:c']);
   });
 
   it('급소가 여럿이면 전부 ①에서 뺀다 — 논술 (2-1)', () => {
@@ -281,7 +282,7 @@ describe('계열별 파트 구조 · ① 급소 K 제외', () => {
     assert.equal(급소.size, 2);
     const 근거 = derive_pieces(입력.물음, 입력.k, 입력.인식, '인문사회국어').filter((c) => c.파트 === '근거대기');
     assert.ok(근거.length > 0 && 근거.every((c) => !급소.has(c.node!.id)));
-    assert.ok(근거.some((c) => c.node?.color === 'C') && 근거.some((c) => c.node?.color === 'P'));
+    assert.ok(근거.some((c) => c.node?.color === 'P')); // P「변화」 — 「C국과 같은 …수출국」은 와/과 덩이 B (2026-10-14)
   });
 
   it('인문 ③ 풀기 없음 — 배점은 봉인④ 결손재분배 (수리는 네 파트 모두 배점)', () => {

@@ -124,3 +124,36 @@ describe('두 음절 용언 어간 — 「이루는」의 「는」은 관형형
     assert.deepEqual(는('하루는 철수를 설명하시오.'), ['하루']);
   });
 });
+
+// 인식 덩이 (오종래 2026-10-14) — 봉인 표지사전으로 본다:
+//   ① 「와/과」 병렬 덩이는 뒤 기능표지에 묶이는 한 단위 (parallelChains.links ~와·~과, 예외 없음)
+//   ② 관형형 「~는」(verbStems 미치·겪 …)은 앞 명사구(「의」「에」「이」로 끝나는 어절)·뒤 「~인」과 한 덩이 (관형절 덩이)
+//   ③ 주어 「이」 — 앞 어절이 「…의」로 끝나고 명사가 두 음절 이상이면 끊는다
+describe('인식 덩이 — 와/과 병렬 · 관형절 · 주어 「이」 (봉인 표지사전)', async () => {
+  const { recognizeV2Analysis } = await import('../src/fq/pipeline.ts');
+  const 실체들 = (q: string) => recognizeV2Analysis(q).graph.nodes.map((n) => `${n.color}「${n.entity.trim()}」`);
+
+  it('「A와 B」는 쪼개지 않고 뒤 표지에 묶인 한 덩이', () => {
+    const r = 실체들('A국과 C국의 무역분쟁으로 인한 손실을 줄이기 위해, D국이 시행한 정책이 자국의 경제에 어떤 도움이 될 수 있는지 설명하시오.');
+    assert.ok(r.includes('B「A국과 C국의 무역분쟁으로 인한 손실」'));
+    assert.ok(!r.some((x) => x === 'P「A국」'));
+  });
+
+  it('관형형 「~는」은 앞 명사구·뒤 「~인」과 한 덩이 — 급소 실체 하나', () => {
+    const a = recognizeV2Analysis('자유무역이 국가의 경제에 미치는 긍정적인 영향을 경제주체별로 구분하여 설명하시오.');
+    assert.deepEqual(a.graph.nodes.map((n) => `${n.color}「${n.entity.trim()}」`).slice(0, 1), ['B「자유무역이 국가의 경제에 미치는 긍정적인 영향」']);
+    assert.ok(a.pivot.ok && a.pivot.pivot.node.entity.trim() === '자유무역이 국가의 경제에 미치는 긍정적인 영향');
+  });
+
+  it('관형절은 다른 조사에서 멈춘다 — 「…를 증명하는」 앞의 인용 명제는 따로 선다', () => {
+    const r = 실체들("다음은 '0 ≤ x < π/2일 때 부등식 sinx ≥ xcosx가 성립한다.'를 증명하는 방법에 대한 철수와 영희의 대화 중 일부이다. 물음에 답하시오.");
+    assert.ok(r.includes("B「'0 ≤ x < π/2일 때 부등식 sinx ≥ xcosx가 성립한다.'」"));
+  });
+
+  it('주어 「이」 — 「…의 수출국이」에서 끊는다, 한 음절 명사(「길이」)는 걸지 않는다', () => {
+    const r = 실체들('C국과 같은 원자재 중심의 수출국이 국제무역 환경의 변화 때문에 겪는 구조적 약점을 제시하고, 국내 물가 상승의 이유를 설명하시오.');
+    assert.ok(r.includes('B「C국과 같은 원자재 중심의 수출국」'));
+    assert.ok(r.includes('B「국제무역 환경」'));
+    assert.ok(!실체들('정사각형의 한 변의 길이가 3일 때 넓이를 구하시오.').some((x) => x.endsWith('「한 변의 길」') || x.endsWith('「길」')));
+  });
+});
