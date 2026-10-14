@@ -87,7 +87,9 @@ app.post('/analyze',async(req,res)=>{
 // ── POST /api/generate — HMOS 이론 기반 제안 (루브릭·모범답안·해설) ──────────
 // 교사가 탭 4의 버튼을 눌렀을 때만 불린다. /analyze 인식 결과(급소·5색)를 받아 Claude API로 제안을 만든다.
 const Anthropic=require('@anthropic-ai/sdk').default;
-const client=new Anthropic(); // ANTHROPIC_API_KEY는 .env에서 (pm2 --env-file=.env)
+// ANTHROPIC_API_KEY는 .env에서 (pm2 --env-file=.env). 사용자 키(sk-ant-usr-)는 워크스페이스 헤더가 있어야 한다 —
+// .env에 ANTHROPIC_WORKSPACE_ID가 있으면 붙인다 (scripts/run-grader.mjs와 같다, 2026-10-14 새 서버)
+const client=new Anthropic(process.env.ANTHROPIC_WORKSPACE_ID?{defaultHeaders:{'anthropic-workspace-id':process.env.ANTHROPIC_WORKSPACE_ID}}:{});
 const MODEL='claude-sonnet-5-5';
 // 명세는 정적 서빙 폴더 밖에 둔다
 const SPEC=process.env.HMOS_SPEC||path.join(__dirname,'..','hmos-spec','HMOS_루브릭_구현명세-7.md');
