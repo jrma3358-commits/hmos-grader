@@ -3063,10 +3063,15 @@ function 문단흔적(글, s) {
   });
 }
 
+/** 채점 용어 — 서버 /api/answer와 같은 목록. 모범답안(교사 수정 포함)에 남으면 표시한다 (오종래 2026-10-14) */
+const 채점용어 = ['근거대기', '세우기', '풀기', '답구하기', '조각', '급소', '루브릭', '채점', '충족조건', '논지를 세'];
+
 function 흔적Html(글, s) {
   const r = 문단흔적(글, s);
   const 못 = r.filter(x => !x.충족).length;
+  const 용어 = 채점용어.filter(w => 글.includes(w) && !r.some(x => x.글자.includes(w)));
   return `<span class="badge ${못 ? 'warn' : 'ok'}">조각 흔적 ${r.length - 못}/${r.length}</span>
+    ${용어.length ? `<span class="badge warn">채점 용어 ${용어.map(w => `「${esc(w)}」`).join(' ')}</span>` : ''}
     ${r.map(x => `<span class="badge ${x.충족 ? 'muted' : 'warn'}" title="${esc(x.파트)}">${esc(x.id)} 「${esc(x.글자)}」${x.경로흔적 ? (x.경로흔적.length ? ' + 경로' : ' · 경로 흔적 없음') : ''}${x.충족 ? '' : ' ✗'}</span>`).join('')}`;
 }
 
