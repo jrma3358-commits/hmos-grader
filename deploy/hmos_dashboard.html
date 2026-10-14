@@ -68,7 +68,7 @@
     white-space: nowrap;
     flex-shrink: 0;
   }
-  /* 슬로건 — 헤더 오른쪽 끝. 좁은 화면에서는 슬로건이 먼저 줄어든다 (…) */
+  /* 슬로건 — 헤더 오른쪽 끝. 모자라면 먼저 줄어들고(…), 768px 이하에서는 숨긴다 */
   .header-slogan {
     margin-left: auto;
     font-size: 15px;
@@ -682,6 +682,7 @@
     .layout { grid-template-columns: 1fr; }
     .sidebar { display: none; }
     .main { padding: 16px; }
+    .header-slogan { display: none; }
   }
 </style>
 </head>
