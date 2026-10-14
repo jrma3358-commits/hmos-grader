@@ -1,4 +1,8 @@
-# deploy — 서버 판 (43.201.35.52 `~/hmos`)
+# deploy — 서버 판 (3.35.141.46 `~/hmos`)
+
+> 2026-10-14 새 서버 3.35.141.46 (Lightsail Node.js 이미지, Debian 12, admin)으로 옮김. 옛 서버 43.201.35.52는 10-14 먹통 — 스냅샷 없이 새로 깔았다.
+> 엔진 900a123, 봉인 표지사전.json은 로컬 사본 (sha256 2292ec5c…), `.env`는 오종래가 넣는다.
+> 옛 서버에만 있던 수정 3개(run.ts `--json`·lexicon.ts·옛 명세서-2)는 새 서버에 없다 — `/api/analyze`(대시보드는 안 씀)는 run.ts `--json`이 없어 실패한다.
 
 서버에 올라가 있는 파일을 그대로 옮겨 둔 것이다. 저장소 최상위 `server.js`·`hmos_dashboard.html`과 다른 판이다.
 서버의 `~/hmos`는 git 저장소가 아니다 — 파일을 직접 올린다 (scp).
@@ -10,7 +14,8 @@
   server.js                 POST /analyze · /api/analyze · /api/generate · /api/refine · /api/propose
   analyze-runner.mts        /analyze 러너 — 엔진(hmos-grader/)을 부르기만 한다
   hmos_dashboard.html       /dashboard
-  hmos-grader/              엔진 사본 (이 폴더에는 없음)
+  hmos-grader/              엔진 사본 — git clone (origin = ~/hmos-bundles/main.bundle). 봉인/표지사전.json은 git 밖이라 따로 scp
+~/hmos-bundles/main.bundle  엔진 번들 (정적 서빙 폴더 밖)
   .env                      ANTHROPIC_API_KEY (이 폴더에는 없음)
 ~/hmos-spec/
   HMOS_루브릭_구현명세-7.md  /api/generate 시스템 프롬프트 (F2~F6 원문) — 정적 서빙 밖에 둔다
@@ -18,7 +23,8 @@
   조립설명서.md              C·논술 9단계 조립설명서 (2026-10-13)
 ```
 
-- pm2: `hmos`, interpreter args `--env-file=.env`, Node 24
+- pm2: `hmos` (admin), node args `--env-file=.env`, Node 24. `pm2 startup systemd`(pm2-admin) + `pm2 save`로 부팅 때 뜬다
+- 재인식(러너)은 하나씩 돈다 — 병렬로 띄우면 서버가 멈춘다 (2026-10-14)
 - `package.json`이 `"type": "commonjs"`라서 `server.js`는 CommonJS다 (저장소 최상위는 ESM).
 
 ## /api/generate
@@ -52,15 +58,16 @@ HMOS 절대 원칙 (오종래 2026-10-13): 인식·제시문 급소 추출·연�
 
 - `https://hmos.hunminos.com` → nginx(80/443) → `127.0.0.1:3000`. 설정: `/etc/nginx/sites-available/hmos` = [`nginx/hmos.conf`](nginx/hmos.conf)
 - `/` 는 대시보드(`/hmos_dashboard.html`)를 그 자리에서 내준다. http는 https로 301
-- 인증서 Let's Encrypt (certbot --nginx, 만료 2027-01-11, certbot.timer 자동 갱신 — dry-run 통과)
-- 예전 자리표시 앱(root pm2 `nodeapp`, `/var/www/nodeapp/server.js`)은 pm2에서 지웠다. 파일은 남아 있다
+- 인증서 Let's Encrypt (certbot --nginx, 새 서버 발급 2026-10-13 23:15 UTC · 만료 2027-01-11, certbot.timer 자동 갱신 — dry-run 통과)
+- 예전 자리표시 앱(root pm2 `nodeapp`, `/var/www/nodeapp/server.js`)은 pm2에서 지웠다. 파일은 남아 있다 (새 서버도 같게, 백업 /root/.pm2/dump.pm2.bak-20261014)
+- 새 서버 nginx는 아래 hmos.conf에 `.bundle`·점 파일 차단을 더하고 proxy_read_timeout 600s (재인식 순차). certbot 등록은 이메일 없이
 - 조립설명서(C·논술 9단계 원전): 서버 `~/hmos-spec/조립설명서.md` = [`hmos-spec/조립설명서.md`](hmos-spec/조립설명서.md)
 
 ## 배포
 
 ```
-scp -i <키> deploy/server.js deploy/hmos_dashboard.html admin@43.201.35.52:hmos/
-ssh -i <키> admin@43.201.35.52 'pm2 restart hmos'
+scp -i <키> deploy/server.js deploy/hmos_dashboard.html admin@3.35.141.46:hmos/
+ssh -i <키> admin@3.35.141.46 'pm2 restart hmos'
 ```
 
 바꾸기 전 서버에서 `파일.bak-YYYYMMDD`로 백업을 남긴다.
