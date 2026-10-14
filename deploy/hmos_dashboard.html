@@ -677,6 +677,43 @@
   }
   #tab-reg.c .run-btn { background: var(--tool-make); }
 
+  /* 0단계 문항 목록 — 상태 네 가지: 미입력·대기·완료·실패 */
+  .badge.wait { background: var(--accent-light); color: var(--accent); }
+  .badge.fail { background: #FAE0E0; color: var(--Q); }
+  .item-nav { display: flex; flex-direction: column; gap: 2px; max-height: 40vh; overflow-y: auto; }
+  .item-nav .nav-item { justify-content: space-between; padding: 8px 12px; }
+  .item-nav .badge { margin: 0; flex-shrink: 0; }
+  .item-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  .item-run { font-size: 11px; color: var(--accent); margin-left: auto; margin-right: 6px; white-space: nowrap; }
+  .item-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .item-table th {
+    text-align: left;
+    padding: 8px 12px;
+    background: var(--bg);
+    border-bottom: 2px solid var(--border);
+    font-weight: 700;
+    color: var(--text-sub);
+    font-size: 11px;
+  }
+  .item-table td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  .item-table tr:last-child td { border-bottom: none; }
+  .item-table tr.current td { background: var(--accent-light); }
+  .item-table input[type="text"], .item-table select {
+    width: 100%;
+    min-width: 110px;
+    padding: 6px 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    font-family: var(--font);
+    font-size: 13px;
+    background: var(--surface);
+    outline: none;
+  }
+  .item-table input[type="text"]:focus { border-color: var(--accent); }
+  .item-table .item-why { font-size: 12px; color: var(--Q); margin-top: 4px; }
+  .item-table .type-btn { padding: 5px 12px; white-space: nowrap; }
+  .item-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
   /* 반응형 */
   @media (max-width: 768px) {
     .layout { grid-template-columns: 1fr; }
@@ -698,7 +735,12 @@
 
   <!-- 사이드바 -->
   <aside class="sidebar">
-    <div class="sidebar-label">분석 단계</div>
+    <!-- 문항 목록 — 누르면 그 문항 결과 화면으로 (결과가 없으면 0단계 등록) -->
+    <div class="sidebar-label">문항 목록</div>
+    <div class="item-nav" id="item-nav"></div>
+    <button class="nav-item" onclick="문항추가()"><div class="nav-num">+</div>문항 추가</button>
+
+    <div class="sidebar-label" style="margin-top: 12px;">분석 단계</div>
 
     <!-- C·논술 9단계 (조립설명서) — C를 고르면 A·B 탭 대신 보인다 -->
     <div id="nav-c" style="display:none;">
@@ -809,7 +851,27 @@
         <div class="section-sub" id="reg-sub">문항 원문을 넣으세요 — 등록하면 1단계 문항 입력으로 넘어갑니다</div>
       </div>
 
+      <!-- 문항 목록 관리 — 아래 편집창은 목록에서 고른 문항(편집 중)을 고친다 -->
       <div class="card">
+        <div class="card-title">문항 목록</div>
+        <div class="c-table-wrap">
+          <!-- rubric-table을 쓰지 않는다 — renderTab4가 첫 .rubric-table 머리를 바꾼다 -->
+          <table class="item-table">
+            <thead><tr><th>이름</th><th>파이프라인</th><th>상태</th><th></th></tr></thead>
+            <tbody id="item-tbody"></tbody>
+          </table>
+        </div>
+        <div class="item-actions" style="margin-top: 12px;">
+          <button class="type-btn" onclick="문항추가()">+ 문항 추가</button>
+          <button class="type-btn" onclick="목록저장()">목록 저장 (.json)</button>
+          <label class="type-btn">목록 불러오기<input type="file" accept=".json,application/json" hidden onchange="목록불러오기(this)"></label>
+        </div>
+        <button class="run-btn" id="batch-btn" onclick="전체분석()">전체 분석 시작</button>
+        <div class="reg-status" id="batch-status">대기·실패 문항을 하나씩 차례로 분석합니다. C는 논제·제시문을 자동으로 나눠 엔진에 넣고, 한 문항이 실패해도 다음 문항으로 넘어갑니다.</div>
+      </div>
+
+      <div class="card">
+        <div class="c-meta" id="reg-current"></div>
         <div class="reg-tabs">
           <button class="reg-tab active" data-src="text" onclick="showRegSrc('text')">① 텍스트</button>
           <button class="reg-tab" data-src="image" onclick="showRegSrc('image')">② 이미지</button>
@@ -1551,11 +1613,13 @@ function showTab(idx, btn) {
   (btn || document.querySelector(`#nav-ab .nav-item[data-tab="${idx}"]`)).classList.add('active');
 }
 
+/** type이 null이면 파이프라인 선택을 푼다 (문항 목록에서 파이프라인 없는 문항을 열 때) */
 function selectType(type, btn) {
+  if (!파이프라인동기(type)) return;
   document.querySelectorAll('.type-btn').forEach(b => b.classList.remove('selected'));
-  btn.classList.add('selected');
-  document.getElementById('pipeline-display').textContent = '파이프라인 ' + type;
-  document.getElementById('type-display').textContent = type;
+  if (btn) btn.classList.add('selected');
+  document.getElementById('pipeline-display').textContent = type ? '파이프라인 ' + type : '— 파이프라인 미선택';
+  document.getElementById('type-display').textContent = type || '문항 유형 선택 필요';
   selectedType = type;
   // C·논술은 논제·제시문만 받고 9단계 메뉴로 바뀐다. A·B는 문항 원문 + 6탭
   const isC = type === 'C-논술';
@@ -1580,6 +1644,7 @@ function selectType(type, btn) {
 /** 파이프라인 버튼을 눌러 준다 — 샘플이 다른 파이프라인 것이면 그쪽으로 바꾼다 */
 function pickType(type) {
   if (selectedType === type) return;
+  if (!type) return selectType(null);
   const btn = [...document.querySelectorAll('.type-btn')].find(b => b.getAttribute('onclick') === `selectType('${type}', this)`);
   if (btn) selectType(type, btn);
 }
@@ -1619,14 +1684,18 @@ async function runAnalysis() {
     });
     const out = await res.json();
     if (!out.ok) {
-      alert('분석 실패: ' + ((out.error && out.error.사유) || res.status));
+      const 사유 = '분석 실패: ' + ((out.error && out.error.사유) || res.status);
+      목록실패(사유, q);
+      alert(사유);
       return;
     }
     currentData = fromEngine(out, q, selectedType);
     if (currentData.생성입력) Object.assign(currentData.생성입력, { 논제: body.논제, 제시문: body.제시문 });
     renderAll(currentData);
+    목록완료({ AB: currentData }, q);
     showTab(1);
   } catch (e) {
+    목록실패('서버 연결 실패: ' + e.message, q);
     alert('서버 연결 실패: ' + e.message);
   } finally {
     btn.disabled = false;
@@ -2066,6 +2135,7 @@ function setRegText(글, 그림 = {}) {
   const 지금 = regText().trim();
   if (지금 && 지금 !== 글.trim() && !confirm('편집창에 있는 글을 바꿀까요?')) return false;
   setRegEditor(글, 그림);
+  원문동기();
   return true;
 }
 
@@ -2079,6 +2149,7 @@ function regPaste(e) {
 function regInput() {
   const box = document.getElementById('reg-input');
   if (!box.textContent.trim() && !box.querySelector('img')) box.innerHTML = '';
+  원문동기();
 }
 
 function regStatus(src, 글, 오류 = false) {
@@ -2227,11 +2298,15 @@ function 쓰인그림(글) {
 function saveReg() {
   const 글 = regText();
   if (!글.trim()) { alert('저장할 글이 없습니다.'); return; }
-  const 내용 = { 종류: 'HMOS 문항 등록', 버전: 1, 원문: 글, 그림: 쓰인그림(글) };
+  내려받기({ 종류: 'HMOS 문항 등록', 버전: 1, 원문: 글, 그림: 쓰인그림(글) }, '문항');
+}
+
+/** .json 내려받기 — 파일 이름은 「머리_날짜-시각.json」 */
+function 내려받기(내용, 머리) {
   const d = new Date(), p = n => String(n).padStart(2, '0');
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([JSON.stringify(내용, null, 1)], { type: 'application/json' }));
-  a.download = `문항_${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}.json`;
+  a.download = `${머리}_${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}.json`;
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 0);
 }
@@ -2352,11 +2427,21 @@ async function withBusy(btn, 글, fn) {
 async function runC() {
   const 논제 = document.getElementById('thesis-input').value.trim();
   if (!논제) { alert('논제를 입력하세요.'); return; }
-  const 제시문 = splitPassages(document.getElementById('passage-input').value);
+  const 제시문칸 = document.getElementById('passage-input').value;
+  const 제시문 = splitPassages(제시문칸);
+  const 글 = 논제 + (제시문칸.trim() ? '\n\n' + 제시문칸.trim() : '');
   await withBusy(document.getElementById('run-btn'), '엔진 분석 중…', async () => {
-    const { out } = await postJSON('/analyze', { 파이프라인: 'C', 논제, ...(제시문.length ? { 제시문 } : {}) });
-    if (!out.ok) { alert('분석 실패: ' + ((out.error && out.error.사유) || '알 수 없음')); return; }
+    let out;
+    try { ({ out } = await postJSON('/analyze', { 파이프라인: 'C', 논제, ...(제시문.length ? { 제시문 } : {}) })); }
+    catch (e) { 목록실패('서버 연결 실패: ' + e.message, 글); throw e; }
+    if (!out.ok) {
+      const 사유 = '분석 실패: ' + ((out.error && out.error.사유) || '알 수 없음');
+      목록실패(사유, 글);
+      alert(사유);
+      return;
+    }
     Object.assign(C, { 논제, 제시문, 분석: out, 정교화: null, 추가: null, 후보: [], 확정: [] });
+    목록완료({ C: C결과(), 입력: { 논제, 제시문: 제시문칸 } }, 글);
     resetCDone();
     renderC2(); renderC3(); renderC4(); renderC5(); renderC6(); renderC7(); renderC8(); renderC9();
     markCDone(1, 2, 5);
@@ -2814,6 +2899,359 @@ function renderC9() {
   }).join('');
   if (C.확정.every(x => x.생성 && x.교사GJ)) markCDone(9);
 }
+
+// ════════════════════════════════════════════════════════════════════════
+// 0단계 문항 목록 (오종래 2026-10-14)
+// 문항마다 {이름, 파이프라인, 원문, 그림, 상태, 사유, 결과}. 상태는 미입력·대기·완료·실패 네 가지.
+//   미입력 = 원문이나 파이프라인이 없음 · 대기 = 분석할 차례(원문이 바뀌면 완료·실패도 대기로)
+//   완료 = 엔진 분석 성공 · 실패 = 엔진이 멈췄거나 서버 연결 실패 (사유를 남긴다)
+// 0단계 편집창·1단계·결과 화면은 「편집 중」 문항 하나를 보인다. 다른 문항을 열면 화면을 비우고 그 문항 것으로 채운다.
+// 결과 — A·B {AB: fromEngine 자료} · C {C: 9단계 상태, 입력: 1단계 두 칸, 뺀것}. 결과는 다시 분석해 성공하거나 파이프라인을 바꿀 때만 바뀐다.
+// 전체 분석은 대기·실패 문항을 하나씩 차례로 (서버 과부하 — 병렬로 보내지 않는다). 한 문항이 실패해도 다음 문항으로.
+// ════════════════════════════════════════════════════════════════════════
+
+const 파이프라인들 = ['A-객관식', 'A-주관식', 'B-서술형', 'C-논술'];
+const 상태배지 = { 미입력: 'muted', 대기: 'wait', 완료: 'ok', 실패: 'fail' };
+const 목록 = { 문항: [], 지금: null, 번호: 0, 전환중: false, 돌리는중: false, 진행: null, 보이는결과: null };
+
+/** 결과 화면을 비울 때 되돌릴 A·B 탭 처음 모습 */
+const AB초기 = Object.fromEntries([1, 2, 3, 4, 5].map(i => [i, document.getElementById('tab-' + i).innerHTML]));
+
+const 지금문항 = () => 목록.문항.find(m => m.id === 목록.지금);
+
+function 새문항(값 = {}) {
+  const n = ++목록.번호;
+  return { id: n, 이름: `문항 ${n}`, 파이프라인: null, 원문: '', 그림: {}, 상태: '미입력', 사유: '', 결과: null, ...값 };
+}
+
+/** 원문·파이프라인이 바뀐 뒤 — 둘 다 있으면 대기, 하나라도 없으면 미입력 */
+function 상태맞춤(m) {
+  m.상태 = m.원문.trim() && m.파이프라인 ? '대기' : '미입력';
+  m.사유 = '';
+}
+
+/** 그 문항 파이프라인에 맞는 결과 */
+const 맞는결과 = m => m.결과 && (m.파이프라인 === 'C-논술' ? m.결과.C : m.결과.AB) ? m.결과 : null;
+
+/** C 전역 상태 → 결과에 담을 값 */
+const C결과 = () => ({ 논제: C.논제, 제시문: C.제시문, 분석: C.분석, 정교화: C.정교화, 추가: C.추가, 후보: C.후보, 확정: C.확정 });
+
+/** 화면에 열린 C 결과에 그동안의 5~9단계 작업(정교화·추가 논제·확정·루브릭)을 담는다 — A·B는 currentData가 결과 그 자체라 할 일 없음 */
+function 현재결과담기() {
+  const r = 목록.보이는결과;
+  if (r && r.C && C.분석) Object.assign(r.C, C결과());
+}
+
+/** 0단계 편집창이 바뀌면 편집 중 문항에 */
+function 원문동기() {
+  const m = 지금문항();
+  if (!m || 목록.전환중) return;
+  const 글 = regText();
+  if (글 === m.원문) return;
+  const 전 = m.상태;
+  m.원문 = 글;
+  m.그림 = REG.그림;
+  상태맞춤(m);
+  if (m.상태 !== 전) 목록그리기();
+}
+
+/** 파이프라인을 바꾸면 편집 중 문항에 — 결과가 있으면 지워지므로 묻는다. 그만두면 false */
+function 파이프라인동기(type) {
+  const m = 지금문항();
+  if (!m || 목록.전환중 || m.파이프라인 === type) return true;
+  if (m.결과) {
+    if (!confirm(`「${m.이름}」의 파이프라인을 바꾸면 분석 결과가 지워집니다. 바꿀까요?`)) { 목록그리기(); return false; }
+    m.결과 = null;
+    화면비우기();
+  }
+  m.파이프라인 = type;
+  상태맞춤(m);
+  목록그리기();
+  return true;
+}
+
+/** 1단계에서 바로 분석했는데 0단계 원문이 비어 있으면 분석한 글을 원문으로 */
+function 원문채움(m, 글) {
+  if (m.원문.trim() || !글) return;
+  m.원문 = 글;
+  m.그림 = {};
+  setRegEditor(글);
+}
+
+/** 1단계 분석 성공 → 편집 중 문항 완료 */
+function 목록완료(결과, 글) {
+  const m = 지금문항();
+  if (!m) return;
+  원문채움(m, 글);
+  Object.assign(m, { 결과, 상태: '완료', 사유: '' });
+  목록.보이는결과 = 결과;
+  목록그리기();
+}
+
+/** 1단계 분석 실패 → 편집 중 문항 실패 (전 결과는 남는다) */
+function 목록실패(사유, 글) {
+  const m = 지금문항();
+  if (!m) return;
+  원문채움(m, 글);
+  Object.assign(m, { 상태: '실패', 사유 });
+  목록그리기();
+}
+
+/** 결과 화면·1단계 칸·단계 표시를 처음 모습으로 */
+function 화면비우기() {
+  목록.보이는결과 = null;
+  currentData = null;
+  for (const [i, html] of Object.entries(AB초기)) document.getElementById('tab-' + i).innerHTML = html;
+  Object.assign(C, { 논제: '', 제시문: [], 분석: null, 정교화: null, 추가: null, 후보: [], 확정: [] });
+  buildCPanes();
+  document.querySelectorAll('#nav-c .nav-item, #nav-ab .nav-item').forEach(b => b.classList.remove('done'));
+  ['question-input', 'thesis-input', 'passage-input'].forEach(id => { document.getElementById(id).value = ''; });
+  document.getElementById('reg-notice').innerHTML = '';
+  document.getElementById('reg-figs').innerHTML = '';
+}
+
+/** 0단계에서 나누며 빠진 글 알림 (registerC와 같은 문구) */
+function 뺀것알림(뺀것) {
+  document.getElementById('reg-notice').innerHTML = 뺀것 && 뺀것.length
+    ? `<div class="flag-box" style="margin: 0 0 12px;">0단계 원문에서 논제·제시문 어디에도 넣지 않은 글이 있습니다 — 필요하면 칸에 옮기세요.${뺀것.map(t => `<div style="margin-top:6px; white-space: pre-wrap;">「${esc(t)}」</div>`).join('')}</div>`
+    : '';
+}
+
+/** 문항 열기 — 결과가 있으면 결과 화면(A·B 2 인식 결과 · C 2 논제 인식), 없으면 0단계 등록 */
+function 문항열기(id) {
+  const m = 목록.문항.find(x => x.id === id);
+  if (!m) return;
+  현재결과담기();
+  목록.지금 = id;
+  목록.전환중 = true;
+  try {
+    setRegEditor(m.원문, m.그림);
+    regInput();
+    if (selectedType !== m.파이프라인) pickType(m.파이프라인);
+    화면비우기();
+    const r = 맞는결과(m);
+    if (r && r.C) {
+      목록.보이는결과 = r;
+      Object.assign(C, r.C);
+      document.getElementById('thesis-input').value = (r.입력 && r.입력.논제) || C.논제;
+      document.getElementById('passage-input').value = (r.입력 && r.입력.제시문) || '';
+      뺀것알림(r.뺀것);
+      renderRegFigs(m.원문);
+      renderC2(); renderC3(); renderC4(); renderC5(); renderC6(); renderC7(); renderC8(); renderC9();
+      markCDone(0, 1, 2, 5);
+      if (C.제시문.length) markCDone(3, 4);
+      if (C.확정.length) markCDone(7);
+      if (C.확정.length && C.확정.every(x => x.생성)) markCDone(8);
+      showCStep(2);
+    } else if (r) {
+      목록.보이는결과 = r;
+      currentData = r.AB;
+      document.getElementById('question-input').value = r.AB.문항원문;
+      renderRegFigs(m.원문);
+      renderAll(currentData);
+      document.querySelector('#nav-ab .nav-item[data-tab="reg"]').classList.add('done');
+      showTab(1);
+    } else if (m.파이프라인 === 'C-논술') {
+      showCStep(0);
+    } else {
+      showTab('reg');
+    }
+  } finally {
+    목록.전환중 = false;
+  }
+  목록그리기();
+}
+
+/** 새 문항 — 편집 중 문항의 파이프라인을 이어받는다 */
+function 문항추가() {
+  const m = 새문항({ 파이프라인: selectedType });
+  목록.문항.push(m);
+  문항열기(m.id);
+}
+
+function 문항삭제(id) {
+  if (목록.돌리는중) { alert('전체 분석이 끝난 뒤 지우세요.'); return; }
+  const m = 목록.문항.find(x => x.id === id);
+  if (!m) return;
+  if ((m.원문.trim() || m.결과) && !confirm(`「${m.이름}」을(를) 목록에서 지울까요?`)) return;
+  목록.문항 = 목록.문항.filter(x => x !== m);
+  if (!목록.문항.length) 목록.문항.push(새문항({ 파이프라인: m.파이프라인 }));
+  if (목록.지금 === id) {
+    목록.보이는결과 = null;  // 지운 문항 결과에 담지 않는다
+    문항열기(목록.문항[0].id);
+  } else {
+    목록그리기();
+  }
+}
+
+function 문항이름(id, 값) {
+  const m = 목록.문항.find(x => x.id === id);
+  if (!m) return;
+  m.이름 = 값.trim() || `문항 ${id}`;
+  목록그리기();
+}
+
+/** 표의 파이프라인 고르기 — 편집 중 문항이면 1단계 파이프라인 버튼과 같이 움직인다 */
+function 문항파이프라인(id, 값) {
+  const type = 값 || null;
+  if (id === 목록.지금) { pickType(type); 목록그리기(); return; }
+  const m = 목록.문항.find(x => x.id === id);
+  if (!m || m.파이프라인 === type) return;
+  if (m.결과 && !confirm(`「${m.이름}」의 파이프라인을 바꾸면 분석 결과가 지워집니다. 바꿀까요?`)) { 목록그리기(); return; }
+  m.결과 = null;
+  m.파이프라인 = type;
+  상태맞춤(m);
+  목록그리기();
+}
+
+function 목록그리기() {
+  const 배지 = m => `<span class="badge ${상태배지[m.상태]}"${m.사유 ? ` title="${esc(m.사유)}"` : ''}>${m.상태}</span>`;
+  const 진행 = m => (목록.진행 === m.id ? '<span class="item-run">분석 중…</span>' : '');
+  document.getElementById('item-nav').innerHTML = 목록.문항.map(m => `
+    <button class="nav-item${m.id === 목록.지금 ? ' active' : ''}" onclick="문항열기(${m.id})">
+      <span class="item-name">${esc(m.이름)}</span>${진행(m)}${배지(m)}
+    </button>`).join('');
+  document.getElementById('item-tbody').innerHTML = 목록.문항.map(m => `
+    <tr${m.id === 목록.지금 ? ' class="current"' : ''}>
+      <td><input type="text" value="${esc(m.이름)}" onchange="문항이름(${m.id}, this.value)"></td>
+      <td><select onchange="문항파이프라인(${m.id}, this.value)">
+        <option value="">— 고르세요</option>
+        ${파이프라인들.map(p => `<option value="${p}"${m.파이프라인 === p ? ' selected' : ''}>${p.replace('-', ' · ')}</option>`).join('')}
+      </select></td>
+      <td>${배지(m)}${진행(m)}${m.상태 === '실패' && m.사유 ? `<div class="item-why">${esc(m.사유)}</div>` : ''}</td>
+      <td><div class="item-actions">
+        ${m.id === 목록.지금 ? '<span class="badge muted">편집 중</span>' : `<button class="type-btn" onclick="문항열기(${m.id})">열기</button>`}
+        <button class="type-btn" onclick="문항삭제(${m.id})">삭제</button>
+      </div></td>
+    </tr>`).join('');
+  const m = 지금문항();
+  document.getElementById('reg-current').textContent = m ? `편집 중: ${m.이름} — 아래에 넣은 원문은 이 문항에 들어갑니다` : '';
+}
+
+/** /analyze 실패 응답 → 사유 한 줄 (엔진 멈춤 사유 · 서버 오류 글) */
+const 분석실패글 = out => '분석 실패: ' + ((out.error && out.error.사유) || (typeof out.error === 'string' ? out.error : '알 수 없음'));
+
+/** 문항 하나 분석 — C는 논제·제시문을 자동으로 나눠 엔진에. 실패하면 사유를 담아 throw */
+async function 문항분석(원문, 파이프라인) {
+  if (파이프라인 === 'C-논술') {
+    const 나눔 = splitRegistration(원문);
+    if (!나눔) throw new Error('논제를 찾지 못했습니다 — 0단계 원문을 확인하세요');
+    const 제시문 = splitPassages(나눔.제시문);
+    const { out } = await postJSON('/analyze', { 파이프라인: 'C', 논제: 나눔.논제, ...(제시문.length ? { 제시문 } : {}) });
+    if (!out.ok) throw new Error(분석실패글(out));
+    return {
+      C: { 논제: 나눔.논제, 제시문, 분석: out, 정교화: null, 추가: null, 후보: [], 확정: [] },
+      입력: { 논제: 나눔.논제, 제시문: 나눔.제시문 },
+      뺀것: 나눔.뺀것,
+    };
+  }
+  const 글 = 원문.trim();
+  const { out } = await postJSON('/analyze', { 문항원문: 글, 파이프라인: 파이프라인.charAt(0) });
+  if (!out.ok) throw new Error(분석실패글(out));
+  return { AB: fromEngine(out, 글, 파이프라인) };
+}
+
+/** 전체 분석 — 대기·실패 문항을 차례로. 파이프라인은 문항마다 따로, 실패는 사유만 남기고 다음 문항으로 */
+async function 전체분석() {
+  if (목록.돌리는중) return;
+  현재결과담기();
+  const 대상 = 목록.문항.filter(m => m.상태 === '대기' || m.상태 === '실패');
+  const 미입력 = 목록.문항.filter(m => m.상태 === '미입력').length;
+  if (!대상.length) { alert('분석할 문항이 없습니다 — 대기·실패 문항만 분석합니다' + (미입력 ? ` (미입력 ${미입력}개)` : '')); return; }
+  const btn = document.getElementById('batch-btn');
+  const 알림 = document.getElementById('batch-status');
+  목록.돌리는중 = true;
+  btn.disabled = true;
+  let 완료 = 0, 실패 = 0, 바뀜 = 0;
+  try {
+    for (const [i, m] of 대상.entries()) {
+      btn.textContent = `전체 분석 중… ${i + 1}/${대상.length} · ${m.이름}`;
+      목록.진행 = m.id;
+      목록그리기();
+      const 원문 = m.원문, 파이프라인 = m.파이프라인;
+      let 결과 = null, 사유 = '';
+      try { 결과 = await 문항분석(원문, 파이프라인); }
+      catch (e) { 사유 = e.message; }
+      // 분석 도중 원문·파이프라인을 고쳤으면 결과를 버리고 대기로 둔다
+      if (m.원문 !== 원문 || m.파이프라인 !== 파이프라인) { 바뀜++; continue; }
+      if (결과) { Object.assign(m, { 결과, 상태: '완료', 사유: '' }); 완료++; }
+      else { Object.assign(m, { 상태: '실패', 사유 }); 실패++; }
+    }
+  } finally {
+    목록.돌리는중 = false;
+    목록.진행 = null;
+    btn.disabled = false;
+    btn.textContent = '전체 분석 시작';
+  }
+  알림.textContent = `전체 분석 끝 — 완료 ${완료} · 실패 ${실패}`
+    + (바뀜 ? ` · 도중에 고친 ${바뀜}개는 대기로 남김` : '')
+    + (미입력 ? ` · 미입력 ${미입력}개는 건너뜀` : '');
+  // 편집 중 문항이 방금 완료됐으면 그 결과를 연다
+  const 지금 = 지금문항();
+  if (지금 && 대상.includes(지금) && 지금.상태 === '완료') 문항열기(지금.id);
+  else 목록그리기();
+}
+
+/** 목록 저장 — 문항마다 이름·파이프라인·원문·그림·상태·분석 결과를 .json 하나로 */
+function 목록저장() {
+  if (목록.돌리는중) { alert('전체 분석이 끝난 뒤 저장하세요.'); return; }
+  현재결과담기();
+  const 그림만 = m => {
+    const 그림 = {};
+    for (const x of m.원문.matchAll(/\[그림\s*(\d+)\]/g)) if (m.그림[x[1]]) 그림[x[1]] = m.그림[x[1]];
+    return 그림;
+  };
+  내려받기({
+    종류: 'HMOS 문항 목록', 버전: 1,
+    문항: 목록.문항.map(m => ({ 이름: m.이름, 파이프라인: m.파이프라인, 원문: m.원문, 그림: 그림만(m), 상태: m.상태, 사유: m.사유, 결과: m.결과 })),
+  }, '문항목록');
+}
+
+/** 불러온 문항 하나 — 모양이 안 맞는 값은 버리고, 상태는 원문·파이프라인·결과에 맞춘다 */
+function 불러온문항(x) {
+  const m = 새문항();
+  if (typeof x.이름 === 'string' && x.이름.trim()) m.이름 = x.이름.trim();
+  if (파이프라인들.includes(x.파이프라인)) m.파이프라인 = x.파이프라인;
+  if (typeof x.원문 === 'string') m.원문 = x.원문;
+  if (x.그림 && typeof x.그림 === 'object') m.그림 = x.그림;
+  const r = x.결과;
+  const 맞음 = r && typeof r === 'object' && (m.파이프라인 === 'C-논술'
+    ? r.C && r.C.분석 && r.C.분석.단계 && Array.isArray(r.C.제시문)
+    : r.AB && r.AB.단계2 && r.AB.교사확정);
+  if (맞음) m.결과 = r;
+  상태맞춤(m);
+  if (m.상태 === '대기') {
+    if (x.상태 === '완료' && m.결과) m.상태 = '완료';
+    else if (x.상태 === '실패') { m.상태 = '실패'; m.사유 = typeof x.사유 === 'string' ? x.사유 : ''; }
+  }
+  return m;
+}
+
+/** 목록 불러오기 — 「목록 저장」 파일. 한 문항 「저장」 파일(.json)도 문항 하나로 받는다 */
+async function 목록불러오기(input) {
+  const f = input.files[0];
+  input.value = '';
+  if (!f) return;
+  if (목록.돌리는중) { alert('전체 분석이 끝난 뒤 불러오세요.'); return; }
+  let d = null;
+  try { d = JSON.parse(await 텍스트파일(f)); } catch (_) {}
+  let 문항;
+  if (d && d.종류 === 'HMOS 문항 목록' && Array.isArray(d.문항)) 문항 = d.문항.filter(x => x && typeof x === 'object');
+  else if (d && typeof d.원문 === 'string') 문항 = [{ 이름: f.name.replace(/\.json$/i, ''), 원문: d.원문, 그림: d.그림 }];
+  else { alert(`${f.name} — 「목록 저장」으로 만든 파일이 아닙니다`); return; }
+  if (목록.문항.some(m => m.원문.trim() || m.결과) && !confirm('지금 목록을 불러온 목록으로 바꿀까요? 저장하지 않은 문항은 사라집니다.')) return;
+  목록.번호 = 0;
+  목록.문항 = 문항.map(불러온문항);
+  if (!목록.문항.length) 목록.문항.push(새문항());
+  목록.보이는결과 = null;
+  문항열기(목록.문항[0].id);
+  document.getElementById('batch-status').textContent = `${f.name}에서 ${목록.문항.length}개 문항을 불러왔습니다`;
+}
+
+// 처음 — 빈 문항 하나
+목록.문항.push(새문항());
+목록.지금 = 목록.문항[0].id;
+목록그리기();
 </script>
 
 </body>
