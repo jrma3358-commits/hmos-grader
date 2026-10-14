@@ -27,7 +27,8 @@ export const 모범조각틀: Readonly<Record<파트, Record<계열, string>>> =
 export function 봉인5_모범조각(조각: 조각뼈대, 재료: 재료, 계열: 계열): string {
   const 틀 = 모범조각틀[재료.파트][계열];
   if (!틀.includes('{실체}')) return 틀;
-  const 실체 = ('node' in 재료 ? 재료.node.entity : '').trim();
+  // 인문논술 ① 제시문 단락 급소 조각은 노드 대신 단락 급소 (2026-10-14)
+  const 실체 = ('node' in 재료 ? 재료.node.entity : '제시문' in 재료 ? 재료.제시문.단락급소 : '').trim();
   if (실체 === '') {
     throw new SealedError(`[봉인⑤] ${조각.id}(${재료.파트}): {실체}를 채울 노드 실체가 비어 있습니다.`);
   }

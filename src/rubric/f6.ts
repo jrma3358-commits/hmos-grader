@@ -16,6 +16,7 @@ import type { 계열, 근거문장, 급소K, 조각뼈대 } from './types.ts';
 export type 재료 =
   | { 파트: '근거대기' | '세우기'; node: PathNode }
   | { 파트: '세우기'; 근거: 근거문장 }
+  | { 파트: '근거대기'; 제시문: { 단락: string; 단락급소: string } }
   | { 파트: '풀기' }
   | { 파트: '답구하기'; k: 급소K };
 
@@ -26,6 +27,8 @@ export function material_of(조각: 조각뼈대, k: 급소K): 재료 {
       if (조각.node === null && 조각.근거) return { 파트: '세우기', 근거: 조각.근거 };
     // falls through — 노드에서 온 세우기
     case '근거대기':
+      // 인문논술 ① 제시문 단락 급소 조각 (2026-10-14)
+      if (조각.파트 === '근거대기' && 조각.node === null && 조각.제시문) return { 파트: '근거대기', 제시문: 조각.제시문 };
       if (조각.node === null) {
         throw new Error(`${조각.id}(${조각.파트}): 노드 없는 조각입니다 — ①②는 인식 노드에서 와야 합니다.`);
       }

@@ -2847,7 +2847,7 @@ function 루브릭소문항Html(s) {
       <td style="white-space:nowrap;">${파트번호[c.파트] || ''} ${esc(c.파트)}</td>
       <td>${esc(c.id)}${c.is_중심 ? ' <span class="badge ok">중심</span>' : ''}</td>
       <td style="white-space:nowrap;">${c.요소 ? esc(c.요소) : `<span class="c-meta">${esc(c.수행질 || '—')}</span>`}</td>
-      <td>「${esc(displayEntity(c.실체 ?? s.급소.실체))}」${c.근거 ? `<div class="c-meta" style="margin:4px 0 0;">근거 [${esc(c.근거.단락)}] ${esc(c.근거.문장)}</div>` : ''}${c.경로 ? `<div class="c-meta" style="margin:4px 0 0;">경로 ${경로글(c.경로)}</div>` : ''}</td>
+      <td>「${esc(displayEntity(c.실체 ?? s.급소.실체))}」${c.근거 ? `<div class="c-meta" style="margin:4px 0 0;">근거 [${esc(c.근거.단락)}] ${esc(c.근거.문장)}</div>` : ''}${c.경로 ? `<div class="c-meta" style="margin:4px 0 0;">경로 ${경로글(c.경로)}</div>` : ''}${c.제시문 ? `<div class="c-meta" style="margin:4px 0 0;">제시문 [${esc(c.제시문.단락)}] 연결 단락 급소 — 제시문에서 실제 가져온 것</div>` : ''}</td>
       <td>${esc(c.확인물음)}</td>
       <td>${esc(c.충족조건)}</td>
       <td style="white-space:nowrap;">${배점글(c.배점)}</td>
@@ -2937,6 +2937,7 @@ function renderC9() {
               ${c.충족 ? '<span class="badge ok" style="margin-left:6px;">충족</span>' : `<span class="badge warn" style="margin-left:6px;">미충족 — ${c.경로 ? '급소 글자 또는 경로 흔적 없음' : '실체 글자 없음'}</span>`}</div>
             ${c.근거 ? `<div class="c-meta" style="margin:2px 0 4px;">근거 [${esc(c.근거.단락)}] ${esc(c.근거.문장)}</div>` : ''}
             ${c.경로 ? `<div class="c-meta" style="margin:2px 0 4px;">경로 ${경로글(c.경로)}${c.흔적 ? ` · 답안에 남은 경로 흔적: ${c.흔적.length ? c.흔적.map(t => `「${esc(t)}」`).join(' ') : '없음'}` : ''}</div>` : ''}
+            ${c.제시문 ? `<div class="c-meta" style="margin:2px 0 4px;">제시문 [${esc(c.제시문.단락)}] 연결 단락 급소</div>` : ''}
             <div class="step-body">${esc(c.표현 || '(문장 없음)')}</div>
           </div>
         </div>`).join('');

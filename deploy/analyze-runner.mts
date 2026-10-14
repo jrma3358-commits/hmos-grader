@@ -116,8 +116,8 @@ function 루브릭작업(논제글: string, 계열: string, 총배점: number, �
       const 조각 = 배점.조각들.map((c: any) => ({
         id: c.id, 파트: c.파트, 요소: c.요소, 수행질: c.수행질, is_중심: c.is_중심, 확인물음: c.확인물음,
         // ④ 경로가 있으면 실체 = 경로의 K (엔진 급소 핵심어)
-        실체: c.경로 ? c.경로[c.경로.length - 1].실체 : c.node ? c.node.entity : c.근거 ? c.근거.단락급소 : null,
-        노드: c.node ? c.node.id : null, 근거: c.근거 ?? null, 경로: c.경로 ?? null, 배점: c.배점,
+        실체: c.경로 ? c.경로[c.경로.length - 1].실체 : c.node ? c.node.entity : c.근거 ? c.근거.단락급소 : c.제시문 ? c.제시문.단락급소 : null,
+        노드: c.node ? c.node.id : null, 근거: c.근거 ?? null, 경로: c.경로 ?? null, 제시문: c.제시문 ?? null, 배점: c.배점,
         충족조건: specify_condition(c, 계열), 모범조각틀: spread_piece(c, k, 계열),
       }));
       조각.sort((a: any, b: any) => 파트순서.indexOf(a.파트) - 파트순서.indexOf(b.파트));
