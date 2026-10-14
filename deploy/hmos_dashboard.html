@@ -3091,6 +3091,14 @@ function 문항이름(id, 값) {
   목록그리기();
 }
 
+/** 이름 칸에 치는 동안 — 사이드바·편집 중 표시만 바로 바꾼다 (표를 다시 그리면 칸 포커스를 잃는다). 칸을 떠나면 문항이름이 마무리 */
+function 문항이름입력(id, 값) {
+  const m = 목록.문항.find(x => x.id === id);
+  if (!m) return;
+  m.이름 = 값.trim() || `문항 ${id}`;
+  사이드바그리기();
+}
+
 /** 표의 파이프라인 고르기 — 편집 중 문항이면 1단계 파이프라인 버튼과 같이 움직인다 */
 function 문항파이프라인(id, 값) {
   const type = 값 || null;
@@ -3104,16 +3112,26 @@ function 문항파이프라인(id, 값) {
   목록그리기();
 }
 
-function 목록그리기() {
-  const 배지 = m => `<span class="badge ${상태배지[m.상태]}"${m.사유 ? ` title="${esc(m.사유)}"` : ''}>${m.상태}</span>`;
-  const 진행 = m => (목록.진행 === m.id ? '<span class="item-run">분석 중…</span>' : '');
+const 상태배지Html = m => `<span class="badge ${상태배지[m.상태]}"${m.사유 ? ` title="${esc(m.사유)}"` : ''}>${m.상태}</span>`;
+const 진행Html = m => (목록.진행 === m.id ? '<span class="item-run">분석 중…</span>' : '');
+
+/** 사이드바 문항 목록 (이름·상태, 편집 중 문항 강조) + 0단계 「편집 중」 표시 */
+function 사이드바그리기() {
   document.getElementById('item-nav').innerHTML = 목록.문항.map(m => `
-    <button class="nav-item${m.id === 목록.지금 ? ' active' : ''}" onclick="문항열기(${m.id})">
-      <span class="item-name">${esc(m.이름)}</span>${진행(m)}${배지(m)}
+    <button class="nav-item${m.id === 목록.지금 ? ' active' : ''}" onclick="문항열기(${m.id})" title="${esc(m.이름)} — ${m.상태}">
+      <span class="item-name">${esc(m.이름)}</span>${진행Html(m)}${상태배지Html(m)}
     </button>`).join('');
+  const m = 지금문항();
+  document.getElementById('reg-current').textContent = m ? `편집 중: ${m.이름} — 아래에 넣은 원문은 이 문항에 들어갑니다` : '';
+}
+
+/** 사이드바 + 0단계 문항 목록 표 — 상태·이름·파이프라인이 바뀔 때마다 둘 다 */
+function 목록그리기() {
+  const 배지 = 상태배지Html, 진행 = 진행Html;
+  사이드바그리기();
   document.getElementById('item-tbody').innerHTML = 목록.문항.map(m => `
     <tr${m.id === 목록.지금 ? ' class="current"' : ''}>
-      <td><input type="text" value="${esc(m.이름)}" onchange="문항이름(${m.id}, this.value)"></td>
+      <td><input type="text" value="${esc(m.이름)}" oninput="문항이름입력(${m.id}, this.value)" onchange="문항이름(${m.id}, this.value)"></td>
       <td><select onchange="문항파이프라인(${m.id}, this.value)">
         <option value="">— 고르세요</option>
         ${파이프라인들.map(p => `<option value="${p}"${m.파이프라인 === p ? ' selected' : ''}>${p.replace('-', ' · ')}</option>`).join('')}
@@ -3124,8 +3142,6 @@ function 목록그리기() {
         <button class="type-btn" onclick="문항삭제(${m.id})">삭제</button>
       </div></td>
     </tr>`).join('');
-  const m = 지금문항();
-  document.getElementById('reg-current').textContent = m ? `편집 중: ${m.이름} — 아래에 넣은 원문은 이 문항에 들어갑니다` : '';
 }
 
 /** /analyze 실패 응답 → 사유 한 줄 (엔진 멈춤 사유 · 서버 오류 글) */
