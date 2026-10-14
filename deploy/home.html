@@ -179,6 +179,34 @@
   .card.grade li::before { background: var(--terracotta); }
   .card.diag li::before { background: var(--brown); }
 
+  /* 이 시대에 필요한 것 (2026-10-15) — 기능 아래 · 푸터 위. 줄바꿈은 원문 그대로 (pre-line) */
+  .needs {
+    padding: 120px 0 128px;
+    text-align: center;
+    background:
+      radial-gradient(ellipse 50% 60% at 50% 0%, var(--apricot-soft) 0%, transparent 70%),
+      var(--cream-deep);
+  }
+  .needs .section-kicker { color: var(--olive); }
+  .needs .section-title { margin-top: 12px; }
+  .needs-body {
+    margin: 48px auto 0;
+    max-width: 30em;
+    font-family: var(--serif);
+    font-size: clamp(17px, 2vw, 20px);
+    line-height: 2.1;
+    white-space: pre-line;
+    word-break: keep-all;
+  }
+  .needs-mark { display: block; width: 36px; height: 2px; margin: 52px auto 0; background: var(--terracotta); border-radius: 2px; }
+  .needs-last {
+    margin-top: 28px;
+    font-family: var(--serif);
+    font-size: clamp(19px, 2.3vw, 24px);
+    font-weight: 700;
+    word-break: keep-all;
+  }
+
   /* 푸터 */
   footer { background: var(--brown); color: #D9CBB8; padding: 44px 0 52px; font-size: 14px; }
   footer .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 20px 40px; align-items: flex-end; }
@@ -231,6 +259,7 @@
     .hero { padding: 80px 0 88px; }
     .cta { width: 100%; justify-content: center; }
     .features { padding: 72px 0 80px; }
+    .needs { padding: 88px 0 96px; }
     .footer-side { align-items: flex-start; }
   }
   @media (prefers-reduced-motion: reduce) {
@@ -308,6 +337,29 @@
           </ul>
         </article>
       </div>
+    </div>
+  </section>
+
+  <section class="needs" aria-labelledby="needs-title">
+    <div class="wrap">
+      <div class="section-kicker">WHY NOW</div>
+      <h2 class="section-title" id="needs-title">이 시대에 필요한 것</h2>
+      <p class="needs-body">답이 흔해진 시대다.
+AI는 질문에 답을 내놓는다.
+그러나 왜 그 답인지,
+그 답이 질문에 실제로 닿았는지 —
+아무도 추적하지 못한다.
+
+근거 없는 답은
+신뢰가 아니라 승복을 강요한다.
+
+이 시대에 필요한 것은
+더 많은 답이 아니다.
+질문을 읽고,
+그 급소에 답이 닿았는지
+확인할 수 있는 근거다.</p>
+      <span class="needs-mark" aria-hidden="true"></span>
+      <p class="needs-last">HMOS는 그 근거를 만드는 엔진이다.</p>
     </div>
   </section>
 </main>
