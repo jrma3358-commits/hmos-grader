@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>HMOS — 훈민정음 OS</title>
+<meta name="description" content="질문의 급소를 읽는 우리 모두의 언어인식 AI — 출제·채점·역량 진단">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&family=Noto+Serif+KR:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  /* 자연 친화 — 크림 · 살구핑크 · 올리브그린 · 테라코타 · 다크브라운 */
+  :root {
+    --cream: #F7F0E3;
+    --cream-deep: #EFE4D0;
+    --apricot: #F2C6B4;
+    --apricot-soft: #F9E3D8;
+    --olive: #6B7A3A;
+    --olive-soft: #E6EAD3;
+    --terracotta: #C0613D;
+    --terracotta-dark: #A44F2F;
+    --brown: #3B2A20;
+    --brown-sub: #6E5A4C;
+    --line: #E2D5C1;
+    --radius: 14px;
+    --sans: 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+    --serif: 'Noto Serif KR', 'AppleMyungjo', 'Batang', serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: var(--sans);
+    background: var(--cream);
+    color: var(--brown);
+    line-height: 1.7;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
+
+  /* 헤더 */
+  header {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: rgba(247, 240, 227, 0.92);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--line);
+  }
+  header .wrap { height: 64px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+  .logo { display: flex; align-items: baseline; gap: 10px; text-decoration: none; color: var(--brown); }
+  .logo-mark { font-size: 22px; font-weight: 700; letter-spacing: -0.5px; }
+  .logo-mark span { color: var(--terracotta); }
+  .logo-sub { font-size: 13px; color: var(--brown-sub); white-space: nowrap; }
+  .header-btn {
+    padding: 8px 16px;
+    border: 1px solid var(--brown);
+    border-radius: 999px;
+    background: transparent;
+    color: var(--brown);
+    font: 500 14px var(--sans);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s, color 0.15s;
+  }
+  .header-btn:hover { background: var(--brown); color: var(--cream); }
+
+  /* 히어로 */
+  .hero {
+    position: relative;
+    overflow: hidden;
+    padding: 112px 0 120px;
+    background:
+      radial-gradient(ellipse 60% 70% at 88% 18%, var(--apricot-soft) 0%, transparent 70%),
+      radial-gradient(ellipse 50% 60% at 6% 92%, var(--olive-soft) 0%, transparent 70%),
+      var(--cream);
+  }
+  .hero .wrap { position: relative; }
+  .hero-slogan {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px;
+    border-radius: 999px;
+    background: var(--olive-soft);
+    color: var(--olive);
+    font-size: 14px;
+    font-weight: 500;
+  }
+  .hero-slogan::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--olive); }
+  .hero-slogan em { font-style: normal; font-weight: 700; }
+  .hero h1 {
+    margin-top: 28px;
+    font-family: var(--serif);
+    font-size: clamp(32px, 5.4vw, 60px);
+    font-weight: 700;
+    line-height: 1.32;
+    letter-spacing: -1px;
+    max-width: 16em;
+    word-break: keep-all;
+  }
+  .hero h1 .accent { color: var(--terracotta); }
+  .hero-sub {
+    margin-top: 22px;
+    font-family: var(--serif);
+    font-size: clamp(17px, 2vw, 21px);
+    color: var(--brown-sub);
+    word-break: keep-all;
+  }
+  .hero-cta { margin-top: 44px; display: flex; flex-wrap: wrap; gap: 14px; align-items: center; }
+  .cta {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 17px 30px;
+    border: none;
+    border-radius: 999px;
+    background: var(--terracotta);
+    color: #fff;
+    font: 700 17px var(--sans);
+    cursor: pointer;
+    box-shadow: 0 10px 24px -10px rgba(192, 97, 61, 0.7);
+    transition: background 0.15s, transform 0.15s;
+  }
+  .cta:hover { background: var(--terracotta-dark); transform: translateY(-1px); }
+  .cta:focus-visible, .header-btn:focus-visible, .modal button:focus-visible { outline: 3px solid var(--olive); outline-offset: 3px; }
+  .cta-note { font-size: 13px; color: var(--brown-sub); }
+
+  /* 장식 — 잎 모양 */
+  .leaf {
+    position: absolute;
+    border-radius: 0 100% 0 100%;
+    opacity: 0.9;
+    pointer-events: none;
+  }
+  .leaf.a { width: 180px; height: 180px; right: 4%; top: 40px; background: var(--apricot); transform: rotate(8deg); }
+  .leaf.b { width: 110px; height: 110px; right: 16%; top: 200px; background: var(--olive); opacity: 0.75; transform: rotate(-18deg); }
+  .leaf.c { width: 70px; height: 70px; right: 6%; top: 260px; background: var(--terracotta); opacity: 0.8; transform: rotate(30deg); }
+
+  /* 기능 */
+  .features { padding: 96px 0 104px; background: #FBF7EF; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+  .section-kicker { font-size: 13px; font-weight: 700; letter-spacing: 0.12em; color: var(--terracotta); }
+  .section-title {
+    margin-top: 10px;
+    font-family: var(--serif);
+    font-size: clamp(26px, 3.4vw, 36px);
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    word-break: keep-all;
+  }
+  .cards { margin-top: 44px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+  .card {
+    background: var(--cream);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 30px 28px 32px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .card-icon {
+    width: 52px;
+    height: 52px;
+    border-radius: 14px;
+    display: grid;
+    place-items: center;
+  }
+  .card-icon svg { width: 26px; height: 26px; }
+  .card.make .card-icon { background: var(--olive-soft); color: var(--olive); }
+  .card.grade .card-icon { background: var(--apricot-soft); color: var(--terracotta); }
+  .card.diag .card-icon { background: var(--cream-deep); color: var(--brown); }
+  .card h3 { font-size: 21px; font-weight: 700; letter-spacing: -0.3px; }
+  .card ul { list-style: none; display: flex; flex-direction: column; gap: 8px; }
+  .card li { display: flex; gap: 10px; align-items: baseline; color: var(--brown-sub); font-size: 15px; }
+  .card li::before { content: ''; flex-shrink: 0; width: 6px; height: 6px; border-radius: 50%; transform: translateY(-2px); }
+  .card.make li::before { background: var(--olive); }
+  .card.grade li::before { background: var(--terracotta); }
+  .card.diag li::before { background: var(--brown); }
+
+  /* 푸터 */
+  footer { background: var(--brown); color: #D9CBB8; padding: 44px 0 52px; font-size: 14px; }
+  footer .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 20px 40px; align-items: flex-end; }
+  footer .logo-mark { color: var(--cream); }
+  footer .logo-mark span { color: var(--apricot); }
+  .footer-info { display: flex; flex-direction: column; gap: 4px; }
+  .footer-info dl { display: flex; flex-wrap: wrap; gap: 4px 24px; }
+  .footer-info dl div { display: flex; gap: 8px; }
+  .footer-info dt { color: #A8957F; }
+  .copy { color: #A8957F; }
+
+  /* 비밀번호 팝업 */
+  .modal { border: none; border-radius: 18px; padding: 0; width: min(420px, calc(100vw - 32px)); background: var(--cream); color: var(--brown); box-shadow: 0 30px 80px -20px rgba(59, 42, 32, 0.5); }
+  .modal::backdrop { background: rgba(59, 42, 32, 0.45); backdrop-filter: blur(3px); }
+  .modal form { padding: 32px 30px 28px; display: flex; flex-direction: column; gap: 14px; }
+  .modal h2 { font-family: var(--serif); font-size: 22px; font-weight: 700; }
+  .modal p { font-size: 14px; color: var(--brown-sub); }
+  .modal input {
+    width: 100%;
+    padding: 13px 16px;
+    border: 1.5px solid var(--line);
+    border-radius: 10px;
+    background: #fff;
+    font: 16px var(--sans);
+    color: var(--brown);
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .modal input:focus { border-color: var(--olive); }
+  .modal input.bad { border-color: var(--terracotta); }
+  .modal-error { min-height: 20px; font-size: 14px; color: var(--terracotta-dark); font-weight: 500; }
+  .modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+  .modal button { padding: 11px 20px; border-radius: 999px; font: 700 15px var(--sans); cursor: pointer; border: 1px solid var(--line); background: transparent; color: var(--brown); }
+  .modal button[type="submit"] { background: var(--olive); border-color: var(--olive); color: #fff; }
+  .modal button[type="submit"]:disabled { opacity: 0.6; cursor: wait; }
+
+  @media (max-width: 860px) {
+    .cards { grid-template-columns: 1fr; }
+    .leaf.a { width: 120px; height: 120px; right: -20px; top: 24px; }
+    .leaf.b, .leaf.c { display: none; }
+  }
+  @media (max-width: 560px) {
+    .wrap { padding: 0 16px; }
+    .logo-sub { display: none; }
+    .hero { padding: 80px 0 88px; }
+    .cta { width: 100%; justify-content: center; }
+    .features { padding: 72px 0 80px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    .cta, .header-btn { transition: none; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <a class="logo" href="/" aria-label="HMOS 홈">
+      <span class="logo-mark">HM<span>OS</span></span>
+      <span class="logo-sub">훈민정음 OS</span>
+    </a>
+    <button class="header-btn" type="button" onclick="열기()">문항 분석</button>
+  </div>
+</header>
+
+<main>
+  <section class="hero">
+    <div class="leaf a" aria-hidden="true"></div>
+    <div class="leaf b" aria-hidden="true"></div>
+    <div class="leaf c" aria-hidden="true"></div>
+    <div class="wrap">
+      <div class="hero-slogan">질문의 급소를 읽는 우리 모두의 <em>언어인식 AI</em></div>
+      <h1>질문을 읽는 순간,<br><span class="accent">디지털의 사유</span>가 시작됩니다</h1>
+      <p class="hero-sub">상상하는 순간 모든 것은 이루어진다</p>
+      <div class="hero-cta">
+        <button class="cta" type="button" onclick="열기()">
+          문항 분석 시작하기
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </button>
+        <span class="cta-note">접속 비밀번호가 필요합니다</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="features" aria-labelledby="features-title">
+    <div class="wrap">
+      <div class="section-kicker">FEATURES</div>
+      <h2 class="section-title" id="features-title">출제에서 채점, 진단까지 — 질문의 급소로 잇습니다</h2>
+      <div class="cards">
+        <article class="card make">
+          <div class="card-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+          </div>
+          <h3>출제 도구</h3>
+          <ul>
+            <li>논제 인식</li>
+            <li>논제 정교화</li>
+            <li>추가 논제 생성</li>
+          </ul>
+        </article>
+        <article class="card grade">
+          <div class="card-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3 8-8"/><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9"/></svg>
+          </div>
+          <h3>채점 도구</h3>
+          <ul>
+            <li>루브릭</li>
+            <li>모범답안</li>
+            <li>부분채점</li>
+          </ul>
+        </article>
+        <article class="card diag">
+          <div class="card-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/><path d="M11 8v3l2 2"/></svg>
+          </div>
+          <h3>역량 진단</h3>
+          <ul>
+            <li>학생 답안 분석</li>
+            <li>약점 국소화</li>
+          </ul>
+        </article>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="footer-info">
+      <div class="logo-mark">HM<span>OS</span></div>
+      <dl>
+        <div><dt>사업자등록번호</dt><dd>174-28-01959</dd></div>
+        <div><dt>특허출원번호</dt><dd>10-2026-0175774</dd></div>
+      </dl>
+    </div>
+    <div class="copy">© 2026 훈민OS</div>
+  </div>
+</footer>
+
+<!-- 접속 비밀번호 — 서버(POST /api/access)가 .env ACCESS_PASSWORD와 대조하고, 맞으면 쿠키를 주어 /dashboard로 -->
+<dialog class="modal" id="access">
+  <form id="access-form">
+    <h2>접속 비밀번호</h2>
+    <p>문항 분석 화면에 들어가려면 비밀번호를 입력하세요.</p>
+    <input type="password" id="access-pw" autocomplete="current-password" aria-label="접속 비밀번호" aria-describedby="access-error" required>
+    <div class="modal-error" id="access-error" role="alert"></div>
+    <div class="modal-actions">
+      <button type="button" onclick="닫기()">취소</button>
+      <button type="submit" id="access-btn">들어가기</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+  const 창 = document.getElementById('access');
+  const 칸 = document.getElementById('access-pw');
+  const 오류 = document.getElementById('access-error');
+  const 버튼 = document.getElementById('access-btn');
+
+  function 열기() {
+    오류.textContent = '';
+    칸.classList.remove('bad');
+    칸.value = '';
+    창.showModal();
+    칸.focus();
+  }
+  function 닫기() { 창.close(); }
+
+  document.getElementById('access-form').addEventListener('submit', async e => {
+    e.preventDefault();
+    if (!칸.value) return;
+    버튼.disabled = true;
+    오류.textContent = '';
+    try {
+      const res = await fetch('/api/access', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 비밀번호: 칸.value }),
+      });
+      const out = await res.json().catch(() => ({}));
+      if (res.ok && out.ok) { location.href = '/dashboard'; return; }
+      오류.textContent = out.error || '비밀번호가 맞지 않습니다';
+      칸.classList.add('bad');
+      칸.select();
+    } catch (_) {
+      오류.textContent = '서버에 연결하지 못했습니다. 잠시 뒤 다시 시도하세요';
+    } finally {
+      버튼.disabled = false;
+    }
+  });
+
+  // /dashboard에 바로 들어오려다 돌아온 경우 (/?login=1) — 팝업을 바로 연다
+  if (new URLSearchParams(location.search).get('login') === '1') {
+    history.replaceState(null, '', '/');
+    열기();
+  }
+</script>
+</body>
+</html>

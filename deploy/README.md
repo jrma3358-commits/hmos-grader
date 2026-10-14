@@ -13,7 +13,8 @@
 ~/hmos/                     ← pm2 앱 hmos (cwd), 정적 서빙 폴더
   server.js                 POST /analyze · /api/analyze · /api/generate · /api/refine · /api/propose
   analyze-runner.mts        /analyze 러너 — 엔진(hmos-grader/)을 부르기만 한다
-  hmos_dashboard.html       /dashboard
+  home.html                 / (홈) — 「문항 분석 시작하기」 → 접속 비밀번호 팝업
+  hmos_dashboard.html       /dashboard — 접속 쿠키가 있어야 열린다 (없으면 /?login=1)
   hmos-grader/              엔진 사본 — git clone (origin = ~/hmos-bundles/main.bundle). 봉인/표지사전.json은 git 밖이라 따로 scp
 ~/hmos-bundles/main.bundle  엔진 번들 (정적 서빙 폴더 밖)
   .env                      ANTHROPIC_API_KEY (이 폴더에는 없음)
@@ -57,7 +58,14 @@ HMOS 절대 원칙 (오종래 2026-10-13): 인식·제시문 급소 추출·연�
 ## 도메인 · HTTPS (2026-10-13)
 
 - `https://hmos.hunminos.com` → nginx(80/443) → `127.0.0.1:3000`. 설정: `/etc/nginx/sites-available/hmos` = [`nginx/hmos.conf`](nginx/hmos.conf)
-- `/` 는 대시보드(`/hmos_dashboard.html`)를 그 자리에서 내준다. http는 https로 301
+- `/` 는 홈(`home.html`, server.js가 내준다). 대시보드는 `/dashboard`. http는 https로 301
+
+## 접속 비밀번호 (2026-10-14)
+
+- `.env`의 `ACCESS_PASSWORD` — 바꾼 뒤 `pm2 restart hmos`. 없으면 `POST /api/access`가 503이라 아무도 대시보드에 못 들어간다
+- 맞으면 `hmos_access` 쿠키(HttpOnly · SameSite=Lax · https면 Secure, 12시간). 값은 비밀번호로 만든 HMAC — 비밀번호를 바꾸면 이전 쿠키는 모두 무효
+- `/hmos_dashboard.html`을 바로 열면 `/dashboard`로 돌린다. IP마다 10분에 10번 틀리면 잠시 막는다
+- API(`/analyze`·`/api/*`)는 이 비밀번호로 막지 않는다 — 화면 입구만 막는다
 - 인증서 Let's Encrypt (certbot --nginx, 새 서버 발급 2026-10-13 23:15 UTC · 만료 2027-01-11, certbot.timer 자동 갱신 — dry-run 통과)
 - 예전 자리표시 앱(root pm2 `nodeapp`, `/var/www/nodeapp/server.js`)은 pm2에서 지웠다. 파일은 남아 있다 (새 서버도 같게, 백업 /root/.pm2/dump.pm2.bak-20261014)
 - 새 서버 nginx는 아래 hmos.conf에 `.bundle`·점 파일 차단을 더하고 proxy_read_timeout 600s (재인식 순차). certbot 등록은 이메일 없이

@@ -18,7 +18,60 @@ const GRADER=path.join(__dirname,'hmos-grader');
 // 0단계 문항 등록이 이미지·PDF를 base64로 보낸다 — nginx client_max_body_size 20m과 맞춘다
 app.use(express.json({limit:'20mb'}));
 
-app.use(express.static(__dirname));
+// ── 홈 · 접속 비밀번호 (2026-10-14) ─────────────────────────────────────────
+// / = 홈(home.html). 「문항 분석 시작하기」 → 비밀번호 → POST /api/access → 맞으면 쿠키 → /dashboard.
+// 비밀번호는 .env ACCESS_PASSWORD. 쿠키 값은 비밀번호로 만든 HMAC이라 비밀번호를 바꾸면 이전 쿠키는 모두 무효.
+// 대시보드 파일(hmos_dashboard.html)을 정적 경로로 바로 여는 것도 /dashboard로 돌린다 — 정적 서빙보다 먼저 둔다.
+const crypto=require('crypto');
+const 접속쿠키='hmos_access';
+const 접속시간=12*60*60;  // 초 — 12시간
+const 접속값=()=>{
+  const pw=process.env.ACCESS_PASSWORD;
+  return pw?crypto.createHmac('sha256',pw).update('hmos-dashboard-access-v1').digest('hex'):null;
+};
+function 쿠키(req,이름){
+  for(const 조각 of String(req.headers.cookie||'').split(';')){
+    const i=조각.indexOf('=');
+    if(i>0&&조각.slice(0,i).trim()===이름)return decodeURIComponent(조각.slice(i+1).trim());
+  }
+  return '';
+}
+const 같음=(a,b)=>{
+  const x=crypto.createHash('sha256').update(String(a)).digest(),y=crypto.createHash('sha256').update(String(b)).digest();
+  return crypto.timingSafeEqual(x,y);
+};
+const 접속됨=req=>{const v=접속값();return !!v&&같음(쿠키(req,접속쿠키),v);};
+
+// 비밀번호 대입 막기 — IP마다 10분에 10번 틀리면 잠시 막는다
+const 틀림=new Map();
+const 접속IP=req=>req.headers['x-real-ip']||req.socket.remoteAddress||'';
+
+app.post('/api/access',(req,res)=>{
+  const 값=접속값();
+  if(!값){res.status(503).json({ok:false,error:'접속 비밀번호가 서버에 설정되지 않았습니다 — 관리자에게 문의하세요'});return;}
+  const ip=접속IP(req),now=Date.now();
+  const 기록=(틀림.get(ip)||[]).filter(t=>now-t<10*60*1000);
+  if(기록.length>=10){res.status(429).json({ok:false,error:'여러 번 틀렸습니다. 잠시 뒤 다시 시도하세요'});return;}
+  const pw=typeof(req.body&&req.body.비밀번호)==='string'?req.body.비밀번호:'';
+  if(!pw||!같음(pw,process.env.ACCESS_PASSWORD)){
+    기록.push(now);틀림.set(ip,기록);
+    res.status(401).json({ok:false,error:'비밀번호가 맞지 않습니다'});return;
+  }
+  틀림.delete(ip);
+  const 보안=req.headers['x-forwarded-proto']==='https'?'; Secure':'';
+  res.setHeader('Set-Cookie',`${접속쿠키}=${값}; Path=/; Max-Age=${접속시간}; HttpOnly; SameSite=Lax${보안}`);
+  res.json({ok:true});
+});
+
+app.get('/',(req,res)=>res.sendFile(path.join(__dirname,'home.html')));
+app.get('/dashboard',(req,res)=>{
+  if(!접속됨(req)){res.redirect(302,'/?login=1');return;}
+  res.setHeader('Cache-Control','no-store');
+  res.sendFile(path.join(__dirname,'hmos_dashboard.html'));
+});
+app.get('/hmos_dashboard.html',(req,res)=>res.redirect(302,'/dashboard'));
+
+app.use(express.static(__dirname,{index:false}));
 
 app.post('/api/analyze',(req,res)=>{
 
@@ -634,8 +687,6 @@ app.post('/api/ocr',async(req,res)=>{
   });
   res.json({model:r.msg.model,usage:r.msg.usage,텍스트:r.out.text,그림});
 });
-
-app.get('/dashboard',(req,res)=>res.sendFile(path.join(__dirname,'hmos_dashboard.html')));
 
 // nginx(https://hmos.hunminos.com)만 닿게 — 3000번을 밖에 열지 않는다 (2026-10-13)
 app.listen(PORT,'127.0.0.1',()=>console.log('HMOS 127.0.0.1:'+PORT));
