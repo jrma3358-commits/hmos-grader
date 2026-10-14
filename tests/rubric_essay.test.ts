@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 import { recognizeV2Analysis } from '../src/fq/pipeline.ts';
-import { derive_pieces, f2_input_from_v2, filter_by_polarity, link_sentences, split_sentences, thesis_polarity } from '../src/rubric/f2.ts';
+import { derive_pieces, f2_input_from_v2, filter_by_polarity, link_sentences, speaker_lines, split_sentences, thesis_polarity } from '../src/rubric/f2.ts';
 import { judge_element } from '../src/rubric/f3.ts';
 import { K핵심어, 마지막명사 } from '../src/rubric/sealed/f2.ts';
 import { allocate_points } from '../src/rubric/f5.ts';
@@ -318,5 +318,21 @@ describe('세우기 — 역접 뒤 반대쪽 문장 제외', () => {
 
   it('역접이 없는 단락은 극성이 있어도 그대로', () => {
     assert.deepEqual(filter_by_polarity(['가.', '나.'], '긍정'), ['가.', '나.']);
+  });
+});
+
+// 화자 지정 (오종래 2026-10-14) — 서술형 B: 소문항이 「X의 방법으로」로 지목한 화자의 「X : …」 줄이 연결 단락
+describe('화자 지정 — 「~의 방법으로」', () => {
+  const 대화 = '철수 : f(x) = sinx - xcosx의 증가, 감소를 따져보는 것은 어때?\r\n영희 : 곡선 y=tanx와 직선 y=x의 그래프를 그려서 비교하면 어때?';
+  it('지목한 화자의 줄만', () => {
+    assert.deepEqual(speaker_lines("철수의 방법으로 '…'를 증명하시오.", 대화), [{ 라벨: '철수', 텍스트: 'f(x) = sinx - xcosx의 증가, 감소를 따져보는 것은 어때?' }]);
+    assert.deepEqual(speaker_lines('영희의 방법으로 증명하시오.', 대화).map((l) => l.라벨), ['영희']);
+  });
+  it('이름 끝 「이」를 떼고도 찾는다 (민권이 → 「민권 :」)', () => {
+    assert.deepEqual(speaker_lines('민권이의 방법으로 구하시오.', '민권 : 거리는 같으니까 …\n은재 : 기울기를 구하고 …').map((l) => l.라벨), ['민권']);
+  });
+  it('지목이 없거나 줄이 없으면 빈 배열', () => {
+    assert.deepEqual(speaker_lines('증명하시오.', 대화), []);
+    assert.deepEqual(speaker_lines('수지의 방법으로 증명하시오.', 대화), []);
   });
 });

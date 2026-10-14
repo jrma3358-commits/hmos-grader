@@ -449,7 +449,7 @@ async function 소문항모범답안(s,{논제,제시문,계열}){
 
 app.post('/api/rubric',async(req,res)=>{
   // 논제: 7단계에서 교사가 확정한 논제 글 · 계열: 교사가 8단계에서 고른 값 · 총배점: 소문항 하나의 배점 (교사 입력)
-  const {논제,계열,총배점,제시문}=req.body||{};
+  const {논제,계열,총배점,제시문,공통자료}=req.body||{};
   const t=String(논제||'').trim();
   if(!t){res.status(400).json({error:'확정 논제가 필요합니다'});return;}
   if(!['수리','인문사회국어'].includes(계열)){res.status(400).json({error:'계열(수리·인문사회국어)을 골라야 합니다'});return;}
@@ -457,7 +457,8 @@ app.post('/api/rubric',async(req,res)=>{
   if(!(배점>0)){res.status(400).json({error:'총배점은 0보다 큰 수여야 합니다'});return;}
 
   // 제시문 — 인문논술 세우기 조각(연결 단락의 문장)을 엔진이 세는 데 쓴다
-  const r=await runAnalyze({파이프라인:'C',작업:'루브릭',논제:t,계열,총배점:배점,...(Array.isArray(제시문)&&제시문.length?{제시문}:{})});
+  // 공통자료: 서술형 B — 소문항 공통발문의 대화·자료를 제시문으로 (오종래 2026-10-14)
+  const r=await runAnalyze({파이프라인:'C',작업:'루브릭',논제:t,계열,총배점:배점,...(Array.isArray(제시문)&&제시문.length?{제시문}:{}),...(공통자료?{공통자료:true}:{})});
   if(!r.ok||!r.단계||!r.단계.루브릭){res.status(r.러너실패?500:400).json({error:'엔진 루브릭 실패: '+((r.error&&r.error.사유)||'알 수 없음')});return;}
   const 소문항=[];
   try{

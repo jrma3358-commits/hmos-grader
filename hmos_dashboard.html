@@ -964,6 +964,10 @@
         <div class="section-sub" id="rubric-sub">급소 기반 채점 축 · 배점</div>
       </div>
 
+      <!-- 서술형 B — C 8단계와 같은 엔진 루브릭 · 학생 채점 (오종래 2026-10-14). A는 이 탭을 숨긴다 -->
+      <div id="b-rubric" style="display:none;"></div>
+
+      <div id="ab-rubric-old">
       <div class="card" id="rubric-content">
         <div class="card-title">채점 축</div>
         <table class="rubric-table">
@@ -987,6 +991,7 @@
         <div class="card-title">공통 정책</div>
         <div class="note-list" id="rubric-policy-list"></div>
       </div>
+      </div>
     </div>
 
     <!-- 탭 5: 모범답안 -->
@@ -996,6 +1001,10 @@
         <div class="section-sub" id="answer-sub">인식 결과와 대조 완료</div>
       </div>
 
+      <!-- 서술형 B — C 9단계와 같은 모범답안 잇기 · 교사 수정 · 확정 (오종래 2026-10-14) -->
+      <div id="b-answer" style="display:none;"></div>
+
+      <div id="ab-answer-old">
       <!-- 인식 대조 요약 -->
       <div class="card" style="margin-bottom: 16px;">
         <div class="card-title">인식 대조</div>
@@ -1024,6 +1033,7 @@
       <div class="card" id="answer-commentary" style="display:none;">
         <div class="card-title">해설</div>
         <div style="font-size: 13px; line-height: 1.7; white-space: pre-wrap;" id="answer-commentary-text"></div>
+      </div>
       </div>
     </div>
 
@@ -1857,6 +1867,10 @@ function renderTab3(data) {
 }
 
 function renderTab4(data) {
+  const isB = String(data.파이프라인 || '').startsWith('B');
+  document.getElementById('b-rubric').style.display = isB ? '' : 'none';
+  document.getElementById('ab-rubric-old').style.display = isB ? 'none' : '';
+  if (isB) { renderB4(); return; }
   const d4 = data.단계4;
   const tbody = document.getElementById('rubric-tbody');
   const policyEl = document.getElementById('rubric-policy');
@@ -1920,6 +1934,10 @@ function renderTab4(data) {
 }
 
 function renderTab5(data) {
+  const isB = String(data.파이프라인 || '').startsWith('B');
+  document.getElementById('b-answer').style.display = isB ? '' : 'none';
+  document.getElementById('ab-answer-old').style.display = isB ? 'none' : '';
+  if (isB) { renderB5(); return; }
   const d5 = data.단계5;
   if (!d5) return;
 
@@ -2958,14 +2976,58 @@ function 채점칸Html(s, i, j) {
     ${목록.map((rec, k) => 채점기록Html(rec, i, j, k)).join('')}`;
 }
 
+/** 8·9단계 공용 (오종래 2026-10-14) — i ≥ 0은 C 확정 논제, i = -1은 서술형 B(현재 문항의 B 루브릭) */
+const 루브릭홀더 = i => (i < 0 ? currentData && currentData.B루브릭 : C.확정[i]);
+const 다시그림8 = i => (i < 0 ? renderB4() : renderC8());
+const 다시그림9 = i => (i < 0 ? renderB5() : renderC9());
+
+// ── 서술형 B 4 루브릭 · 5 모범답안 (오종래 2026-10-14) — C 8·9단계와 같은 엔진 루브릭 · 학생 채점 · 모범답안 잇기 ──
+// 계열 인문사회국어 고정 · 풀기 없음 · 답구하기 = 급소 경로 흔적. 제시문 = 소문항 공통발문의 대화·자료(공통자료),
+// 세우기 = 「~의 방법으로」가 지목한 화자의 줄 (엔진 화자 지정). 루브릭은 현재 문항 자료(currentData.B루브릭)에 담겨 목록 저장에 같이 간다.
+function renderB4() {
+  const box = document.getElementById('b-rubric');
+  if (!currentData) { box.innerHTML = '<div class="card c-empty">1단계에서 분석하면 표시됩니다</div>'; return; }
+  const h = currentData.B루브릭;
+  const r = h && h.루브릭;
+  box.innerHTML = `<div class="card">
+    <div class="card-title">${엔진배지}서술형 루브릭 — 엔진 조각</div>
+    <div class="c-meta">계열 인문사회국어 · 풀기 없음 · 답구하기 = 급소 경로 흔적. 소문항 배점은 소문항의 「[N점]」(없으면 문항 「[총 N점]」, 그것도 없으면 10).
+      세우기 = 공통 자료(대화)에서 「~의 방법으로」가 지목한 화자의 줄.</div>
+    <button class="type-btn" id="b-gen" style="margin-top:8px;" onclick="genB()">${r ? '루브릭 다시 생성' : '루브릭 생성'} (엔진 조각 → Claude 문장)</button>
+    ${r ? `<div class="c-meta" style="margin-top:12px;">파트 지수 2:3:2:2 (봉인④) · 파트 배점 ÷ 조각 수 · 충족 경계 급소 도달 · 엔진 ${esc(r.엔진 ? r.엔진.commit : '—')}</div>
+      ${r.소문항.map((s, j) => 루브릭소문항Html(s, -1, j)).join('')}` : ''}
+  </div>`;
+}
+
+async function genB() {
+  const data = currentData;
+  if (!data) return;
+  if (data.B루브릭 && data.B루브릭.루브릭 && !confirm('다시 만들면 이 문항의 학생 채점과 모범답안이 지워집니다. 다시 만들까요?')) return;
+  const 총 = (data.문항원문.match(/\[\s*총\s*(\d+(?:\.\d+)?)\s*점\s*\]/) || [])[1];
+  await withBusy(document.getElementById('b-gen'), '엔진 조각 → 조각 문장 생성 중… (1~2분)', async () => {
+    const { out } = await postJSON('/api/rubric', { 논제: data.문항원문, 계열: '인문사회국어', 총배점: 총 ? Number(총) : 10, 공통자료: true });
+    if (out.error) { alert('루브릭 생성 실패: ' + out.error); return; }
+    data.B루브릭 = { 출처: '서술형', 텍스트: data.문항원문, 루브릭: out };
+    renderB4(); renderB5();
+    document.querySelector('#nav-ab .nav-item[data-tab="3"]').classList.add('done');
+  });
+}
+
+function renderB5() {
+  const box = document.getElementById('b-answer');
+  const h = currentData && currentData.B루브릭;
+  if (!h || !h.루브릭) { box.innerHTML = '<div class="card c-empty">4 루브릭에서 루브릭을 만들면 표시됩니다</div>'; return; }
+  box.innerHTML = `<div class="card"><div class="card-title">서술형 모범답안</div>${h.루브릭.소문항.map((s, j) => 모범소문항Html(s, -1, j)).join('')}</div>`;
+}
+
 /** 입력칸 — 다시 그려도 남게 소문항에 둔다 */
 function 채점입력(i, j, 칸, 값) {
-  const s = C.확정[i].루브릭.소문항[j];
+  const s = 루브릭홀더(i).루브릭.소문항[j];
   s.채점입력 = { ...(s.채점입력 || { 이름: '', 답: '' }), [칸]: 값 };
 }
 
 async function 학생채점(i, j) {
-  const x = C.확정[i], s = x.루브릭.소문항[j];
+  const x = 루브릭홀더(i), s = x.루브릭.소문항[j];
   const 입력 = s.채점입력 || { 이름: '', 답: '' };
   if (!입력.답.trim()) { alert('학생 답안을 넣으세요.'); return; }
   await withBusy(document.getElementById(`c8-gr-${i}-${j}`), '엔진 채점 중…', async () => {
@@ -2974,31 +3036,31 @@ async function 학생채점(i, j) {
     if (out.error) { alert('채점 실패: ' + out.error); return; }
     s.채점목록 = [...(s.채점목록 || []), { 이름: 입력.이름.trim(), 답: 입력.답, 엔진: out, 교사: {}, 확정: null }];
     s.채점입력 = { 이름: '', 답: '' };
-    renderC8();
+    다시그림8(i);
   });
 }
 
 /** 교사 O/X — 같은 것을 다시 누르면 엔진 판정으로 돌린다. 고치면 확정을 푼다 */
 function 교사판정(i, j, k, 조각id, 값) {
-  const rec = C.확정[i].루브릭.소문항[j].채점목록[k];
+  const rec = 루브릭홀더(i).루브릭.소문항[j].채점목록[k];
   if (rec.교사[조각id] === 값) delete rec.교사[조각id];
   else rec.교사[조각id] = 값;
   rec.확정 = null;
-  renderC8();
+  다시그림8(i);
 }
 
 function 채점확정(i, j, k) {
-  const rec = C.확정[i].루브릭.소문항[j].채점목록[k];
+  const rec = 루브릭홀더(i).루브릭.소문항[j].채점목록[k];
   if (채점집계(rec).판정불가.length) { alert('교사 판정이 필요한 조각이 남았습니다.'); return; }
   rec.확정 = new Date().toLocaleString('ko-KR');
-  renderC8();
+  다시그림8(i);
 }
 
 function 채점삭제(i, j, k) {
-  const s = C.확정[i].루브릭.소문항[j];
+  const s = 루브릭홀더(i).루브릭.소문항[j];
   if (!confirm(`${s.채점목록[k].이름 || `학생 ${k + 1}`}의 채점을 지울까요?`)) return;
   s.채점목록.splice(k, 1);
-  renderC8();
+  다시그림8(i);
 }
 
 function renderC8() {
@@ -3084,12 +3146,8 @@ function 확정Html(s) {
   return s.답안 && s.답안.확정 ? `<span class="badge ok">교사 확정 ✓ ${esc(s.답안.확정.시각)}</span>` : '<span class="badge muted">확정 전</span>';
 }
 
-function renderC9() {
-  const body = document.getElementById('c9-body');
-  if (!C.확정.some(x => x.루브릭)) { body.innerHTML = '<div class="card c-empty">8단계에서 루브릭을 만들면 표시됩니다</div>'; return; }
-  body.innerHTML = C.확정.map((x, i) => {
-    if (!x.루브릭) return '';
-    const 소 = x.루브릭.소문항.map((s, j) => {
+/** 9단계 소문항 하나 — 모범답안 잇기 · 교사 수정 · 확정 (i = -1이면 서술형 B) */
+function 모범소문항Html(s, i, j) {
       const 이름 = esc(단위이름(s.번호));
       if (!s.조각) return `<div class="flag-box">${이름} 엔진이 조각을 뽑지 못해 모범답안이 없습니다</div>`;
       const 조각 = s.조각.map((c, k) => `
@@ -3125,43 +3183,50 @@ function renderC9() {
         <details class="c-text" style="margin-top:12px;"><summary>조각별 문장 (8단계 · 경로 순서)</summary>
           <div class="answer-steps" style="margin-top:10px; white-space:normal;">${조각}</div></details>
       </div>`;
-    }).join('');
+}
+
+function renderC9() {
+  const body = document.getElementById('c9-body');
+  if (!C.확정.some(x => x.루브릭)) { body.innerHTML = '<div class="card c-empty">8단계에서 루브릭을 만들면 표시됩니다</div>'; return; }
+  body.innerHTML = C.확정.map((x, i) => {
+    if (!x.루브릭) return '';
+    const 소 = x.루브릭.소문항.map((s, j) => 모범소문항Html(s, i, j)).join('');
     return `<div class="card"><div class="card-title">${i + 1}. ${esc(x.출처)}</div>${소}</div>`;
   }).join('');
 }
 
 /** 확정 논제 i의 소문항 j — 조각 문장을 Claude가 한 문단으로 잇는다 */
 async function 답안잇기(i, j) {
-  const x = C.확정[i], s = x.루브릭.소문항[j];
+  const x = 루브릭홀더(i), s = x.루브릭.소문항[j];
   if (s.답안 && s.답안.교사 != null && !confirm('교사가 고친 글이 있습니다. 다시 이으면 고친 글이 사라집니다. 다시 이을까요?')) return;
   await withBusy(document.getElementById(`c9-btn-${i}-${j}`), '모범답안 잇는 중… (수십 초)', async () => {
     const { out } = await postJSON('/api/answer', { 소문항: s, 논제: x.텍스트, 계열: x.루브릭.계열 });
     if (out.error) { alert('모범답안 잇기 실패: ' + out.error); return; }
     s.답안 = { 글: out.모범답안, 시도: out.시도, 교사: null, 확정: null };
-    renderC9();
+    다시그림9(i);
   });
 }
 
 /** 교사가 고친 글 — 흔적 표시만 다시 그린다 (편집칸 포커스 유지). 확정 뒤 고치면 확정을 푼다 */
 function 답안수정(i, j, 값) {
-  const s = C.확정[i].루브릭.소문항[j];
+  const s = 루브릭홀더(i).루브릭.소문항[j];
   s.답안.교사 = 값;
   if (s.답안.확정 && s.답안.확정.글 !== 값) s.답안.확정 = null;
   document.getElementById(`c9-tr-${i}-${j}`).innerHTML = 흔적Html(값, s);
   document.getElementById(`c9-st-${i}-${j}`).innerHTML = 확정Html(s);
-  markC9();
+  if (i >= 0) markC9();
 }
 
 /** 교사 확정 — 빠진 흔적이 있으면 묻는다 */
 function 답안확정(i, j) {
-  const s = C.확정[i].루브릭.소문항[j];
+  const s = 루브릭홀더(i).루브릭.소문항[j];
   const 글 = 지금답안(s).trim();
   if (!글) { alert('확정할 모범답안이 없습니다.'); return; }
   const 빠짐 = 문단흔적(글, s).filter(x => !x.충족);
   if (빠짐.length && !confirm(`조각 흔적이 빠진 곳이 ${빠짐.length}개 있습니다 (${빠짐.map(x => x.id).join(', ')}). 그래도 확정할까요?`)) return;
   s.답안.확정 = { 글, 시각: new Date().toLocaleString('ko-KR') };
-  renderC9();
-  markC9();
+  다시그림9(i);
+  if (i >= 0) markC9();
 }
 
 /** 9단계 완료 표시 — 루브릭 조각이 있는 소문항의 모범답안을 모두 교사가 확정했을 때 */

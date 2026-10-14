@@ -76,6 +76,25 @@ export function link_sentences(
 }
 
 /**
+ * 화자 지정 (오종래 2026-10-14) — 소문항이 「X의 방법으로」로 화자 X를 지목하면, 공통 자료의 「X : …」 줄이 그 소문항의 연결 단락이다.
+ * 대화(서술형 B)에는 [가] 같은 단락 기호가 없고 급소도 닿지 않아 엔진 정합이 잇지 못한다 — 지목으로 잇는다.
+ * 이름 끝 「이」(민권이 → 「민권 :」)는 떼고도 찾는다. 지목 표현은 오종래가 정한 「~의 방법으로」 하나
+ */
+export const 화자지목 = /(\S+?)의 방법으로/g;
+
+export function speaker_lines(소문항글: string, 자료: string): { 라벨: string; 텍스트: string }[] {
+  const 이름들 = [...new Set([...소문항글.matchAll(화자지목)].map((m) => m[1]))];
+  const 줄들 = 자료.split(/\r?\n/);
+  return 이름들.flatMap((x) => {
+    const 후보 = [...new Set([x, x.replace(/이$/, '')])].filter(Boolean);
+    return 줄들.flatMap((줄) => {
+      const m = 줄.match(/^\s*([^\s:：]+)\s*[:：]\s*(.+)$/);
+      return m && 후보.includes(m[1]) ? [{ 라벨: m[1], 텍스트: m[2].trim() }] : [];
+    });
+  });
+}
+
+/**
  * F2 조각역산(파트별물음, 급소_k, 5색인식결과, 계열?) → 조각뼈대[]  (구현명세 §3 F2)
  * 계열이 인문사회국어면 ④ 답구하기는 서술·논술형 규칙(급소 K마다 · 경로 표지)이다. 계열을 주지 않으면 수리 규칙 그대로 (1차 필터 등)
  * @throws SealedError 봉인②가 비어 있을 때
