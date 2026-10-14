@@ -1627,6 +1627,9 @@ function selectType(type, btn) {
   document.getElementById('question-block').style.display = isC ? 'none' : 'block';
   document.getElementById('nav-c').style.display = isC ? '' : 'none';
   document.getElementById('nav-ab').style.display = isC ? 'none' : '';
+  // A(객관식·주관식)는 4 루브릭 · 5 모범답안을 사이드바에서 숨긴다 — B·C는 그대로 (오종래 2026-10-14)
+  const isA = !!type && type.startsWith('A-');
+  document.querySelectorAll('#nav-ab .nav-item[data-tab="3"], #nav-ab .nav-item[data-tab="4"]').forEach(b => { b.style.display = isA ? 'none' : ''; });
   // 0단계 문항 등록은 A·B·C가 같이 쓴다 — C만 출제도구 표시·논제/제시문 안내
   document.getElementById('tab-reg').classList.toggle('c', isC);
   document.getElementById('reg-tool-tag').style.display = isC ? '' : 'none';
