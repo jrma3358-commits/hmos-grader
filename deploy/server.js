@@ -319,6 +319,142 @@ app.post('/api/generate',async(req,res)=>{
   });
 });
 
+// ── POST /api/rubric — C 8·9단계 루브릭·모범답안 (오종래 2026-10-14) ──────────
+// 엔진이 확정 논제의 소문항마다 조각을 뽑는다 (F1 파트투영 → F2 조각역산 → F3 요소색판정 → F4 충족조건 → F5 배점 → 문항평가, 러너 작업 '루브릭').
+// Claude는 엔진 조각 하나하나를 문장으로 표현할 뿐이다 — 조각·실체·배점·충족조건은 바꾸지 않는다.
+// 검산은 GJ가 아니라 조각 충족 여부다: 조각 문장에 그 조각의 실체 글자가 그대로 들어 있으면 충족 (오종래 2026-10-14 — GJ는 서술문 답안에서 급소를 세우지 못함).
+// 충족하지 못한 조각만 다시 쓰게 한다 — 2회까지 (오종래 2026-10-14). 그래도 못 채우면 표시만 하고 넘긴다.
+// 모범답안 = 조각 문장을 파트 순서(근거대기 → 세우기 → 풀기 → 답구하기)로 이은 것.
+const 루브릭재시도=2;
+
+const RUBRIC_SYSTEM=`너는 HMOS 모범답안 작성기다. HMOS 엔진이 논제에서 뽑은 루브릭 조각을 한 조각씩 답안 문장으로 표현한다.
+
+지킬 것:
+- 조각(파트·요소·실체·확인물음·충족조건·배점)은 엔진 산출이다. 조각을 더하거나 빼거나 합치지 말고, 받은 조각마다 문장을 하나씩 쓴다.
+- 각 조각 문장에는 그 조각의 「실체」 글자를 반드시 그대로 넣는다. 실체가 어절 중간에서 끊긴 꼴(예: 「…에 미치」)이면 그 글자를 그대로 둔 채 자연스러운 활용(「…에 미치는」)으로 잇는다.
+- 파트마다 하는 일:
+  · 근거대기 — 실체의 뜻·개념을 제시문 근거로 밝힌다.
+  · 세우기 — 실체(조건·상황)를 이 논제의 논지로 세운다.
+  · 풀기 — 세운 논지를 근거와 이어 전개한다.
+  · 답구하기 — 논제의 급소가 요구한 것에 직접 답한다.
+- 근거는 주어진 제시문에서만 가져온다. 제시문에 없는 사실·용어를 지어내지 않는다. 제시문이 없으면 논제 글 안에서만 쓴다.
+- 조각 문장을 받은 순서대로 이으면 한 편의 답안으로 자연스럽게 읽히게 쓴다. 조각마다 1~2문장.
+- 모든 출력은 한국어.`;
+
+const RUBRIC_FORMAT={
+  type:'json_schema',
+  schema:{
+    type:'object',
+    additionalProperties:false,
+    required:['pieces'],
+    properties:{
+      pieces:{
+        type:'array',
+        items:{
+          type:'object',
+          additionalProperties:false,
+          required:['id','text'],
+          properties:{
+            id:{type:'string',description:'받은 조각 id 그대로'},
+            text:{type:'string',description:'이 조각을 표현한 답안 문장 — 조각의 실체 글자를 그대로 포함'},
+          },
+        },
+      },
+    },
+  },
+};
+
+/** 조각의 실체 — 노드에서 오지 않은 조각은 급소 실체. 앞 쉼표·공백은 뗀다 (대시보드 displayEntity와 같다) */
+const 조각실체=(c,급소)=>String(c.실체??급소.실체??'').trim().replace(/^[,，]\s*/,'');
+
+/** Claude 한 번 — 조각 문장 { id: text }. 실패하면 Error(사유) */
+async function 조각문장(user){
+  let msg;
+  try{
+    msg=await client.beta.messages.create({
+      model:MODEL,
+      max_tokens:8000,
+      betas:['server-side-fallback-2026-07-01'],
+      fallbacks:'default',
+      system:RUBRIC_SYSTEM,
+      output_config:{format:RUBRIC_FORMAT},
+      messages:[{role:'user',content:user}],
+    });
+  }catch(e){
+    if(e instanceof Anthropic.AuthenticationError)throw new Error('API 키 인증 실패 — .env의 ANTHROPIC_API_KEY 확인');
+    if(e instanceof Anthropic.RateLimitError)throw new Error('API 요청 한도 초과 — 잠시 뒤 다시');
+    if(e instanceof Anthropic.APIError)throw new Error(`Claude API 오류 ${e.status}: ${e.message}`);
+    throw new Error('Claude API 연결 실패: '+e.message);
+  }
+  if(msg.stop_reason==='refusal')throw new Error(`모델이 거절함 (${(msg.stop_details&&msg.stop_details.category)||'분류 없음'})`);
+  if(msg.stop_reason==='max_tokens')throw new Error('응답이 max_tokens에서 잘림');
+  let out=null;
+  try{out=JSON.parse(msg.content.filter(b=>b.type==='text').map(b=>b.text).join(''));}catch(_){}
+  if(!out||!Array.isArray(out.pieces))throw new Error(`조각 문장을 받지 못함 (stop_reason: ${msg.stop_reason})`);
+  return {문장:Object.fromEntries(out.pieces.map(p=>[String(p.id),String(p.text||'').trim()])),usage:msg.usage};
+}
+
+/** 소문항 하나 — 조각 문장 → 충족 확인 → 못 채운 조각만 다시 (2회까지) → 모범답안 */
+async function 소문항모범답안(s,{논제,제시문,계열}){
+  const 조각표=c=>({id:c.id,파트:c.파트,요소:c.요소,실체:조각실체(c,s.급소),확인물음:c.확인물음,충족조건:c.충족조건,엔진모범조각틀:c.모범조각틀});
+  const 바탕=[
+    `계열: ${계열}`,
+    `이 소문항:\n${s.공통발문?s.공통발문+'\n':''}${s.번호?`(${s.번호}) `:''}${s.텍스트}`,
+    `전체 논제:\n${논제}`,
+    Array.isArray(제시문)&&제시문.length?`제시문:\n${제시문.map(p=>(/^[가-하]$/.test(p.id)?`[${p.id}] `:'')+p.텍스트).join('\n\n')}`:'제시문: (없음)',
+    `급소(엔진): 「${조각실체({},s.급소)}」`,
+  ];
+  const 문장={};
+  const 사용=[];
+  const 채움=c=>(문장[c.id]||'').includes(조각실체(c,s.급소));
+  let 시도=0;
+  let 남은=s.조각;
+  while(남은.length&&시도<=루브릭재시도){
+    const 일=시도===0
+      ?`엔진 조각 (이 순서로 문장을 쓴다):\n${JSON.stringify(s.조각.map(조각표),null,1)}`
+      :`아래 조각은 앞서 쓴 문장에 실체 글자가 빠졌다. 실체 글자를 그대로 넣어 이 조각들만 다시 쓴다.\n`+
+       `이미 쓴 다른 조각 문장 (참고만, 다시 쓰지 말 것):\n${s.조각.filter(c=>!남은.includes(c)).map(c=>`- ${c.id}: ${문장[c.id]}`).join('\n')||'(없음)'}\n\n`+
+       `다시 쓸 조각:\n${JSON.stringify(남은.map(조각표),null,1)}`;
+    const r=await 조각문장([...바탕,일].join('\n\n'));
+    사용.push(r.usage);
+    for(const c of 남은)if(r.문장[c.id])문장[c.id]=r.문장[c.id];
+    시도++;
+    남은=s.조각.filter(c=>!채움(c));
+  }
+  const 조각=s.조각.map(c=>({...c,표현:문장[c.id]||'',충족:채움(c)}));
+  return {
+    ...s,
+    조각,
+    모범답안:조각.map(c=>c.표현).filter(Boolean).join(' '),
+    충족:{조각수:조각.length,충족수:조각.filter(c=>c.충족).length,시도,재시도한도:루브릭재시도},
+    usage:사용,
+  };
+}
+
+app.post('/api/rubric',async(req,res)=>{
+  // 논제: 7단계에서 교사가 확정한 논제 글 · 계열: 교사가 8단계에서 고른 값 · 총배점: 소문항 하나의 배점 (교사 입력)
+  const {논제,계열,총배점,제시문}=req.body||{};
+  const t=String(논제||'').trim();
+  if(!t){res.status(400).json({error:'확정 논제가 필요합니다'});return;}
+  if(!['수리','인문사회국어'].includes(계열)){res.status(400).json({error:'계열(수리·인문사회국어)을 골라야 합니다'});return;}
+  const 배점=Number(총배점);
+  if(!(배점>0)){res.status(400).json({error:'총배점은 0보다 큰 수여야 합니다'});return;}
+
+  const r=await runAnalyze({파이프라인:'C',작업:'루브릭',논제:t,계열,총배점:배점});
+  if(!r.ok||!r.단계||!r.단계.루브릭){res.status(r.러너실패?500:400).json({error:'엔진 루브릭 실패: '+((r.error&&r.error.사유)||'알 수 없음')});return;}
+  const 소문항=[];
+  try{
+    // Claude 호출도 소문항마다 하나씩 차례로
+    for(const s of r.단계.루브릭.소문항){
+      소문항.push(s.조각&&s.조각.length?await 소문항모범답안(s,{논제:t,제시문,계열}):s);
+    }
+  }catch(e){
+    res.status(502).json({error:e.message});
+    return;
+  }
+  res.json({엔진:r.엔진,계열,총배점:배점,소문항});
+});
+
 // ── POST /api/refine — C 5단계 논제 정교화 (조립설명서 C·논술 9단계) ──────────
 // 진단은 엔진([봉인⑬], /analyze 응답의 단계.정교화.진단)이 한다. Claude는 진단된 ①②③ 갈래마다 정교화안만 쓴다.
 // ④사족은 표시만 — 생성하지 않는다. 정교화안은 다시 엔진에 태워 급소·진단을 돌려준다 (명세서-2 §3 자가검증 순환).

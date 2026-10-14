@@ -24,6 +24,13 @@ const { split_thesis } = await load('src/thesis/split.ts');
 const { align_passage } = await load('src/thesis/align.ts');
 const { essay_pivot_chunks } = await load('src/thesis/chunk.ts');
 const { 봉인14_6단계 } = await load('src/thesis/relate.ts');
+// 8단계 루브릭 — 엔진 F1~F5·문항평가 (src/rubric). GJ는 쓰지 않는다 (오종래 2026-10-14: GJ 검산 대신 조각 충족 여부)
+const { derive_pieces, f2_input_from_v2 } = await load('src/rubric/f2.ts');
+const { judge_element } = await load('src/rubric/f3.ts');
+const { specify_condition } = await load('src/rubric/f4.ts');
+const { allocate_points } = await load('src/rubric/f5.ts');
+const { spread_piece } = await load('src/rubric/f6.ts');
+const { evaluate_item } = await load('src/rubric/item_eval.ts');
 
 const [reqPath, outPath] = process.argv.slice(2);
 const req = JSON.parse(readFileSync(reqPath, 'utf8'));
@@ -61,6 +68,46 @@ function 인식of(a: any) {
 }
 
 const out: any = { ok: true, 파이프라인, 엔진: 엔진버전(), 단계: {} as Record<string, unknown>, 멈춘곳: null };
+
+const 파트순서 = ['근거대기', '세우기', '풀기', '답구하기'];
+
+/**
+ * 8단계 루브릭 (요청 작업: '루브릭') — 확정 논제의 소문항마다 엔진 F1 파트투영 → F2 조각역산 → F3 요소색판정 → F4 충족조건
+ * → F5 배점(봉인④ 그대로) → F6 모범조각 틀 → 문항평가. assemble.ts generate_rubric과 같은 순서로 부른다.
+ * generate_rubric은 1차 필터 확인화면(①) 입장권을 받는데, C는 1차 필터를 타지 않고 7단계 교사 확정이 승인이다 (2026-10-13 확정 4) —
+ * 대시보드는 7단계에서 확정한 논제만 보낸다. 소문항 하나가 멈춰도 나머지는 낸다
+ */
+function 루브릭작업(논제글: string, 계열: string, 총배점: number) {
+  return split_thesis(논제글).map((s: any) => {
+    const 소 = { 번호: s.번호, 텍스트: s.텍스트, 공통발문: s.공통발문 };
+    try {
+      const 입력 = f2_input_from_v2(fq.recognizeV2Analysis(s.텍스트));
+      if (!입력.ok) return { ...소, 멈춤: { 멈춤: 입력.flag, 종류: '급소', 사유: `급소가 서지 않아 조각을 뽑지 못했습니다 (${입력.flag})` } };
+      const { 물음, k, 인식 } = 입력;
+      const 뼈대 = derive_pieces(물음, k, 인식).map((c: any) => ({ ...c, 요소: judge_element(c, 계열) }));
+      const 배점 = allocate_points(뼈대, 총배점, 계열);
+      const 조각 = 배점.조각들.map((c: any) => ({
+        id: c.id, 파트: c.파트, 요소: c.요소, 수행질: c.수행질, is_중심: c.is_중심, 확인물음: c.확인물음,
+        실체: c.node ? c.node.entity : null, 노드: c.node ? c.node.id : null, 배점: c.배점,
+        충족조건: specify_condition(c, 계열), 모범조각틀: spread_piece(c, k, 계열),
+      }));
+      조각.sort((a: any, b: any) => 파트순서.indexOf(a.파트) - 파트순서.indexOf(b.파트));
+      return {
+        ...소,
+        급소: { 실체: k.실체, 노드: k.node.id },
+        물음,
+        조각,
+        부분채점기준: Object.fromEntries(파트순서.map((p) => {
+          const 안 = 조각.filter((c: any) => c.파트 === p);
+          return [p, { 조각수: 안.length, 배점합: 배점.파트배점[p], 조각배점: 안.map((c: any) => c.배점) }];
+        })),
+        문항평가: evaluate_item(뼈대, 배점.미배정),
+      };
+    } catch (e) {
+      return { ...소, 멈춤: 멈춤of(e) };
+    }
+  });
+}
 const stop = (단계: string, why: unknown) => {
   out.단계[단계] = why;
   out.멈춘곳 ??= { 단계, ...(why as object) };
@@ -72,7 +119,12 @@ try {
 
   const 제시문목록: { id: string; 텍스트: string }[] | null = Array.isArray(req.제시문) ? req.제시문 : typeof req.제시문 === 'string' && req.제시문.trim() ? [{ id: '제시문', 텍스트: req.제시문 }] : null;
 
-  if (파이프라인 === 'C') {
+  if (req.작업 === '루브릭') {
+    // ── 8단계 루브릭만 ── 인식·제시문·정교화는 다시 돌리지 않는다
+    const 계열 = req.계열 === '수리' ? '수리' : '인문사회국어';
+    const 총배점 = Number(req.총배점) > 0 ? Number(req.총배점) : 10;
+    out.단계.루브릭 = { 계열, 총배점, 소문항: 루브릭작업(String(req.논제 ?? 문항원문), 계열, 총배점) };
+  } else if (파이프라인 === 'C') {
     // ── C·논술 (조립설명서 C·논술 9단계) — 논제를 먼저 읽는다. 1차 필터는 타지 않는다 (2026-10-13 확정 4) ──
     const 논제글 = String(req.논제 ?? 문항원문);
 

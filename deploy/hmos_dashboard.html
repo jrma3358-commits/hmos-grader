@@ -2021,8 +2021,8 @@ const C화면 = {
   5: { 제목: '논제 정교화', 도구: 'make', 설명: '엔진 — 정교화할 곳을 문장으로 · 정교화안 문장은 Claude가 엔진 진단에서' },
   6: { 제목: '추가 논제', 도구: 'make', 설명: '엔진 — 단락 핵심 관계(유사·대비·보완·병렬) → 6유형 논제 뼈대 · 문장은 Claude가 다듬음' },
   7: { 제목: '교사 확정', 도구: 'grade', 설명: '논제를 선택·수정·확정합니다 — 확정 논제는 엔진이 다시 인식합니다' },
-  8: { 제목: '루브릭', 도구: 'grade', 설명: '확정 논제 급소(엔진)에서 채점 축 · C-F가 있으면 서술 방향 축' },
-  9: { 제목: '모범답안', 도구: 'grade', 설명: '조각을 파트 순서로 전개 · 급소 포함 역검증(GJ)' },
+  8: { 제목: '루브릭', 도구: 'grade', 설명: '엔진 — 확정 논제 소문항마다 파트 × 요소 조각 · 채점기준(충족조건) · 배점 · 부분채점기준 · 문항평가' },
+  9: { 제목: '모범답안', 도구: 'grade', 설명: 'Claude가 엔진 조각을 하나씩 문장으로 · 파트 순서로 엮음 · 조각 충족(실체 글자) 확인' },
 };
 
 function buildCPanes() {
@@ -2815,7 +2815,7 @@ async function confirmC() {
     for (const x of 고른) {
       const { out } = await postJSON('/analyze', { 파이프라인: 'C', 논제: x.텍스트.trim(), ...(C.제시문.length ? { 제시문: C.제시문 } : {}) });
       if (!out.ok) { alert(`재인식 실패 (${x.출처}): ` + ((out.error && out.error.사유) || '알 수 없음')); return; }
-      결과.push({ 출처: x.출처, 텍스트: x.텍스트.trim(), 분석: out, 생성: null, 교사GJ: null });
+      결과.push({ 출처: x.출처, 텍스트: x.텍스트.trim(), 분석: out, 루브릭: null });
     }
     C.확정 = 결과;
     renderC7(); renderC8(); renderC9();
@@ -2823,32 +2823,74 @@ async function confirmC() {
   });
 }
 
-// ── 8단계 루브릭 (확정 논제 급소 → Claude 문장 · C-F 서술 방향 축은 엔진 노드) ──
+// ── 8단계 루브릭 (엔진 조각 · 오종래 2026-10-14) ──
+// 엔진이 확정 논제의 소문항마다 F1 파트투영 → F2 조각역산 → F3 요소색판정 → F4 충족조건 → F5 배점 → 문항평가를 낸다 (/api/rubric).
+// Claude는 조각 하나하나를 문장으로 표현할 뿐이다. 검산은 GJ가 아니라 조각 충족 여부(조각 문장에 실체 글자가 있는가) — 9단계에 모범답안.
+const 파트순서C = ['근거대기', '세우기', '풀기', '답구하기'];
+const 파트번호 = { 근거대기: '①', 세우기: '②', 풀기: '③', 답구하기: '④' };
+
+/** 소문항 하나의 배점 기본값 — 논제에 「[N점]」「(N점)」이 있으면 그 값, 없으면 10 */
+function 기본배점(글) {
+  const m = String(글 || '').match(/[\[(]\s*(\d+(?:\.\d+)?)\s*점\s*[\])]/);
+  return m ? Number(m[1]) : 10;
+}
+
+const 배점글 = n => String(Math.round(n * 100) / 100);
+
+function 루브릭소문항Html(s) {
+  const 이름 = esc(단위이름(s.번호));
+  if (s.멈춤) return `<div class="flag-box">${이름} 엔진이 조각을 뽑지 못했습니다 — ${esc(s.멈춤.사유 || s.멈춤.멈춤 || '알 수 없음')}</div>`;
+  const 행 = s.조각.map(c => `<tr>
+      <td style="white-space:nowrap;">${파트번호[c.파트] || ''} ${esc(c.파트)}</td>
+      <td>${esc(c.id)}${c.is_중심 ? ' <span class="badge ok">중심</span>' : ''}</td>
+      <td style="white-space:nowrap;">${c.요소 ? esc(c.요소) : `<span class="c-meta">${esc(c.수행질 || '—')}</span>`}</td>
+      <td>「${esc(displayEntity(c.실체 ?? s.급소.실체))}」</td>
+      <td>${esc(c.확인물음)}</td>
+      <td>${esc(c.충족조건)}</td>
+      <td style="white-space:nowrap;">${배점글(c.배점)}</td>
+    </tr>`).join('');
+  const 부분 = 파트순서C.map(p => {
+    const b = s.부분채점기준[p];
+    if (!b) return '';
+    return `<div class="note-item"><strong>${파트번호[p]} ${p}</strong> — ${b.조각수 ? `${b.조각수}조각 · ${배점글(b.배점합)}점 (${b.조각배점.map(배점글).join(' + ')})` : '조각 없음 · 배점 다른 파트로 (봉인④ 결손재분배)'}</div>`;
+  }).join('');
+  const 경고 = s.문항평가 && s.문항평가.경고 && s.문항평가.경고.length
+    ? s.문항평가.경고.map(t => `<div class="note-item">${esc(t)}</div>`).join('')
+    : '<div class="note-item">경고 없음</div>';
+  return `<div class="c-row"><strong>${이름}</strong> ${엔진배지}급소 「${esc(displayEntity(s.급소.실체))}」
+      <div class="c-table-wrap" style="margin-top:8px;"><table class="rubric-table">
+        <thead><tr><th>파트</th><th>조각</th><th>요소</th><th>실체</th><th>확인물음</th><th>채점기준 (충족조건 · O/X)</th><th>배점</th></tr></thead>
+        <tbody>${행}</tbody></table></div>
+      <div class="card-title" style="margin:12px 0 6px;">부분채점기준 — 맞춘 조각 배점의 합</div>
+      <div class="note-list">${부분}</div>
+      <div class="card-title" style="margin:12px 0 6px;">${엔진배지}문항평가</div>
+      <div class="note-list">${경고}</div>
+    </div>`;
+}
+
 function renderC8() {
   const body = document.getElementById('c8-body');
   if (!C.확정.length) { body.innerHTML = '<div class="card c-empty">7단계에서 논제를 확정하면 표시됩니다</div>'; return; }
   body.innerHTML = C.확정.map((x, i) => {
     const 인식 = x.분석.단계.인식;
-    const 여럿 = 인식.소문항.length > 1;
     const cf = 인식.소문항.flatMap(s => s.노드.filter(n => n.스위치 === 'C-F').map(n => ({ s, n })));
-    const g = x.생성;
-    const 축 = g ? g.단계4.축.map(r => `<tr><td>${esc(r.소문항)}</td><td><strong>${esc(r.이름)}</strong></td><td>${esc(r.배점)}</td><td>${esc(r.판정)}</td></tr>`).join('') : '';
-    const 방향 = cf.map(({ s, n }) => `<tr><td>서술 방향</td><td><strong>C-F「${esc((n.표지 || n.실체).trim())}」</strong></td><td>—</td><td>${esc(단위이름(s.번호))} 「${esc((n.표지 || n.실체).trim())}」의 방식으로 서술했는가 (엔진 C-F 노드)</td></tr>`).join('');
+    const r = x.루브릭;
+    const 계열 = r ? r.계열 : '';
     return `<div class="card">
       <div class="card-title">${i + 1}. ${esc(x.출처)}</div>
       <div class="question-box">${esc(x.텍스트)}</div>
       <div class="c-row">${엔진배지}<strong>급소</strong> ${인식.소문항.map(s => `${esc(단위이름(s.번호))} ${급소글(s)}`).join(' / ')}</div>
-      <div class="c-row"><strong>C-F 서술 방향 축</strong> ${cf.length ? cf.map(({ n }) => `<span class="badge muted">「${esc((n.표지 || n.실체).trim())}」</span>`).join('') : '엔진이 잡은 C-F 노드 없음 — 서술 방향 축 없음'}</div>
-      ${여럿 ? '<div class="flag-box">소문항이 여럿입니다 — 루브릭은 논제 전체 인식으로 만듭니다. 소문항별 루브릭은 7단계에서 하나씩 확정하세요</div>' : ''}
-      <div style="margin:12px 0 8px; font-size:13px;">계열
-        <label style="margin-left: 8px;"><input type="radio" name="c-gy-${i}" value="수리"> 수리 (완전 일치)</label>
-        <label style="margin-left: 8px;"><input type="radio" name="c-gy-${i}" value="인문사회국어"> 인문사회국어 (급소 도달)</label>
+      <div class="c-row"><strong>C-F 서술 방향</strong> ${cf.length ? cf.map(({ s, n }) => `<span class="badge muted">${esc(단위이름(s.번호))} 「${esc((n.표지 || n.실체).trim())}」</span>`).join('') : '엔진이 잡은 C-F 노드 없음'}</div>
+      <div style="margin:12px 0 8px; font-size:13px; display:flex; flex-wrap:wrap; gap:8px 16px; align-items:center;">
+        <span>계열
+          <label style="margin-left: 8px;"><input type="radio" name="c-gy-${i}" value="수리"${계열 === '수리' ? ' checked' : ''}> 수리 (완전 일치)</label>
+          <label style="margin-left: 8px;"><input type="radio" name="c-gy-${i}" value="인문사회국어"${계열 === '인문사회국어' ? ' checked' : ''}> 인문사회국어 (급소 도달)</label>
+        </span>
+        <label>소문항 배점 <input type="number" id="c-score-${i}" min="0.5" step="0.5" value="${r ? r.총배점 : 기본배점(x.텍스트)}" style="width:80px; padding:4px 8px; border:1px solid var(--border); border-radius:var(--radius);"></label>
       </div>
-      <button class="type-btn" id="c8-btn-${i}" onclick="genC(${i})">루브릭 문장 생성</button>
-      ${g ? `<div class="c-table-wrap" style="margin-top:16px;"><table class="rubric-table">
-        <thead><tr><th>파트</th><th>축</th><th>배점</th><th>판정 (충족조건)</th></tr></thead>
-        <tbody>${축}${방향}</tbody></table></div>
-        <div class="note-list" style="margin-top:12px;">${g.단계4.공통정책.map(p => `<div class="note-item">${esc(p)}</div>`).join('')}</div>` : ''}
+      <button class="type-btn" id="c8-btn-${i}" onclick="genC(${i})">${r ? '루브릭 다시 생성' : '루브릭 생성'} (엔진 조각 → Claude 문장)</button>
+      ${r ? `<div class="c-meta" style="margin-top:12px;">파트 지수 2:3:2:2 (봉인④) · 파트 배점 ÷ 조각 수 · 충족 경계 ${r.계열 === '수리' ? '완전 일치' : '급소 도달'} · 엔진 ${esc(r.엔진 ? r.엔진.commit : '—')}</div>
+        ${r.소문항.map(루브릭소문항Html).join('')}` : ''}
     </div>`;
   }).join('');
 }
@@ -2857,47 +2899,49 @@ async function genC(i) {
   const x = C.확정[i];
   const 고른 = document.querySelector(`input[name="c-gy-${i}"]:checked`);
   if (!고른) { alert('계열(수리·인문사회국어)을 고르세요.'); return; }
-  await withBusy(document.getElementById('c8-btn-' + i), '루브릭 생성 중… (약 1분)', async () => {
-    const 인식 = x.분석.단계.인식;
-    const { out } = await postJSON('/api/generate', {
-      문항원문: x.텍스트, 파이프라인: 'C', 계열: 고른.value, 논제: x.텍스트,
+  const 총배점 = Number(document.getElementById('c-score-' + i).value);
+  if (!(총배점 > 0)) { alert('소문항 배점을 넣으세요.'); return; }
+  await withBusy(document.getElementById('c8-btn-' + i), '엔진 조각 → 모범답안 문장 생성 중… (1~2분)', async () => {
+    const { out } = await postJSON('/api/rubric', {
+      논제: x.텍스트, 계열: 고른.value, 총배점,
       ...(C.제시문.length ? { 제시문: C.제시문 } : {}),
-      인식: 인식.소문항.length === 1 ? 인식.소문항[0] : 인식.전체,
     });
     if (out.error) { alert('루브릭 생성 실패: ' + out.error); return; }
-    x.생성 = out;
+    x.루브릭 = out;
     renderC8(); renderC9();
-    if (C.확정.every(y => y.생성)) markCDone(8);
+    if (C.확정.every(y => y.루브릭)) markCDone(8, 9);
   });
 }
 
-// ── 9단계 모범답안 (조각 전개 · GJ는 봉인 → 판정불가는 교사 판정) ──
+// ── 9단계 모범답안 (조각 문장을 파트 순서로 · 충족 = 조각 문장에 실체 글자가 있는가) ──
 function renderC9() {
   const body = document.getElementById('c9-body');
-  const 있음 = C.확정.filter(x => x.생성);
-  if (!있음.length) { body.innerHTML = '<div class="card c-empty">8단계에서 루브릭을 만들면 표시됩니다</div>'; return; }
+  if (!C.확정.some(x => x.루브릭)) { body.innerHTML = '<div class="card c-empty">8단계에서 루브릭을 만들면 표시됩니다</div>'; return; }
   body.innerHTML = C.확정.map((x, i) => {
-    if (!x.생성) return '';
-    const d5 = x.생성.단계5;
-    const 조각 = d5.조각.map((s, k) => `
-      <div class="answer-step">
-        <div class="step-line"><div class="step-dot">${k + 1}</div>${k < d5.조각.length - 1 ? '<div class="step-connector"></div>' : ''}</div>
-        <div class="step-content"><div class="step-name">${esc(s.이름)}</div><div class="step-body">${esc(s.내용)}</div></div>
-      </div>`).join('');
-    const gj = x.교사GJ;
-    return `<div class="card">
-      <div class="card-title">${AI배지}${i + 1}. ${esc(x.출처)}</div>
-      <div class="answer-steps">${조각}</div>
-      <div class="c-row"><strong>이어 읽기</strong><div style="white-space:pre-wrap; margin-top:4px;">${esc(d5.조각.map(s => s.내용).join(' '))}</div></div>
-      <div class="c-row"><strong>급소 포함</strong> ${d5.인식대조.급소포함 ? '<span class="badge ok">급소가 글자로 들어 있음</span>' : `<span class="badge warn">${esc(d5.인식대조.플래그 || '급소 미포함')}</span>`}</div>
-      <div class="c-row"><strong>급소 역검증 (GJ)</strong> <span class="badge muted">[봉인⑤⑥] 비어 있음 — 교사 판정</span>
-        <button class="type-btn${gj === 'O' ? ' selected' : ''}" onclick="C.확정[${i}].교사GJ='O'; renderC9();">O 급소에 닿음</button>
-        <button class="type-btn${gj === 'X' ? ' selected' : ''}" onclick="C.확정[${i}].교사GJ='X'; renderC9();">X 닿지 않음</button>
-      </div>
-      ${d5.해설 ? `<div class="c-row"><strong>해설</strong><div style="white-space:pre-wrap; margin-top:4px;">${esc(d5.해설)}</div></div>` : ''}
-    </div>`;
+    if (!x.루브릭) return '';
+    const 소 = x.루브릭.소문항.map(s => {
+      const 이름 = esc(단위이름(s.번호));
+      if (!s.조각) return `<div class="flag-box">${이름} 엔진이 조각을 뽑지 못해 모범답안이 없습니다</div>`;
+      const 조각 = s.조각.map((c, k) => `
+        <div class="answer-step">
+          <div class="step-line"><div class="step-dot">${k + 1}</div>${k < s.조각.length - 1 ? '<div class="step-connector"></div>' : ''}</div>
+          <div class="step-content">
+            <div class="step-name">${파트번호[c.파트] || ''} ${esc(c.파트)} · ${esc(c.id)} · 「${esc(displayEntity(c.실체 ?? s.급소.실체))}」
+              ${c.충족 ? '<span class="badge ok" style="margin-left:6px;">충족</span>' : '<span class="badge warn" style="margin-left:6px;">미충족 — 실체 글자 없음</span>'}</div>
+            <div class="step-body">${esc(c.표현 || '(문장 없음)')}</div>
+          </div>
+        </div>`).join('');
+      const 못 = s.충족.조각수 - s.충족.충족수;
+      return `<div class="c-row"><strong>${이름}</strong> 급소 「${esc(displayEntity(s.급소.실체))}」
+        <span class="badge ${못 ? 'warn' : 'ok'}" style="margin-left:6px;">조각 충족 ${s.충족.충족수}/${s.충족.조각수}</span>
+        <span class="c-meta">Claude ${s.충족.시도}회 (다시 쓰기 ${s.충족.재시도한도}회까지)</span>
+        ${못 ? `<div class="flag-box">${못}개 조각은 다시 써도 실체 글자를 넣지 못했습니다 — 교사 확인</div>` : ''}
+        <div class="answer-steps" style="margin-top:10px;">${조각}</div>
+        <div class="c-row"><strong>이어 읽기</strong><div style="white-space:pre-wrap; margin-top:4px;">${esc(s.모범답안)}</div></div>
+      </div>`;
+    }).join('');
+    return `<div class="card"><div class="card-title">${AI배지}${i + 1}. ${esc(x.출처)}</div>${소}</div>`;
   }).join('');
-  if (C.확정.every(x => x.생성 && x.교사GJ)) markCDone(9);
 }
 
 // ════════════════════════════════════════════════════════════════════════
@@ -3041,7 +3085,7 @@ function 문항열기(id) {
       markCDone(0, 1, 2, 5);
       if (C.제시문.length) markCDone(3, 4);
       if (C.확정.length) markCDone(7);
-      if (C.확정.length && C.확정.every(x => x.생성)) markCDone(8);
+      if (C.확정.length && C.확정.every(x => x.루브릭)) markCDone(8, 9);
       showCStep(2);
     } else if (r) {
       목록.보이는결과 = r;
