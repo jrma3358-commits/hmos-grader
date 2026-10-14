@@ -3,6 +3,8 @@
 // [오종래 2026-10-13] 소문항마다 따로 인식한다 — (1-1)·(1-2)를 한 그래프에 그리지 않는다.
 // [오종래 2026-10-13] 공통 발문(「제시문 [가], [나], [다]를 참고하여 다음의 물음에 답하시오.」)은 떼어 내고 C-F를 판정한다.
 //   공통 발문은 인식에 넣지 않는다. 참조 제시문 범위만 소문항에 물려준다.
+// [오종래 2026-10-14] 계단 「(1)(2)(3)」도 따로 인식한다 — 5단계 ② 서술복잡의 처방(소문항 계단)으로 나눈 논제를
+//   한 소문항으로 읽으면 B가 다시 셋 이상이 되어 서술복잡이 그대로 남는다. 계단 번호는 「1」, 소문항 안이면 「2-1-1」.
 //
 // 이 파일이 하지 않는 것:
 //   - 인식 (recognizeV2Analysis가 한다)
@@ -23,6 +25,11 @@ export interface 소문항 {
 
 /** 소문항 번호 「(1-1)」 — 글 머리, 줄 머리, 또는 문장 끝(. ? ! 。) 뒤 */
 const ITEM = /(?:^|(?<=\n)|(?<=[.?!。]))[ \t]*\((\d+-\d+)\)[ \t]*/g;
+/**
+ * 계단 번호 「(1)」 — 글 머리, 줄 머리, 문장 끝 뒤 (소문항 본문 안에서 찾으므로 소문항 번호 바로 뒤도 글 머리다).
+ * 문장 가운데의 「(1)의 변화」는 계단이 아니다.
+ */
+const STEP = /(?:^|(?<=\n)|(?<=[.?!。]))[ \t]*\((\d+)\)[ \t]*/g;
 /** 문항 머리 「[문항 1]」·「문제 1」 — 공통 발문이 여기서 새로 시작한다 */
 const HEAD = /(?:^|(?<=\n)|(?<=[.?!。]))[ \t]*(?:\[문항\s*\d+\]|문제\s*\d+)/g;
 
@@ -32,19 +39,38 @@ function 참조of(text: string): string[] {
 }
 
 /**
+ * 소문항 하나 → 계단들. 본문에 계단 번호 「(N)」가 없으면 그대로. 있으면 계단마다 한 단위 —
+ * 번호 = 「N」(소문항 번호가 있으면 「소문항-N」), 첫 계단 앞 글(계단의 발문)은 공통 발문에 잇는다,
+ * 참조 = 계단 자신 → 계단 발문 → 소문항의 참조 순서.
+ */
+function 계단으로(u: 소문항): 소문항[] {
+  const steps = [...u.텍스트.matchAll(STEP)];
+  if (!steps.length) return [u];
+  const 발문 = u.텍스트.slice(0, steps[0].index!).trim();
+  const 공통발문 = [u.공통발문, 발문].filter(Boolean).join('\n');
+  const 위참조 = 참조of(발문).length ? 참조of(발문) : u.참조;
+  return steps.map((m, k) => {
+    const body = u.텍스트.slice(m.index! + m[0].length, steps[k + 1]?.index ?? u.텍스트.length).trim();
+    const 자기참조 = 참조of(body);
+    return { 번호: u.번호 ? `${u.번호}-${m[1]}` : m[1], 텍스트: body, 공통발문, 참조: 자기참조.length ? 자기참조 : 위참조 };
+  });
+}
+
+/**
  * 논제 → 소문항들. 「(N-M)」 번호가 없으면 논제 전체가 소문항 하나다 (번호 null, 공통 발문 없음).
  * 공통 발문 = 문항 머리(또는 글 처음)부터 그 문항의 첫 소문항 번호 앞까지.
+ * 소문항(또는 논제 전체) 안의 계단 「(1)(2)(3)」은 계단마다 나눈다 (계단으로).
  */
 export function split_thesis(논제: string): 소문항[] {
   const text = 논제.replace(/\r\n?/g, '\n');
   const items = [...text.matchAll(ITEM)];
   if (!items.length) {
     const t = text.trim();
-    return t ? [{ 번호: null, 텍스트: t, 공통발문: '', 참조: 참조of(t) }] : [];
+    return t ? 계단으로({ 번호: null, 텍스트: t, 공통발문: '', 참조: 참조of(t) }) : [];
   }
   const heads = [...text.matchAll(HEAD)].map((m) => m.index!);
 
-  return items.map((m, k) => {
+  return items.flatMap((m, k) => {
     const start = m.index! + m[0].length;
     const nextItem = items[k + 1]?.index ?? text.length;
     // 다음 소문항 앞에 문항 머리가 있으면 거기서 끊는다 (다음 문항의 공통 발문)
@@ -57,6 +83,6 @@ export function split_thesis(논제: string): 소문항[] {
     const 공통발문 = text.slice(head, first.index!).trim();
 
     const 자기참조 = 참조of(body);
-    return { 번호: m[1], 텍스트: body, 공통발문, 참조: 자기참조.length ? 자기참조 : 참조of(공통발문) };
+    return 계단으로({ 번호: m[1], 텍스트: body, 공통발문, 참조: 자기참조.length ? 자기참조 : 참조of(공통발문) });
   });
 }
