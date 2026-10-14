@@ -9,6 +9,7 @@ import { recognizeV2Analysis } from '../src/fq/pipeline.ts';
 import { derive_pieces, f2_input_from_v2, filter_by_polarity, link_sentences, speaker_lines, split_sentences, thesis_polarity } from '../src/rubric/f2.ts';
 import { judge_element } from '../src/rubric/f3.ts';
 import { K핵심어, 마지막명사 } from '../src/rubric/sealed/f2.ts';
+import { 봉인6_조각대조 } from '../src/rubric/sealed/g1.ts';
 import { allocate_points } from '../src/rubric/f5.ts';
 import { spread_piece } from '../src/rubric/f6.ts';
 import { specify_condition } from '../src/rubric/f4.ts';
@@ -359,5 +360,27 @@ describe('단계형 — 앞 급소를 ① 「앞 결과」 조각으로', () => 
   it('수리는 앞 급소를 받지 않는다', () => {
     const 수리 = derive_pieces(입력.물음, 입력.k, { ...입력.인식, 앞급소: [{ 번호: '1', 실체: 'x' }] }, '수리');
     assert.ok(!수리.some((c) => c.앞결과));
+  });
+});
+
+// 앞 결과 조각 채점 — 앞 급소의 K 핵심어로 맞춘다 (오종래 2026-10-14)
+describe('단계형 — 앞 결과 조각은 핵심어로 채점', () => {
+  const 입력 = f2_input_from_v2(recognizeV2Analysis("영희의 방법으로 '0 ≤ x < π/2일 때 부등식 sinx ≥ xcosx가 성립한다.'를 증명하시오."));
+  assert.ok(입력.ok);
+  const 맥락 = { 답노드: [], 질문급소: 입력.k, 계열: '인문사회국어' as const, 루브릭: [], 앞결과: new Map() };
+  const 앞조각 = (실체: string) => derive_pieces(입력.물음, 입력.k, { ...입력.인식, 앞급소: [{ 번호: '1', 실체 }] }, '인문사회국어').map((c) => ({ ...c, 충족조건: '', 배점: 1, 모범조각: '' })).find((c) => c.앞결과)!;
+
+  it('명제 전체를 옮겨 쓰지 않아도 핵심어 「부등식 sinx ≥ xcosx」가 있으면 O', () => {
+    const c = 앞조각("'0 ≤ x < π/2일 때 부등식 sinx ≥ xcosx가 성립한다.'");
+    const r = 봉인6_조각대조('앞에서 보인 부등식 sinx ≥ xcosx를 그래프로도 확인한다.', c, 맥락);
+    assert.equal(r.결과, 'O');
+    assert.match(r.근거, /부등식 sinx ≥ xcosx/);
+    assert.equal(봉인6_조각대조('영희의 방법으로 그래프를 그렸다.', c, 맥락).결과, 'X');
+  });
+
+  it('핵심어가 한 글자(「f(x) ≥ 0」 → 「0」)면 명제 전체로 — 거짓 O 막기', () => {
+    const c = 앞조각('f(x) ≥ 0');
+    assert.equal(봉인6_조각대조('x=0에서 그래프가 만난다.', c, 맥락).결과, 'X');
+    assert.equal(봉인6_조각대조('앞에서 f(x) ≥ 0을 보였다.', c, 맥락).결과, 'O');
   });
 });
