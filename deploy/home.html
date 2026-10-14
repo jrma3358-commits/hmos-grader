@@ -66,6 +66,10 @@
     transition: background 0.15s, color 0.15s;
   }
   .header-btn:hover { background: var(--brown); color: var(--cream); }
+  .header-nav { display: flex; align-items: center; gap: 20px; }
+  .header-link { color: var(--brown); font-size: 14px; font-weight: 500; text-decoration: none; white-space: nowrap; }
+  .header-link:hover { color: var(--terracotta); }
+  .header-link:focus-visible { outline: 3px solid var(--olive); outline-offset: 3px; }
 
   /* 히어로 */
   .hero {
@@ -214,10 +218,6 @@
   .footer-info dl { display: flex; flex-wrap: wrap; gap: 4px 24px; }
   .footer-info dl div { display: flex; gap: 8px; }
   .footer-info dt { color: #A8957F; }
-  .footer-side { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
-  .footer-link { color: var(--apricot); text-decoration: none; font-weight: 500; }
-  .footer-link:hover { text-decoration: underline; }
-  .footer-link:focus-visible { outline: 3px solid var(--olive); outline-offset: 3px; }
   .copy { color: #A8957F; }
 
   /* 비밀번호 팝업 */
@@ -254,11 +254,11 @@
   @media (max-width: 560px) {
     .wrap { padding: 0 16px; }
     .logo-sub { display: none; }
+    .header-nav { gap: 14px; }
     .hero { padding: 80px 0 88px; }
     .cta { width: 100%; justify-content: center; }
     .features { padding: 72px 0 80px; }
     .needs { padding: 88px 0 96px; }
-    .footer-side { align-items: flex-start; }
   }
   @media (prefers-reduced-motion: reduce) {
     html { scroll-behavior: auto; }
@@ -274,7 +274,10 @@
       <span class="logo-mark">HM<span>OS</span></span>
       <span class="logo-sub">훈민정음 OS</span>
     </a>
-    <button class="header-btn" type="button" onclick="열기()">문항 분석</button>
+    <nav class="header-nav">
+      <a class="header-link" href="/about">HMOS 이야기 →</a>
+      <button class="header-btn" type="button" onclick="열기()">문항 분석</button>
+    </nav>
   </div>
 </header>
 
@@ -370,10 +373,7 @@ AI는 질문에 답을 내놓는다.
         <div><dt>특허출원번호</dt><dd>10-2026-0175774</dd></div>
       </dl>
     </div>
-    <div class="footer-side">
-      <a class="footer-link" href="/about">HMOS 이야기 →</a>
-      <div class="copy">© 2026 훈민OS</div>
-    </div>
+    <div class="copy">© 2026 훈민OS</div>
   </div>
 </footer>
 
