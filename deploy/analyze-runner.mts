@@ -31,6 +31,9 @@ const { specify_condition } = await load('src/rubric/f4.ts');
 const { allocate_points } = await load('src/rubric/f5.ts');
 const { spread_piece } = await load('src/rubric/f6.ts');
 const { evaluate_item } = await load('src/rubric/item_eval.ts');
+// 8단계 학생 답안 채점 — 엔진 G1 (봉인⑥ 조각 대조 · 봉인④-b 게이트, 계열별, 오종래 2026-10-14)
+const { grade } = await load('src/rubric/g1.ts');
+const { 게이트사슬, 상한비 } = await load('src/rubric/sealed/g1.ts');
 
 const [reqPath, outPath] = process.argv.slice(2);
 const req = JSON.parse(readFileSync(reqPath, 'utf8'));
@@ -151,7 +154,30 @@ try {
 
   const 제시문목록: { id: string; 텍스트: string }[] | null = Array.isArray(req.제시문) ? req.제시문 : typeof req.제시문 === 'string' && req.제시문.trim() ? [{ id: '제시문', 텍스트: req.제시문 }] : null;
 
-  if (req.작업 === '루브릭') {
+  if (req.작업 === '채점') {
+    // ── 8단계 학생 답안 채점 ── 루브릭(러너 루브릭 작업 출력의 조각)을 엔진 조각으로 되살려 G1에 넣는다. Claude는 쓰지 않는다
+    const 계열 = req.계열 === '수리' ? '수리' : '인문사회국어';
+    const 학생답 = String(req.학생답 ?? '');
+    if (!학생답.trim()) throw Object.assign(new Error('학생 답안이 비어 있습니다'), { name: '입력오류' });
+    const 노드of = (id: string | null, 실체: string | null) => (id ? { id, entity: 실체 ?? '', color: null, surface: '', switchId: '', index: 0 } : null);
+    const 조각들 = (Array.isArray(req.조각) ? req.조각 : []).map((c: any) => ({
+      id: c.id, 파트: c.파트, 요소: c.요소 ?? null, 수행질: c.수행질 ?? null, 확인물음: c.확인물음 ?? '', 충족조건: c.충족조건 ?? '',
+      is_중심: !!c.is_중심, 배점: Number(c.배점) || 0, 모범조각: '',
+      node: 노드of(c.노드 ?? null, c.실체 ?? null),
+      ...(c.근거 ? { 근거: c.근거 } : {}), ...(c.경로 ? { 경로: c.경로 } : {}), ...(c.제시문 ? { 제시문: c.제시문 } : {}),
+    }));
+    if (!조각들.length) throw Object.assign(new Error('루브릭 조각이 없습니다'), { name: '입력오류' });
+    const 급소 = { 실체: String(req.급소?.실체 ?? ''), node: 노드of(req.급소?.노드 ?? 'k', req.급소?.실체 ?? '') };
+    const r = grade(학생답, 조각들, '', 급소, 계열);
+    out.단계.채점 = {
+      계열,
+      조각별: Object.values(r.파트별).flatMap((p: any) => p.조각별),
+      파트별: Object.fromEntries(Object.entries(r.파트별).map(([p, v]: [string, any]) => [p, { 배점합: v.배점합, 파트점수: v.파트점수, 상한: v.상한 }])),
+      부분점수: r.부분점수, 만점: r.만점, 무너진지점: r.무너진지점, 약점: r.약점, 판정불가: r.판정불가,
+      // 교사가 O/X를 고치면 대시보드가 이 사슬·비율로 다시 센다 (엔진 값 그대로)
+      게이트: { 사슬: 게이트사슬(계열), 상한비 },
+    };
+  } else if (req.작업 === '루브릭') {
     // ── 8단계 루브릭만 ── 인식·제시문·정교화는 다시 돌리지 않는다
     const 계열 = req.계열 === '수리' ? '수리' : '인문사회국어';
     const 총배점 = Number(req.총배점) > 0 ? Number(req.총배점) : 10;

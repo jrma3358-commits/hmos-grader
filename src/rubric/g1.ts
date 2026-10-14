@@ -70,7 +70,7 @@ export function grade(학생답: string, 루브릭: 조각[], 모범답안: stri
   const 파트배점 = Object.fromEntries(
     파트순서.map((p) => [p, 합(조각별.filter((r) => r.파트 === p), (r) => r.배점)]),
   ) as Record<파트, number>;
-  const 상한 = 봉인4b_게이트(조각별, 파트배점);
+  const 상한 = 봉인4b_게이트(조각별, 파트배점, 계열); // 계열별 사슬 (2026-10-14)
 
   const 파트별 = Object.fromEntries(
     파트순서.map((p) => {
