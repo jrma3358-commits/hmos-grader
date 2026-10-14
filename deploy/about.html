@@ -66,6 +66,10 @@
     transition: background 0.15s, color 0.15s;
   }
   .header-btn:hover { background: var(--brown); color: var(--cream); }
+  /* 홈 헤더와 같은 링크 — 지금 이 페이지라 테라코타로 표시 */
+  .header-nav { display: flex; align-items: center; gap: 20px; }
+  .header-link { color: var(--brown); font-size: 14px; font-weight: 500; text-decoration: none; white-space: nowrap; }
+  .header-link:hover, .header-link[aria-current="page"] { color: var(--terracotta); }
   a:focus-visible { outline: 3px solid var(--olive); outline-offset: 3px; }
 
   /* 머리 */
@@ -203,6 +207,7 @@
   @media (max-width: 560px) {
     .wrap { padding: 0 16px; }
     .logo-sub { display: none; }
+    .header-nav { gap: 14px; }
     .intro { padding: 72px 0 64px; }
     .layer { padding: 64px 0 72px; }
     .charter { padding: 28px 22px; line-height: 1.9; }
@@ -225,7 +230,10 @@
       <span class="logo-mark">HM<span>OS</span></span>
       <span class="logo-sub">훈민정음 OS</span>
     </a>
-    <a class="header-btn" href="/?login=1">문항 분석</a>
+    <nav class="header-nav">
+      <a class="header-link" href="/about" aria-current="page">HMOS 이야기</a>
+      <a class="header-btn" href="/?login=1">문항 분석</a>
+    </nav>
   </div>
 </header>
 
