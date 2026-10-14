@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- HMOS 탭 아이콘 — 테라코타 바탕에 크림 잎 + H -->
+  <rect width="64" height="64" rx="14" fill="#C0613D"/>
+  <path d="M40 10c9 2 14 9 14 18-8 0-14-5-14-18Z" fill="#F2C6B4"/>
+  <path d="M16 18v30M36 18v30M16 33h20" stroke="#F7F0E3" stroke-width="7" stroke-linecap="round" fill="none"/>
+</svg>
