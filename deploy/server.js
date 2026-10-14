@@ -71,6 +71,16 @@ app.get('/dashboard',(req,res)=>{
 });
 app.get('/hmos_dashboard.html',(req,res)=>res.redirect(302,'/dashboard'));
 
+// API도 접속 쿠키가 있어야 — 엔진(/analyze)·Claude 호출(/api/*) (2026-10-14).
+// API는 모두 POST라 GET·HEAD(홈·정적 파일) 말고는 전부 막고 /api/access만 연다 — 경로 대소문자·인코딩으로 비켜 가지 못하게 경로 모양으로 고르지 않는다.
+// 오류 모양은 대시보드가 읽는 대로: /analyze는 error.사유, /api/*는 error 글
+const 접속만료='접속이 만료되었거나 비밀번호를 입력하지 않았습니다 — 홈에서 「문항 분석 시작하기」로 다시 들어오세요';
+app.use((req,res,next)=>{
+  if(req.method==='GET'||req.method==='HEAD'||req.path.toLowerCase()==='/api/access'||접속됨(req))return next();
+  if(req.path.toLowerCase().startsWith('/api/'))res.status(401).json({ok:false,error:접속만료});
+  else res.status(401).json({ok:false,error:{멈춤:'접속',종류:'접속',사유:접속만료}});
+});
+
 app.use(express.static(__dirname,{index:false}));
 
 app.post('/api/analyze',(req,res)=>{

@@ -65,7 +65,7 @@ HMOS 절대 원칙 (오종래 2026-10-13): 인식·제시문 급소 추출·연�
 - `.env`의 `ACCESS_PASSWORD` — 바꾼 뒤 `pm2 restart hmos`. 없으면 `POST /api/access`가 503이라 아무도 대시보드에 못 들어간다
 - 맞으면 `hmos_access` 쿠키(HttpOnly · SameSite=Lax · https면 Secure, 12시간). 값은 비밀번호로 만든 HMAC — 비밀번호를 바꾸면 이전 쿠키는 모두 무효
 - `/hmos_dashboard.html`을 바로 열면 `/dashboard`로 돌린다. IP마다 10분에 10번 틀리면 잠시 막는다
-- API(`/analyze`·`/api/*`)는 이 비밀번호로 막지 않는다 — 화면 입구만 막는다
+- API(`/analyze`·`/api/*`)도 같은 쿠키가 있어야 한다 — GET·HEAD 말고는 `/api/access`만 열려 있다. 쿠키가 없거나 만료되면 401 (`/analyze`는 `error.사유`, `/api/*`는 `error` 글 — 대시보드가 그대로 띄운다)
 - 인증서 Let's Encrypt (certbot --nginx, 새 서버 발급 2026-10-13 23:15 UTC · 만료 2027-01-11, certbot.timer 자동 갱신 — dry-run 통과)
 - 예전 자리표시 앱(root pm2 `nodeapp`, `/var/www/nodeapp/server.js`)은 pm2에서 지웠다. 파일은 남아 있다 (새 서버도 같게, 백업 /root/.pm2/dump.pm2.bak-20261014)
 - 새 서버 nginx는 아래 hmos.conf에 `.bundle`·점 파일 차단을 더하고 proxy_read_timeout 600s (재인식 순차). certbot 등록은 이메일 없이
