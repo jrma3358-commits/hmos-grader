@@ -3036,6 +3036,7 @@ function renderB4() {
     <div class="card-title">${엔진배지}서술형 루브릭 — 엔진 조각</div>
     <div class="c-meta">계열 인문사회국어 · 풀기 없음 · 답구하기 = 급소 경로 흔적. 소문항 배점은 소문항의 「[N점]」(없으면 문항 「[총 N점]」, 그것도 없으면 10).
       세우기 = 공통 자료(대화)에서 「~의 방법으로」가 지목한 화자의 줄.</div>
+    ${r ? '' : '<div class="c-meta" style="margin-top:8px;">아래 버튼을 눌러 루브릭을 생성하세요.</div>'}
     <button class="type-btn" id="b-gen" style="margin-top:8px;" onclick="genB()">${r ? '루브릭 다시 생성' : '루브릭 생성'} (엔진 조각 → Claude 문장)</button>
     ${r ? `<div class="c-meta" style="margin-top:12px;">파트 지수 2:3:2:2 (봉인④) · 파트 배점 ÷ 조각 수 · 충족 경계 급소 도달 · 엔진 ${esc(r.엔진 ? r.엔진.commit : '—')}</div>
       ${r.소문항.map((s, j) => 루브릭소문항Html(s, -1, j)).join('')}` : ''}
@@ -3131,6 +3132,7 @@ function renderC8() {
         </span>
         <label>소문항 배점 <input type="number" id="c-score-${i}" min="0.5" step="0.5" value="${r ? r.총배점 : 기본배점(x.텍스트)}" style="width:80px; padding:4px 8px; border:1px solid var(--border); border-radius:var(--radius);"></label>
       </div>
+      ${r ? '' : '<div class="c-meta" style="margin-bottom:8px;">계열과 배점을 고른 뒤 아래 버튼을 눌러 루브릭을 생성하세요.</div>'}
       <button class="type-btn" id="c8-btn-${i}" onclick="genC(${i})">${r ? '루브릭 다시 생성' : '루브릭 생성'} (엔진 조각 → Claude 문장)</button>
       ${r ? `<div class="c-meta" style="margin-top:12px;">파트 지수 2:3:2:2 (봉인④) · 파트 배점 ÷ 조각 수 · 충족 경계 ${r.계열 === '수리' ? '완전 일치' : '급소 도달'} · 엔진 ${esc(r.엔진 ? r.엔진.commit : '—')}</div>
         ${r.소문항.map((s, j) => 루브릭소문항Html(s, i, j)).join('')}` : ''}
@@ -3222,6 +3224,7 @@ function 모범소문항Html(s, i, j) {
              <span id="c9-st-${키}">${확정Html(s)}</span>
            </div>`
         : `<div class="c-meta">조각 문장을 루브릭 경로 순서(근거대기 → 세우기 → 답구하기)로 Claude가 한 문단으로 잇습니다. 새 사실은 더하지 않고, 조각마다 실체·급소 핵심어 글자를 남깁니다.</div>
+           <div class="c-meta" style="margin:6px 0 8px;">아래 버튼을 눌러 모범답안을 생성하세요.</div>
            <button class="type-btn" id="c9-btn-${키}" onclick="답안잇기(${i}, ${j})">모범답안 잇기 (Claude)</button>`;
       return `<div class="c-row"><strong>${이름}</strong> 급소 「${esc(displayEntity(s.급소.실체))}」
         <span class="badge ${못 ? 'warn' : 'ok'}" style="margin-left:6px;">8단계 조각 충족 ${s.충족.충족수}/${s.충족.조각수}</span>
