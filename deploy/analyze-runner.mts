@@ -1,6 +1,7 @@
 // /analyze 러너 — 엔진(hmos-grader/)을 부르기만 한다. 엔진에 없는 판단은 하지 않는다 (안 1, 오종래 2026-10-11).
 // 사용: node analyze-runner.mts <요청.json> <결과.json>
-//   요청: { 문항원문, 파이프라인: 'A'|'B'|'C', 논제?, 제시문?, 사족? }
+//   요청: { 문항원문, 파이프라인: 'A'|'B'|'C', 논제?, 제시문?, 사족?, 참조? }
+//   참조: C 논제를 다시 인식할 때 원 소문항의 참조 제시문 — 자기 참조가 없는 소문항에 물려준다 (5단계 보완 재인식, 2026-10-14)
 //   A·B 흐름: 인식 → 1차 필터 확인화면 → [교사 ① 승인 대기]
 //   C 흐름 (조립설명서 C·논술 9단계, HMOS 절대 원칙 — 엔진이 잡는다): 2단계 소문항별 인식
 //     → 3·4단계 제시문 단락 급소 ↔ 논제 급소 연결·사족 (제시문이 오면) → 5단계 정교화 진단[봉인⑬]
@@ -76,7 +77,8 @@ try {
     const 논제글 = String(req.논제 ?? 문항원문);
 
     // 2단계 — 소문항마다 따로 인식. 공통 발문은 떼어 낸다 (오종래 2026-10-13)
-    const 소문항 = split_thesis(논제글).map((s: any) => ({ ...s, a: fq.recognizeV2Analysis(s.텍스트) }));
+    const 물려줄참조: string[] = Array.isArray(req.참조) ? req.참조.map(String) : [];
+    const 소문항 = split_thesis(논제글).map((s: any) => ({ ...s, ...(!s.참조.length && 물려줄참조.length ? { 참조: 물려줄참조 } : {}), a: fq.recognizeV2Analysis(s.텍스트) }));
     if (!소문항.length) throw Object.assign(new Error('논제가 비어 있습니다'), { name: '입력오류' });
     const 전체 = 소문항.length === 1 ? 소문항[0].a : fq.recognizeV2Analysis(논제글);
     out.단계.인식 = {
