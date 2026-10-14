@@ -94,6 +94,65 @@ describe('F2 인문논술 세우기 (연결문장이 있을 때)', () => {
   });
 });
 
+// 서술·논술형 ④ 답구하기 — 봉인② (오종래 2026-10-14): 값 일치가 아니라 경로 추적.
+// 대상 = 엔진 급소 K (급소 복수면 조각마다 하나), 경로 = 제시문 단락급소 → 논제 K 앞 노드 → K, 충족 = K + 경로 흔적 하나 이상
+describe('④ 답구하기 서술·논술형 (계열 인문사회국어)', () => {
+  const 조각of = (논제글: string, 단락연결?: { 노드: string; 단락: string; 단락급소: string }[]) => {
+    const 입력 = f2_input_from_v2(recognizeV2Analysis(논제글));
+    assert.ok(입력.ok);
+    return { 입력, 조각: derive_pieces(입력.물음, 입력.k, { ...입력.인식, ...(단락연결 ? { 단락연결 } : {}) }, '인문사회국어').filter((c) => c.파트 === '답구하기') };
+  };
+
+  it('대상 = 엔진 급소 K — 「무엇」 같은 간접의문 Q는 조각이 아니다', () => {
+    const { 입력, 조각 } = 조각of(논제);
+    assert.equal(조각.length, 1);
+    assert.equal(조각[0].node?.id, 입력.k.node.id);
+    assert.equal(조각[0].is_중심, true);
+  });
+
+  it('경로 = 제시문 단락급소 → 논제 K 앞 노드 → K (마지막이 k)', () => {
+    const { 입력, 조각 } = 조각of(논제, [{ 노드: '', 단락: '다', 단락급소: 'B국' }]);
+    // 단락연결의 노드가 K가 아니면 제시문 경로에 들지 않는다
+    assert.ok(조각[0].경로!.every((p) => p.출처 === '논제'));
+    const 맞음 = 조각of(논제, [{ 노드: 입력.k.node.id, 단락: '다', 단락급소: 'B국' }, { 노드: 입력.k.node.id, 단락: '다', 단락급소: '중복' }]).조각[0].경로!;
+    assert.deepEqual(맞음.map((p) => `${p.출처}:${p.색}:${p.실체}`), [
+      '제시문:b:B국',
+      '논제:b:A국의 보호무역 정책으로 인한 손실',
+      '논제:k:B국이 시행한 대응조치',
+    ]);
+  });
+
+  it('급소가 여럿이면 조각마다 하나 — 뒤 급소의 논제 경로는 앞 물음 Q 뒤부터, 머리 쉼표는 뗀다', () => {
+    const { 조각 } = 조각of('C국과 같은 원자재 중심의 수출국이 국제무역 환경의 변화 때문에 겪는 구조적 약점을 제시하고, 국내 물가 상승의 이유를 설명하시오.');
+    assert.equal(조각.length, 2);
+    assert.ok(조각.every((c) => c.is_중심));
+    assert.equal(조각[0].경로!.at(-1)!.실체, '구조적 약점');
+    assert.ok(조각[0].경로!.length > 1);
+    assert.deepEqual(조각[1].경로!.map((p) => p.실체), ['국내 물가 상승의 이유']);
+  });
+
+  it('충족조건 = 급소 흔적 + 경로 표지 흔적 (완전일치 아님)', () => {
+    const { 입력, 조각 } = 조각of(논제, []);
+    const c = { ...조각[0], 요소: 'k' as const };
+    assert.equal(
+      specify_condition(c, '인문사회국어'),
+      '급소 「B국이 시행한 대응조치」에 닿았다 — 경로 b「A국의 보호무역 정책으로 인한 손실」 → k「B국이 시행한 대응조치」 위에서 급소 흔적과 경로 표지 흔적 하나 이상이 답안에 남아 있다.',
+    );
+    assert.ok(입력.ok);
+  });
+
+  it('수리는 Q 대상 규칙(값 일치) 그대로 — 계열을 주지 않아도 같다', () => {
+    const 입력 = f2_input_from_v2(recognizeV2Analysis(논제));
+    assert.ok(입력.ok);
+    const 수리 = derive_pieces(입력.물음, 입력.k, 입력.인식, '수리').filter((c) => c.파트 === '답구하기');
+    const 없음 = derive_pieces(입력.물음, 입력.k, 입력.인식).filter((c) => c.파트 === '답구하기');
+    assert.deepEqual(수리.map((c) => c.node?.id), 없음.map((c) => c.node?.id));
+    assert.equal(수리.length, 2); // B국이 시행한 대응조치 · 무엇 (Q 앞 노드마다)
+    assert.ok(수리.every((c) => !c.경로));
+    assert.equal(specify_condition({ ...수리[0], 요소: 'k' }, '수리'), '질문의 급소에서 요구된 값과 일치했다.');
+  });
+});
+
 describe('연결문장이 없으면 노드 규칙 그대로 (수리·서술형)', () => {
   it('세우기 = C·P 노드, 풀기 = 세우기와 1:1', () => {
     const 입력 = f2_input_from_v2(recognizeV2Analysis('17. 다항함수 f(x)에 대하여 f\'(x)=9x²+4x이고 f(1)=6일 때, f(2)의 값을 구하시오. [3점]'));

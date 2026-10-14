@@ -82,6 +82,8 @@ function 루브릭작업(논제글: string, 계열: string, 총배점: number, �
   const 소문항들 = split_thesis(논제글).map((s: any) => ({ ...s, a: fq.recognizeV2Analysis(s.텍스트) }));
   // 인문논술 연결 문장 — 제시문이 없으면 연결도 없다(세우기 0). 정합이 멈추면 그 사유로 소문항마다 멈춘다
   let 연결of: (번호: string | null) => any[] | undefined = () => undefined;
+  // 서술·논술형 ④ 경로의 제시문 부분 — 정합이 급소 노드와 이은 단락급소 (봉인②, 오종래 2026-10-14)
+  let 단락연결of: (번호: string | null) => any[] = () => [];
   let 연결멈춤: unknown = null;
   if (계열 === '인문사회국어') {
     연결of = () => [];
@@ -93,6 +95,7 @@ function 루브릭작업(논제글: string, 계열: string, 총배점: number, �
         const 라벨들 = passageLabels(passage.paragraphs);
         const 단락들 = passage.paragraphs.map((p: any, i: number) => ({ 라벨: 라벨들[i] ?? `#${i + 1}`, 텍스트: p.text }));
         연결of = (번호) => link_sentences(단락들, 정합.연결.filter((x: any) => x.소문항 === 번호).flatMap((x: any) => x.단락));
+        단락연결of = (번호) => 정합.연결.filter((x: any) => x.소문항 === 번호).flatMap((x: any) => x.단락.map((d: any) => ({ 노드: x.노드, 단락: d.단락, 단락급소: d.단락급소 })));
       } catch (e) {
         연결멈춤 = 멈춤of(e);
       }
@@ -106,12 +109,15 @@ function 루브릭작업(논제글: string, 계열: string, 총배점: number, �
       if (!입력.ok) return { ...소, 멈춤: { 멈춤: 입력.flag, 종류: '급소', 사유: `급소가 서지 않아 조각을 뽑지 못했습니다 (${입력.flag})` } };
       const { 물음, k } = 입력;
       const 연결문장 = 연결of(s.번호);
-      const 인식 = 연결문장 ? { ...입력.인식, 연결문장 } : 입력.인식;
-      const 뼈대 = derive_pieces(물음, k, 인식).map((c: any) => ({ ...c, 요소: judge_element(c, 계열) }));
+      const 인식 = 연결문장 ? { ...입력.인식, 연결문장, 단락연결: 단락연결of(s.번호) } : 입력.인식;
+      // 계열이 ④ 답구하기를 가른다 — 인문사회국어 = 급소 K마다 경로 추적, 수리 = Q 대상 값 일치
+      const 뼈대 = derive_pieces(물음, k, 인식, 계열).map((c: any) => ({ ...c, 요소: judge_element(c, 계열) }));
       const 배점 = allocate_points(뼈대, 총배점, 계열);
       const 조각 = 배점.조각들.map((c: any) => ({
         id: c.id, 파트: c.파트, 요소: c.요소, 수행질: c.수행질, is_중심: c.is_중심, 확인물음: c.확인물음,
-        실체: c.node ? c.node.entity : c.근거 ? c.근거.단락급소 : null, 노드: c.node ? c.node.id : null, 근거: c.근거 ?? null, 배점: c.배점,
+        // ④ 경로가 있으면 실체 = 경로의 K (엔진 급소 핵심어)
+        실체: c.경로 ? c.경로[c.경로.length - 1].실체 : c.node ? c.node.entity : c.근거 ? c.근거.단락급소 : null,
+        노드: c.node ? c.node.id : null, 근거: c.근거 ?? null, 경로: c.경로 ?? null, 배점: c.배점,
         충족조건: specify_condition(c, 계열), 모범조각틀: spread_piece(c, k, 계열),
       }));
       조각.sort((a: any, b: any) => 파트순서.indexOf(a.파트) - 파트순서.indexOf(b.파트));

@@ -53,7 +53,7 @@ export function generate_rubric(문항: 승인된문항, 계열: 계열, 총배�
   if (!입력.ok) return 입력;
   const { 물음, k, 인식 } = 입력;
 
-  const 뼈대들 = derive_pieces(물음, k, 인식).map((c) => ({ ...c, 요소: judge_element(c, 계열) })); // F2·F3
+  const 뼈대들 = derive_pieces(물음, k, 인식, 계열).map((c) => ({ ...c, 요소: judge_element(c, 계열) })); // F2·F3
   const 조건 = new Map(뼈대들.map((c) => [c.id, specify_condition(c, 계열)])); // F4
   const 모범 = new Map(뼈대들.map((c) => [c.id, spread_piece(c, k, 계열)])); // F6
   const 배점 = allocate_points(뼈대들, 총배점, 계열); // F5

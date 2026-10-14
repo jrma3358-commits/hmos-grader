@@ -3,7 +3,7 @@ import type { recognizeV2Analysis } from '../fq/pipeline.ts';
 import type { PivotFailure } from '../fq/v2/pivot.ts';
 import { project_parts } from './f1.ts';
 import { 봉인2_조각역산 } from './sealed/f2.ts';
-import type { 근거문장, 급소K, 인식결과, 조각뼈대, 파트별물음, 요소 } from './types.ts';
+import type { 계열, 근거문장, 급소K, 인식결과, 조각뼈대, 파트별물음, 요소 } from './types.ts';
 
 type V2Analysis = ReturnType<typeof recognizeV2Analysis>;
 
@@ -12,13 +12,14 @@ export function f2_input_from_v2(
   v2: V2Analysis,
 ): { ok: true; 물음: 파트별물음; k: 급소K; 인식: 인식결과 } | PivotFailure {
   if (!v2.pivot.ok) return v2.pivot;
-  const { node } = v2.pivot.pivot;
+  const 급소of = (p: { node: 급소K['node']; keyword?: string }): 급소K => ({ 실체: p.node.entity, node: p.node, keyword: p.keyword });
   const 조합 = v2.form.colors.map((c) => c.toLowerCase() as 요소);
   return {
     ok: true,
     물음: project_parts(v2.question, 조합),
-    k: { 실체: node.entity, node },
-    인식: { 조합: v2.form.colors, nodes: v2.graph.nodes },
+    k: 급소of(v2.pivot.pivot),
+    // 급소 복수(pivots)면 전부 — 서술·논술형 ④ 답구하기가 급소마다 조각 하나로 쓴다
+    인식: { 조합: v2.form.colors, nodes: v2.graph.nodes, 급소들: (v2.pivot.pivots ?? [v2.pivot.pivot]).map(급소of) },
   };
 }
 
@@ -48,9 +49,10 @@ export function link_sentences(단락들: { 라벨: string; 텍스트: string }[
 }
 
 /**
- * F2 조각역산(파트별물음, 급소_k, 5색인식결과) → 조각뼈대[]  (구현명세 §3 F2)
+ * F2 조각역산(파트별물음, 급소_k, 5색인식결과, 계열?) → 조각뼈대[]  (구현명세 §3 F2)
+ * 계열이 인문사회국어면 ④ 답구하기는 서술·논술형 규칙(급소 K마다 · 경로 표지)이다. 계열을 주지 않으면 수리 규칙 그대로 (1차 필터 등)
  * @throws SealedError 봉인②가 비어 있을 때
  */
-export function derive_pieces(물음: 파트별물음 | null, k: 급소K, 인식: 인식결과): 조각뼈대[] {
-  return 봉인2_조각역산(물음, k, 인식);
+export function derive_pieces(물음: 파트별물음 | null, k: 급소K, 인식: 인식결과, 계열?: 계열): 조각뼈대[] {
+  return 봉인2_조각역산(물음, k, 인식, 계열);
 }
