@@ -68,17 +68,19 @@
     white-space: nowrap;
     flex-shrink: 0;
   }
-  /* 좁은 화면에서는 슬로건이 먼저 줄어든다 (…) */
+  /* 슬로건 — 헤더 오른쪽 끝. 좁은 화면에서는 슬로건이 먼저 줄어든다 (…) */
   .header-slogan {
-    font-size: 12px;
-    color: #9CA3AF;
-    border-left: 1px solid #374151;
-    padding-left: 12px;
+    margin-left: auto;
+    font-size: 15px;
+    font-weight: 500;
+    color: #E5E7EB;
+    letter-spacing: -0.2px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     min-width: 0;
   }
+  .header-slogan em { font-style: normal; font-weight: 700; color: #6EA8FE; }
 
   /* 레이아웃 */
   .layout {
@@ -688,7 +690,7 @@
 <header>
   <div class="logo">HM<span>OS</span></div>
   <div class="header-sub">훈민정음 OS · 문항 분석 시스템</div>
-  <div class="header-slogan">질문의 급소를 읽는 우리 모두의 언어인식 AI</div>
+  <div class="header-slogan">질문의 급소를 읽는 우리 모두의 <em>언어인식 AI</em></div>
 </header>
 
 <div class="layout">
