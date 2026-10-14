@@ -64,6 +64,8 @@ app.post('/api/access',(req,res)=>{
 });
 
 app.get('/',(req,res)=>res.sendFile(path.join(__dirname,'home.html')));
+// /about = HMOS 이야기 (기원 헌장 · 발견 · 실현) — 홈처럼 비밀번호 없이 연다 (2026-10-15)
+app.get('/about',(req,res)=>res.sendFile(path.join(__dirname,'about.html')));
 // 탭 아이콘 — 대시보드처럼 <link rel=icon>이 없는 화면은 /favicon.ico를 찾는다. SVG를 그대로 내준다
 app.get('/favicon.ico',(req,res)=>res.type('image/svg+xml').sendFile(path.join(__dirname,'favicon.svg')));
 app.get('/dashboard',(req,res)=>{
