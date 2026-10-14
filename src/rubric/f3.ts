@@ -10,7 +10,8 @@ import type { 계열, 요소, 조각뼈대, 파트 } from './types.ts';
 export function element_candidates(파트: 파트, 계열: 계열): 요소[] | null {
   switch (파트) {
     case '근거대기':
-      return ['b', 'd', 'c', 'p']; // 2026-10-14 오종래 — ① 근거대기 조각 = b·d·c·p (봉인②)
+      // 2026-10-14 오종래 계열별 파트 구조 (봉인②) — 수리 ① = b·d, 인문 ① = b·d·c·p
+      return 계열 === '수리' ? ['b', 'd'] : ['b', 'd', 'c', 'p'];
     case '세우기':
       return 계열 === '수리' ? ['c'] : ['p'];
     case '풀기':

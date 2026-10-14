@@ -49,12 +49,12 @@ describe('link_sentences', () => {
   });
 });
 
-describe('F2 인문논술 세우기 (연결문장이 있을 때)', () => {
+describe('F2 인문논술 세우기 (계열 인문사회국어)', () => {
   const 입력 = f2_input_from_v2(recognizeV2Analysis(논제));
   assert.ok(입력.ok);
   const { 물음, k, 인식 } = 입력;
   const 연결문장 = link_sentences([{ 라벨: '다', 텍스트: 다 }], [{ 단락: '다', 단락급소: '연구개발(R&D) 지원' }]);
-  const 조각 = derive_pieces(물음, k, { ...인식, 연결문장 });
+  const 조각 = derive_pieces(물음, k, { ...인식, 연결문장 }, '인문사회국어');
 
   it('세우기 = 연결 단락 문장 수, 조각마다 근거 문장 · 요소 p · 노드 없음', () => {
     const 세우기 = 조각.filter((c) => c.파트 === '세우기');
@@ -68,8 +68,8 @@ describe('F2 인문논술 세우기 (연결문장이 있을 때)', () => {
     assert.equal(조각.filter((c) => c.파트 === '풀기').length, 0);
   });
 
-  it('근거대기·답구하기는 노드 규칙 그대로', () => {
-    const 노드규칙 = derive_pieces(물음, k, 인식);
+  it('근거대기·답구하기는 연결문장과 무관하다', () => {
+    const 노드규칙 = derive_pieces(물음, k, 인식, '인문사회국어');
     for (const 파트 of ['근거대기', '답구하기'] as const) {
       assert.deepEqual(
         조각.filter((c) => c.파트 === 파트).map((c) => c.node?.id),
@@ -90,8 +90,13 @@ describe('F2 인문논술 세우기 (연결문장이 있을 때)', () => {
   });
 
   it('연결 단락이 없으면 세우기 0 · 풀기 0', () => {
-    const 빈 = derive_pieces(물음, k, { ...인식, 연결문장: [] });
+    const 빈 = derive_pieces(물음, k, { ...인식, 연결문장: [] }, '인문사회국어');
     assert.equal(빈.filter((c) => c.파트 === '세우기' || c.파트 === '풀기').length, 0);
+  });
+
+  it('연결문장이 있어도 수리 계열이면 수리 구조 — 세우기는 C·P 노드', () => {
+    const 수리 = derive_pieces(물음, k, { ...인식, 연결문장 }, '수리');
+    assert.ok(수리.filter((c) => c.파트 === '세우기').every((c) => c.node !== null && !c.근거));
   });
 });
 
@@ -154,9 +159,10 @@ describe('④ 답구하기 서술·논술형 (계열 인문사회국어)', () =>
   });
 });
 
-// ① 근거대기 — 봉인② (오종래 2026-10-14): K 조각을 뺀다 (K는 ④에서만), 조각 = b·d·c·p 노드.
-// C·P가 ①로 가므로 수리·서술형 ② 세우기는 노드에서 세지 않는다 (규칙 미정 — 조각 없음, ③ 풀기도 없음)
-describe('① 근거대기 = b·d·c·p, 급소 K 제외', () => {
+// 계열별 파트 구조 — 봉인② (오종래 2026-10-14). 두 계열 모두 ① 근거대기에서 급소 K를 뺀다 (K는 ④에서만):
+//   수리 ① b·d · ② c·p 노드(식 세우기) · ③ ②와 1:1 · ④ K 값 일치
+//   인문 ① b·d·c·p · ② 논제 실체 서술 문장 · ③ 없음 · ④ K 경로 흔적 도달
+describe('계열별 파트 구조 · ① 급소 K 제외', () => {
   const 수능17 = "17. 다항함수 f(x)에 대하여 f'(x)=9x²+4x이고 f(1)=6일 때, f(2)의 값을 구하시오. [3점]";
 
   it('급소 K는 ①에 없고 ④에만 — 수리', () => {
@@ -168,13 +174,33 @@ describe('① 근거대기 = b·d·c·p, 급소 K 제외', () => {
     assert.ok(조각.some((c) => c.파트 === '답구하기' && c.node?.id === 입력.k.node.id));
   });
 
-  it('C·P 노드도 ① 조각 — F3 요소는 노드 색 그대로 (P→p, 접힌 C는 B라 b)', () => {
+  it('수리 ① = b·d — C·P 노드는 ② 세우기로 (접힌 C는 B라 ①)', () => {
     const 입력 = f2_input_from_v2(recognizeV2Analysis(수능17));
     assert.ok(입력.ok);
-    const 근거 = derive_pieces(입력.물음, 입력.k, 입력.인식, '수리')
+    const 조각 = derive_pieces(입력.물음, 입력.k, 입력.인식, '수리').map((c) => ({ ...c, 요소: judge_element(c, '수리') }));
+    assert.deepEqual(조각.filter((c) => c.파트 === '근거대기').map((c) => `${c.node?.color}:${c.요소}`), ['B:b']);
+    assert.deepEqual(조각.filter((c) => c.파트 === '세우기').map((c) => `${c.node?.color}:${c.요소}`), ['P:c']);
+  });
+
+  it('수리 ③ 풀기 = ②와 1:1 · 계열을 주지 않으면 수리 구조', () => {
+    const 입력 = f2_input_from_v2(recognizeV2Analysis(수능17));
+    assert.ok(입력.ok);
+    const 조각 = derive_pieces(입력.물음, 입력.k, 입력.인식, '수리');
+    assert.deepEqual(
+      조각.filter((c) => c.파트 === '풀기').map((c) => c.node?.id),
+      조각.filter((c) => c.파트 === '세우기').map((c) => c.node?.id),
+    );
+    const 없음 = derive_pieces(입력.물음, 입력.k, 입력.인식);
+    assert.deepEqual(없음.map((c) => `${c.id}:${c.node?.id}`), 조각.map((c) => `${c.id}:${c.node?.id}`));
+  });
+
+  it('인문 ① = b·d·c·p — F3 요소는 노드 색 그대로', () => {
+    const 입력 = f2_input_from_v2(recognizeV2Analysis('A국과 C국의 무역분쟁으로 인한 손실을 줄이기 위해, D국이 시행한 정책이 자국의 경제에 어떤 도움이 될 수 있는지 설명하시오.'));
+    assert.ok(입력.ok);
+    const 근거 = derive_pieces(입력.물음, 입력.k, 입력.인식, '인문사회국어')
       .filter((c) => c.파트 === '근거대기')
-      .map((c) => ({ ...c, 요소: judge_element(c, '수리') }));
-    assert.deepEqual(근거.map((c) => `${c.node?.color}:${c.요소}`), ['P:p', 'B:b']);
+      .map((c) => ({ ...c, 요소: judge_element(c, '인문사회국어') }));
+    assert.deepEqual(근거.map((c) => `${c.node?.color}:${c.요소}`), ['P:p', 'B:b', 'C:c']);
   });
 
   it('급소가 여럿이면 전부 ①에서 뺀다 — 논술 (2-1)', () => {
@@ -187,12 +213,12 @@ describe('① 근거대기 = b·d·c·p, 급소 K 제외', () => {
     assert.ok(근거.some((c) => c.node?.color === 'C') && 근거.some((c) => c.node?.color === 'P'));
   });
 
-  it('수리·서술형(연결문장 없음) ② 세우기·③ 풀기 없음 — 배점은 봉인④ 결손재분배', () => {
+  it('인문 ③ 풀기 없음 — 배점은 봉인④ 결손재분배 (수리는 네 파트 모두 배점)', () => {
     const 입력 = f2_input_from_v2(recognizeV2Analysis(수능17));
     assert.ok(입력.ok);
-    const 조각 = derive_pieces(입력.물음, 입력.k, 입력.인식, '수리');
-    assert.equal(조각.filter((c) => c.파트 === '세우기' || c.파트 === '풀기').length, 0);
-    const 배점 = allocate_points(조각, 10, '수리');
-    assert.deepEqual([...배점.미배정].sort(), ['세우기', '풀기'].sort());
+    const 인문 = derive_pieces(입력.물음, 입력.k, 입력.인식, '인문사회국어');
+    assert.equal(인문.filter((c) => c.파트 === '풀기').length, 0);
+    assert.ok(allocate_points(인문, 10, '인문사회국어').미배정.includes('풀기'));
+    assert.deepEqual(allocate_points(derive_pieces(입력.물음, 입력.k, 입력.인식, '수리'), 10, '수리').미배정, []);
   });
 });
