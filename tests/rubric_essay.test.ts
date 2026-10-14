@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 import { recognizeV2Analysis } from '../src/fq/pipeline.ts';
-import { derive_pieces, f2_input_from_v2, link_sentences, split_sentences } from '../src/rubric/f2.ts';
+import { derive_pieces, f2_input_from_v2, filter_by_polarity, link_sentences, split_sentences, thesis_polarity } from '../src/rubric/f2.ts';
 import { judge_element } from '../src/rubric/f3.ts';
 import { K핵심어, 마지막명사 } from '../src/rubric/sealed/f2.ts';
 import { allocate_points } from '../src/rubric/f5.ts';
@@ -292,5 +292,31 @@ describe('계열별 파트 구조 · ① 급소 K 제외', () => {
     assert.equal(인문.filter((c) => c.파트 === '풀기').length, 0);
     assert.ok(allocate_points(인문, 10, '인문사회국어').미배정.includes('풀기'));
     assert.deepEqual(allocate_points(derive_pieces(입력.물음, 입력.k, 입력.인식, '수리'), 10, '수리').미배정, []);
+  });
+});
+
+// 세우기 문장 — 논제 요구와 맞는 문장만 (오종래 2026-10-14 (가)): 논제가 긍정·부정 한쪽을 지정하면
+// 단락 안에서 역접(하지만·그러나·반면·그렇지만) 문장부터 끝까지를 반대쪽으로 보고 뺀다
+describe('세우기 — 역접 뒤 반대쪽 문장 제외', () => {
+  const 가 =
+    '자유무역은 무역 확대를 목표로 한다. 자유무역의 긍정적인 효과는 소비자들이 저렴한 상품을 구매할 수 있다는 것이다. ' +
+    '또한, 수출 증가는 고용 창출에 도움을 준다. 하지만 부정적인 효과도 존재한다. 이익이 균등하지 않을 수 있다. 또한, 해외 의존도가 높아진다.';
+
+  it('논제 극성 — 「긍정적」만이면 긍정, 「부정적」만이면 부정, 둘 다·없으면 null', () => {
+    assert.equal(thesis_polarity('자유무역이 국가의 경제에 미치는 긍정적인 영향을 설명하시오.'), '긍정');
+    assert.equal(thesis_polarity('부정적인 효과를 서술하시오.'), '부정');
+    assert.equal(thesis_polarity('긍정적·부정적 효과를 비교하시오.'), null);
+    assert.equal(thesis_polarity('대응조치를 설명하시오.'), null);
+  });
+
+  it('긍정을 물으면 역접 앞까지 · 부정을 물으면 역접부터 · 극성 없으면 전부', () => {
+    const 연결 = [{ 단락: '가', 단락급소: '자유무역' }];
+    assert.equal(link_sentences([{ 라벨: '가', 텍스트: 가 }], 연결, '긍정').length, 3);
+    assert.deepEqual(link_sentences([{ 라벨: '가', 텍스트: 가 }], 연결, '부정').map((x) => x.문장.slice(0, 4)), ['하지만 ', '이익이 ', '또한, ']);
+    assert.equal(link_sentences([{ 라벨: '가', 텍스트: 가 }], 연결).length, 6);
+  });
+
+  it('역접이 없는 단락은 극성이 있어도 그대로', () => {
+    assert.deepEqual(filter_by_polarity(['가.', '나.'], '긍정'), ['가.', '나.']);
   });
 });

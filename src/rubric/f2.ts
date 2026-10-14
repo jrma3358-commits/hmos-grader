@@ -32,18 +32,45 @@ export function split_sentences(텍스트: string): string[] {
 }
 
 /**
- * 인문논술 ② 세우기의 재료 — 소문항 급소와 엔진이 연결한 제시문 단락(정합 연결)의 문장 전부 (오종래 2026-10-14).
+ * 논제가 지정한 쪽 — 소문항 글에 「긍정적」만 있으면 긍정, 「부정적」만 있으면 부정, 둘 다·둘 다 없으면 null (오종래 2026-10-14)
+ */
+export function thesis_polarity(소문항글: string): '긍정' | '부정' | null {
+  const 긍 = 소문항글.includes('긍정적'), 부 = 소문항글.includes('부정적');
+  return 긍 === 부 ? null : 긍 ? '긍정' : '부정';
+}
+
+/** 역접 머리 — 문장이 이것으로 시작하면 단락이 반대쪽으로 돈다 */
+export const 역접머리 = /^(하지만|그러나|반면에?|그렇지만)/;
+
+/**
+ * 논제 요구와 맞는 문장만 (오종래 2026-10-14 (가)) — 단락 안에서 역접 문장부터 끝까지를 반대쪽으로 본다.
+ * 긍정을 물으면 역접 앞까지, 부정을 물으면 역접부터. 극성이 없거나 역접이 없으면 문장 그대로
+ */
+export function filter_by_polarity(문장들: string[], 극성: '긍정' | '부정' | null): string[] {
+  const at = 문장들.findIndex((s) => 역접머리.test(s));
+  if (!극성 || at < 0) return 문장들;
+  return 극성 === '긍정' ? 문장들.slice(0, at) : 문장들.slice(at);
+}
+
+/**
+ * 인문논술 ② 세우기의 재료 — 소문항 급소와 엔진이 연결한 제시문 단락(정합 연결)의 문장 (오종래 2026-10-14).
  * 같은 라벨의 단락이 여럿이면(같은 기호를 잇는 단락) 모두. 한 라벨에 단락 급소가 여럿 연결돼도 문장은 한 번만 센다 — 실체는 첫 연결의 단락 급소.
+ * 논제 요구와 맞는 문장만 센다 — 논제가 긍정·부정 한쪽을 지정하면 단락마다 역접 뒤(또는 앞) 반대쪽 문장을 뺀다 (filter_by_polarity)
  * @param 단락들 제시문 단락 (라벨 = align_passage가 연결에 쓰는 이름)
  * @param 연결 이 소문항의 연결 [{단락: 라벨, 단락급소}] — 엔진 정합 산출 그대로
+ * @param 극성 논제가 지정한 쪽 (thesis_polarity) — 없으면 거르지 않는다
  */
-export function link_sentences(단락들: { 라벨: string; 텍스트: string }[], 연결: { 단락: string; 단락급소: string }[]): 근거문장[] {
+export function link_sentences(
+  단락들: { 라벨: string; 텍스트: string }[],
+  연결: { 단락: string; 단락급소: string }[],
+  극성: '긍정' | '부정' | null = null,
+): 근거문장[] {
   const 라벨들 = [...new Set(연결.map((l) => l.단락))];
   return 라벨들.flatMap((라벨) => {
     const 단락급소 = 연결.find((l) => l.단락 === 라벨)!.단락급소;
     return 단락들
       .filter((p) => p.라벨 === 라벨)
-      .flatMap((p) => split_sentences(p.텍스트))
+      .flatMap((p) => filter_by_polarity(split_sentences(p.텍스트), 극성))
       .map((문장) => ({ 단락: 라벨, 단락급소, 문장 }));
   });
 }

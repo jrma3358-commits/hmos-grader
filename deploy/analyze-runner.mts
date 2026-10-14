@@ -25,7 +25,7 @@ const { align_passage } = await load('src/thesis/align.ts');
 const { essay_pivot_chunks } = await load('src/thesis/chunk.ts');
 const { 봉인14_6단계 } = await load('src/thesis/relate.ts');
 // 8단계 루브릭 — 엔진 F1~F5·문항평가 (src/rubric). GJ는 쓰지 않는다 (오종래 2026-10-14: GJ 검산 대신 조각 충족 여부)
-const { derive_pieces, f2_input_from_v2, link_sentences } = await load('src/rubric/f2.ts');
+const { derive_pieces, f2_input_from_v2, link_sentences, thesis_polarity } = await load('src/rubric/f2.ts');
 const { judge_element } = await load('src/rubric/f3.ts');
 const { specify_condition } = await load('src/rubric/f4.ts');
 const { allocate_points } = await load('src/rubric/f5.ts');
@@ -94,7 +94,9 @@ function 루브릭작업(논제글: string, 계열: string, 총배점: number, �
         const 정합 = align_passage(소문항들.map((s: any) => ({ 번호: s.번호, 참조: s.참조, 인식: s.a })), passage);
         const 라벨들 = passageLabels(passage.paragraphs);
         const 단락들 = passage.paragraphs.map((p: any, i: number) => ({ 라벨: 라벨들[i] ?? `#${i + 1}`, 텍스트: p.text }));
-        연결of = (번호) => link_sentences(단락들, 정합.연결.filter((x: any) => x.소문항 === 번호).flatMap((x: any) => x.단락));
+        // 논제 요구와 맞는 문장만 — 소문항이 긍정·부정 한쪽을 지정하면 역접 뒤(앞) 반대쪽 문장을 뺀다 (오종래 2026-10-14)
+        const 극성of = (번호: string | null) => thesis_polarity(소문항들.find((s: any) => s.번호 === 번호)?.텍스트 ?? '');
+        연결of = (번호) => link_sentences(단락들, 정합.연결.filter((x: any) => x.소문항 === 번호).flatMap((x: any) => x.단락), 극성of(번호));
         단락연결of = (번호) => 정합.연결.filter((x: any) => x.소문항 === 번호).flatMap((x: any) => x.단락.map((d: any) => ({ 노드: x.노드, 단락: d.단락, 단락급소: d.단락급소 })));
       } catch (e) {
         연결멈춤 = 멈춤of(e);
