@@ -3,7 +3,7 @@ import type { recognizeV2Analysis } from '../fq/pipeline.ts';
 import type { PivotFailure } from '../fq/v2/pivot.ts';
 import { project_parts } from './f1.ts';
 import { 봉인2_조각역산 } from './sealed/f2.ts';
-import type { 급소K, 인식결과, 조각뼈대, 파트별물음, 요소 } from './types.ts';
+import type { 근거문장, 급소K, 인식결과, 조각뼈대, 파트별물음, 요소 } from './types.ts';
 
 type V2Analysis = ReturnType<typeof recognizeV2Analysis>;
 
@@ -20,6 +20,31 @@ export function f2_input_from_v2(
     k: { 실체: node.entity, node },
     인식: { 조합: v2.form.colors, nodes: v2.graph.nodes },
   };
+}
+
+/** 문장으로 나눈다 — 문장 끝 부호(. ? ! 。) 뒤 공백·줄바꿈에서. 빈 문장은 버린다 */
+export function split_sentences(텍스트: string): string[] {
+  return 텍스트
+    .split(/(?<=[.?!。])\s+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+/**
+ * 인문논술 ② 세우기의 재료 — 소문항 급소와 엔진이 연결한 제시문 단락(정합 연결)의 문장 전부 (오종래 2026-10-14).
+ * 같은 라벨의 단락이 여럿이면(같은 기호를 잇는 단락) 모두. 한 라벨에 단락 급소가 여럿 연결돼도 문장은 한 번만 센다 — 실체는 첫 연결의 단락 급소.
+ * @param 단락들 제시문 단락 (라벨 = align_passage가 연결에 쓰는 이름)
+ * @param 연결 이 소문항의 연결 [{단락: 라벨, 단락급소}] — 엔진 정합 산출 그대로
+ */
+export function link_sentences(단락들: { 라벨: string; 텍스트: string }[], 연결: { 단락: string; 단락급소: string }[]): 근거문장[] {
+  const 라벨들 = [...new Set(연결.map((l) => l.단락))];
+  return 라벨들.flatMap((라벨) => {
+    const 단락급소 = 연결.find((l) => l.단락 === 라벨)!.단락급소;
+    return 단락들
+      .filter((p) => p.라벨 === 라벨)
+      .flatMap((p) => split_sentences(p.텍스트))
+      .map((문장) => ({ 단락: 라벨, 단락급소, 문장 }));
+  });
 }
 
 /**

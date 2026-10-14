@@ -4,7 +4,7 @@
 import { SealedError } from '../fq/sealed/index.ts';
 import type { PathNode } from '../fq/v2/graph.ts';
 import { 봉인5_모범조각 } from './sealed/f6.ts';
-import type { 계열, 급소K, 조각뼈대 } from './types.ts';
+import type { 계열, 근거문장, 급소K, 조각뼈대 } from './types.ts';
 
 /**
  * 파트별로 펴는 재료 (구현명세 §3 F6)
@@ -14,16 +14,18 @@ import type { 계열, 급소K, 조각뼈대 } from './types.ts';
  *   답구하기 — 급소 대상에 요구값을 맞춰 도달
  */
 export type 재료 =
-  | { 파트: '근거대기'; node: PathNode }
-  | { 파트: '세우기'; node: PathNode }
+  | { 파트: '근거대기' | '세우기'; node: PathNode }
+  | { 파트: '세우기'; 근거: 근거문장 }
   | { 파트: '풀기' }
   | { 파트: '답구하기'; k: 급소K };
 
-/** 조각 → 재료. ①②는 노드에서 온 조각이어야 한다 (F2가 node를 채운다) */
+/** 조각 → 재료. ①②는 노드에서 온 조각이어야 한다 (F2가 node를 채운다). 인문논술 ②는 제시문 문장(근거)에서 온다 */
 export function material_of(조각: 조각뼈대, k: 급소K): 재료 {
   switch (조각.파트) {
-    case '근거대기':
     case '세우기':
+      if (조각.node === null && 조각.근거) return { 파트: '세우기', 근거: 조각.근거 };
+    // falls through — 노드에서 온 세우기
+    case '근거대기':
       if (조각.node === null) {
         throw new Error(`${조각.id}(${조각.파트}): 노드 없는 조각입니다 — ①②는 인식 노드에서 와야 합니다.`);
       }

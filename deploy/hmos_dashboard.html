@@ -2844,7 +2844,7 @@ function 루브릭소문항Html(s) {
       <td style="white-space:nowrap;">${파트번호[c.파트] || ''} ${esc(c.파트)}</td>
       <td>${esc(c.id)}${c.is_중심 ? ' <span class="badge ok">중심</span>' : ''}</td>
       <td style="white-space:nowrap;">${c.요소 ? esc(c.요소) : `<span class="c-meta">${esc(c.수행질 || '—')}</span>`}</td>
-      <td>「${esc(displayEntity(c.실체 ?? s.급소.실체))}」</td>
+      <td>「${esc(displayEntity(c.실체 ?? s.급소.실체))}」${c.근거 ? `<div class="c-meta" style="margin:4px 0 0;">근거 [${esc(c.근거.단락)}] ${esc(c.근거.문장)}</div>` : ''}</td>
       <td>${esc(c.확인물음)}</td>
       <td>${esc(c.충족조건)}</td>
       <td style="white-space:nowrap;">${배점글(c.배점)}</td>
@@ -2857,7 +2857,11 @@ function 루브릭소문항Html(s) {
   const 경고 = s.문항평가 && s.문항평가.경고 && s.문항평가.경고.length
     ? s.문항평가.경고.map(t => `<div class="note-item">${esc(t)}</div>`).join('')
     : '<div class="note-item">경고 없음</div>';
-  return `<div class="c-row"><strong>${이름}</strong> ${엔진배지}급소 「${esc(displayEntity(s.급소.실체))}」
+  // 인문논술 — 세우기 조각 = 엔진이 이 소문항 급소와 연결한 제시문 단락의 문장 (봉인②, 오종래 2026-10-14)
+  const 연결 = s.연결단락
+    ? `<div class="c-meta" style="margin-top:4px;">세우기 = 엔진 연결 단락의 문장 — ${s.연결단락.length ? `${s.연결단락.map(l => `[${esc(l)}]`).join('·')} ${s.조각.filter(c => c.파트 === '세우기').length}문장` : '연결된 단락이 없어 세우기 조각 없음'} · 논술은 풀기 없음</div>`
+    : '';
+  return `<div class="c-row"><strong>${이름}</strong> ${엔진배지}급소 「${esc(displayEntity(s.급소.실체))}」${연결}
       <div class="c-table-wrap" style="margin-top:8px;"><table class="rubric-table">
         <thead><tr><th>파트</th><th>조각</th><th>요소</th><th>실체</th><th>확인물음</th><th>채점기준 (충족조건 · O/X)</th><th>배점</th></tr></thead>
         <tbody>${행}</tbody></table></div>
@@ -2928,6 +2932,7 @@ function renderC9() {
           <div class="step-content">
             <div class="step-name">${파트번호[c.파트] || ''} ${esc(c.파트)} · ${esc(c.id)} · 「${esc(displayEntity(c.실체 ?? s.급소.실체))}」
               ${c.충족 ? '<span class="badge ok" style="margin-left:6px;">충족</span>' : '<span class="badge warn" style="margin-left:6px;">미충족 — 실체 글자 없음</span>'}</div>
+            ${c.근거 ? `<div class="c-meta" style="margin:2px 0 4px;">근거 [${esc(c.근거.단락)}] ${esc(c.근거.문장)}</div>` : ''}
             <div class="step-body">${esc(c.표현 || '(문장 없음)')}</div>
           </div>
         </div>`).join('');
