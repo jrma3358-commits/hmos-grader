@@ -2022,7 +2022,7 @@ const C화면 = {
   6: { 제목: '추가 논제', 도구: 'make', 설명: '엔진 — 단락 핵심 관계(유사·대비·보완·병렬) → 6유형 논제 뼈대 · 문장은 Claude가 다듬음' },
   7: { 제목: '교사 확정', 도구: 'grade', 설명: '논제를 선택·수정·확정합니다 — 확정 논제는 엔진이 다시 인식합니다' },
   8: { 제목: '루브릭', 도구: 'grade', 설명: '엔진 — 확정 논제 소문항마다 파트 × 요소 조각 · 채점기준(충족조건) · 배점 · 부분채점기준 · 문항평가' },
-  9: { 제목: '모범답안', 도구: 'grade', 설명: 'Claude가 엔진 조각을 하나씩 문장으로 · 파트 순서로 엮음 · 조각 충족(실체 글자, ④는 급소 + 경로 표지 흔적) 확인' },
+  9: { 제목: '모범답안', 도구: 'grade', 설명: '8단계 조각 문장을 Claude가 경로 순서(근거대기 → 세우기 → 답구하기)로 한 문단으로 잇고 · 조각 흔적 확인 · 교사가 고쳐 확정' },
 };
 
 function buildCPanes() {
@@ -2916,17 +2916,49 @@ async function genC(i) {
     if (out.error) { alert('루브릭 생성 실패: ' + out.error); return; }
     x.루브릭 = out;
     renderC8(); renderC9();
-    if (C.확정.every(y => y.루브릭)) markCDone(8, 9);
+    if (C.확정.every(y => y.루브릭)) markCDone(8);
   });
 }
 
-// ── 9단계 모범답안 (조각 문장을 파트 순서로 · 충족 = 조각 문장에 실체 글자가 있는가) ──
+// ── 9단계 모범답안 (오종래 2026-10-14) ──
+// 8단계 루브릭 조각 문장을 Claude가 루브릭 경로 순서(근거대기 → 세우기 → 풀기 → 답구하기)로 한 문단으로 잇는다 (/api/answer).
+// 이은 문단은 교사가 고치고 확정한다. 조각 흔적(실체 · ④는 K 핵심어 + 경로 흔적)은 글자로 다시 본다 — 서버 /api/answer와 같은 기준.
+
+/** 조각 하나가 문단에 남겨야 할 글자 — ④(경로)는 K 핵심어, 나머지는 실체 (서버 K글자와 같다) */
+const 남길글자 = (c, s) => {
+  const K = c.경로 && c.경로.length ? c.경로[c.경로.length - 1] : null;
+  return K ? (K.핵심어 || K.실체) : displayEntity(c.실체 ?? s.급소.실체);
+};
+
+/** 문단 흔적 — 조각마다 남길 글자가 있는가, ④는 경로 앞 표지 하나 이상도 */
+function 문단흔적(글, s) {
+  return s.조각.map(c => {
+    const 글자 = 남길글자(c, s);
+    const 앞 = c.경로 && c.경로.length > 1 ? c.경로.slice(0, -1).map(p => p.실체) : null;
+    const 경로흔적 = 앞 ? 앞.filter(t => 글.includes(t)) : null;
+    return { id: c.id, 파트: c.파트, 글자, 충족: 글.includes(글자) && (!앞 || 경로흔적.length > 0), 경로흔적 };
+  });
+}
+
+function 흔적Html(글, s) {
+  const r = 문단흔적(글, s);
+  const 못 = r.filter(x => !x.충족).length;
+  return `<span class="badge ${못 ? 'warn' : 'ok'}">조각 흔적 ${r.length - 못}/${r.length}</span>
+    ${r.map(x => `<span class="badge ${x.충족 ? 'muted' : 'warn'}" title="${esc(x.파트)}">${esc(x.id)} 「${esc(x.글자)}」${x.경로흔적 ? (x.경로흔적.length ? ' + 경로' : ' · 경로 흔적 없음') : ''}${x.충족 ? '' : ' ✗'}</span>`).join('')}`;
+}
+
+const 지금답안 = s => (s.답안 ? (s.답안.교사 ?? s.답안.글) : '');
+
+function 확정Html(s) {
+  return s.답안 && s.답안.확정 ? `<span class="badge ok">교사 확정 ✓ ${esc(s.답안.확정.시각)}</span>` : '<span class="badge muted">확정 전</span>';
+}
+
 function renderC9() {
   const body = document.getElementById('c9-body');
   if (!C.확정.some(x => x.루브릭)) { body.innerHTML = '<div class="card c-empty">8단계에서 루브릭을 만들면 표시됩니다</div>'; return; }
   body.innerHTML = C.확정.map((x, i) => {
     if (!x.루브릭) return '';
-    const 소 = x.루브릭.소문항.map(s => {
+    const 소 = x.루브릭.소문항.map((s, j) => {
       const 이름 = esc(단위이름(s.번호));
       if (!s.조각) return `<div class="flag-box">${이름} 엔진이 조각을 뽑지 못해 모범답안이 없습니다</div>`;
       const 조각 = s.조각.map((c, k) => `
@@ -2942,16 +2974,70 @@ function renderC9() {
           </div>
         </div>`).join('');
       const 못 = s.충족.조각수 - s.충족.충족수;
+      const 키 = `${i}-${j}`;
+      const 답안 = s.답안
+        ? `<textarea class="input-area" id="c9-ta-${키}" style="min-height:220px;" oninput="답안수정(${i}, ${j}, this.value)">${esc(지금답안(s))}</textarea>
+           <div class="chip-list" id="c9-tr-${키}" style="margin-top:8px;">${흔적Html(지금답안(s), s)}</div>
+           <div class="c-meta" style="margin-top:6px;">Claude ${s.답안.시도}회 이음${s.답안.교사 != null ? ' · 교사가 고침' : ''} — 고치면 조각 흔적을 바로 다시 봅니다</div>
+           <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:8px;">
+             <button class="type-btn" id="c9-btn-${키}" onclick="답안잇기(${i}, ${j})">다시 잇기 (Claude)</button>
+             <button class="type-btn" onclick="답안확정(${i}, ${j})">교사 확정</button>
+             <span id="c9-st-${키}">${확정Html(s)}</span>
+           </div>`
+        : `<div class="c-meta">조각 문장을 루브릭 경로 순서(근거대기 → 세우기 → 답구하기)로 Claude가 한 문단으로 잇습니다. 새 사실은 더하지 않고, 조각마다 실체·급소 핵심어 글자를 남깁니다.</div>
+           <button class="type-btn" id="c9-btn-${키}" onclick="답안잇기(${i}, ${j})">모범답안 잇기 (Claude)</button>`;
       return `<div class="c-row"><strong>${이름}</strong> 급소 「${esc(displayEntity(s.급소.실체))}」
-        <span class="badge ${못 ? 'warn' : 'ok'}" style="margin-left:6px;">조각 충족 ${s.충족.충족수}/${s.충족.조각수}</span>
-        <span class="c-meta">Claude ${s.충족.시도}회 (다시 쓰기 ${s.충족.재시도한도}회까지)</span>
+        <span class="badge ${못 ? 'warn' : 'ok'}" style="margin-left:6px;">8단계 조각 충족 ${s.충족.충족수}/${s.충족.조각수}</span>
         ${못 ? `<div class="flag-box">${못}개 조각은 다시 써도 충족하지 못했습니다 (실체 글자 · ④는 급소와 경로 흔적) — 교사 확인</div>` : ''}
-        <div class="answer-steps" style="margin-top:10px;">${조각}</div>
-        <div class="c-row"><strong>이어 읽기</strong><div style="white-space:pre-wrap; margin-top:4px;">${esc(s.모범답안)}</div></div>
+        <div class="card-title" style="margin:12px 0 6px;">${AI배지}모범답안</div>
+        ${답안}
+        <details class="c-text" style="margin-top:12px;"><summary>조각별 문장 (8단계 · 경로 순서)</summary>
+          <div class="answer-steps" style="margin-top:10px; white-space:normal;">${조각}</div></details>
       </div>`;
     }).join('');
-    return `<div class="card"><div class="card-title">${AI배지}${i + 1}. ${esc(x.출처)}</div>${소}</div>`;
+    return `<div class="card"><div class="card-title">${i + 1}. ${esc(x.출처)}</div>${소}</div>`;
   }).join('');
+}
+
+/** 확정 논제 i의 소문항 j — 조각 문장을 Claude가 한 문단으로 잇는다 */
+async function 답안잇기(i, j) {
+  const x = C.확정[i], s = x.루브릭.소문항[j];
+  if (s.답안 && s.답안.교사 != null && !confirm('교사가 고친 글이 있습니다. 다시 이으면 고친 글이 사라집니다. 다시 이을까요?')) return;
+  await withBusy(document.getElementById(`c9-btn-${i}-${j}`), '모범답안 잇는 중… (수십 초)', async () => {
+    const { out } = await postJSON('/api/answer', { 소문항: s, 논제: x.텍스트, 계열: x.루브릭.계열 });
+    if (out.error) { alert('모범답안 잇기 실패: ' + out.error); return; }
+    s.답안 = { 글: out.모범답안, 시도: out.시도, 교사: null, 확정: null };
+    renderC9();
+  });
+}
+
+/** 교사가 고친 글 — 흔적 표시만 다시 그린다 (편집칸 포커스 유지). 확정 뒤 고치면 확정을 푼다 */
+function 답안수정(i, j, 값) {
+  const s = C.확정[i].루브릭.소문항[j];
+  s.답안.교사 = 값;
+  if (s.답안.확정 && s.답안.확정.글 !== 값) s.답안.확정 = null;
+  document.getElementById(`c9-tr-${i}-${j}`).innerHTML = 흔적Html(값, s);
+  document.getElementById(`c9-st-${i}-${j}`).innerHTML = 확정Html(s);
+  markC9();
+}
+
+/** 교사 확정 — 빠진 흔적이 있으면 묻는다 */
+function 답안확정(i, j) {
+  const s = C.확정[i].루브릭.소문항[j];
+  const 글 = 지금답안(s).trim();
+  if (!글) { alert('확정할 모범답안이 없습니다.'); return; }
+  const 빠짐 = 문단흔적(글, s).filter(x => !x.충족);
+  if (빠짐.length && !confirm(`조각 흔적이 빠진 곳이 ${빠짐.length}개 있습니다 (${빠짐.map(x => x.id).join(', ')}). 그래도 확정할까요?`)) return;
+  s.답안.확정 = { 글, 시각: new Date().toLocaleString('ko-KR') };
+  renderC9();
+  markC9();
+}
+
+/** 9단계 완료 표시 — 루브릭 조각이 있는 소문항의 모범답안을 모두 교사가 확정했을 때 */
+function markC9() {
+  const 소 = C.확정.flatMap(x => (x.루브릭 ? x.루브릭.소문항.filter(s => s.조각) : [null]));
+  const 끝 = 소.length && 소.every(s => s && s.답안 && s.답안.확정);
+  document.querySelector('#nav-c .nav-item[data-step="9"]').classList.toggle('done', !!끝);
 }
 
 // ════════════════════════════════════════════════════════════════════════
@@ -3095,7 +3181,8 @@ function 문항열기(id) {
       markCDone(0, 1, 2, 5);
       if (C.제시문.length) markCDone(3, 4);
       if (C.확정.length) markCDone(7);
-      if (C.확정.length && C.확정.every(x => x.루브릭)) markCDone(8, 9);
+      if (C.확정.length && C.확정.every(x => x.루브릭)) markCDone(8);
+      markC9();
       showCStep(2);
     } else if (r) {
       목록.보이는결과 = r;

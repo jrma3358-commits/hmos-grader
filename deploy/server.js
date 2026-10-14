@@ -472,6 +472,84 @@ app.post('/api/rubric',async(req,res)=>{
   res.json({엔진:r.엔진,계열,총배점:배점,소문항});
 });
 
+// ── POST /api/answer — C 9단계 모범답안 잇기 (오종래 2026-10-14) ──────────
+// 8단계 루브릭 조각 문장(엔진 조각마다 Claude가 쓴 문장)을 루브릭 경로 순서(근거대기 → 세우기 → 풀기 → 답구하기) 그대로
+// 한 편의 답안 문단으로 잇는다. Claude는 잇기만 한다 — 조각을 더하거나 빼지 않고, 새 사실을 지어내지 않는다.
+// 검산은 /api/rubric과 같은 조각 흔적: 조각마다 필요한 글자(실체 · ④는 K 핵심어 + 경로 흔적 하나 이상)가 이은 문단에 남았는가.
+// 빠지면 2회까지 다시 잇게 한다 (루브릭재시도). 교사 확인·수정·확정은 대시보드가 한다.
+const ANSWER_SYSTEM=`너는 HMOS 모범답안 편집자다. 엔진 루브릭 조각마다 이미 쓴 답안 문장들을 받아 한 편의 답안 문단으로 자연스럽게 잇는다.
+
+지킬 것:
+- 받은 조각 순서(근거대기 → 세우기 → 풀기 → 답구하기)를 그대로 지킨다. 조각을 빼거나 합쳐 없애지 않는다.
+- 각 조각의 「반드시 남길 글자」는 글자 그대로 문단에 남긴다.
+- 조각 문장에 없는 사실·용어·수치를 더하지 않는다. 겹치는 말·군더더기·「제시문 [가]에서 보듯」 같은 반복 머리만 다듬고, 이음말로 문장 사이를 잇는다.
+- 제시문 문장을 따옴표로 그대로 옮겨 적지 않는다 — 답안 문장으로 풀어 쓴다.
+- 한국어 문단 하나로 낸다.`;
+
+const ANSWER_FORMAT={
+  type:'json_schema',
+  schema:{type:'object',additionalProperties:false,required:['text'],properties:{text:{type:'string',description:'이어 쓴 모범답안 문단'}}},
+};
+
+/** 이은 문단에서 조각 흔적 — /api/rubric 채움과 같은 기준 (실체 · ④는 K 핵심어 + 경로 앞 표지 하나 이상) */
+function 문단흔적(글,s){
+  return s.조각.map(c=>{
+    const 글자=K글자(c,s.급소);
+    const 앞=c.경로&&c.경로.length>1?c.경로.slice(0,-1).map(p=>p.실체):null;
+    const 경로흔적=앞?앞.filter(t=>글.includes(t)):null;
+    return {id:c.id,글자,있음:글.includes(글자),경로흔적,충족:글.includes(글자)&&(!앞||경로흔적.length>0)};
+  });
+}
+
+async function 답안잇기(user){
+  let msg;
+  try{
+    msg=await client.beta.messages.create({
+      model:MODEL,max_tokens:8000,betas:['server-side-fallback-2026-07-01'],fallbacks:'default',
+      system:ANSWER_SYSTEM,output_config:{format:ANSWER_FORMAT},messages:[{role:'user',content:user}],
+    });
+  }catch(e){
+    if(e instanceof Anthropic.AuthenticationError)throw new Error('API 키 인증 실패 — .env의 ANTHROPIC_API_KEY 확인');
+    if(e instanceof Anthropic.RateLimitError)throw new Error('API 요청 한도 초과 — 잠시 뒤 다시');
+    if(e instanceof Anthropic.APIError)throw new Error(`Claude API 오류 ${e.status}: ${e.message}`);
+    throw new Error('Claude API 연결 실패: '+e.message);
+  }
+  if(msg.stop_reason==='refusal')throw new Error(`모델이 거절함 (${(msg.stop_details&&msg.stop_details.category)||'분류 없음'})`);
+  if(msg.stop_reason==='max_tokens')throw new Error('응답이 max_tokens에서 잘림');
+  let out=null;
+  try{out=JSON.parse(msg.content.filter(b=>b.type==='text').map(b=>b.text).join(''));}catch(_){}
+  if(!out||typeof out.text!=='string'||!out.text.trim())throw new Error(`모범답안 문단을 받지 못함 (stop_reason: ${msg.stop_reason})`);
+  return {글:out.text.trim(),usage:msg.usage};
+}
+
+app.post('/api/answer',async(req,res)=>{
+  // 소문항: /api/rubric 응답의 소문항 하나 그대로 (조각마다 표현·실체·경로) · 논제·제시문·계열은 바탕으로만
+  const {소문항:s,논제,계열}=req.body||{};
+  if(!s||!Array.isArray(s.조각)||!s.조각.length){res.status(400).json({error:'루브릭 조각이 있는 소문항이 필요합니다 — 8단계에서 루브릭을 먼저 만드세요'});return;}
+  if(s.조각.some(c=>!String(c.표현||'').trim())){res.status(400).json({error:'문장이 없는 조각이 있습니다 — 8단계에서 루브릭을 다시 만드세요'});return;}
+  const 순서=['근거대기','세우기','풀기','답구하기'];
+  const 조각=[...s.조각].sort((a,b)=>순서.indexOf(a.파트)-순서.indexOf(b.파트));
+  const 바탕=[
+    계열?`계열: ${계열}`:'',
+    `이 소문항:\n${s.공통발문?s.공통발문+'\n':''}${s.번호?`(${s.번호}) `:''}${s.텍스트||''}`,
+    논제?`전체 논제:\n${논제}`:'',
+    `조각 문장 (이 순서로 잇는다):\n${조각.map((c,i)=>`${i+1}. [${c.파트}] ${c.표현}\n   반드시 남길 글자: 「${K글자(c,s.급소)}」${c.경로&&c.경로.length>1?` · 경로 흔적 하나 이상: ${c.경로.slice(0,-1).map(p=>`「${p.실체}」`).join(' ')}`:''}`).join('\n')}`,
+  ].filter(Boolean).join('\n\n');
+  const 사용=[];
+  let 글='',확인=[],시도=0;
+  try{
+    while(시도<=루브릭재시도){
+      const 빠짐=확인.filter(x=>!x.충족);
+      const user=시도===0?바탕:`${바탕}\n\n앞서 이은 문단:\n${글}\n\n이 문단에서 빠진 글자가 있다 — 그 글자를 그대로 넣어 다시 잇는다:\n${빠짐.map(x=>`- ${x.id}: 「${x.글자}」${x.경로흔적&&!x.경로흔적.length?' + 경로 흔적 하나 이상':''}`).join('\n')}`;
+      const r=await 답안잇기(user);
+      사용.push(r.usage);
+      글=r.글;확인=문단흔적(글,{...s,조각});시도++;
+      if(확인.every(x=>x.충족))break;
+    }
+  }catch(e){res.status(502).json({error:e.message});return;}
+  res.json({모범답안:글,확인,시도,재시도한도:루브릭재시도,usage:사용});
+});
+
 // ── POST /api/refine — C 5단계 논제 정교화 (조립설명서 C·논술 9단계) ──────────
 // 진단은 엔진([봉인⑬], /analyze 응답의 단계.정교화.진단)이 한다. Claude는 진단된 ①②③ 갈래마다 정교화안만 쓴다.
 // ④사족은 표시만 — 생성하지 않는다. 정교화안은 다시 엔진에 태워 급소·진단을 돌려준다 (명세서-2 §3 자가검증 순환).
