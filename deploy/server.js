@@ -583,8 +583,10 @@ ${rules}`;
   res.json({model:r.msg.model,usage:r.msg.usage,비교불가:!!관계.비교불가,추가논제});
 });
 
-// ── POST /api/ocr — C 0단계 문항 등록: 이미지(1~2장)·PDF → 원문 텍스트 (오종래 2026-10-14) ──
+// ── POST /api/ocr — 0단계 문항 등록: 이미지(1~2장)·PDF → 원문 텍스트 + 그림 영역 (오종래 2026-10-14) ──
 // 글자를 옮겨 적기만 한다. 인식·분석은 엔진이 하므로 Claude는 고치거나 요약하지 않는다.
+// 이미지는 대시보드가 Claude가 보는 크기(긴 변 1568px 이하)로 줄여 크기와 함께 보낸다 — 그림 영역은 그 사진의 픽셀 좌표로 받아
+// 대시보드가 원본에서 잘라 [그림 n] 자리에 넣는다.
 const OCR_이미지=['image/jpeg','image/png','image/webp','image/gif'];
 app.post('/api/ocr',async(req,res)=>{
   const 파일=(req.body&&req.body.파일)||[];
@@ -593,10 +595,12 @@ app.post('/api/ocr',async(req,res)=>{
   if(pdf.length?파일.length!==1:파일.length>2){res.status(400).json({error:'이미지는 1~2장, PDF는 한 개만 보낼 수 있습니다'});return;}
   const 틀린=파일.find(f=>f.종류!=='application/pdf'&&!OCR_이미지.includes(f.종류));
   if(틀린){res.status(400).json({error:`읽을 수 없는 형식: ${틀린.종류||'알 수 없음'}`});return;}
+  const 크기=f=>Array.isArray(f.크기)&&f.크기.length===2&&f.크기.every(v=>Number.isFinite(v)&&v>0)?f.크기:null;
   const content=[
-    ...파일.map(f=>f.종류==='application/pdf'
-      ?{type:'document',source:{type:'base64',media_type:'application/pdf',data:f.데이터}}
-      :{type:'image',source:{type:'base64',media_type:f.종류,data:f.데이터}}),
+    ...파일.flatMap((f,i)=>f.종류==='application/pdf'
+      ?[{type:'document',source:{type:'base64',media_type:'application/pdf',data:f.데이터}}]
+      :[{type:'text',text:`사진 ${i+1}${크기(f)?` (가로 ${f.크기[0]} × 세로 ${f.크기[1]} px)`:''}`},
+        {type:'image',source:{type:'base64',media_type:f.종류,data:f.데이터}}]),
     {type:'text',text:['A','B'].includes(req.body.유형)
       ?'위 자료에 있는 시험 문항(문항 번호·발문·조건·보기·배점)의 글자를 그대로 옮겨 적어라.'
       :'위 자료에 있는 논술 문항(논제와 제시문)의 글자를 그대로 옮겨 적어라.'},
@@ -606,15 +610,29 @@ app.post('/api/ocr',async(req,res)=>{
 - 제시문 라벨([가]·<가>·(가) 등), 문항 번호([문항 1]·(1-1) 등), 배점 표기는 원문 모양 그대로 둔다.
 - 단락 사이는 빈 줄 하나로 나눈다. 쪽 머리말·쪽 번호·워터마크는 뺀다.
 - 여러 장이면 순서대로 이어 적는다.
-- 표·그림은 글자로 옮길 수 있는 만큼만 옮기고, 그림 자체는 [그림]으로 적는다.
+- 표는 글자로 옮긴다. 그림·그래프·도형은 나오는 차례대로 [그림 1], [그림 2]…로 번호를 붙여 본문의 그 자리에 따로 한 줄로 적는다. 그림 안의 글자는 본문에 옮기지 않는다.
+- figures에는 [그림 n]마다 하나씩: n(번호), photo(몇 번째 사진인지, 1부터), box([x1, y1, x2, y2] — 그 사진의 왼쪽 위가 0,0인 픽셀 좌표, 사진 크기는 사진 앞에 적혀 있다). 영역은 그림 전체와 그림에 딸린 축 이름·점 이름·눈금·범례를 다 넣고 본문 문장은 넣지 않는다. PDF는 figures를 빈 배열로 둔다.
 - 읽을 수 없는 글자는 □로 적는다.
 - 수식은 LaTeX를 쓰지 않고 평문으로 적는다 (엔진이 읽는 꼴): 거듭제곱 x², 분수 a/b, 근호 √(…), 그리스 문자 π·θ 그대로, 미분 f'(x), 부등호 ≤ ≥, 적분 ∫, 구간별 함수 { 5x+a (x < -2) / x²-a (x ≥ -2) }.
 - 객관식 보기 번호 ①~⑤와 배점 [3점]은 원문 모양 그대로 둔다.`;
   const r=await askClaude(res,system,content,
-    {type:'json_schema',schema:{type:'object',additionalProperties:false,required:['text'],properties:{text:{type:'string',description:'옮겨 적은 원문 전체'}}}},
-    o=>typeof o.text==='string');
+    {type:'json_schema',schema:{type:'object',additionalProperties:false,required:['text','figures'],properties:{
+      text:{type:'string',description:'옮겨 적은 원문 전체 — 그림 자리는 [그림 n]'},
+      figures:{type:'array',items:{type:'object',additionalProperties:false,required:['n','photo','box'],properties:{
+        n:{type:'integer'},photo:{type:'integer'},box:{type:'array',items:{type:'number'}},
+      }}},
+    }}},
+    o=>typeof o.text==='string'&&Array.isArray(o.figures));
   if(!r)return;
-  res.json({model:r.msg.model,usage:r.msg.usage,텍스트:r.out.text});
+  // 영역은 사진 안으로 맞추고, 사진이 없거나 넓이가 없는 것은 버린다 — 대시보드는 받은 것만 자른다
+  const 그림=r.out.figures.flatMap(g=>{
+    const f=파일[g.photo-1],k=f&&f.종류!=='application/pdf'&&크기(f);
+    if(!k||!Array.isArray(g.box)||g.box.length!==4||!g.box.every(Number.isFinite))return [];
+    const [x1,y1,x2,y2]=[Math.min(g.box[0],g.box[2]),Math.min(g.box[1],g.box[3]),Math.max(g.box[0],g.box[2]),Math.max(g.box[1],g.box[3])]
+      .map((v,i)=>Math.max(0,Math.min(v,k[i%2])));
+    return x2-x1>=4&&y2-y1>=4?[{번호:g.n,사진:g.photo,영역:[x1,y1,x2,y2]}]:[];
+  });
+  res.json({model:r.msg.model,usage:r.msg.usage,텍스트:r.out.text,그림});
 });
 
 app.get('/dashboard',(req,res)=>res.sendFile(path.join(__dirname,'hmos_dashboard.html')));
