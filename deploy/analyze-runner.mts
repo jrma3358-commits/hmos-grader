@@ -7,6 +7,7 @@
 //     → 3·4단계 제시문 단락 급소 ↔ 논제 급소 연결·사족 (제시문이 오면) → 5단계 정교화 진단[봉인⑬]
 //     → 6단계 단락 급소 관계·6유형 뼈대·추가/보완[봉인⑭] (제시문이 오면) — 보완은 5단계 진단(갈래 「보완」)으로 넘긴다. 1차 필터는 타지 않는다
 //   사족: 제시문 없이 진단할 때 [{소문항, 급소}]
+//   C 대표 발문은 상황 P 블록(단계.상황)으로만 — 인식하지 않는다. 6단계 말고는 소논제마다 따로 (2026-10-15)
 //   작업: '소논제' → 엔진 split_thesis 결과만 (1단계 소논제 미리보기, 2026-10-15)
 // 엔진이 멈추면(SealedError·급소 실패) 그 자리와 사유를 그대로 싣고 끝낸다 — 어디서 멈췄는지가 곧 다음에 채울 봉인이다.
 // 루브릭·모범답안(generate_rubric)은 교사가 확인화면에서 ①로 승인한 문항만 받는다 (명세서-2 §6) — 여기서는 승인하지 않는다.
@@ -18,7 +19,7 @@ import { pathToFileURL } from 'node:url';
 const GRADER = process.env.HMOS_GRADER ?? join(import.meta.dirname, 'hmos-grader');
 const load = (p: string) => import(pathToFileURL(join(GRADER, p)).href);
 const fq = await load('src/fq/index.ts');
-const { recognizePassage, passageLabels } = await load('src/fq/v2/passage.ts');
+const { recognizePassage, passageLabels, PASSAGE_REFERENCE, referenceGroup, designatedLabels } = await load('src/fq/v2/passage.ts');
 const { make_screen } = await load('src/filter/confirm.ts');
 const { 봉인13_정교화진단 } = await load('src/filter/sealed/items.ts');
 const { split_thesis } = await load('src/thesis/split.ts');
@@ -122,7 +123,8 @@ function 루브릭작업(논제글: string, 계열: string, 총배점: number, �
   const 급소들of = (s: any) => (s.a.pivot.ok ? (s.a.pivot.pivots ?? [s.a.pivot.pivot]).map((p: any) => ({ 번호: s.번호, 실체: p.node.entity })) : []);
   return 소문항들.map((s: any, n: number) => {
     // 소문항 배점 — 소문항 글에 「[N점]」이 있으면 그 값, 없으면 요청 총배점 (2026-10-14)
-    const 점 = String(s.텍스트).match(/\[\s*(\d+(?:\.\d+)?)\s*점\s*\]/);
+    //   [오종래 2026-10-15 ③] 괄호 안 「N점」도 — 「(200자 내외, 4점)」. 여럿이면 마지막 것 (앞에 붙은 공통 발문의 「(16점)」이 아니라)
+    const 점 = [...String(s.텍스트).matchAll(/[\[(][^\[\]()]*?(\d+(?:\.\d+)?)\s*점\s*[\])]/g)].at(-1);
     const 소배점 = 점 ? Number(점[1]) : 총배점;
     const 소 = { 번호: s.번호, 텍스트: s.텍스트, 공통발문: s.공통발문, 배점: 소배점 };
     if (연결멈춤) return { ...소, 멈춤: 연결멈춤 };
@@ -217,10 +219,15 @@ try {
     const 물려줄참조: string[] = Array.isArray(req.참조) ? req.참조.map(String) : [];
     const 소문항 = split_thesis(논제글).map((s: any) => ({ ...s, ...(!s.참조.length && 물려줄참조.length ? { 참조: 물려줄참조 } : {}), a: fq.recognizeV2Analysis(s.텍스트) }));
     if (!소문항.length) throw Object.assign(new Error('논제가 비어 있습니다'), { name: '입력오류' });
-    const 전체 = 소문항.length === 1 ? 소문항[0].a : fq.recognizeV2Analysis(논제글);
+    // 상황 P (오종래 2026-10-15 ①(a)) — 대표 발문(공통 발문, 「(가)~(바)의 내용을 바탕으로 물음에 답하시오」)은 인식하지 않고
+    //   P 블록 하나로 둔다. 소논제 그래프에는 붙이지 않는다 — 참조 범위만 소논제에 물려준다(split_thesis). 논제 전체 인식(옛 인식.전체)은 내지 않는다
+    const 발문들 = [...new Set(소문항.map((s: any) => s.공통발문).filter(Boolean))] as string[];
+    out.단계.상황 = 발문들.map((t) => {
+      const last = [...t.matchAll(PASSAGE_REFERENCE)].at(-1);
+      return { 색: 'P', 실체: t, 참조: last ? designatedLabels(referenceGroup(last)) : [], 소논제: 소문항.filter((s: any) => s.공통발문 === t).map((s: any) => s.번호) };
+    });
     out.단계.인식 = {
       입력: '논제',
-      전체: 인식of(전체),
       단위: [],
       // 급소덩어리 — 논술 논제 급소 = Q 앞 B+C (오종래 2026-10-13). 급소(엔진 pivot)는 그대로 함께 싣는다
       소문항: 소문항.map((s: any) => ({
@@ -235,8 +242,16 @@ try {
         // 제시문 id가 한 글자 라벨(가·나…)이면 [가] 머리를 붙여 단락 라벨로 읽히게 한다
         const 본문 = 제시문목록.map((p) => (/^[가-하]$/.test(p.id) ? `[${p.id}] ${p.텍스트}` : p.텍스트)).join('\n\n');
         const passage = recognizePassage(본문, fq.markerTable());
-        const 정합 = align_passage(소문항.map((s: any) => ({ 번호: s.번호, 참조: s.참조, 인식: s.a })), passage);
         const 라벨들 = passageLabels(passage.paragraphs);
+        // 소논제마다 독립 (오종래 2026-10-15 (c)) — 3·4단계 정합은 소논제 하나씩 따로 돌려 잇는다 (5단계 진단·8단계 루브릭도 소논제마다).
+        //   6단계 관계·추가·보완만 문항 전체 — 소논제들이 세운 단락 급소를 모아 단락 쌍을 맞대는 단계라, 소논제 하나로는 쌍이 서지 않는다
+        //   (사회논술 샘플: 소논제마다 돌리면 관계 9 → 1, 추가 후보 3 → 0)
+        const 소논제정합 = 소문항.map((s: any) => align_passage([{ 번호: s.번호, 참조: s.참조, 인식: s.a }], passage));
+        const 정합 = {
+          연결: 소논제정합.flatMap((x: any) => x.연결),
+          사족: 소논제정합.flatMap((x: any) => x.사족),
+          소문항: 소논제정합.flatMap((x: any) => x.소문항),
+        };
         out.단계.제시문 = {
           // 라벨 = align_passage가 연결에 쓰는 단락 이름 (기호 없는 단락은 앞 기호를 잇고, 그것도 없으면 「#순번」)
           단락: passage.paragraphs.map((p: any, i: number) => ({ label: p.label ?? null, 라벨: 라벨들[i] ?? `#${i + 1}`, 텍스트: p.text, 색: p.colors })),
