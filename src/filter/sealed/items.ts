@@ -57,6 +57,18 @@ export function 엔진단위(a: V2Analysis & { units?: V2Analysis[] }): 진단�
   return a.units.map((u, i) => ({ 이름: `단위 ${i + 1}`, 인식: u }));
 }
 
+/** 서술복잡에서 세지 않는 기호 B — 실체가 기호(나열·범위 포함)뿐 (오종래 2026-10-15) */
+const 기호 = String.raw`(?:[\[<(][가-힣][\]>)]|[ⓐ-ⓩⒶ-Ⓩ㉠-㉻])`;
+const 기호뿐 = new RegExp(String.raw`^[\s,]*${기호}(?:\s*(?:[,·ㆍ~∼～-]|및|와|과)\s*${기호})*[\s,]*$`);
+const 기호B = (entity: string) => 기호뿐.test(entity);
+
+/** 물음 앞 배경 문장의 B — 표지 뒤부터 다음 Q 노드까지 사이에 평서 종결 「~다.」가 있다 (오종래 2026-10-15) */
+function 배경문장B(question: string, n: { index: number; surface: string }, nodes: readonly { index: number; color: string | null }[]): boolean {
+  const q = nodes.find((x) => x.color === 'Q' && x.index > n.index);
+  if (!q) return false;
+  return /다\s*[.。](?=\s|$)/.test(question.slice(n.index + n.surface.length, q.index));
+}
+
 /** 소문항(단위) 하나의 ①②③ */
 function 단위진단(u: 인식단위, 단위: string | null): 정교화진단[] {
   const nodes = [...u.graph.nodes].sort((a, b) => a.index - b.index);
@@ -75,7 +87,11 @@ function 단위진단(u: 인식단위, 단위: string | null): 정교화진단[]
   }
 
   // ② 서술복잡 — B 노드 3개 이상이고 C-F 노드가 없다
-  const bs = nodes.filter((n) => n.color === 'B');
+  //   [오종래 2026-10-15 안 A] 기호 B는 세지 않는다 — 실체가 제시문 기호(「(나)」「[가]」)·원문자 기호(「ⓐ」「㉠」, 나열·범위 포함)뿐인 B는
+  //   대상이 아니라 가리키는 표시다. 「ⓐ~ⓓ에 담긴 차별적 인식」처럼 기호 뒤에 명사구가 붙으면 그대로 센다.
+  //   [오종래 2026-10-15 안 B] 물음 문장 밖 B는 세지 않는다 — B 표지 뒤부터 다음 Q까지 사이에 평서 종결(「~다.」)이 있으면
+  //   그 B는 물음 앞 배경 문장(「…주장이 제기되고 있다.」)에 있다. 인용 명제(「'…해야 한다.'는」)는 노드 표지가 인용 전체라 걸리지 않는다.
+  const bs = nodes.filter((n) => n.color === 'B' && !기호B(n.entity) && !배경문장B(u.question, n, nodes));
   if (bs.length >= 3 && !nodes.some((n) => n.switchId === 'C-F')) {
     진단.push({ 갈래: '서술복잡', 단위, 근거: `B 노드 ${bs.length}개 (${bs.map((n) => n.id).join('·')}), C-F 없음` });
   }

@@ -195,6 +195,30 @@ describe('봉인⑬ 정교화 4갈래 진단 (오종래 2026-10-13)', () => {
     assert.deepEqual(갈래들(논제([...bs, node('c', 'C'), node('q', 'Q')], { ok: true, pivot: pv(bs[2], 2) })), ['서술복잡']);
   });
 
+  it('② 기호뿐인 B(「(나)」「ⓐ」「ⓐ~ⓓ」)는 세지 않는다 — 기호 뒤 명사구가 붙으면 센다 (오종래 2026-10-15 안 A)', () => {
+    const 기호들 = [node('l1', 'B', '(나)'), node('l2', 'B', 'ⓐ'), node('l3', 'B', '(라)'), node('l4', 'B', 'ⓐ~ⓓ')];
+    const b = node('b', 'B', '차별·혐오 표현이 발생하는 원인');
+    assert.deepEqual(갈래들(논제([...기호들, b, node('c', 'C'), node('q', 'Q')], { ok: true, pivot: pv(b, 1) })), []);
+    const 붙은 = [node('l1', 'B', '(나)'), node('b1', 'B', 'ⓐ~ⓓ에 담긴 차별적 인식'), node('b2', 'B', '요인'), node('b3', 'B', '근거')];
+    assert.deepEqual(갈래들(논제([...붙은, node('c', 'C'), node('q', 'Q')], { ok: true, pivot: pv(붙은[3], 1) })), ['서술복잡']);
+  });
+
+  it('② 물음 앞 배경 문장(「~다.」)의 B는 세지 않는다 (오종래 2026-10-15 안 B)', () => {
+    // 실제 글자 자리로 — 「가를 나는 있다. 다를 라를 마를 하시오.」
+    const q = '가를 나는 있다. 다를 라를 마를 하시오.';
+    const at = (s: string, color: Color, entity: string, surface: string): PathNode => ({ ...node(s, color, entity), surface, index: q.indexOf(surface, q.indexOf(entity)) });
+    const 배경 = [at('b1', 'B', '가', '를'), at('b2', 'B', '나', '는')];
+    const 물음 = [at('b3', 'B', '다', '를'), at('b4', 'B', '라', '를')];
+    const qn = at('q', 'Q', '하시오', '하시오');
+    const a = {
+      question: q,
+      graph: { question: q, nodes: [...배경, ...물음, at('c', 'C', '마', '를'), qn], edges: [], combination: [], undecided: [] },
+      form: null,
+      pivot: { ok: true, pivot: pv(물음[1], 1) },
+    } as unknown as V2Analysis;
+    assert.deepEqual(갈래들(a), [], '물음 문장 B는 둘');
+  });
+
   it('② C-F 노드가 있으면 서술복잡이 아니다', () => {
     const bs = [node('b1', 'B'), node('b2', 'B'), node('b3', 'B')];
     const cf = { ...node('cf', 'C'), switchId: 'C-F' };
