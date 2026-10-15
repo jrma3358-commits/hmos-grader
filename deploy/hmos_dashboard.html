@@ -2943,27 +2943,53 @@ const 배점글 = n => String(Math.round(n * 100) / 100);
 /** 서술·논술형 ④ 경로 — 제시문 단락급소 → 논제 K 앞 노드 → K (엔진, 봉인② 2026-10-14) */
 const 경로글 = 경로 => 경로.map(p => `${esc(p.색)}「${esc(p.실체)}」${p.단락 ? `[${esc(p.단락)}]` : ''}${p.핵심어 && p.핵심어 !== p.실체 ? ` (핵심어 「${esc(p.핵심어)}」)` : ''}`).join(' → ');
 
+/** 조각의 실체 칸 — 교사 풀기 조각(라벨 글)은 실체 대신 그 글 (2026-10-16) */
+const 조각실체글 = (c, s) => (c.풀기글 ? c.풀기글 : displayEntity(c.실체 ?? s.급소.실체));
+
+/**
+ * 서술형 B 4단계 — 파트 그룹 (오종래 2026-10-16): ① 근거대기 [합계 배점] → 조각들 · ② · ③ 풀기(풀기-1, 풀기-2… 없으면 「풀기 단계 없음」) · ④.
+ * 그룹 머리 밑에 교사 모범답안의 그 라벨 구간 글을 보인다 (루브릭을 맞출 때의 글)
+ */
+const 라벨키 = { 근거대기: '근거', 세우기: '세우기', 답구하기: '답' };
+function 그룹행Html(s, 행of) {
+  return 파트순서C.map(p => {
+    const 안 = s.조각.filter(c => c.파트 === p);
+    const 합 = Math.round(안.reduce((a, c) => a + c.배점, 0) * 100) / 100;
+    const 라벨글 = s.라벨 && s.라벨.라벨있음 && p !== '풀기' ? s.라벨[라벨키[p]] : '';
+    const 빈 = p === '풀기' ? '풀기 단계 없음' : '조각 없음';
+    return `<tr class="rubric-group"><td colspan="7" style="background:var(--accent-light); font-weight:600;">
+        ${파트번호[p]} ${p} <span class="badge muted" style="margin-left:6px;">합계 ${배점글(합)}점</span>
+        ${라벨글 ? `<div class="c-meta" style="margin:4px 0 0; font-weight:400;">모범답안 [${라벨키[p]}] ${esc(라벨글)}</div>` : ''}</td></tr>
+      ${안.length ? 안.map(행of).join('') : `<tr><td colspan="7" class="c-meta" style="padding-left:24px;">${빈}</td></tr>`}`;
+  }).join('');
+}
+
 function 루브릭소문항Html(s, i, j) {
   const 이름 = esc(단위이름(s.번호));
   if (s.멈춤) return `<div class="flag-box">${이름} 엔진이 조각을 뽑지 못했습니다 — ${esc(s.멈춤.사유 || s.멈춤.멈춤 || '알 수 없음')}</div>`;
-  const 행 = s.조각.map(c => `<tr>
-      <td style="white-space:nowrap;">${파트번호[c.파트] || ''} ${esc(c.파트)}</td>
-      <td>${esc(c.id)}${c.is_중심 ? ' <span class="badge ok">중심</span>' : ''}</td>
+  const 행of = c => `<tr>
+      <td style="white-space:nowrap;">${i < 0 ? '' : `${파트번호[c.파트] || ''} ${esc(c.파트)}`}</td>
+      <td>${esc(c.id)}${c.is_중심 ? ' <span class="badge ok">중심</span>' : ''}${c.풀기글 ? ' <span class="badge muted">모범답안 라벨</span>' : ''}</td>
       <td style="white-space:nowrap;">${c.요소 ? esc(c.요소) : `<span class="c-meta">${esc(c.수행질 || '—')}</span>`}</td>
-      <td>「${esc(displayEntity(c.실체 ?? s.급소.실체))}」${c.근거 ? `<div class="c-meta" style="margin:4px 0 0;">근거 [${esc(c.근거.단락)}] ${esc(c.근거.문장)}</div>` : ''}${c.경로 ? `<div class="c-meta" style="margin:4px 0 0;">경로 ${경로글(c.경로)}</div>` : ''}${c.제시문 ? `<div class="c-meta" style="margin:4px 0 0;">제시문 [${esc(c.제시문.단락)}] 연결 단락 급소 — 제시문에서 실제 가져온 것</div>` : ''}${c.앞결과 ? `<div class="c-meta" style="margin:4px 0 0;">앞 결과 — ${esc(단위이름(c.앞결과.번호))}의 급소를 이어받음</div>` : ''}</td>
+      <td>「${esc(조각실체글(c, s))}」${c.근거 ? `<div class="c-meta" style="margin:4px 0 0;">근거 [${esc(c.근거.단락)}] ${esc(c.근거.문장)}</div>` : ''}${c.경로 ? `<div class="c-meta" style="margin:4px 0 0;">경로 ${경로글(c.경로)}</div>` : ''}${c.제시문 ? `<div class="c-meta" style="margin:4px 0 0;">제시문 [${esc(c.제시문.단락)}] 연결 단락 급소 — 제시문에서 실제 가져온 것</div>` : ''}${c.앞결과 ? `<div class="c-meta" style="margin:4px 0 0;">앞 결과 — ${esc(단위이름(c.앞결과.번호))}의 급소를 이어받음</div>` : ''}</td>
       <td>${esc(c.확인물음)}</td>
       <td>${esc(c.충족조건)}</td>
       <td style="white-space:nowrap;">${배점글(c.배점)}</td>
-    </tr>`).join('');
+    </tr>`;
+  // 서술형 B(i = -1)는 파트 그룹, C 8단계는 평면 표 그대로
+  const 행 = i < 0 ? 그룹행Html(s, 행of) : s.조각.map(행of).join('');
+  const 라벨경고 = i < 0 && s.라벨 && !s.라벨.라벨있음
+    ? '<div class="flag-box" style="margin-top:6px;">모범답안에 라벨이 없습니다 — [근거] [세우기] [풀기-1] [답] 라벨을 붙여야 풀기 조각이 생깁니다. 루브릭은 엔진 조각 그대로입니다.</div>'
+    : '';
   // 부분채점(맞춘 조각 배점의 합)은 문항 분석에서 뽑지 않는다 — 학생 답안 채점에서만 (오종래 2026-10-14)
   const 경고 = s.문항평가 && s.문항평가.경고 && s.문항평가.경고.length
     ? s.문항평가.경고.map(t => `<div class="note-item">${esc(t)}</div>`).join('')
     : '<div class="note-item">경고 없음</div>';
   // 인문논술 — 세우기 조각 = 엔진이 이 소문항 급소와 연결한 제시문 단락의 문장 (봉인②, 오종래 2026-10-14)
   const 연결 = s.연결단락
-    ? `<div class="c-meta" style="margin-top:4px;">세우기 = 엔진 연결 단락의 문장 — ${s.연결단락.length ? `${s.연결단락.map(l => `[${esc(l)}]`).join('·')} ${s.조각.filter(c => c.파트 === '세우기').length}문장` : '연결된 단락이 없어 세우기 조각 없음'} · 논술은 풀기 없음</div>`
+    ? `<div class="c-meta" style="margin-top:4px;">세우기 = 엔진 연결 단락의 문장 — ${s.연결단락.length ? `${s.연결단락.map(l => `[${esc(l)}]`).join('·')} ${s.조각.filter(c => c.파트 === '세우기').length}문장` : '연결된 단락이 없어 세우기 조각 없음'}${i < 0 ? '' : ' · 논술은 풀기 없음'}</div>`
     : '';
-  return `<div class="c-row"><strong>${이름}</strong> ${엔진배지}급소 「${esc(displayEntity(s.급소.실체))}」${연결}
+  return `<div class="c-row"><strong>${이름}</strong> ${엔진배지}급소 「${esc(displayEntity(s.급소.실체))}」${연결}${라벨경고}
       <div class="c-table-wrap" style="margin-top:8px;"><table class="rubric-table">
         <thead><tr><th>파트</th><th>조각</th><th>요소</th><th>실체</th><th>확인물음</th><th>채점기준 (충족조건 · O/X)</th><th>배점</th></tr></thead>
         <tbody>${행}</tbody></table></div>
@@ -3077,8 +3103,9 @@ function renderB4() {
   const r = h && h.루브릭;
   box.innerHTML = `<div class="card">
     <div class="card-title">${엔진배지}서술형 루브릭 — 엔진 조각</div>
-    <div class="c-meta">계열 인문사회국어 · 풀기 없음 · 답구하기 = 급소 경로 흔적. 소문항 배점은 소문항의 「[N점]」(없으면 문항 「[총 N점]」, 그것도 없으면 10).
-      세우기 = 공통 자료(대화)에서 「~의 방법으로」가 지목한 화자의 줄.</div>
+    <div class="c-meta">계열 인문사회국어 · 답구하기 = 급소 경로 흔적. 소문항 배점은 소문항의 「[N점]」(없으면 문항 「[총 N점]」, 그것도 없으면 10).
+      세우기 = 공통 자료(대화)에서 「~의 방법으로」가 지목한 화자의 줄.
+      풀기 = 5 모범답안의 [풀기-1] [풀기-2]… 라벨 하나에 조각 하나 (5에서 「라벨로 루브릭 맞추기」) — 배점은 근거·세우기·답구하기 몫을 뺀 나머지를 풀기 단계 수로 나눔, 판정은 교사.</div>
     ${r ? '' : '<div class="c-meta" style="margin-top:8px;">아래 버튼을 눌러 루브릭을 생성하세요.</div>'}
     <button class="type-btn" id="b-gen" style="margin-top:8px;" onclick="genB()">${r ? '루브릭 다시 생성' : '루브릭 생성'} (엔진 조각 → Claude 문장)</button>
     ${r ? `<div class="c-meta" style="margin-top:12px;">파트 지수 2:3:2:2 (봉인④) · 파트 배점 ÷ 조각 수 · 충족 경계 급소 도달 · 엔진 ${esc(r.엔진 ? r.엔진.commit : '—')}</div>
@@ -3086,19 +3113,45 @@ function renderB4() {
   </div>`;
 }
 
-async function genB() {
+/** 조각 서명 — 라벨로 다시 맞춰도 이것이 같으면 그 소문항의 학생 채점을 그대로 둔다 */
+const 조각서명 = s => JSON.stringify((s.조각 || []).map(c => [c.id, c.배점, c.충족조건]));
+
+/**
+ * 라벨 = false: 4단계 「루브릭 생성」 — 학생 채점·모범답안을 지우고 새로 (지금대로).
+ * 라벨 = true: 5단계 「라벨로 루브릭 맞추기」 (오종래 2026-10-16) — 소문항마다 교사 모범답안을 보내 [풀기-n]을 풀기 조각으로.
+ *   모범답안은 그대로 둔다. 조각(id·배점·충족조건)이 바뀐 소문항의 학생 채점만 지운다 — 있으면 묻는다
+ */
+async function genB(라벨 = false) {
   const data = currentData;
   if (!data) return;
-  if (data.B루브릭 && data.B루브릭.루브릭 && !confirm('다시 만들면 이 문항의 학생 채점과 모범답안이 지워집니다. 다시 만들까요?')) return;
+  const 옛 = data.B루브릭 && data.B루브릭.루브릭;
+  if (!라벨 && 옛 && !confirm('다시 만들면 이 문항의 학생 채점과 모범답안이 지워집니다. 다시 만들까요?')) return;
+  const 모범답안 = 라벨 && 옛 ? 옛.소문항.map(s => 지금답안(s).trim() || null) : null;
+  if (라벨 && !(모범답안 && 모범답안.some(Boolean))) { alert('모범답안을 먼저 쓰세요 — [근거] [세우기] [풀기-1] [풀기-2] [답] 라벨로.'); return; }
   const 총 = (data.문항원문.match(/\[\s*총\s*(\d+(?:\.\d+)?)\s*점\s*\]/) || [])[1];
-  await withBusy(document.getElementById('b-gen'), '엔진 조각 → 조각 문장 생성 중… (1~2분)', async () => {
+  await withBusy(document.getElementById(라벨 ? 'b-label' : 'b-gen'), '엔진 조각 → 조각 문장 생성 중… (1~2분)', async () => {
     // 제시문 칸이 있으면 그것(1단계 두 칸), 없으면 엔진이 공통발문에서 뽑는다 · 단계형 이어받기 (2026-10-14)
     const 제시문 = data.B입력 && data.B입력.제시문;
     const { out } = await postJSON('/api/rubric', {
       논제: data.문항원문, 계열: '인문사회국어', 총배점: 총 ? Number(총) : 10, 이어받기: true,
       ...(제시문 ? { 제시문: [{ id: '제시문', 텍스트: 제시문 }] } : { 공통자료: true }),
+      ...(모범답안 ? { 모범답안 } : {}),
     });
     if (out.error) { alert('루브릭 생성 실패: ' + out.error); return; }
+    if (라벨) {
+      const 지울 = out.소문항.map((s, j) => {
+        const o = 옛.소문항[j];
+        return o && (o.채점목록 || []).length && 조각서명(o) !== 조각서명(s) ? `${단위이름(s.번호)} ${o.채점목록.length}명` : null;
+      }).filter(Boolean);
+      if (지울.length && !confirm(`조각이 바뀌어 학생 채점 기록이 지워집니다 — ${지울.join(', ')}. 적용할까요?`)) return;
+      out.소문항.forEach((s, j) => {
+        const o = 옛.소문항[j];
+        if (!o) return;
+        if (o.답안) s.답안 = o.답안;
+        if (o.채점입력) s.채점입력 = o.채점입력;
+        if (조각서명(o) === 조각서명(s) && o.채점목록) s.채점목록 = o.채점목록;
+      });
+    }
     data.B루브릭 = { 출처: '서술형', 텍스트: data.문항원문, 루브릭: out };
     renderB4(); renderB5();
     document.querySelector('#nav-ab .nav-item[data-tab="3"]').classList.add('done');
@@ -3109,7 +3162,11 @@ function renderB5() {
   const box = document.getElementById('b-answer');
   const h = currentData && currentData.B루브릭;
   if (!h || !h.루브릭) { box.innerHTML = '<div class="card c-empty">4 루브릭에서 루브릭을 만들면 표시됩니다</div>'; return; }
-  box.innerHTML = `<div class="card"><div class="card-title">서술형 모범답안</div>${h.루브릭.소문항.map((s, j) => 모범소문항Html(s, -1, j)).join('')}</div>`;
+  box.innerHTML = `<div class="card"><div class="card-title">서술형 모범답안</div>
+    <div class="c-meta">모범답안은 라벨을 붙여 쓰세요: <strong>[근거] [세우기] [풀기-1] [풀기-2] … [답]</strong> — 풀기 단계가 없으면 [풀기]는 빼도 됩니다.
+      다 쓴 뒤 「라벨로 루브릭 맞추기」를 누르면 [풀기-n] 하나가 4 루브릭의 풀기 조각 하나가 됩니다.</div>
+    <button class="type-btn" id="b-label" style="margin-top:8px;" onclick="genB(true)">라벨로 루브릭 맞추기 (엔진)</button>
+    ${h.루브릭.소문항.map((s, j) => 모범소문항Html(s, -1, j)).join('')}</div>`;
 }
 
 /** 입력칸 — 다시 그려도 남게 소문항에 둔다 */
@@ -3211,9 +3268,13 @@ const 남길글자 = (c, s) => {
   return K ? (K.핵심어 || K.실체) : displayEntity(c.실체 ?? s.급소.실체);
 };
 
-/** 문단 흔적 — 조각마다 남길 글자가 있는가, ④는 경로 앞 표지 하나 이상도 */
+/** 서술형 B 모범답안 라벨을 뗀 글 — 엔진 src/rubric/labels.ts 라벨식과 같다 (오종래 2026-10-16) */
+const 라벨빼기 = 글 => String(글 || '').replace(/\[\s*(근거(?:대기)?|세우기|풀기(?:\s*-?\s*\d+)?|답(?:구하기)?)\s*\]\s*/g, '');
+
+/** 문단 흔적 — 조각마다 남길 글자가 있는가, ④는 경로 앞 표지 하나 이상도. 교사 풀기 조각(라벨 글)은 보지 않는다 */
 function 문단흔적(글, s) {
-  return s.조각.map(c => {
+  글 = 라벨빼기(글);
+  return s.조각.filter(c => !c.풀기글).map(c => {
     const 글자 = 남길글자(c, s);
     const 앞 = c.경로 && c.경로.length > 1 ? c.경로.slice(0, -1).map(p => p.실체) : null;
     const 경로흔적 = 앞 ? 앞.filter(t => 글.includes(t)) : null;
@@ -3227,7 +3288,7 @@ const 채점용어 = ['근거대기', '세우기', '풀기', '답구하기', '�
 function 흔적Html(글, s) {
   const r = 문단흔적(글, s);
   const 못 = r.filter(x => !x.충족).length;
-  const 용어 = 채점용어.filter(w => 글.includes(w) && !r.some(x => x.글자.includes(w)));
+  const 용어 = 채점용어.filter(w => 라벨빼기(글).includes(w) && !r.some(x => x.글자.includes(w)));
   return `<span class="badge ${못 ? 'warn' : 'ok'}">조각 흔적 ${r.length - 못}/${r.length}</span>
     ${용어.length ? `<span class="badge warn">채점 용어 ${용어.map(w => `「${esc(w)}」`).join(' ')}</span>` : ''}
     ${r.map(x => `<span class="badge ${x.충족 ? 'muted' : 'warn'}" title="${esc(x.파트)}">${esc(x.id)} 「${esc(x.글자)}」${x.경로흔적 ? (x.경로흔적.length ? ' + 경로' : ' · 경로 흔적 없음') : ''}${x.충족 ? '' : ' ✗'}</span>`).join('')}`;
@@ -3247,7 +3308,7 @@ function 모범소문항Html(s, i, j) {
         <div class="answer-step">
           <div class="step-line"><div class="step-dot">${k + 1}</div>${k < s.조각.length - 1 ? '<div class="step-connector"></div>' : ''}</div>
           <div class="step-content">
-            <div class="step-name">${파트번호[c.파트] || ''} ${esc(c.파트)} · ${esc(c.id)} · 「${esc(displayEntity(c.실체 ?? s.급소.실체))}」
+            <div class="step-name">${파트번호[c.파트] || ''} ${esc(c.파트)} · ${esc(c.id)} · 「${esc(조각실체글(c, s))}」
               ${c.충족 ? '<span class="badge ok" style="margin-left:6px;">충족</span>' : `<span class="badge warn" style="margin-left:6px;">미충족 — ${c.경로 ? '급소 글자 또는 경로 흔적 없음' : '실체 글자 없음'}</span>`}</div>
             ${c.근거 ? `<div class="c-meta" style="margin:2px 0 4px;">근거 [${esc(c.근거.단락)}] ${esc(c.근거.문장)}</div>` : ''}
             ${c.경로 ? `<div class="c-meta" style="margin:2px 0 4px;">경로 ${경로글(c.경로)}${c.흔적 ? ` · 답안에 남은 경로 흔적: ${c.흔적.length ? c.흔적.map(t => `「${esc(t)}」`).join(' ') : '없음'}` : ''}</div>` : ''}
@@ -3257,10 +3318,21 @@ function 모범소문항Html(s, i, j) {
         </div>`).join('');
       const 못 = s.충족.조각수 - s.충족.충족수;
       const 키 = `${i}-${j}`;
-      const 답안 = s.답안
-        ? `<textarea class="input-area" id="c9-ta-${키}" style="min-height:220px;" oninput="답안수정(${i}, ${j}, this.value)">${esc(지금답안(s))}</textarea>
+      // 서술형 B — 교사가 처음부터 라벨을 붙여 쓸 수 있게 편집칸을 늘 보인다 (오종래 2026-10-16)
+      const 라벨안내 = '[근거] …\n[세우기] …\n[풀기-1] …\n[풀기-2] …\n[답] …';
+      const 답안 = i < 0 && !s.답안
+        ? `<textarea class="input-area" id="c9-ta-${키}" style="min-height:220px;" placeholder="${esc(라벨안내)}" oninput="답안수정(${i}, ${j}, this.value)"></textarea>
+           <div class="chip-list" id="c9-tr-${키}" style="margin-top:8px;"></div>
+           <div class="c-meta" style="margin-top:6px;">직접 쓰거나, 조각 문장을 Claude가 한 문단으로 잇게 할 수 있습니다 (이은 글에는 라벨을 붙여 고치세요).</div>
+           <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:8px;">
+             <button class="type-btn" id="c9-btn-${키}" onclick="답안잇기(${i}, ${j})">모범답안 잇기 (Claude)</button>
+             <button class="type-btn" onclick="답안확정(${i}, ${j})">교사 확정</button>
+             <span id="c9-st-${키}">${확정Html(s)}</span>
+           </div>`
+        : s.답안
+        ? `<textarea class="input-area" id="c9-ta-${키}" style="min-height:220px;"${i < 0 ? ` placeholder="${esc(라벨안내)}"` : ''} oninput="답안수정(${i}, ${j}, this.value)">${esc(지금답안(s))}</textarea>
            <div class="chip-list" id="c9-tr-${키}" style="margin-top:8px;">${흔적Html(지금답안(s), s)}</div>
-           <div class="c-meta" style="margin-top:6px;">Claude ${s.답안.시도}회 이음${s.답안.교사 != null ? ' · 교사가 고침' : ''} — 고치면 조각 흔적을 바로 다시 봅니다</div>
+           <div class="c-meta" style="margin-top:6px;">${s.답안.시도 ? `Claude ${s.답안.시도}회 이음${s.답안.교사 != null ? ' · 교사가 고침' : ''}` : '교사가 씀'} — 고치면 조각 흔적을 바로 다시 봅니다</div>
            <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:8px;">
              <button class="type-btn" id="c9-btn-${키}" onclick="답안잇기(${i}, ${j})">다시 잇기 (Claude)</button>
              <button class="type-btn" onclick="답안확정(${i}, ${j})">교사 확정</button>
@@ -3296,7 +3368,7 @@ async function 답안잇기(i, j) {
   let 앞답안 = null;
   if (i < 0 && j > 0) {
     const 앞 = x.루브릭.소문항[j - 1];
-    앞답안 = 앞 && 앞.답안 ? (앞.답안.확정 ? 앞.답안.확정.글 : 지금답안(앞)) : null;
+    앞답안 = 앞 && 앞.답안 ? 라벨빼기(앞.답안.확정 ? 앞.답안.확정.글 : 지금답안(앞)).trim() || null : null; // 라벨은 떼고 넘긴다 (2026-10-16)
     if (앞 && 앞.조각 && !앞답안) { alert(`${단위이름(앞.번호)} 모범답안을 먼저 이으세요 — 단계형은 앞 결과를 이어받아 순서대로 잇습니다.`); return; }
   }
   if (s.답안 && s.답안.교사 != null && !confirm('교사가 고친 글이 있습니다. 다시 이으면 고친 글이 사라집니다. 다시 이을까요?')) return;
@@ -3311,6 +3383,7 @@ async function 답안잇기(i, j) {
 /** 교사가 고친 글 — 흔적 표시만 다시 그린다 (편집칸 포커스 유지). 확정 뒤 고치면 확정을 푼다 */
 function 답안수정(i, j, 값) {
   const s = 루브릭홀더(i).루브릭.소문항[j];
+  s.답안 ??= { 글: '', 시도: 0, 교사: null, 확정: null }; // 서술형 B — 잇기 전에 교사가 직접 씀 (2026-10-16)
   s.답안.교사 = 값;
   if (s.답안.확정 && s.답안.확정.글 !== 값) s.답안.확정 = null;
   document.getElementById(`c9-tr-${i}-${j}`).innerHTML = 흔적Html(값, s);

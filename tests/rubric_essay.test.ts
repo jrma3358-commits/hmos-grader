@@ -14,6 +14,7 @@ import { 봉인6_조각대조 } from '../src/rubric/sealed/g1.ts';
 import { allocate_points } from '../src/rubric/f5.ts';
 import { spread_piece } from '../src/rubric/f6.ts';
 import { specify_condition } from '../src/rubric/f4.ts';
+import { parse_answer_labels } from '../src/rubric/labels.ts';
 
 const 논제 = 'A국의 보호무역 정책으로 인한 손실을 줄이기 위해, B국이 시행한 대응조치는 무엇인지 설명하시오.';
 const 다 =
@@ -408,5 +409,56 @@ describe('단계형 — 앞 결과 조각은 핵심어로 채점', () => {
     const c = 앞조각('f(x) ≥ 0');
     assert.equal(봉인6_조각대조('x=0에서 그래프가 만난다.', c, 맥락).결과, 'X');
     assert.equal(봉인6_조각대조('앞에서 f(x) ≥ 0을 보였다.', c, 맥락).결과, 'O');
+  });
+});
+
+// 서술형 B 교사 모범답안 라벨 (오종래 2026-10-16) — [풀기-n] 하나 = 인문 ③ 풀기 조각 하나, 배점은 풀기 몫(봉인④ 2/9)을 균등 분배
+describe('서술형 B — 모범답안 라벨 → 풀기 조각', () => {
+  it('라벨 구간 — 별칭·번호 없는 풀기·같은 번호 잇기·앞글', () => {
+    const r = parse_answer_labels('머리말 [근거] 가 [세우기] 나\n[풀기-1] 다 [풀기 2] 라 [풀기-1] 다2 [풀기] 마 [답구하기] 바');
+    assert.equal(r.라벨있음, true);
+    assert.equal(r.앞글, '머리말');
+    assert.equal(r.근거, '가');
+    assert.equal(r.세우기, '나');
+    assert.deepEqual(r.풀기, ['다 다2', '라', '마']);
+    assert.equal(r.답, '바');
+  });
+
+  it('라벨이 없으면 라벨있음 false · 빈 풀기 구간은 뺀다', () => {
+    assert.equal(parse_answer_labels('그냥 쓴 답안').라벨있음, false);
+    assert.deepEqual(parse_answer_labels('[풀기-1] [풀기-2] 둘 [답] 끝').풀기, ['둘']);
+  });
+
+  const 입력 = f2_input_from_v2(recognizeV2Analysis(논제));
+  assert.ok(입력.ok);
+  const 조각of = (교사풀기?: string[]) => derive_pieces(입력.물음, 입력.k, { ...입력.인식, ...(교사풀기 ? { 교사풀기 } : {}) }, '인문사회국어').map((c) => ({ ...c, 요소: judge_element(c, '인문사회국어') }));
+
+  it('풀기 라벨 둘 → 풀기 조각 둘 (노드 없음 · 수행질 정확성 · 충족조건에 라벨 글)', () => {
+    const 풀기 = 조각of(['첫 단계', '둘째 단계']).filter((c) => c.파트 === '풀기');
+    assert.deepEqual(풀기.map((c) => c.id), ['풀기-1', '풀기-2']);
+    assert.equal(풀기[0].node, null);
+    assert.equal(풀기[0].요소, null);
+    assert.equal(풀기[0].수행질, '정확성');
+    assert.match(specify_condition(풀기[1], '인문사회국어'), /모범답안 \[풀기-2\]: 「둘째 단계」/);
+    assert.equal(spread_piece(풀기[0], 입력.k, '인문사회국어'), '논지의 전개 논리와 근거가 모두 타당하다.');
+  });
+
+  it('배점 — 풀기 몫 = 총배점 × 2/9 ÷ 풀기 수, 근거·세우기·답은 2:3:2 그대로', () => {
+    const 뼈 = (파트: any, id: string) => ({ id, 파트, 요소: null, 수행질: null, 확인물음: '', is_중심: false, node: null });
+    const 네파트 = (풀기수: number) => [뼈('근거대기', '근거대기-1'), 뼈('세우기', '세우기-1'), ...Array.from({ length: 풀기수 }, (_, i) => 뼈('풀기', `풀기-${i + 1}`)), 뼈('답구하기', '답구하기-1')];
+    const r = allocate_points(네파트(2), 9, '인문사회국어');
+    assert.deepEqual(r.파트배점, { 근거대기: 2, 세우기: 3, 풀기: 2, 답구하기: 2 });
+    assert.deepEqual(r.조각들.filter((c) => c.파트 === '풀기').map((c) => c.배점), [1, 1]);
+    // 풀기가 없으면 결손재분배 — 지금처럼 2:3:2
+    assert.deepEqual(allocate_points(네파트(0), 7, '인문사회국어').파트배점, { 근거대기: 2, 세우기: 3, 풀기: 0, 답구하기: 2 });
+  });
+
+  it('라벨이 없으면 지금대로 풀기 없음', () => {
+    assert.ok(!조각of().some((c) => c.파트 === '풀기'));
+  });
+
+  it('인문 풀기는 교사 판정', () => {
+    const c = { ...조각of(['a']).find((x) => x.파트 === '풀기')!, 충족조건: '', 배점: 1, 모범조각: '' };
+    assert.equal(봉인6_조각대조('a', c, { 답노드: [], 질문급소: 입력.k, 계열: '인문사회국어', 루브릭: [], 앞결과: new Map() }).결과, '판정불가');
   });
 });
