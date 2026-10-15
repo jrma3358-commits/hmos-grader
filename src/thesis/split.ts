@@ -10,7 +10,7 @@
 //   - 인식 (recognizeV2Analysis가 한다)
 //   - 계단식 단계형(A·B)의 소문항 분리 — 그건 [봉인⑦]이다. 여기는 C 논제만 본다
 
-import { designatedLabels, PASSAGE_REFERENCE } from '../fq/v2/passage.ts';
+import { designatedLabels, PASSAGE_REFERENCE, referenceGroup } from '../fq/v2/passage.ts';
 
 export interface 소문항 {
   /** 「1-1」 같은 번호. 번호 없는 논제 하나면 null */
@@ -35,7 +35,7 @@ const HEAD = /(?:^|(?<=\n)|(?<=[.?!。]))[ \t]*(?:\[문항\s*\d+\]|문제\s*\d+)
 
 function 참조of(text: string): string[] {
   const last = [...text.matchAll(PASSAGE_REFERENCE)].at(-1);
-  return last ? designatedLabels(last[1]) : [];
+  return last ? designatedLabels(referenceGroup(last)) : [];
 }
 
 /**

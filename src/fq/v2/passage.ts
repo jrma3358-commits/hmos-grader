@@ -199,8 +199,16 @@ export function designatedLabels(entity: string): string[] {
  * [오종래 2026-10-14] 참조 범위는 「제시문 [가], [나]를 참고하여」·「(나)를 바탕으로」처럼 제시문을 읽을 거리로 세운 말이다.
  * 「제시문 [다]에서 … 점을 바탕으로」·「제시문 [나]와 같이」는 내용을 가리킬 뿐 범위를 좁히지 않는다
  * (5단계 보완 정교화안 d3이 「제시문 [다]에서」로 범위가 [다]로 좁아져 [가] 연결을 잃었다).
+ * [오종래 2026-10-15 안 A] 「제시문」 없이 선 기호 나열·범위도 — 기호가 둘 이상 이어지면(「(가), (다), (라)를 활용하여」) 같다.
+ *   인식의 기호 나열 P(graph.ts BARE_LABEL_LIST, 10-14)와 같은 꼴이다. 기호 하나(「(가)를」)는 보기 기호일 수 있어 그대로 둔다.
+ * [오종래 2026-10-15 안 B] 「기호의 내용을/를」도 목적어와 같다 (「(가)~(바)의 내용을 바탕으로」). 「[가]의 관점에서」는 그대로 아니다.
+ * 기호는 1번 묶음(「제시문」 뒤) 또는 2번 묶음(「제시문」 없는 나열) — referenceGroup으로 꺼낸다.
  */
-export const PASSAGE_REFERENCE = /제시문\s*((?:[[<(][가-힣][\]>)](?:\s*(?:[,·~∼～]|및|와|과)\s*)?)+)(?=\s*[를을])/g;
+export const PASSAGE_REFERENCE =
+  /(?:제시문\s*((?:[[<(][가-힣][\]>)](?:\s*(?:[,·~∼～]|및|와|과)\s*)?)+)|(?<![가-힣A-Za-z0-9])([[<(][가-힣][\]>)](?:\s*(?:[,·~∼～]|및|와|과)\s*[[<(][가-힣][\]>)])+))(?:\s*의\s*내용)?(?=\s*[를을])/g;
+
+/** PASSAGE_REFERENCE 일치 → 기호 묶음 글 */
+export const referenceGroup = (m: RegExpMatchArray): string => m[1] ?? m[2] ?? '';
 
 /**
  * 논제가 참조한 제시문 기호 — 마지막 참조를 쓴다 (공통 발문의 「제시문 [가]~[마]」 뒤에 소문항 자신의 참조가 온다).
@@ -208,7 +216,7 @@ export const PASSAGE_REFERENCE = /제시문\s*((?:[[<(][가-힣][\]>)](?:\s*(?:[
  */
 function referencedLabels(question: string): string[] | undefined {
   const last = [...question.matchAll(PASSAGE_REFERENCE)].at(-1);
-  const labels = last && designatedLabels(last[1]);
+  const labels = last && designatedLabels(referenceGroup(last));
   return labels?.length ? labels : undefined;
 }
 
