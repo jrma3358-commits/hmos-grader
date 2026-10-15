@@ -386,9 +386,15 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
           continue;
         }
         // 단독 어절 [오종래 2026-10-01] — 스위치의 standalone이면 앞에 한글 글자가 붙지 않을 때만 건다
-        //   (「대표단」·「지표」의 「표」 ✕, 「표는」·「표가」·「표를」 ○). 뒤 조건은 두지 않는다.
+        //   (「대표단」·「지표」의 「표」 ✕, 「표는」·「표가」·「표를」 ○).
+        //   [오종래 2026-10-15 안 B] 뒤 조건도 — 바로 뒤에 붙은 한글이 없거나 등록된 조사·어미 하나뿐일 때만 건다
+        //   (「표현」의 「표」 ✕ — 「차별·혐오 표현이」가 P[표] B[현이 …]로 쪼개지던 문제, 「표에서」·「표와」 ○).
         if (c.sw.standalone && /[가-힣ㄱ-ㅎㅏ-ㅣ]/.test(question[i - 1] ?? '')) {
           continue; // 앞에 한글이 붙었다 — 다른 낱말 안
+        }
+        if (c.sw.standalone) {
+          const tail = rest.slice(m[0].length).match(/^[가-힣]*/)![0];
+          if (tail && !josaOnly(tail)) continue; // 뒤에 낱말이 이어진다 — 다른 낱말의 머리
         }
         if (blockIds.includes(c.sw.id)) {
           if (i > 0 && !/\s/.test(question[i - 1])) continue; // 어절 머리가 아니다

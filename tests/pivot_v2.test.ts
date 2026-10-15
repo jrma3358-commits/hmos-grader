@@ -664,8 +664,11 @@ describe('단독 어절 스위치 — 낱말 안에서는 걸지 않는다 (오�
   const ps = (q: string, t: SealedTable) => build_path_graph(q, t).nodes.filter((n) => n.switchId === 'SW').length;
 
   it('독립 어절이면 건다', () => assert.equal(ps('아래 표 참조', table(true)), 1));
-  it('뒤에 무엇이 붙어도 건다 — 「표는」·「표가」·「표를」 (뒤 조건 없음)', () => {
-    assert.equal(ps('표는 가 표가 나 표를 다', table(true)), 3);
+  it('뒤에 등록된 조사 하나만 붙으면 건다 — 「표는」·「표」 (오종래 2026-10-15 안 B)', () => {
+    assert.equal(ps('표는 가 표 나', table(true)), 2);
+  });
+  it('뒤에 낱말이 이어지면 걸지 않는다 — 「표현」·「표준」 (오종래 2026-10-15 안 B)', () => {
+    assert.equal(ps('표현 나 표준 다', table(true)), 0);
   });
   it('앞에 한글이 붙으면 걸지 않는다 — 「대표단」·「지표」', () => assert.equal(ps('대표단 지표', table(true)), 0));
   it('standalone이 없으면 어디서나 건다', () => assert.equal(ps('대표단 지표', table()), 2));
