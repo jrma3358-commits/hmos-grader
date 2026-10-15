@@ -112,8 +112,10 @@ function 루브릭작업(논제글: string, 계열: string, 총배점: number, �
         const 단락들 = passage.paragraphs.map((p: any, i: number) => ({ 라벨: 라벨들[i] ?? `#${i + 1}`, 텍스트: p.text }));
         // 논제 요구와 맞는 문장만 — 소문항이 긍정·부정 한쪽을 지정하면 역접 뒤(앞) 반대쪽 문장을 뺀다 (오종래 2026-10-14)
         const 극성of = (번호: string | null) => thesis_polarity(소문항들.find((s: any) => s.번호 === 번호)?.텍스트 ?? '');
-        연결of = (번호) => link_sentences(단락들, 정합.연결.filter((x: any) => x.소문항 === 번호).flatMap((x: any) => x.단락), 극성of(번호));
-        단락연결of = (번호) => 정합.연결.filter((x: any) => x.소문항 === 번호).flatMap((x: any) => x.단락.map((d: any) => ({ 노드: x.노드, 단락: d.단락, 단락급소: d.단락급소 })));
+        // 지정 연결(자리 「지정」, 단락 급소 없음 — 2026-10-15)은 루브릭에 넣지 않는다: 세우기 문장·① 제시문 조각·④ 경로는 단락 급소 실체로만
+        const 급소단락of = (번호: string | null) => 정합.연결.filter((x: any) => x.소문항 === 번호).map((x: any) => ({ ...x, 단락: x.단락.filter((d: any) => d.자리 !== '지정') }));
+        연결of = (번호) => link_sentences(단락들, 급소단락of(번호).flatMap((x: any) => x.단락), 극성of(번호));
+        단락연결of = (번호) => 급소단락of(번호).flatMap((x: any) => x.단락.map((d: any) => ({ 노드: x.노드, 단락: d.단락, 단락급소: d.단락급소 })));
       } catch (e) {
         연결멈춤 = 멈춤of(e);
       }

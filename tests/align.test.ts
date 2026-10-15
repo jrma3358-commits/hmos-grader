@@ -67,6 +67,12 @@ describe('align_passage', () => {
     assert.deepEqual(r.사족, []);
   });
 
+  it('논제가 기호로 짚은 단락은 지정 연결 — 사족이 아니다 (오종래 2026-10-15 안 A)', () => {
+    const r = align_passage([{ 번호: '1', 참조: [], 인식: 인식('(다)를 설명하시오.') }], 제시문);
+    assert.deepEqual(r.연결.map((x) => x.단락), [[{ 단락: '다', 단락급소: '', 자리: '지정' }]]);
+    assert.deepEqual(r.사족, []);
+  });
+
   it('급소가 서지 않은 소문항은 사족을 가리지 않는다', () => {
     const r = align_passage([{ 번호: null, 참조: [], 인식: 인식('설명하시오.') }], 제시문);
     assert.deepEqual(r.연결, []);
