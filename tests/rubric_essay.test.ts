@@ -9,6 +9,7 @@ import { recognizeV2Analysis } from '../src/fq/pipeline.ts';
 import { derive_pieces, f2_input_from_v2, filter_by_polarity, link_sentences, speaker_lines, split_sentences, thesis_polarity } from '../src/rubric/f2.ts';
 import { judge_element } from '../src/rubric/f3.ts';
 import { K핵심어, 마지막명사 } from '../src/rubric/sealed/f2.ts';
+import { 봉인4a_반올림 } from '../src/rubric/sealed/f5.ts';
 import { 봉인6_조각대조 } from '../src/rubric/sealed/g1.ts';
 import { allocate_points } from '../src/rubric/f5.ts';
 import { spread_piece } from '../src/rubric/f6.ts';
@@ -19,6 +20,22 @@ const 다 =
   'B국은 무역 의존도가 높은 국가로, A국의 보호무역 정책 때문에 주요 수출품의 가격 경쟁력이 약화하여 수출이 감소하였다. ' +
   '이에 따라 B국 기업의 수익이 줄어들고 B국의 상품수지도 악화하였다. ' +
   '그럼에도 불구하고 B국 정부는 연구개발(R&D) 지원과 자유무역협정(FTA) 다변화 정책을 추진하였다.';
+
+// [오종래 2026-10-15 (가)] 봉인④-a 큰 나머지 방식 — 마지막 몫이 나머지를 떠안아 음수가 되던 것
+describe('봉인④-a 반올림 — 큰 나머지 방식', () => {
+  it('1.1점을 7몫 — 음수 없이 합이 맞고, 몫끼리 차이는 0.1 이하', () => {
+    const r = 봉인4a_반올림(1.1, Array(7).fill(1.1 / 7));
+    assert.ok(r.every((x) => x >= 0), JSON.stringify(r));
+    assert.equal(Math.round(r.reduce((a, b) => a + b, 0) * 10), 11);
+    assert.ok(Math.max(...r) - Math.min(...r) <= 0.1 + 1e-9);
+  });
+
+  it('끝수가 큰 몫부터 0.1씩 — 같으면 뒤 몫 먼저 (옛 규칙 「마지막 칸」과 같은 결과)', () => {
+    assert.deepEqual(봉인4a_반올림(1, [0.24, 0.36, 0.4]), [0.2, 0.4, 0.4]);
+    assert.deepEqual(봉인4a_반올림(1, [1 / 3, 1 / 3, 1 / 3]), [0.3, 0.3, 0.4]);
+    assert.deepEqual(봉인4a_반올림(10, [2.2, 3.3, 2.2, 2.3]), [2.2, 3.3, 2.2, 2.3]);
+  });
+});
 
 describe('split_sentences', () => {
   it('문장 끝 부호 뒤 공백에서 나눈다 — 괄호 속 약어·쉼표는 나누지 않는다', () => {
