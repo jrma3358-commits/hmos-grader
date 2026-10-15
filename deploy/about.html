@@ -160,6 +160,42 @@
   }
   .prose + .prose { margin-top: 28px; }
 
+  /* 들어가며 — 훈민정음 OS의 배경. 소제목 셋, 문단은 원문 줄 그대로 */
+  .bg-part { margin-top: 64px; }
+  h2 + .bg-part { margin-top: 48px; }
+  .bg-part h3 {
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    font-family: var(--serif);
+    font-size: clamp(20px, 2.4vw, 24px);
+    font-weight: 700;
+    letter-spacing: -0.3px;
+    word-break: keep-all;
+  }
+  .bg-part h3 .n { font-size: 15px; color: var(--olive); }
+  .bg-body { margin-top: 22px; font-family: var(--serif); font-size: clamp(17px, 1.9vw, 19px); line-height: 2; word-break: keep-all; }
+  .bg-body p + p { margin-top: 18px; }
+  .bg-quote {
+    margin: 28px 0;
+    padding: 6px 0 6px 24px;
+    border-left: 3px solid var(--apricot);
+    font-style: italic;
+    color: var(--brown-sub);
+  }
+  .bg-close { color: var(--terracotta-dark); font-weight: 700; }
+  /* 「사과가」 등 — 살구 배경, 조사는 테라코타 */
+  .josa {
+    display: inline-block;
+    margin: 2px 2px;
+    padding: 0 10px;
+    border-radius: 8px;
+    background: var(--apricot-soft);
+    line-height: 1.8;
+    white-space: nowrap;
+  }
+  .josa b { color: var(--terracotta); font-weight: 700; }
+
   /* 입구 → 출구 */
   .gate { margin-top: 40px; display: grid; grid-template-columns: 1fr auto 1fr; gap: 16px; align-items: stretch; }
   .gate-box { border: 1px solid var(--line); border-radius: var(--radius); background: var(--cream); padding: 22px 24px; }
@@ -287,9 +323,47 @@
       <h1>HMOS <span class="accent">이야기</span></h1>
       <p class="intro-sub">왜 시작했는가 · 무엇을 발견했는가 · 어떻게 만들었는가</p>
       <ul class="toc">
+        <li><a href="#background">들어가며</a></li>
         <li><a href="#origin"><b>01</b> 기원</a></li>
         <li><a href="#discovery"><b>02</b> 발견</a></li>
         <li><a href="#realization"><b>03</b> 실현</a></li>      </ul>
+    </div>
+  </section>
+
+  <!-- 0. 들어가며 — 훈민정음 OS의 배경. 문구는 오종래 원문 그대로 (2026-10-15) -->
+  <section class="layer alt" id="background" aria-labelledby="background-title">
+    <div class="wrap narrow">
+      <div class="layer-head"><span class="kicker">들어가며</span></div>
+      <h2 id="background-title">훈민정음 OS의 배경</h2>
+
+      <div class="bg-part">
+        <h3><span class="n">1</span>디지털 바벨탑의 시대</h3>
+        <div class="bg-body">
+          <p>매번 책을 쓸 때마다 생각의 속도와 자판을 누르는 속도 사이의 격차가 사고의 흐름을 끊어놓곤 했다. 그때마다 되뇌었다.</p>
+          <p class="bg-quote">"머리에 코드를 심어 내 생각을 그대로 글로 써줄 수 있는 시대가 오면 좋겠는데."</p>
+          <p>그 시대가 왔다. 그런데 막상 AI를 써보니 다시 네이버 검색창으로 돌아가고 있었다. 왜인가.</p>
+          <p>AI는 거대한 통계적 확률로 문장을 생성한다. 그러나 확률은 확률의 늪이다 — 데이터가 쌓일수록 경우의 수는 늘어나고, 인간의 사유에서는 멀어진다. 우리는 환각을 검열하는 무한한 노동 속으로 빨려들어 가고 있다.</p>
+          <p>문제는 데이터의 양이 아니었다. 조사와 어미 — 인간의 사유를 결정하는 이 미세한 결을 AI가 읽어내지 못하는 데 있었다.</p>
+        </div>
+      </div>
+
+      <div class="bg-part">
+        <h3><span class="n">2</span>조사·어미 속에 사유의 유전자가 있다</h3>
+        <div class="bg-body">
+          <p>인류는 수십만 년간 언어로 살아남았다. 맹수보다 느리고, 하마보다 약하고, 고양이보다 반사 신경이 둔한 인간이 지구의 최고 종이 된 것은 오직 언어 덕분이었다.</p>
+          <p>그 언어의 핵심은 단어가 아니다.</p>
+          <p><span class="josa">「사과<b>가</b>」</span><span class="josa">「사과<b>를</b>」</span><span class="josa">「사과<b>마저</b>」</span><span class="josa">「사과<b>라도</b>」</span>— 같은 단어지만 전혀 다른 의지다. 조사 하나가 바뀌면 의미 전체가 달라진다. 어미 하나가 바뀌면 관계 전체가 달라진다.</p>
+          <p>인류는 조사·어미 속에 사유의 유전자를 심어 놓았다. 이것은 한국어만의 특성이 아니다 — 전 세계 모든 언어의 굴절과 결합 속에 공통적으로 존재하는 지능의 보편 규격이다.</p>
+        </div>
+      </div>
+
+      <div class="bg-part">
+        <h3><span class="n">3</span>그것이 HMOS의 출발점이다</h3>
+        <div class="bg-body">
+          <p>디지털 바벨탑을 더 높이 쌓는 것이 아니다. 기계에게 생각하는 법을 가르치는 것도 아니다.</p>
+          <p class="bg-close">기계가 인간의 무의식적인 언어 속에 담긴 사유의 유전자를 스스로 읽어내게 하는 것 — 그것이 훈민정음 OS의 단 하나의 목적이다.</p>
+        </div>
+      </div>
     </div>
   </section>
 
