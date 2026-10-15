@@ -74,6 +74,14 @@ app.get('/dashboard',(req,res)=>{
   res.sendFile(path.join(__dirname,'hmos_dashboard.html'));
 });
 app.get('/hmos_dashboard.html',(req,res)=>res.redirect(302,'/dashboard'));
+// /grader = 채점 솔루션 (2026-10-15) — 비밀번호 칸이 페이지 안에 있어 쿠키 없이도 연다. 채점·OCR API는 아래 쿠키 검사로 막힌다.
+// GET /api/access = 쿠키가 살아 있는가만 알려 준다 (페이지가 비밀번호 칸을 띄울지 정한다)
+app.get('/api/access',(req,res)=>{res.setHeader('Cache-Control','no-store');res.json({ok:접속됨(req)});});
+app.get('/grader',(req,res)=>{
+  res.setHeader('Cache-Control','no-store');
+  res.sendFile(path.join(__dirname,'grader.html'));
+});
+app.get('/grader.html',(req,res)=>res.redirect(302,'/grader'));
 
 // API도 접속 쿠키가 있어야 — 엔진(/analyze)·Claude 호출(/api/*) (2026-10-14).
 // API는 모두 POST라 GET·HEAD(홈·정적 파일) 말고는 전부 막고 /api/access만 연다 — 경로 대소문자·인코딩으로 비켜 가지 못하게 경로 모양으로 고르지 않는다.
@@ -921,16 +929,26 @@ app.post('/api/ocr',async(req,res)=>{
   const 틀린=파일.find(f=>f.종류!=='application/pdf'&&!OCR_이미지.includes(f.종류));
   if(틀린){res.status(400).json({error:`읽을 수 없는 형식: ${틀린.종류||'알 수 없음'}`});return;}
   const 크기=f=>Array.isArray(f.크기)&&f.크기.length===2&&f.크기.every(v=>Number.isFinite(v)&&v>0)?f.크기:null;
+  // 유형 '답안' — /grader 학생 답안 사진 (2026-10-15). 옮겨 적기만 한다 — 채점은 엔진(/api/grade)이 한다
+  const 답안=req.body.유형==='답안';
   const content=[
     ...파일.flatMap((f,i)=>f.종류==='application/pdf'
       ?[{type:'document',source:{type:'base64',media_type:'application/pdf',data:f.데이터}}]
       :[{type:'text',text:`사진 ${i+1}${크기(f)?` (가로 ${f.크기[0]} × 세로 ${f.크기[1]} px)`:''}`},
         {type:'image',source:{type:'base64',media_type:f.종류,data:f.데이터}}]),
-    {type:'text',text:['A','B'].includes(req.body.유형)
+    {type:'text',text:답안
+      ?'위 자료에 있는 학생 답안의 글자를 그대로 옮겨 적어라. 문제 글(발문·제시문)이 함께 찍혀 있으면 빼고 학생이 쓴 답만 적는다.'
+      :['A','B'].includes(req.body.유형)
       ?'위 자료에 있는 시험 문항(문항 번호·발문·조건·보기·배점)의 글자를 그대로 옮겨 적어라.'
       :'위 자료에 있는 논술 문항(논제와 제시문)의 글자를 그대로 옮겨 적어라.'},
   ];
-  const system=`너는 시험 문항 원문을 옮겨 적는 전사기다.
+  const system=답안?`너는 학생 답안을 옮겨 적는 전사기다. 채점하지 않는다.
+- 학생이 쓴 글자를 그대로 옮긴다. 맞춤법·띄어쓰기·계산 실수도 고치지 않는다. 고치거나 요약하거나 설명을 붙이지 않는다.
+- 줄을 그어 지운 글은 옮기지 않는다.
+- 단락 사이는 빈 줄 하나로 나눈다. 여러 장이면 순서대로 이어 적는다.
+- 읽을 수 없는 글자는 □로 적는다.
+- 수식은 LaTeX를 쓰지 않고 평문으로 적는다: 거듭제곱 x², 분수 a/b, 근호 √(…), 미분 f'(x), 부등호 ≤ ≥, 적분 ∫.
+- figures는 빈 배열로 둔다.`:`너는 시험 문항 원문을 옮겨 적는 전사기다.
 - 보이는 글자를 그대로 옮긴다. 고치거나 요약하거나 설명을 붙이지 않는다. 맞춤법·띄어쓰기도 원문대로.
 - 제시문 라벨([가]·<가>·(가) 등), 문항 번호([문항 1]·(1-1) 등), 배점 표기는 원문 모양 그대로 둔다.
 - 단락 사이는 빈 줄 하나로 나눈다. 쪽 머리말·쪽 번호·워터마크는 뺀다.
