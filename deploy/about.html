@@ -185,6 +185,43 @@
   .does h3::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--terracotta); }
   .does p { color: var(--brown-sub); font-size: 15px; word-break: keep-all; }
 
+  /* 걸어온 길 — 세로 타임라인. 왼쪽 연도, 가운데 선·점, 오른쪽 내용 */
+  .timeline { margin-top: 44px; list-style: none; }
+  .tl-item { display: grid; grid-template-columns: 92px 1fr; column-gap: 24px; }
+  .tl-year {
+    padding-top: 1px;
+    text-align: right;
+    font-family: var(--serif);
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--olive);
+    white-space: nowrap;
+  }
+  .tl-body { position: relative; padding: 0 0 40px 28px; border-left: 2px solid var(--line); }
+  .tl-item:last-child .tl-body { border-left-color: transparent; padding-bottom: 0; }
+  .tl-body::before {
+    content: '';
+    position: absolute;
+    left: -7px;
+    top: 9px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--cream);
+    border: 2px solid var(--olive);
+  }
+  .tl-main { font-size: 17px; font-weight: 500; word-break: keep-all; }
+  .tl-note { margin-top: 2px; color: var(--brown-sub); font-family: var(--serif); font-size: 16px; word-break: keep-all; }
+  .tl-sub { list-style: none; margin-top: 10px; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; }
+  .tl-body > .tl-sub:first-child { margin-top: 0; }
+  .tl-sub li { position: relative; padding-left: 26px; font-size: 16px; word-break: keep-all; }
+  .tl-sub li::before { content: '—'; position: absolute; left: 0; color: var(--brown-sub); }
+  /* 2026.9.1 오픈 — 테라코타 강조 */
+  .tl-item.open .tl-year { color: var(--terracotta); }
+  .tl-item.open .tl-body::before { background: var(--terracotta); border-color: var(--terracotta); box-shadow: 0 0 0 5px var(--apricot-soft); }
+  .tl-item.open .tl-main { color: var(--terracotta-dark); font-family: var(--serif); font-size: 20px; font-weight: 700; }
+  .tl-item.open .tl-note { color: var(--brown); }
+
   /* 푸터 — 홈과 같다 */
   footer { background: var(--brown); color: #D9CBB8; padding: 44px 0 52px; font-size: 14px; }
   footer .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 20px 40px; align-items: flex-end; }
@@ -214,6 +251,10 @@
     .gate { grid-template-columns: 1fr; }
     .gate-mid svg { transform: rotate(90deg); }
     .does { grid-template-columns: 1fr; }
+    .tl-item { grid-template-columns: 64px 1fr; column-gap: 16px; }
+    .tl-year { font-size: 14px; padding-top: 3px; }
+    .tl-body { padding-left: 20px; }
+    .tl-sub { padding-left: 4px; }
     .footer-side { align-items: flex-start; }
   }
   @media (prefers-reduced-motion: reduce) {
@@ -249,6 +290,7 @@
         <li><a href="#origin"><b>01</b> 기원</a></li>
         <li><a href="#discovery"><b>02</b> 발견</a></li>
         <li><a href="#realization"><b>03</b> 실현</a></li>
+        <li><a href="#history"><b>04</b> 걸어온 길</a></li>
       </ul>
     </div>
   </section>
@@ -323,6 +365,51 @@ AI는 정직해진다.</p>
         <li><h3>진단</h3><p>어디서 어긋났는지 국소화한다.</p></li>
         <li><h3>플랜</h3><p>약점 기반 학습 경로를 제안한다.</p></li>
       </ul>
+    </div>
+  </section>
+
+  <!-- 4. 걸어온 길 — 문구는 오종래 원문 그대로 (2026-10-15) -->
+  <section class="layer alt" id="history" aria-labelledby="history-title">
+    <div class="wrap narrow">
+      <div class="layer-head"><span class="layer-num">04</span><span class="kicker">연혁 · 2002 — 2026</span></div>
+      <h2 id="history-title">걸어온 길</h2>
+      <ol class="timeline">
+        <li class="tl-item">
+          <div class="tl-year">2002</div>
+          <div class="tl-body">
+            <p class="tl-main">수학잡고 시리즈 1편 출간</p>
+            <p class="tl-note">수학의 급소를 읽는 교육법 시작</p>
+            <ul class="tl-sub"><li>「수학잡고 대학가기」상표권 등록</li></ul>
+          </div>
+        </li>
+        <li class="tl-item">
+          <div class="tl-year">2013</div>
+          <div class="tl-body"><p class="tl-main">수학잡고 대학가기 씨크릿 5편 출간</p></div>
+        </li>
+        <li class="tl-item">
+          <div class="tl-year">2017</div>
+          <div class="tl-body"><p class="tl-main">수학잡고 대학가기 맞춤 프로그램 교재 시리즈 54권 출간</p></div>
+        </li>
+        <li class="tl-item">
+          <div class="tl-year">2026</div>
+          <div class="tl-body">
+            <ul class="tl-sub">
+              <li>훈민정음 시리즈 10권 저작권 등록</li>
+              <li>수학의 훈민정음 상표출원</li>
+              <li>HMOS 이론 기반 논문 2편 저작권 등록</li>
+              <li>훈민OS 상표출원</li>
+              <li>자연어 기반 언어 인식 제어 로직 특허출원</li>
+            </ul>
+          </div>
+        </li>
+        <li class="tl-item open">
+          <div class="tl-year">2026.9.1</div>
+          <div class="tl-body">
+            <p class="tl-main">HMOS 오픈</p>
+            <p class="tl-note">24년의 현장이 언어 인식 AI 엔진으로 실현됨</p>
+          </div>
+        </li>
+      </ol>
     </div>
   </section>
 </main>
