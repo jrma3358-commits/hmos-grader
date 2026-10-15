@@ -835,7 +835,8 @@
         <div id="essay-inputs" style="display:none; margin-top: 16px;">
           <div id="reg-notice"></div>
           <div class="card-title">논제</div>
-          <textarea class="input-area" id="thesis-input" style="min-height: 90px;" placeholder="논제만 붙여넣으세요.&#10;예) [문항 1] 제시문 [가], [나], [다]를 참고하여 …&#10;(1-1) …설명하시오."></textarea>
+          <textarea class="input-area" id="thesis-input" style="min-height: 90px;" placeholder="논제만 붙여넣으세요.&#10;예) [문항 1] 제시문 [가], [나], [다]를 참고하여 …&#10;(1-1) …설명하시오." onchange="소논제미리보기()"></textarea>
+          <div id="thesis-split"></div>
           <div class="card-title" style="margin-top: 12px;">제시문</div>
           <textarea class="input-area" id="passage-input" placeholder="제시문을 [가] [나] … 라벨과 함께 붙여넣으세요.&#10;[가] …&#10;[나] …"></textarea>
           <div class="type-selector">
@@ -1673,9 +1674,9 @@ function pickType(type) {
   if (btn) selectType(type, btn);
 }
 
-/** 제시문 칸 → [{id, 텍스트}] — [가]·<가>·(가) 단락 머리로 나눈다. 머리가 없으면 한 덩어리 */
+/** 제시문 칸 → [{id, 텍스트}] — [가]·<가>·(가) 단락 머리로 나눈다(기호 바로 뒤가 공백·줄끝일 때만, splitRegistration과 같다). 머리가 없으면 한 덩어리 */
 function splitPassages(text) {
-  const heads = [...text.matchAll(/(?:^|\n)\s*[\[<(]([가-하])[\]>)]\s*/g)];
+  const heads = [...text.matchAll(/(?:^|\n)\s*[\[<(]([가-하])[\]>)](?:\s+|$)/g)];
   if (!heads.length) return text.trim() ? [{ id: '제시문', 텍스트: text.trim() }] : [];
   return heads.map((m, i) => ({
     id: m[1],
@@ -2106,6 +2107,7 @@ function fillCSample() {
   document.getElementById('reg-figs').innerHTML = '';
   document.getElementById('thesis-input').value = 원문.slice(원문.indexOf('[문항 1]')).trim();
   document.getElementById('passage-input').value = 원문.slice(원문.indexOf('\n[가]') + 1, 제시문끝 > 0 ? 제시문끝 : undefined).trim().replace(/\n(?=\[[가-하]\])/g, '\n\n');
+  소논제미리보기();
   if (selectedType !== 'C-논술') {
     const btn = [...document.querySelectorAll('.type-btn')].find(b => b.textContent.includes('논술') && b.getAttribute('onclick')?.startsWith('selectType'));
     if (btn) btn.click();
@@ -2374,11 +2376,14 @@ function startSample(sel) {
  * 나누면서 빠진 글은 뺀것에 담아 1단계에 보인다. 나누지 못하면 null
  */
 function splitRegistration(text) {
-  const 제시문머리 = text.search(/(?:^|\n)[ \t]*[\[<(][가-하][\]>)]/);
-  const 논제m = /(?:^|\n)[ \t]*(?:\[문항\s*\d+\]|<문항\s*\d+>|【문항\s*\d+】|\[논제[^\]\n]*\]|<논제[^>\n]*>|논제\s*\d*\s*[.:)]?(?=\s))/.exec(text);
-  const 논제머리 = 논제m ? 논제m.index : -1;
   const 뺀것 = [];
   const 덜어 = 글 => { if (글.trim()) 뺀것.push(글.trim()); };
+  // 「논제:」「제시문:」「[논제]」「[제시문]」만 있는 줄은 머리말 — 본문에 넣지 않는다 (오종래 2026-10-15)
+  text = text.replace(/\r\n?/g, '\n').replace(/^[ \t]*[\[<【]?[ \t]*(?:논제|제시문)[ \t]*[\]>】]?[ \t]*[:：]?[ \t]*$/gm, m => { 덜어(m); return ''; });
+  // 제시문 머리 = 줄 머리 기호 바로 뒤가 공백·줄끝일 때만 — 「(가)~(바)의」「(가), (다)를」은 논제 안의 지시다 (오종래 2026-10-15)
+  const 제시문머리 = text.search(/(?:^|\n)[ \t]*[\[<(][가-하][\]>)](?=\s|$)/);
+  const 논제m = /(?:^|\n)[ \t]*(?:\[문항\s*\d+\]|<문항\s*\d+>|【문항\s*\d+】|\[논제[^\]\n]*\]|<논제[^>\n]*>|논제\s*\d*\s*[.:)]?(?=\s))/.exec(text);
+  const 논제머리 = 논제m ? 논제m.index : -1;
   let 논제 = '', 제시문 = '';
   if (제시문머리 < 0) {
     논제 = text;
@@ -2395,7 +2400,7 @@ function splitRegistration(text) {
     제시문 = text.slice(제시문머리);
   }
   제시문 = 제시문.replace(/[ \t]*<주의사항[^>]*>[ \t]*/g, m => { 덜어(m); return ''; });
-  제시문 = 제시문.trim().replace(/\n+(?=[ \t]*[\[<(][가-하][\]>)])/g, '\n\n');
+  제시문 = 제시문.trim().replace(/\n+(?=[ \t]*[\[<(][가-하][\]>)](?:\s|$))/g, '\n\n');
   if (!논제.trim()) return null;
   return { 논제: 논제.trim(), 제시문, 뺀것 };
 }
@@ -2457,6 +2462,27 @@ function registerC() {
   }
   markCDone(0);
   showCStep(1);
+  소논제미리보기();
+}
+
+/**
+ * 1단계 소논제 미리보기 (오종래 2026-10-15 안 a) — 논제 칸을 엔진 split_thesis로 나눈 모습만 보인다.
+ * 나누는 판단은 엔진이 하고(러너 작업 「소논제」), 2단계 인식도 같은 split_thesis를 쓴다. 칸은 고치지 않는다
+ */
+let 소논제차례 = 0;
+async function 소논제미리보기() {
+  const 칸 = document.getElementById('thesis-split');
+  const 논제 = document.getElementById('thesis-input').value.trim();
+  const 차례 = ++소논제차례;
+  if (!논제) { 칸.innerHTML = ''; return; }
+  let out;
+  try { ({ out } = await postJSON('/analyze', { 파이프라인: 'C', 작업: '소논제', 논제 })); }
+  catch (e) { out = { ok: false, error: { 사유: e.message } }; }
+  if (차례 !== 소논제차례) return; // 그사이 논제가 바뀌었다
+  if (!out.ok) { 칸.innerHTML = `<div class="flag-box" style="margin: 8px 0 0;">소논제 미리보기 실패: ${esc((out.error && (out.error.사유 || out.error)) || '알 수 없음')}</div>`; return; }
+  const 소논제 = out.단계.소논제 || [];
+  const 발문 = 소논제[0] && 소논제[0].공통발문;
+  칸.innerHTML = `<div class="c-meta" style="margin-top: 8px;">${엔진배지} 소논제 ${소논제.length}개로 나뉩니다 — 2단계에서 이대로 따로 인식합니다${발문 ? `<div style="margin-top:4px;">공통 발문: ${esc(발문)}</div>` : ''}${소논제.map(s => `<div style="margin-top:4px;"><b>${esc(소문항이름(s))}</b> ${esc(s.텍스트)}</div>`).join('')}</div>`;
 }
 
 // ── 공통 조각 ──
@@ -3408,6 +3434,8 @@ function 화면비우기() {
   ['question-input', 'thesis-input', 'passage-input'].forEach(id => { document.getElementById(id).value = ''; });
   document.getElementById('reg-notice').innerHTML = '';
   document.getElementById('reg-figs').innerHTML = '';
+  소논제차례++;
+  document.getElementById('thesis-split').innerHTML = '';
 }
 
 /** 0단계에서 나누며 빠진 글 알림 (registerC와 같은 문구) */
@@ -3437,6 +3465,7 @@ function 문항열기(id) {
       document.getElementById('passage-input').value = (r.입력 && r.입력.제시문) || '';
       뺀것알림(r.뺀것);
       renderRegFigs(m.원문);
+      소논제미리보기();
       renderC2(); renderC3(); renderC4(); renderC5(); renderC6(); renderC7(); renderC8(); renderC9();
       markCDone(0, 1, 2, 5);
       if (C.제시문.length) markCDone(3, 4);
