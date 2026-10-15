@@ -269,6 +269,22 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
     const prev = question.slice(0, at - noun.length).match(/(\S+)[ \t]+$/)?.[1];
     return /^[가-힣]{2,}$/.test(noun) && prev !== undefined && /[가-힣]([한된진던]|의)$/.test(prev);
   };
+  //   간접의문 절의 주어 [오종래 2026-10-15 안 1] — 주격 「이」는 같은 문장 뒤쪽에 간접의문 표지(Q 「~인지」「~는지」 등, 표층 「~지」 두 글자 이하 —
+  //   pivot.ts isIndirectQ와 같은 기준)가 어절 끝으로 오고, 붙은 명사가 두 음절 이상이면 건다. 주어가 B로 서야 간접의문 주어 규칙(pivot.ts, 10-13)이
+  //   급소를 잡는다 (「차별적 인식이 … 무엇에 의한 것인지」 → B「차별적 인식」). 한 음절 명사(「높이」「길이」「차이」)는 그대로 걸지 않는다.
+  //   보격 「이」(바로 뒤 어절이 「되」「돼」「아니」 — 「어떤 도움이 될 수 있는지」)는 주어가 아니라 걸지 않는다.
+  const indirectRes = cands
+    .filter((c) => c.sw.kind === NODE_KIND && c.sw.color === 'Q' && /^.?지$/.test(c.surface.replace(/^~/, '').trim()))
+    .map((c) => new RegExp(c.re.source, 'g'));
+  const beforeIndirect = (at: number) => {
+    const noun = question.slice(0, at).match(/(\S*)$/)![1];
+    const next = question.slice(at + 1).match(/^\s+([가-힣]+)/)?.[1] ?? '';
+    const 받침뗀 = (ch: string) => String.fromCharCode(ch.charCodeAt(0) - ((ch.charCodeAt(0) - 0xac00) % 28)); // 「될」「됩」 → 「되」
+    if (!/^[가-힣]{2,}$/.test(noun) || (next && ['되', '돼'].includes(받침뗀(next))) || next.startsWith('아니')) return false;
+    const stop = question.slice(at).search(/[.?!。](?=\s|$)|\n/);
+    const clause = question.slice(at + 1, stop === -1 ? undefined : at + stop);
+    return indirectRes.some((re) => [...clause.matchAll(re)].some((m) => !insideWord(clause[m.index! + m[0].length])));
+  };
 
   // 문장 종결 [오종래 2026-10-04] — apply.sentenceEnds(예: 「이다.」「만족시킨다.」「~하다.」)가 걸리면 절 경계다.
   //   다른 표지보다 먼저 본다 — 종결 표지 안의 글자(「이다」의 「이」)를 조사로 걸지 않는다.
@@ -376,7 +392,7 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
         if (afterNounOnly.includes(c.sw.id) && verbStemBefore(i)) {
           continue; // 앞이 용언 어간 — 관형형 어미로 본다
         }
-        if (afterMathOnly.includes(c.sw.id) && !afterMath(i) && !(c.surface.replace(/^~/, '').trim() === '이' && afterModifiedNoun(i))) {
+        if (afterMathOnly.includes(c.sw.id) && !afterMath(i) && !(c.surface.replace(/^~/, '').trim() === '이' && (afterModifiedNoun(i) || beforeIndirect(i)))) {
           continue; // 바로 앞이 수식이 아니다
         }
         // 의문사 + 방식 [오종래 2026-10-13] — 「어떤 방식으로 작용하는지」의 「방식으로」는 묻는 내용이지 서술 형태가 아니다.

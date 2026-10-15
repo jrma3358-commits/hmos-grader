@@ -1180,6 +1180,22 @@ describe('서술형태 급소 — C-F 노드 안의 핵심어 (오종래 2026-10
     assert.equal(noSubject.ok && noSubject.pivot.node.entity.trim(), '목적', '주어가 없으면 Q 직전 B 그대로');
   });
 
+  it('간접의문 절의 주격 「이」는 수식 뒤가 아니어도 건다 — 두 음절 이상 명사, 보격 「이 되」 제외 (오종래 2026-10-15 안 1)', () => {
+    const base = table();
+    const t: SealedTable = {
+      ...base,
+      apply: { ...base.apply, afterMathOnly: ['SS'] },
+      switches: [sw('SS', ['~이'], 'B'), sw('SB', ['~@B', '~을'], 'B'), sw('SI', ['~인지', '~는지'], 'Q'), sw('SQ', ['~@Q'], 'Q')],
+    };
+    const r = analyze_pivot(build_path_graph('차별적 인식이 무엇에 의한 것인지 서술 @Q', t), t);
+    assert.equal(r.ok && r.pivot.node.entity.trim(), '차별적 인식');
+    const ss = (q: string) => build_path_graph(q, t).nodes.filter((n) => n.switchId === 'SS').map((n) => n.entity.trim());
+    assert.deepEqual(ss('인식이 무엇인지 서술 @Q'), ['인식']);
+    assert.deepEqual(ss('인식이 중요하다 서술 @Q'), [], '간접의문이 없으면 걸지 않는다');
+    assert.deepEqual(ss('높이 무엇인지 서술 @Q'), [], '한 음절 명사 + 이는 걸지 않는다');
+    assert.deepEqual(ss('어떤 도움이 될 수 있는지 서술 @Q'), [], '보격 「이 되」는 걸지 않는다');
+  });
+
   it('간접의문 주어는 물음 구간마다 — 앞 직접 Q 뒤부터 센다', () => {
     const t: SealedTable = {
       ...table(),
