@@ -276,6 +276,15 @@ describe('계열별 파트 구조 · ① 급소 K 제외', () => {
     assert.deepEqual(근거.map((c) => `${c.node?.color}:${c.요소}`), ['B:b', 'C:c']);
   });
 
+  it('인문 ① — 기호뿐인 노드(「(나)」「ⓐ」)는 조각이 아니다 (오종래 2026-10-15 안 A)', () => {
+    const 입력 = f2_input_from_v2(recognizeV2Analysis('(나)의 ⓐ는 (라)의 핵심 개념과, (나)의 ⓑ는 (마)의 핵심 개념과 연결하여 차별·혐오 표현이 발생하는 원인을 각각 분석하고 서술하시오.'));
+    assert.ok(입력.ok);
+    const 근거 = derive_pieces(입력.물음, 입력.k, 입력.인식, '인문사회국어').filter((c) => c.파트 === '근거대기');
+    assert.deepEqual(근거.map((c) => c.node?.entity.trim()), ['핵심 개념', '핵심 개념', '연결하여']);
+    const 수리 = derive_pieces(입력.물음, 입력.k, 입력.인식, '수리').filter((c) => c.파트 === '근거대기');
+    assert.ok(수리.some((c) => c.node?.entity.trim() === '(나)'), '수리는 그대로');
+  });
+
   it('급소가 여럿이면 전부 ①에서 뺀다 — 논술 (2-1)', () => {
     const 입력 = f2_input_from_v2(recognizeV2Analysis('C국과 같은 원자재 중심의 수출국이 국제무역 환경의 변화 때문에 겪는 구조적 약점을 제시하고, 국내 물가 상승의 이유를 설명하시오.'));
     assert.ok(입력.ok);

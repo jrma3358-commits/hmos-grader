@@ -4,6 +4,7 @@
 // ⑬은 채워졌다 (오종래 2026-10-13) — C·논술 5단계 정교화 4갈래 진단 (조립설명서 C·논술 9단계).
 import type { V2Analysis } from '../../fq/pipeline.ts';
 import { essay_pivot_chunks } from '../../thesis/chunk.ts';
+import { 기호뿐 } from '../../thesis/sign.ts';
 import { SealedError } from '../../fq/sealed/index.ts';
 import type { 급소K } from '../../rubric/types.ts';
 import type { 서술형분석 } from '../descriptive.ts';
@@ -57,10 +58,8 @@ export function 엔진단위(a: V2Analysis & { units?: V2Analysis[] }): 진단�
   return a.units.map((u, i) => ({ 이름: `단위 ${i + 1}`, 인식: u }));
 }
 
-/** 서술복잡에서 세지 않는 기호 B — 실체가 기호(나열·범위 포함)뿐 (오종래 2026-10-15) */
-const 기호 = String.raw`(?:[\[<(][가-힣][\]>)]|[ⓐ-ⓩⒶ-Ⓩ㉠-㉻])`;
-const 기호뿐 = new RegExp(String.raw`^[\s,]*${기호}(?:\s*(?:[,·ㆍ~∼～-]|및|와|과)\s*${기호})*[\s,]*$`);
-const 기호B = (entity: string) => 기호뿐.test(entity);
+/** 서술복잡에서 세지 않는 기호 B — 실체가 기호(나열·범위 포함)뿐 (오종래 2026-10-15, thesis/sign.ts) */
+const 기호B = 기호뿐;
 
 /** 물음 앞 배경 문장의 B — 표지 뒤부터 다음 Q 노드까지 사이에 평서 종결 「~다.」가 있다 (오종래 2026-10-15) */
 function 배경문장B(question: string, n: { index: number; surface: string }, nodes: readonly { index: number; color: string | null }[]): boolean {

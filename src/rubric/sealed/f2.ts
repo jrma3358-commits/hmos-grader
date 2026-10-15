@@ -26,6 +26,7 @@
 import type { Color } from '../../fq/types.ts';
 import type { PathNode } from '../../fq/v2/graph.ts';
 import type { 경로표지, 계열, 급소K, 인식결과, 조각뼈대, 파트, 파트별물음, 요소 } from '../types.ts';
+import { 기호뿐 } from '../../thesis/sign.ts';
 
 /** Q의 대상 — Q 노드 바로 앞 노드. 질문이 «무엇을» 요구하는가 */
 function qTargets(인식: 인식결과): PathNode[] {
@@ -65,7 +66,10 @@ const 인문 = (계열?: 계열) => 계열 === '인문사회국어';
  */
 export function 봉인2_근거대기(물음: 파트별물음 | null, k: 급소K, 인식: 인식결과, 계열?: 계열): 조각뼈대[] {
   const 색들: Color[] = 인문(계열) ? ['B', 'D', 'C', 'P'] : ['B', 'D'];
-  const 논제 = piecesFromNodes('근거대기', 색들, 물음, k, 인식, (인식.급소들 ?? [k]).map((g) => g.node));
+  // [오종래 2026-10-15 안 A] 인문 — 기호뿐인 노드(「(나)」「ⓐ」「(가), (다), (라)」)는 ① 조각이 아니다. 가리키는 표시지 이해할 개념이 아니다
+  //   (5단계 서술복잡 개수와 같은 판정, thesis/sign.ts). 수리는 그대로
+  const 기호노드 = 인문(계열) ? 인식.nodes.filter((n) => 기호뿐(n.entity)) : [];
+  const 논제 = piecesFromNodes('근거대기', 색들, 물음, k, 인식, [...(인식.급소들 ?? [k]).map((g) => g.node), ...기호노드]);
   if (!인문(계열)) return 논제;
   const 짝들 = (인식.단락연결 ?? [])
     .map((x) => ({ 단락: x.단락, 단락급소: 깨끗이(x.단락급소) }))
