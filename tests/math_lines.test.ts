@@ -9,6 +9,7 @@ import { describe, it } from 'node:test';
 import { recognizeV2Analysis } from '../src/fq/pipeline.ts';
 import { derive_pieces, f2_input_from_v2 } from '../src/rubric/f2.ts';
 import { grade } from '../src/rubric/g1.ts';
+import { 봉인4b_게이트 } from '../src/rubric/sealed/g1.ts';
 import { answer_values, classify_math_lines, student_answer_line } from '../src/rubric/solve_lines.ts';
 import type { 조각 } from '../src/rubric/types.ts';
 
@@ -68,6 +69,20 @@ describe('(c) ④ 값 직접 대조', () => {
     assert.equal(r.파트별.답구하기.조각별[0].결과, 'X');
     assert.equal(r.파트별.세우기.조각별[0].결과, '판정불가');
     assert.equal(r.부분점수, 0);
+    // 풀기 없음 → ④ X가 ② 세우기에 상한 (3 × 1/3 = 1, 2026-10-16)
+    assert.equal(r.파트별.세우기.상한, 1);
+    assert.equal(r.파트별.풀기.상한, null);
+  });
+  it('풀기 없는 수리 — 교사가 ②를 O로 매겨도 ④ X면 ②는 상한 1점', () => {
+    const 상한 = 봉인4b_게이트(
+      [
+        { 조각id: '세우기-1', 파트: '세우기', 요소: 'c', 결과: 'O', 배점: 3, 득점: 3, 판단근거: '' },
+        { 조각id: '답구하기-1', 파트: '답구하기', 요소: 'k', 결과: 'X', 배점: 2, 득점: 0, 판단근거: '' },
+      ],
+      { 근거대기: 0, 세우기: 3, 풀기: 0, 답구하기: 2 },
+      '수리',
+    );
+    assert.deepEqual(상한, { 세우기: 1 });
   });
   it('값이 맞으면 ④ O', () => {
     const r = grade('(x+3)(x-1)=0\n∴ x=-3 또는 x=1', 루브릭, '', k, '수리');
