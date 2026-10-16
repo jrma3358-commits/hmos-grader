@@ -166,7 +166,8 @@ function 루브릭작업(논제글: string, 계열: string, 총배점: number, �
       // 계열이 ④ 답구하기를 가른다 — 인문사회국어 = 급소 K마다 경로 추적, 수리 = Q 대상 값 일치
       let 뼈대 = derive_pieces(물음, k, 인식, 계열).map((c: any) => ({ ...c, 요소: judge_element(c, 계열) }));
       // 서술형 B — 교사 모범답안(소문항 순서)에서 엔진 ② 세우기 실체 줄 뒤 ~ ④ 급소 K 줄 앞을 줄마다 풀기 조각으로 (오종래 2026-10-16)
-      const 풀기구간 = 답안글.trim() && 계열 === '인문사회국어' ? split_solve_lines(답안글, 뼈대) : null;
+      //   수리 계열도 같다 (같은 날 확대 — 줄이 있으면 봉인2_풀기가 세우기 1:1 대신 줄 조각을 낸다)
+      const 풀기구간 = 답안글.trim() ? split_solve_lines(답안글, 뼈대) : null;
       if (풀기구간 && 풀기구간.풀기.length) {
         뼈대 = derive_pieces(물음, k, { ...인식, 교사풀기: 풀기구간.풀기 }, 계열).map((c: any) => ({ ...c, 요소: judge_element(c, 계열) }));
       }

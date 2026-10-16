@@ -284,6 +284,29 @@ describe('계열별 파트 구조 · ① 급소 K 제외', () => {
     assert.deepEqual(없음.map((c) => `${c.id}:${c.node?.id}`), 조각.map((c) => `${c.id}:${c.node?.id}`));
   });
 
+  // [오종래 2026-10-16] 수리도 교사 모범답안 줄 단위 — 줄이 있으면 줄 하나 = 풀기 하나(노드 없음 · 교사 판정), 없으면 ②와 1:1
+  it('수리 ③ 풀기 — 모범답안 풀기 줄이 있으면 줄마다 조각 (판정은 교사)', () => {
+    const 입력 = f2_input_from_v2(recognizeV2Analysis(수능17));
+    assert.ok(입력.ok);
+    const 뼈대 = derive_pieces(입력.물음, 입력.k, 입력.인식, '수리');
+    const 세우기 = 뼈대.find((c) => c.파트 === '세우기')!.node!.entity.trim();
+    const 답 = 뼈대.find((c) => c.파트 === '답구하기')!.node!.entity.trim();
+    const 답안 = [`${세우기}에서 f(x)=3x³+2x²+C이다.`, 'x=1을 넣으면 3+2+C=6이므로 C=1이다.', '따라서 f(x)=3x³+2x²+1이다.', `${답}은 24+8+1=33이다.`].join('\n');
+    const 구간 = split_solve_lines(답안, 뼈대);
+    assert.deepEqual(구간.풀기, ['x=1을 넣으면 3+2+C=6이므로 C=1이다.', '따라서 f(x)=3x³+2x²+1이다.']);
+    const 조각 = derive_pieces(입력.물음, 입력.k, { ...입력.인식, 교사풀기: 구간.풀기 }, '수리');
+    const 풀기 = 조각.filter((c) => c.파트 === '풀기');
+    assert.deepEqual(풀기.map((c) => c.풀기글), 구간.풀기);
+    assert.ok(풀기.every((c) => c.node === null && judge_element(c, '수리') === null));
+    // ①②④는 줄과 상관없이 그대로
+    assert.deepEqual(조각.filter((c) => c.파트 !== '풀기').map((c) => c.id), 뼈대.filter((c) => c.파트 !== '풀기').map((c) => c.id));
+    // 배점 — 수리도 네 파트 모두 배점 · 충족조건에 그 줄 · 채점은 교사
+    assert.deepEqual(allocate_points(조각, 10, '수리').미배정, []);
+    assert.match(specify_condition(풀기[0], '수리'), /모범답안 풀기-1: 「x=1을 넣으면/);
+    const 맥락 = { 답노드: [], 질문급소: 입력.k, 계열: '수리' as const, 루브릭: 조각 as any, 앞결과: new Map() };
+    assert.equal(봉인6_조각대조('아무 답', 풀기[0] as any, 맥락).결과, '판정불가');
+  });
+
   it('인문 ① = b·d·c·p — F3 요소는 노드 색 그대로', () => {
     const 입력 = f2_input_from_v2(recognizeV2Analysis('A국과 C국의 무역분쟁으로 인한 손실을 줄이기 위해, D국이 시행한 정책이 자국의 경제에 어떤 도움이 될 수 있는지 설명하시오.'));
     assert.ok(입력.ok);

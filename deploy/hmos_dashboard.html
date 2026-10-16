@@ -3554,7 +3554,7 @@ function renderC9() {
     const 소 = x.루브릭.소문항.map((s, j) => 모범소문항Html(s, i, j)).join('');
     // 서술형 B 5단계와 같은 맞추기 — 풀이 단계마다 줄을 바꾼 글로 8단계 풀기 조각을 다시 낸다 (2026-10-16)
     return `<div class="card"><div class="card-title">${i + 1}. ${esc(x.출처)}</div>
-      <div class="c-meta">풀이 단계마다 줄을 바꿔 쓰고 「모범답안으로 루브릭 맞추기」를 누르면, 엔진이 세우기 줄과 답 줄 사이 줄을 하나씩 8단계 풀기 조각으로 만듭니다${x.루브릭.계열 === '수리' ? ' (지금 엔진은 계열 인문사회국어에서만 줄을 나눕니다)' : ''}.</div>
+      <div class="c-meta">풀이 단계마다 줄을 바꿔 쓰고 「모범답안으로 루브릭 맞추기」를 누르면, 엔진이 세우기 줄과 답 줄 사이 줄을 하나씩 8단계 풀기 조각으로 만듭니다.</div>
       <button class="type-btn" id="c9-fit-${i}" style="margin-top:8px;" onclick="genC(${i}, true)">모범답안으로 루브릭 맞추기 (엔진)</button>
       ${소}</div>`;
   }).join('');
