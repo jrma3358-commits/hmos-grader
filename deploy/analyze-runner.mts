@@ -245,7 +245,8 @@ try {
     }));
     if (!조각들.length) throw Object.assign(new Error('루브릭 조각이 없습니다'), { name: '입력오류' });
     const 급소 = { 실체: String(req.급소?.실체 ?? ''), node: 노드of(req.급소?.노드 ?? 'k', req.급소?.실체 ?? '') };
-    const r = grade(학생답, 조각들, '', 급소, 계열);
+    // 앞 소문항들의 학생 답 — ② 방정식 세우기를 이 답에서 못 찾으면 앞 답에서 본다 (2026-10-16)
+    const r = grade(학생답, 조각들, '', 급소, 계열, String(req.앞학생답 ?? ''));
     out.단계.채점 = {
       계열,
       조각별: Object.values(r.파트별).flatMap((p: any) => p.조각별),

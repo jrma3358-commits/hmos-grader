@@ -21,8 +21,13 @@ export interface 다경로검증 {
   /** 검증된 경로 (O일 때) */
   경로?: 경로이름;
   /** 찾은 경로 꼴 하나하나의 검증 */
-  시도: { 경로: 경로이름; 식: string; 맞음: boolean; 까닭: string }[];
+  시도: { 경로: 경로이름; 식: string; 맞음: boolean; 까닭: string; 오류?: string }[];
+  /** 엔진이 이름 붙인 오류 — 「D와 D/4 혼동 — 공식 불완전 암기」 (2026-10-16) */
+  오류?: string;
 }
+
+/** D와 D/4 혼동 (오종래 2026-10-16) — b=2b′(짝수 b)인 문항에서 「D=…」로 쓰고 D/4 값을 넣었다 */
+export const D혼동오류 = 'D와 D/4 혼동 — 공식 불완전 암기';
 
 const 같다 = (x: number, y: number) => Math.abs(x - y) < 1e-9;
 const 정리 = (s: string) =>
@@ -235,25 +240,36 @@ export function verify_discriminant(학생답: string, 원: 문자이차식): �
     if (변.length > 1 && 변[변.length - 1] === '0') 변.pop(); // 「…=0」 조건
     const 식들 = 변.filter(Boolean);
     if (!식들.length) continue;
-    const 맞음 = 식들.every((e) =>
-      시료.every((k) => {
-        const q = 계수at(원, k);
-        const v = 넣어계산(e, { [원.문자]: k });
-        if (!q || v === null) return false;
-        const 기대 = 사등분 ? (q.b / 2) ** 2 - q.a * q.c : q.b ** 2 - 4 * q.a * q.c;
-        return 같다(v, 기대);
-      }),
-    );
+    const 모두 = (기대of: (q: 이차식) => number) =>
+      식들.every((e) =>
+        시료.every((k) => {
+          const q = 계수at(원, k);
+          const v = 넣어계산(e, { [원.문자]: k });
+          return !!q && v !== null && 같다(v, 기대of(q));
+        }),
+      );
+    const D값 = (q: 이차식) => q.b ** 2 - 4 * q.a * q.c;
+    const D4값 = (q: 이차식) => (q.b / 2) ** 2 - q.a * q.c;
+    const 맞음 = 모두(사등분 ? D4값 : D값);
+    // D와 D/4 혼동 (2026-10-16) — 「D=」로 썼는데 식이 D/4 값이고, b가 문자와 상관없는 짝수(b=2b′)일 때만
+    const b들 = 시료.map((k) => 계수at(원, k)?.b);
+    // b는 x=±1 값으로 푼 것이라 부동소수 끝수가 있다 — 반올림한 정수와 같고 짝수인지로 본다
+    const 짝수b = b들.every((b) => b !== undefined && 같다(b, b들[0]!) && 같다(b, Math.round(b)) && Math.round(b) % 2 === 0);
+    const 혼동 = !맞음 && !사등분 && 짝수b && 모두(D4값);
     시도.push({
       경로: 사등분 ? '판별식 D/4' : '판별식 D',
       식: 마디,
       맞음,
-      까닭: 맞음 ? `${사등분 ? '(b/2)²-ac' : 'b²-4ac'}와 같다 (원식 ${원.식}=0)` : `${사등분 ? '(b/2)²-ac' : 'b²-4ac'}와 다르다 (원식 ${원.식}=0)`,
+      까닭: 혼동
+        ? `D/4를 D로 표기 오류 — 식이 (b/2)²-ac(D/4) 값이다 (원식 ${원.식}=0)`
+        : 맞음 ? `${사등분 ? '(b/2)²-ac' : 'b²-4ac'}와 같다 (원식 ${원.식}=0)` : `${사등분 ? '(b/2)²-ac' : 'b²-4ac'}와 다르다 (원식 ${원.식}=0)`,
+      ...(혼동 ? { 오류: D혼동오류 } : {}),
     });
   }
   const 맞은 = 시도.find((t) => t.맞음);
   if (맞은) return { 결과: 'O', 경로: 맞은.경로, 시도 };
-  return { 결과: 시도.length ? 'X' : '판정불가', 시도 };
+  const 오류 = 시도.find((t) => t.오류)?.오류;
+  return { 결과: 시도.length ? 'X' : '판정불가', 시도, ...(오류 ? { 오류 } : {}) };
 }
 
 // ── 방정식 세우기 검증 (오종래 2026-10-16 q4 학생 2) — 학생이 세운 이차방정식(「x²+2x+k-1=0」 「-x+1=x²+x+k」)이

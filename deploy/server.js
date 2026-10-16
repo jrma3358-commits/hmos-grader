@@ -717,13 +717,13 @@ app.post('/api/verify',async(req,res)=>{
 // 인문 세우기는 판정불가로 오고 교사가 매긴다. 교사 수정·확정·여러 학생 목록은 대시보드가 한다.
 app.post('/api/grade',async(req,res)=>{
   // 소문항: /api/rubric 응답의 소문항 하나 그대로 (조각·급소) · 학생답: 학생 답안 글 · 계열: 8단계에서 고른 값
-  const {소문항:s,학생답,계열}=req.body||{};
+  const {소문항:s,학생답,계열,앞학생답}=req.body||{}; // 앞학생답: 단계형 앞 소문항들의 학생 답 (② 방정식 세우기 자동 적용, 2026-10-16)
   if(!s||!Array.isArray(s.조각)||!s.조각.length){res.status(400).json({error:'루브릭 조각이 있는 소문항이 필요합니다'});return;}
   if(!String(학생답||'').trim()){res.status(400).json({error:'학생 답안을 넣으세요'});return;}
   if(!['수리','인문사회국어'].includes(계열)){res.status(400).json({error:'계열(수리·인문사회국어)이 필요합니다'});return;}
   // 논제 = 공통 발문 + 소문항 글 — 엔진이 수학 문항인지 본다 (q4처럼 식이 공통 발문에만 있는 소문항, 2026-10-16)
   const 논제글=[s.공통발문,s.텍스트].filter(Boolean).join('\n')||'채점';
-  const r=await runAnalyze({파이프라인:'C',작업:'채점',논제:논제글,계열,학생답:String(학생답),조각:s.조각,급소:s.급소});
+  const r=await runAnalyze({파이프라인:'C',작업:'채점',논제:논제글,계열,학생답:String(학생답),앞학생답:String(앞학생답||''),조각:s.조각,급소:s.급소});
   if(!r.ok||!r.단계||!r.단계.채점){res.status(r.러너실패?500:400).json({error:엔진실패글('엔진 채점 실패: ',r)});return;}
   res.json({엔진:r.엔진,...r.단계.채점});
 });

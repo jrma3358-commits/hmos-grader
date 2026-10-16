@@ -1218,7 +1218,10 @@ async function 엔진채점() {
   if (전 && Object.keys(전.교사).length && !confirm('다시 채점하면 교사가 고친 판정이 지워집니다. 다시 채점할까요?')) return;
   await withBusy($('grade-btn'), '엔진 채점 중…', async () => {
     const { 채점목록, 채점입력, 답안, ...소문항 } = u.s;
-    const { out } = await postJSON('/api/grade', { 소문항, 학생답: 답, 계열: u.계열 });
+    // 앞 소문항들(단계형 u.앞 사슬)의 이 학생 답 — 엔진이 ② 방정식 세우기를 이 답에서 못 찾으면 앞 답에서 본다 (2026-10-16)
+    const 앞답들 = [];
+    for (let k = u.앞; k; k = (단위찾기(k) || {}).앞) { const r = 기록of(k, st.id); if (r && r.답) 앞답들.unshift(r.답); }
+    const { out } = await postJSON('/api/grade', { 소문항, 학생답: 답, 계열: u.계열, ...(앞답들.length ? { 앞학생답: 앞답들.join('\n') } : {}) });
     if (out.error) { alert('채점 실패: ' + out.error); return; }
     (G.채점[u.key] ??= {})[st.id] = { 답, 엔진: out, 교사: {}, 확정: null, 시각: new Date().toLocaleString('ko-KR') };
     delete G.초안[`${u.key}#${st.id}`];

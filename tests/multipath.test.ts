@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 import { grade } from '../src/rubric/g1.ts';
-import { evaluate, is_math_item, parse_parametric_quadratic, parse_poly, parse_quadratic, resolve_subject, roots, verify_discriminant, verify_equation, verify_multipath, 계열오류글 } from '../src/rubric/multipath.ts';
+import { evaluate, is_math_item, parse_parametric_quadratic, parse_poly, parse_quadratic, resolve_subject, roots, verify_discriminant, verify_equation, verify_multipath, D혼동오류, 계열오류글 } from '../src/rubric/multipath.ts';
 import type { 조각 } from '../src/rubric/types.ts';
 
 const 원 = { a: 1, b: 2, c: -3 };
@@ -170,5 +170,43 @@ describe('q4 학생 3 — 과정 오류 · 답 맞음', () => {
     assert.match(r.경고[0], /답은 맞으나 세우기 과정 검증 실패 \(세우기-2\)/);
     assert.equal(r.부분점수, 0.5);
     assert.deepEqual(grade('D/4=1-(k-1)=-k+2>0 ∴ k<2', 루브릭, '', k, '수리').경고, []);
+  });
+});
+
+// D와 D/4 혼동 (오종래 2026-10-16) · 앞 소문항 방정식 자동 적용
+describe('D와 D/4 혼동 · 앞 소문항 방정식', () => {
+  const 원식 = parse_parametric_quadratic('x²+x+k=-x+1, x²+2x+k-1=0')!;
+  const k = { 실체: 'k의 범위', node: { id: '공통-n6', entity: 'k의 범위', color: 'B', surface: '', switchId: '', index: 0 } } as any;
+  const 판별 = (배점 = 0.4): 조각 => ({ id: '세우기-2', 파트: '세우기', 요소: 'c', 수행질: null, 확인물음: '', 충족조건: '', is_중심: false, node: null, 모범조각: '', 배점, 줄글: 'D=-4k+8=0', 판별식원식: 원식 });
+  const 답: 조각 = { id: '답구하기-1', 파트: '답구하기', 요소: 'k', 수행질: null, 확인물음: '', 충족조건: '', is_중심: true, node: null, 모범조각: '', 배점: 0.6, 모범답: { 줄: '∴ k=2', 값: ['k=2'] } };
+  it('b=2(짝수)인 문항에서 「D=-k+2=0」 — D/4 값을 D로: X + 「D와 D/4 혼동 — 공식 불완전 암기」', () => {
+    const v = verify_discriminant('D=-k+2=0, k=2', 원식);
+    assert.equal(v.결과, 'X');
+    assert.equal(v.오류, D혼동오류);
+    assert.equal(D혼동오류, 'D와 D/4 혼동 — 공식 불완전 암기');
+  });
+  it('그냥 계산 오류(「D=1-(k+1)」)는 혼동이 아니다', () => {
+    assert.equal(verify_discriminant('D=1-(k+1)>0', 원식).오류, undefined);
+  });
+  it('b가 홀수면 D/4 공식이 맞지 않는 문항 — 혼동으로 보지 않는다', () => {
+    const 홀 = parse_parametric_quadratic('x²+3x+k=0')!;
+    assert.equal(verify_discriminant('D=9/4-k>0', 홀).오류, undefined);
+  });
+  it('G1 — ② X(감점) · ④ 값 맞으면 O 유지 · 경고에 오류 이름', () => {
+    const r = grade('D=-k+2=0, k=2', [판별(), 답], '', k, '수리');
+    const 세 = r.파트별.세우기.조각별[0];
+    assert.equal(세.결과, 'X');
+    assert.equal(세.오류, D혼동오류);
+    assert.match(세.판단근거, /^D\/4를 D로 표기 오류/);
+    assert.equal(r.파트별.답구하기.조각별[0].결과, 'O');
+    assert.ok(r.경고.includes(`세우기-2: ${D혼동오류}`));
+  });
+  it('앞 소문항 답의 방정식을 뒤 소문항 ② 방정식 세우기에 적용', () => {
+    const 방정식: 조각 = { ...판별(0.4), id: '세우기-1', 줄글: 'x²+x+k=-x+1, x²+2x+k-1=0', 판별식원식: undefined, 방정식원식: 원식 };
+    assert.equal(grade('D/4=-k+2=0 ∴ k=2', [방정식], '', k, '수리').파트별.세우기.조각별[0].결과, '판정불가');
+    const r = grade('D/4=-k+2=0 ∴ k=2', [방정식], '', k, '수리', 'x²+x+k=-x+1, x²+2x+k-1=0\nD/4=1-(k-1)>0 ∴ k<2').파트별.세우기.조각별[0];
+    assert.equal(r.결과, 'O');
+    assert.match(r.판단근거, /앞 소문항 답/);
+    assert.equal(grade('D/4=-k+2=0', [방정식], '', k, '수리', 'x²+2x+k+1=0').파트별.세우기.조각별[0].결과, 'X');
   });
 });
