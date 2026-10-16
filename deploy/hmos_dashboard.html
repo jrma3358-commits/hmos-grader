@@ -861,7 +861,7 @@
       <!-- 등록 안내 (오종래 2026-10-16) -->
       <div class="card" style="padding: 14px 18px; background: var(--accent-light); border-color: var(--accent-light); font-size: 14px; line-height: 1.7;">
         분석할 문항을 등록합니다. 여러 문항을 연속으로 등록하면 차례대로 분석할 수 있습니다.<br>
-        <strong>필수:</strong> 문항·정답(논술은 선택) / <strong>선택:</strong> 질문의 핵심·모범답안 <span style="color: var(--text-sub);">(입력할수록 분석 정확도가 높아집니다)</span>
+        <strong>필수:</strong> 문항 + 정답(단답형) · 질문의 핵심(서술형·논술형) / <strong>선택:</strong> 질문의 핵심(단답형) · 모범답안(서술형) <span style="color: var(--text-sub);">(입력할수록 분석 정확도가 높아집니다)</span>
       </div>
 
       <!-- 문항 목록 관리 — 아래 편집창은 목록에서 고른 문항(편집 중)을 고친다 -->
@@ -912,16 +912,19 @@
         <!-- 그림이 들어가는 편집기 — 글자는 [그림 n] 자리에 그림을 끼워 보이고, 꺼낼 때는 다시 [그림 n] 글자로 (regText) -->
         <div class="input-area" id="reg-input" contenteditable="true" spellcheck="false" onpaste="regPaste(event)" oninput="regInput()" data-placeholder="문항 원문을 붙여넣으세요.&#10;예) 4. 함수 f(x) = ... 가 실수 전체에서 연속일 때, 상수 a의 값은? [3점]"></div>
 
-        <!-- 교사 입력 (오종래 2026-10-16) — 정답(필수, 검증용) · 질문의 핵심(선택) · 모범답안(선택, 서술형 B만). 소문항이 여럿이면 줄 머리 (1) (2) -->
-        <div class="card-title" style="margin-top: 16px;">정답 <span class="badge warn" id="reg-answer-badge">필수</span></div>
-        <textarea class="input-area" id="reg-answer" style="min-height: 64px;" spellcheck="false" oninput="교사칸동기('정답', this.value)"
-          placeholder="예) sinx ≥ xcosx&#10;소문항이 여럿이면 줄 머리에 (1) (2)"></textarea>
-        <div class="c-meta" style="margin-top: 4px;" id="reg-answer-hint">최종 답·핵심 키워드를 쓰세요</div>
+        <!-- 교사 입력 (오종래 2026-10-16) — A: 정답(필수, 검증용) · 질문의 핵심(선택) / B·C: 질문의 핵심(필수), 정답 칸 없음 / B: 모범답안(선택).
+             소문항이 여럿이면 줄 머리 (1) (2) -->
+        <div id="reg-answer-wrap">
+          <div class="card-title" style="margin-top: 16px;">정답 <span class="badge warn">필수</span></div>
+          <textarea class="input-area" id="reg-answer" style="min-height: 64px;" spellcheck="false" oninput="교사칸동기('정답', this.value)"
+            placeholder="예) 3&#10;소문항이 여럿이면 줄 머리에 (1) (2)"></textarea>
+          <div class="c-meta" style="margin-top: 4px;">최종 답·핵심 키워드를 쓰세요</div>
+        </div>
 
-        <div class="card-title" style="margin-top: 16px;">질문의 핵심 <span class="badge muted">선택</span></div>
+        <div class="card-title" style="margin-top: 16px;">질문의 핵심 <span class="badge muted" id="reg-core-badge">선택</span></div>
         <input type="text" id="reg-core" spellcheck="false" oninput="교사칸동기('핵심', this.value)" placeholder="예) 증가, 감소"
           style="width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius); font: inherit;">
-        <div class="c-meta" style="margin-top: 4px;">엔진이 급소를 더 정확히 잡습니다 (선택)</div>
+        <div class="c-meta" style="margin-top: 4px;" id="reg-core-hint">엔진이 급소를 더 정확히 잡습니다 (선택)</div>
 
         <div id="reg-model-wrap" style="display: none;">
           <div class="card-title" style="margin-top: 16px;">모범답안 <span class="badge muted">선택</span></div>
@@ -1684,14 +1687,13 @@ function selectType(type, btn) {
       : '문항 원문을 넣으세요 — 등록하면 1단계 문항 입력으로 넘어갑니다';
   document.getElementById('reg-title').textContent = isC ? '논제 + 제시문' : '문항 원문';
   document.getElementById('reg-model-wrap').style.display = isB ? '' : 'none'; // 모범답안 칸은 서술형 B만 (2026-10-16)
-  // C 정답은 선택 — 핵심 주장·결론 키워드 (오종래 2026-10-16). A·B는 필수
-  const 필수 = !isC;
-  document.getElementById('reg-answer-badge').textContent = 필수 ? '필수' : '선택';
-  document.getElementById('reg-answer-badge').className = 'badge ' + (필수 ? 'warn' : 'muted');
-  document.getElementById('reg-answer-hint').textContent = 필수 ? '최종 답·핵심 키워드를 쓰세요' : '핵심 주장·결론 키워드를 쓰세요 (선택)';
-  document.getElementById('reg-answer').placeholder = 필수
-    ? '예) sinx ≥ xcosx\n소문항이 여럿이면 줄 머리에 (1) (2)'
-    : '예) 보호무역은 장기적으로 자국 경제에 손실\n소논제가 여럿이면 줄 머리에 (1-1) (1-2)';
+  // A: 정답 필수 · 질문의 핵심 선택 / B·C: 정답 칸 없음 · 질문의 핵심 필수 (오종래 2026-10-16)
+  const 핵심필수 = isB || isC;
+  document.getElementById('reg-answer-wrap').style.display = 핵심필수 ? 'none' : '';
+  document.getElementById('reg-core-badge').textContent = 핵심필수 ? '필수' : '선택';
+  document.getElementById('reg-core-badge').className = 'badge ' + (핵심필수 ? 'warn' : 'muted');
+  document.getElementById('reg-core-hint').textContent = 핵심필수 ? '엔진이 급소를 더 정확히 잡습니다 (필수)' : '엔진이 급소를 더 정확히 잡습니다 (선택)';
+  document.getElementById('reg-core').placeholder = isC ? '예) 보호무역, 대응조치 — 소논제가 여럿이면 (1-1) … (1-2) …' : '예) 증가, 감소';
   // A는 4 루브릭 · 5 모범답안을 숨기니 교사 확정을 4로 — 0 등록 → 1 입력 → 2 인식 → 3 평가 → 4 교사 확정 (오종래 2026-10-16)
   document.getElementById('nav-confirm-num').textContent = isA ? '4' : '6';
   document.getElementById('reg-input').dataset.placeholder = isC
@@ -2464,11 +2466,14 @@ function splitB(text) {
   };
 }
 
-/** 정답은 필수 (오종래 2026-10-16) — 비어 있으면 알리고 false */
-function 정답있나() {
-  if (document.getElementById('reg-answer').value.trim()) return true;
-  alert('정답을 넣으세요 — 최종 답·핵심 키워드 (필수)');
-  document.getElementById('reg-answer').focus();
+/** 필수 교사 입력 — A 정답, B·C 질문의 핵심 (오종래 2026-10-16). 비어 있으면 알리고 false */
+function 필수칸있나() {
+  const 칸 = 필수칸(selectedType);
+  if (!칸) return true;
+  const el = document.getElementById(칸 === '정답' ? 'reg-answer' : 'reg-core');
+  if (el.value.trim()) return true;
+  alert(칸 === '정답' ? '정답을 넣으세요 — 최종 답·핵심 키워드 (필수)' : '질문의 핵심을 넣으세요 — 핵심 개념·키워드 (필수)');
+  el.focus();
   return false;
 }
 
@@ -2476,7 +2481,7 @@ function registerReg() {
   if (selectedType === 'C-논술') return registerC();
   const 글 = regText().trim();
   if (!글) { alert('문항 원문을 넣으세요.'); return; }
-  if (!정답있나()) return;
+  if (!필수칸있나()) return;
   if (selectedType && selectedType.startsWith('B')) {
     const 나눔 = splitB(글);
     document.getElementById('thesis-input').value = 나눔.논제;
@@ -2497,6 +2502,7 @@ function registerReg() {
 function registerC() {
   const 글 = regText();
   if (!글.trim()) { alert('논제와 제시문을 넣으세요.'); return; }
+  if (!필수칸있나()) return;
   renderRegFigs(글);
   const 나눔 = splitRegistration(글);
   const 알림 = document.getElementById('reg-notice');
@@ -3203,7 +3209,7 @@ async function genB(맞추기 = false) {
   if (!맞추기 && 옛 && !confirm('다시 만들면 이 문항의 학생 채점과 모범답안이 지워집니다. 다시 만들까요?')) return;
   // 0단계 교사 입력 (2026-10-16) — 정답(검증)·질문의 핵심은 늘, 모범답안은 맞추기면 5단계 칸, 처음 생성이면 0단계 칸(소문항 「(1)」「(2)」 머리로 엔진이 나눈다)
   const m = 지금문항() || {};
-  const 교사 = { ...(String(m.정답 || '').trim() ? { 정답: m.정답 } : {}), ...(String(m.핵심 || '').trim() ? { 핵심: m.핵심 } : {}) };
+  const 교사 = { ...(정답씀(m.파이프라인) && String(m.정답 || '').trim() ? { 정답: m.정답 } : {}), ...(String(m.핵심 || '').trim() ? { 핵심: m.핵심 } : {}) };
   const 모범답안 = 맞추기 && 옛 ? 옛.소문항.map(s => 지금답안(s).trim() || null) : (String(m.모범답안 || '').trim() ? m.모범답안 : null);
   if (맞추기 && !(모범답안 && 모범답안.some(Boolean))) { alert('모범답안을 먼저 쓰세요 — 풀이 단계마다 줄을 바꿔서.'); return; }
   const 총 = (data.문항원문.match(/\[\s*총\s*(\d+(?:\.\d+)?)\s*점\s*\]/) || [])[1];
@@ -3333,7 +3339,7 @@ async function genC(i) {
       논제: x.텍스트, 계열: 고른.value, 총배점,
       ...(C.제시문.length ? { 제시문: C.제시문 } : {}),
       // 0단계 교사 입력 — 정답(검증)·질문의 핵심 (2026-10-16)
-      ...(String(m.정답 || '').trim() ? { 정답: m.정답 } : {}),
+      ...(정답씀(m.파이프라인) && String(m.정답 || '').trim() ? { 정답: m.정답 } : {}),
       ...(String(m.핵심 || '').trim() ? { 핵심: m.핵심 } : {}),
     });
     if (out.error) { alert('루브릭 생성 실패: ' + out.error); return; }
@@ -3479,8 +3485,8 @@ function 답안수정(i, j, 값) {
 // ── C 9단계 정답 검증 (오종래 2026-10-16) ── 정답은 채점 기준이 아니라 검증. 엔진(/api/verify)이 모범답안 문단을 문장으로 나눠
 //   답 문장(급소 핵심어가 마지막으로 나온 문장)과 0단계 정답을 대조한다. 잇기 직후와 교사 확정 때 돌리고, 어긋나면 교사 확인을 받는다.
 
-/** 0단계 정답 (편집 중 문항) */
-const 문항정답 = () => String((지금문항() || {}).정답 || '').trim();
+/** 0단계 정답 (편집 중 문항) — 정답 칸은 A만이라(2026-10-16) C에서는 늘 비어 검증하지 않는다 */
+const 문항정답 = () => { const m = 지금문항() || {}; return 정답씀(m.파이프라인) ? String(m.정답 || '').trim() : ''; };
 
 /** 엔진 정답 검증 → s.답안검증 {…결과, 글}. 정답이 없으면 지운다. 실패하면 null */
 async function 답안정답검증(i, j, 글) {
@@ -3496,7 +3502,7 @@ async function 답안정답검증(i, j, 글) {
 
 function 답안검증Html(s, i, j) {
   const v = s.답안검증;
-  if (!문항정답()) return '<div class="c-meta" style="margin-top:6px;">정답 검증 안 함 — 0단계 정답이 없습니다</div>';
+  if (!문항정답()) return ''; // 정답이 없으면(C는 정답 칸 없음) 검증 줄을 보이지 않는다
   if (!v) return '<div class="c-meta" style="margin-top:6px;">정답 검증 — 교사 확정 때 엔진이 모범답안 답 문장과 정답을 대조합니다</div>';
   if (v.글 !== 지금답안(s)) return '<div class="c-meta" style="margin-top:6px;"><span class="badge muted">정답 검증 다시 필요</span> 글을 고쳤습니다 — 교사 확정 때 다시 대조합니다</div>';
   if (v.결과 === '일치') return `<div class="c-meta" style="margin-top:6px;"><span class="badge ok">정답 검증 통과</span> 정답 「${esc(v.정답)}」 = 답 문장 「${esc(v.답줄글 || '')}」</div>`;
@@ -3564,21 +3570,25 @@ function 새문항(값 = {}) {
   return { id: n, 이름: `문항 ${n}`, 파이프라인: null, 원문: '', 그림: {}, 정답: '', 핵심: '', 모범답안: '', 상태: '미입력', 사유: '', 결과: null, ...값 };
 }
 
-/** 원문·파이프라인이 바뀐 뒤 — 원문·파이프라인·정답(필수, 2026-10-16)이 다 있으면 대기, 하나라도 없으면 미입력 */
+/** 원문·파이프라인이 바뀐 뒤 — 원문·파이프라인·필수 교사 입력(A 정답 · B·C 질문의 핵심, 2026-10-16)이 다 있으면 대기, 하나라도 없으면 미입력 */
 function 상태맞춤(m) {
-  m.상태 = m.원문.trim() && m.파이프라인 && (!정답필수(m.파이프라인) || String(m.정답 || '').trim()) ? '대기' : '미입력';
+  const 칸 = 필수칸(m.파이프라인);
+  m.상태 = m.원문.trim() && m.파이프라인 && (!칸 || String(m[칸] || '').trim()) ? '대기' : '미입력';
   m.사유 = '';
 }
 
-/** 정답이 필수인 파이프라인 — A·B. C 논술은 선택 (핵심 주장·결론 키워드, 오종래 2026-10-16) */
-const 정답필수 = 파이프라인 => !!파이프라인 && 파이프라인 !== 'C-논술';
+/** 파이프라인마다 필수 교사 입력 — A 정답, B·C 질문의 핵심 (정답 칸 없음, 오종래 2026-10-16) */
+const 필수칸 = 파이프라인 => (!파이프라인 ? null : 파이프라인.startsWith('A') ? '정답' : '핵심');
 
-/** 0단계 교사 입력(정답·핵심·모범답안) → 편집 중 문항. 정답은 미입력↔대기만 바꾼다 (완료·실패는 그대로 — 인식 결과와 상관없다) */
+/** 정답을 쓰는 파이프라인 — A만. B·C는 정답 칸이 없어 예전에 저장된 정답도 엔진에 보내지 않는다 */
+const 정답씀 = 파이프라인 => !!파이프라인 && 파이프라인.startsWith('A');
+
+/** 0단계 교사 입력(정답·핵심·모범답안) → 편집 중 문항. 필수 칸은 미입력↔대기만 바꾼다 (완료·실패는 그대로 — 인식 결과와 상관없다) */
 function 교사칸동기(칸, 값) {
   const m = 지금문항();
   if (!m || 목록.전환중) return;
   m[칸] = 값;
-  if (칸 === '정답' && (m.상태 === '미입력' || m.상태 === '대기')) {
+  if (칸 === 필수칸(m.파이프라인) && (m.상태 === '미입력' || m.상태 === '대기')) {
     const 전 = m.상태;
     상태맞춤(m);
     if (m.상태 !== 전) 목록그리기();
