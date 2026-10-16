@@ -69,9 +69,11 @@ describe('(c) ④ 값 직접 대조', () => {
     assert.equal(r.파트별.답구하기.조각별[0].결과, 'X');
     assert.equal(r.파트별.세우기.조각별[0].결과, '판정불가');
     assert.equal(r.부분점수, 0);
-    // 풀기 없음 → ④ X가 ② 세우기에 상한 (3 × 1/3 = 1, 2026-10-16)
-    assert.equal(r.파트별.세우기.상한, 1);
-    assert.equal(r.파트별.풀기.상한, null);
+    // ± 등식 풀기 규칙(2026-10-16) 뒤 — 이 학생은 「x = (-1 ± 2) / 2」 등 ± 등식을 써서 학생 풀기가 있다 → 정상 흐름, ② 상한 없음
+    //   (그 전에는 풀기 없음 → ④ X가 ② 세우기에 상한 1)
+    assert.equal(r.풀기있음, true);
+    assert.equal(r.파트별.세우기.상한, null);
+    assert.equal(r.파트별.풀기.상한, 0);
   });
   it('풀기 없는 수리 — 교사가 ②를 O로 매겨도 ④ X면 ②는 상한 1점', () => {
     const 상한 = 봉인4b_게이트(
@@ -146,5 +148,27 @@ describe('완전제곱식 다경로 수용 — 복부호 값', () => {
     const r = grade(학생3, 루브릭, '', k, '수리');
     assert.equal(r.파트별.답구하기.조각별[0].결과, 'O');
     assert.equal(r.부분점수, 2);
+  });
+});
+
+// 2026-10-16 — ±가 있는 등식도 풀기 조각 (「또는」 규칙에 추가). 「∴」 결론 줄은 그대로 풀기가 아니다
+describe('풀기 조각 인식 — ± 등식', () => {
+  const 학생3 = 'x²+2x-3=0 에서\n(x²+2x+1)-1-3=0\n(x+1)²=4, x+1=±√4\n∴ x=-1±2, x=1 또는 x=-3';
+  const k = { 실체: '두 근', node: { id: 'n1', entity: '두 근', color: 'B', surface: '', switchId: '', index: 0 } } as any;
+  const 루브릭: 조각[] = [
+    { id: '세우기-1', 파트: '세우기', 요소: 'c', 수행질: null, 확인물음: '', 충족조건: '', is_중심: false, node: null, 모범조각: '', 배점: 3, 줄글: '(x+3)(x-1)=0' },
+    { id: '답구하기-1', 파트: '답구하기', 요소: null, 수행질: null, 확인물음: '', 충족조건: '', is_중심: false, node: null, 모범조각: '', 배점: 2, 모범답: { 줄: '∴ x=1 또는 x=-3', 값: ['x=-3', 'x=1'] } },
+  ];
+  it('「x+1=±√4」 「x=-1±2」는 풀기, ± 없는 등식은 아니다', () => {
+    assert.deepEqual(solve_segments(학생3), ['x+1=±√4']);
+    assert.deepEqual(solve_segments('(x+1)²=4\nx=-1±2'), ['x=-1±2']);
+    const r = classify_math_lines('(x+1)²=4, x+1=±√4\n∴ x=1 또는 x=-3');
+    assert.deepEqual(r.세우기, ['(x+1)²=4']);
+    assert.deepEqual(r.풀기, ['x+1=±√4']);
+  });
+  it('학생 3 — 학생 풀기 인식, 게이트 정상 흐름', () => {
+    const r = grade(학생3, 루브릭, '', k, '수리');
+    assert.deepEqual(r.학생풀기, ['x+1=±√4']);
+    assert.equal(r.풀기있음, true);
   });
 });
