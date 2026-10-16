@@ -285,3 +285,23 @@ export function verify_equation(학생답: string, 원: 문자이차식): 다경
   if (맞은) return { 결과: 'O', 경로: 맞은.경로, 시도 };
   return { 결과: 시도.length ? 'X' : '판정불가', 시도 };
 }
+
+// ── 수학 문항 계열 고정 (오종래 2026-10-16) — 수학 문항은 수리 계열로만 채점한다 ──
+//   수학 문항 = 등호가 있고 x 항(「x²」 「2x」 「+x」 「x=」)이 있는 식이 문항 글에 있다.
+//   식 하나만으로는 보지 않는다 — 인문사회 논술(경제 「Q=100-2P」)에도 식이 나온다
+
+export const 계열오류글 = '이 문항은 수리 계열로 채점해야 합니다';
+
+export function is_math_item(글: string): boolean {
+  const s = 정리(글);
+  return /=/.test(s) && /(?<![a-zA-Z])x(?:²|[=+\-<>*/)])|\dx(?![a-zA-Z])|[=+\-(*/]x(?![a-zA-Z])/.test(s);
+}
+
+/** 요청 계열 → 실제 계열. 「자동」이면 수학 문항은 수리, 아니면 인문사회국어. 인문사회국어로 수학 문항을 넣으면 계열오류 */
+export function resolve_subject(요청: unknown, 글: string): '수리' | '인문사회국어' {
+  const 수학 = is_math_item(글);
+  if (요청 === '자동') return 수학 ? '수리' : '인문사회국어';
+  const 계열 = 요청 === '수리' ? '수리' : '인문사회국어';
+  if (계열 === '인문사회국어' && 수학) throw Object.assign(new Error(계열오류글), { name: '계열오류' });
+  return 계열;
+}

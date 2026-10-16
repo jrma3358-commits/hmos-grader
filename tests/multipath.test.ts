@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 import { grade } from '../src/rubric/g1.ts';
-import { evaluate, parse_parametric_quadratic, parse_poly, parse_quadratic, roots, verify_discriminant, verify_equation, verify_multipath } from '../src/rubric/multipath.ts';
+import { evaluate, is_math_item, parse_parametric_quadratic, parse_poly, parse_quadratic, resolve_subject, roots, verify_discriminant, verify_equation, verify_multipath, 계열오류글 } from '../src/rubric/multipath.ts';
 import type { 조각 } from '../src/rubric/types.ts';
 
 const 원 = { a: 1, b: 2, c: -3 };
@@ -122,5 +122,27 @@ describe('방정식 세우기 검증', () => {
     assert.equal(r.결과, 'O');
     assert.equal(r.다경로, undefined);
     assert.equal(grade('x²+2x+k+1=0', [조각1], '', k, '수리').파트별.세우기.조각별[0].결과, 'X');
+  });
+});
+
+// 수학 문항 계열 고정 (오종래 2026-10-16) — 수학 문항은 수리로만. 인문사회국어로 오면 계열오류, 「자동」이면 엔진이 고른다
+describe('수학 문항 계열 고정', () => {
+  it('x 항이 있는 식이 있으면 수학 문항 — 경제 식 · 논술 발문은 아니다', () => {
+    assert.equal(is_math_item('이차방정식 x²+2x-3=0의 두 근을 구하고'), true);
+    assert.equal(is_math_item('이차함수 y=x²+x+k와 직선 y=-x+1이'), true);
+    assert.equal(is_math_item('함수 f(x)=2x+1일 때'), true);
+    assert.equal(is_math_item('수요함수 Q=100-2P일 때 균형 가격을 구하시오.'), false);
+    assert.equal(is_math_item('국민소득 Y=C+I+G에서'), false);
+    assert.equal(is_math_item('(가)의 관점에서 (나)를 비판하시오.'), false);
+  });
+  it('인문사회국어 + 수학 문항 → 「이 문항은 수리 계열로 채점해야 합니다」', () => {
+    assert.throws(() => resolve_subject('인문사회국어', 'x²+2x-3=0'), (e: Error) => e.name === '계열오류' && e.message === 계열오류글);
+    assert.equal(계열오류글, '이 문항은 수리 계열로 채점해야 합니다');
+  });
+  it('수리는 그대로 · 「자동」은 수학이면 수리, 아니면 인문사회국어 · 인문 문항의 인문은 그대로', () => {
+    assert.equal(resolve_subject('수리', 'x²+2x-3=0'), '수리');
+    assert.equal(resolve_subject('자동', 'x²+2x-3=0'), '수리');
+    assert.equal(resolve_subject('자동', '철수의 방법으로 설명하시오.'), '인문사회국어');
+    assert.equal(resolve_subject('인문사회국어', '철수의 방법으로 설명하시오.'), '인문사회국어');
   });
 });

@@ -704,7 +704,7 @@ function 단위그리기() {
              <label><input type="radio" name="gy-${esc(u.key)}" value="인문사회국어"> 인문사회국어</label>
              <label>배점 <input type="number" min="0.5" step="0.5" data-score="${esc(u.key)}" value="${기본배점(u.x.텍스트)}" style="width:70px;"></label>
            </div>`
-        : '<div class="meta">계열 인문사회국어 (서술형 고정)</div>';
+        : '<div class="meta">계열 자동 — 수학 문항은 수리, 그 밖은 인문사회국어 (엔진이 정함)</div>';
       return `<tr>
         <td></td>
         <td><strong>${esc(u.문항)}</strong> ${esc(u.라벨)}${u.종류 === 'C' ? `<div class="meta" style="white-space:pre-wrap;">${esc(u.x.텍스트)}</div>` : ''}</td>
@@ -829,7 +829,8 @@ async function 루브릭생성(btn) {
   } else {
     const 총 = (u.d.문항원문.match(/\[\s*총\s*(\d+(?:\.\d+)?)\s*점\s*\]/) || [])[1];
     const 제시문 = u.d.B입력 && u.d.B입력.제시문;
-    body = { 논제: u.d.문항원문, 계열: '인문사회국어', 총배점: 총 ? Number(총) : 10, 이어받기: true,
+    // 계열 「자동」 — 수학 문항이면 엔진이 수리로 (오종래 2026-10-16 수학 문항 계열 고정)
+    body = { 논제: u.d.문항원문, 계열: '자동', 총배점: 총 ? Number(총) : 10, 이어받기: true,
       ...(제시문 ? { 제시문: [{ id: '제시문', 텍스트: 제시문 }] } : { 공통자료: true }) };
   }
   await withBusy(btn, '생성 중… (1~2분)', async () => {

@@ -39,7 +39,7 @@ const { split_solve_lines, classify_math_lines } = await load('src/rubric/solve_
 // 문항 등록창의 정답(검증) · 출제의도(루브릭 참고 표시만) · 모범답안 소문항 나누기 (오종래 2026-10-16)
 const { item_portion, verify_answer, sub_item_points } = await load('src/rubric/teacher_input.ts');
 // 수리 다경로 검증 — 문항의 이차방정식(원식)을 ② 세우기 줄 조각에 붙인다 (오종래 2026-10-16)
-const { parse_quadratic } = await load('src/rubric/multipath.ts');
+const { parse_quadratic, resolve_subject } = await load('src/rubric/multipath.ts');
 // 8단계 학생 답안 채점 — 엔진 G1 (봉인⑥ 조각 대조 · 봉인④-b 게이트, 계열별, 오종래 2026-10-14)
 const { grade } = await load('src/rubric/g1.ts');
 const { 게이트사슬, 상한비 } = await load('src/rubric/sealed/g1.ts');
@@ -226,7 +226,8 @@ try {
 
   if (req.작업 === '채점') {
     // ── 8단계 학생 답안 채점 ── 루브릭(러너 루브릭 작업 출력의 조각)을 엔진 조각으로 되살려 G1에 넣는다. Claude는 쓰지 않는다
-    const 계열 = req.계열 === '수리' ? '수리' : '인문사회국어';
+    // 수학 문항은 수리로만 — 인문사회국어로 들어오면 계열오류 (오종래 2026-10-16). 논제 = 공통 발문 + 소문항 글 (서버가 잇는다)
+    const 계열 = resolve_subject(req.계열, String(req.논제 ?? ''));
     const 학생답 = String(req.학생답 ?? '');
     if (!학생답.trim()) throw Object.assign(new Error('학생 답안이 비어 있습니다'), { name: '입력오류' });
     const 노드of = (id: string | null, 실체: string | null) => (id ? { id, entity: 실체 ?? '', color: null, surface: '', switchId: '', index: 0 } : null);
@@ -268,7 +269,8 @@ try {
     out.단계.소논제 = split_thesis(String(req.논제 ?? 문항원문)).map((s: any) => ({ 번호: s.번호, 텍스트: s.텍스트, 공통발문: s.공통발문, 참조: s.참조 }));
   } else if (req.작업 === '루브릭') {
     // ── 8단계 루브릭만 ── 인식·제시문·정교화는 다시 돌리지 않는다
-    const 계열 = req.계열 === '수리' ? '수리' : '인문사회국어';
+    // 수학 문항은 수리로만 (오종래 2026-10-16) — 「자동」이면 엔진이 고르고, 인문사회국어로 수학 문항이 오면 계열오류
+    const 계열 = resolve_subject(req.계열, String(req.논제 ?? 문항원문));
     const 총배점 = Number(req.총배점) > 0 ? Number(req.총배점) : 10;
     out.단계.루브릭 = { 계열, 총배점, 소문항: 루브릭작업(String(req.논제 ?? 문항원문), 계열, 총배점, 제시문목록, !!req.공통자료, !!req.이어받기, req.모범답안 ?? [], req.정답 ?? '', req.핵심 ?? '') };
   } else if (파이프라인 === 'C') {
