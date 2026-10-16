@@ -409,6 +409,98 @@ async function 조각문장(user){
   return {문장:Object.fromEntries(out.pieces.map(p=>[String(p.id),String(p.text||'').trim()])),usage:msg.usage};
 }
 
+/** 엔진 조각 → Claude에 보내는 표 */
+const 조각표of=(c,급소)=>({id:c.id,파트:c.파트,요소:c.요소,실체:조각실체(c,급소),...(c.제시문?{제시문단락:`[${c.제시문.단락}]`}:{}),...(c.근거?{근거문장:`[${c.근거.단락}] ${c.근거.문장}`}:{}),...(c.경로?{경로:c.경로.map(p=>`${p.색}「${p.실체}」${p.단락?`[${p.단락}]`:''}`).join(' → '),급소핵심어:K글자(c,급소)}:{}),확인물음:c.확인물음,충족조건:c.충족조건});
+
+// ── 모범답안 자동 생성 (오종래 2026-10-16) — 서술형 B에 교사 모범답안이 없을 때 ──
+// 엔진 인식(5색 노드·급소)과 엔진 조각(풀기 없음)을 바탕으로 Claude가 줄바꿈 원칙대로 모범답안을 쓴다:
+//   앞 줄 = 근거·세우기 (세우기 실체 글자) · 풀이 단계 하나 = 한 줄 · 마지막 줄 = 답 (급소 핵심어 글자).
+// 풀기 조각은 이 글을 엔진 split_solve_lines가 나눈다 — Claude는 글만 쓴다. 생성된 글은 5단계 모범답안 칸에 들어가 교사가 확인·수정한다
+const LINES_SYSTEM=`너는 HMOS 서술형 모범답안 작성기다. HMOS 엔진이 논제에서 인식한 5색 노드·급소와 루브릭 조각을 바탕으로, 학생이 쓰는 모범답안을 줄 단위로 쓴다.
+
+줄바꿈 원칙 (엔진이 줄로 풀이 단계를 나눈다 — 반드시 지킨다):
+- 첫 줄: 근거와 세우기 — 제시문(자료) 근거를 대고 논제의 조건을 세운다. 「세우기 실체」 글자를 그대로 넣는다.
+- 가운데 줄: 풀이 단계 하나에 한 줄. 세운 조건에서 답까지 가는 과정을 단계마다 줄을 바꿔 쓴다. 풀이 단계는 한 줄 이상. 가운데 줄에는 「세우기 실체」 글자를 다시 쓰지 않는다(「이」「그」 등으로 받는다).
+- 마지막 줄: 답 — 논제가 요구한 것에 직접 답한다. 「급소핵심어」 글자를 그대로 넣고, 경로 앞 표지 가운데 하나 이상의 글자도 넣는다.
+
+지킬 것:
+- 근거는 주어진 논제·자료 안에서만 가져온다. 자료에 없는 사실·용어를 지어내지 않는다. 계산·추론은 논제가 시킨 풀이만 한다.
+- 앞 소문항 모범답안이 주어지면(단계형) 앞 결과를 이어받되 되풀이하지 않는다.
+- 학생 답안 문장으로 쓴다. 채점 용어(근거대기·세우기·풀기·답구하기·조각·급소·루브릭·채점·충족조건)와 「논지를 세운다」 같은 채점 틀 말투를 쓰지 않는다. 줄 머리에 번호·라벨을 붙이지 않는다.
+- 모든 출력은 한국어.`;
+
+const LINES_FORMAT={
+  type:'json_schema',
+  schema:{type:'object',additionalProperties:false,required:['lines'],properties:{lines:{type:'array',items:{type:'string'},description:'모범답안 줄 — 첫 줄 근거·세우기, 가운데 풀이 단계마다 한 줄, 마지막 줄 답'}}},
+};
+
+const 깨끗이=t=>String(t??'').trim().replace(/^[,，]\s*/,'');
+
+/** 생성된 줄 점검 — 엔진 split_solve_lines가 풀기를 나눌 수 있는 꼴인가 (답 줄·세우기 줄·풀이 줄·채점 용어) */
+function 줄점검(줄,s){
+  const 답=s.조각.filter(c=>c.파트==='답구하기').map(c=>깨끗이(K글자(c,s.급소))).filter(Boolean);
+  const 세우기=s.조각.filter(c=>c.파트==='세우기').map(c=>깨끗이(c.근거?c.근거.단락급소:c.실체)).filter(Boolean);
+  const 마지막=줄[줄.length-1]||'';
+  // 엔진은 세우기 실체가 답 줄 앞에서 마지막으로 나온 줄까지를 앞 구간으로 본다 — 가운데 줄에 다시 나오면 풀이 줄이 줄어든다
+  const 가운데=줄.slice(1,-1);
+  const 문제=[];
+  if(줄.length<3)문제.push(`줄이 ${줄.length}개다 — 근거·세우기 줄, 풀이 단계 줄(하나 이상), 답 줄로 3줄 이상 쓴다`);
+  if(답.length&&!답.some(t=>마지막.includes(t)))문제.push(`마지막 줄에 급소핵심어가 없다: ${답.map(t=>`「${t}」`).join(' ')}`);
+  if(세우기.length&&!세우기.some(t=>(줄[0]||'').includes(t)))문제.push(`첫 줄에 세우기 실체가 없다: ${세우기.map(t=>`「${t}」`).join(' ')}`);
+  const 겹친=가운데.map((l,i)=>세우기.some(t=>l.includes(t))?i+2:0).filter(Boolean);
+  if(겹친.length)문제.push(`세우기 실체(${세우기.map(t=>`「${t}」`).join(' ')})가 풀이 줄(${겹친.join('·')}째 줄)에 다시 나온다 — 풀이 줄에서는 다른 말(「이」「그」 등)로 받는다`);
+  const 용어=채점용어.filter(w=>줄.some(l=>l.includes(w))&&![...답,...세우기].some(t=>t.includes(w)));
+  if(용어.length)문제.push(`채점 용어가 남았다: ${용어.map(w=>`「${w}」`).join(' ')}`);
+  return 문제;
+}
+
+async function 줄쓰기(user){
+  let msg;
+  try{
+    msg=await client.beta.messages.create({
+      model:MODEL,max_tokens:8000,betas:['server-side-fallback-2026-07-01'],fallbacks:'default',
+      system:LINES_SYSTEM,output_config:{format:LINES_FORMAT},messages:[{role:'user',content:user}],
+    });
+  }catch(e){
+    if(e instanceof Anthropic.AuthenticationError)throw new Error('API 키 인증 실패 — .env의 ANTHROPIC_API_KEY 확인');
+    if(e instanceof Anthropic.RateLimitError)throw new Error('API 요청 한도 초과 — 잠시 뒤 다시');
+    if(e instanceof Anthropic.APIError)throw new Error(`Claude API 오류 ${e.status}: ${e.message}`);
+    throw new Error('Claude API 연결 실패: '+e.message);
+  }
+  if(msg.stop_reason==='refusal')throw new Error(`모델이 거절함 (${(msg.stop_details&&msg.stop_details.category)||'분류 없음'})`);
+  if(msg.stop_reason==='max_tokens')throw new Error('응답이 max_tokens에서 잘림');
+  let out=null;
+  try{out=JSON.parse(msg.content.filter(b=>b.type==='text').map(b=>b.text).join(''));}catch(_){}
+  if(!out||!Array.isArray(out.lines))throw new Error(`모범답안 줄을 받지 못함 (stop_reason: ${msg.stop_reason})`);
+  return {줄:out.lines.map(l=>String(l||'').replace(/\s*\n\s*/g,' ').trim()).filter(Boolean),usage:msg.usage};
+}
+
+/** 소문항 하나 — 엔진 인식·조각 → Claude 줄 모범답안 → 줄 점검 → 어긋나면 다시 (2회까지) */
+async function 줄모범답안(s,{논제,제시문,계열,앞답안}){
+  const 바탕=[
+    `계열: ${계열}`,
+    `이 소문항:\n${s.공통발문?s.공통발문+'\n':''}${s.번호?`(${s.번호}) `:''}${s.텍스트}`,
+    `전체 논제:\n${논제}`,
+    Array.isArray(제시문)&&제시문.length?`제시문:\n${제시문.map(p=>(/^[가-하]$/.test(p.id)?`[${p.id}] `:'')+p.텍스트).join('\n\n')}`:'',
+    앞답안?`앞 소문항 모범답안 (단계형 — 앞 결과를 이어받는다):\n${앞답안}`:'',
+    s.인식?`엔진 5색 인식 (조합 ${s.인식.조합||'—'}):\n${s.인식.노드.map(n=>`- ${n.색} 「${n.실체}」`).join('\n')}`:'',
+    `급소(엔진): 「${조각실체({},s.급소)}」`,
+    `세우기 실체 (첫 줄에): ${[...new Set(s.조각.filter(c=>c.파트==='세우기').map(c=>깨끗이(c.근거?c.근거.단락급소:c.실체)).filter(Boolean))].map(t=>`「${t}」`).join(' ')||'(없음)'}`,
+    `급소핵심어 (마지막 줄에): ${[...new Set(s.조각.filter(c=>c.파트==='답구하기').map(c=>깨끗이(K글자(c,s.급소))).filter(Boolean))].map(t=>`「${t}」`).join(' ')||'(없음)'}`,
+    `엔진 루브릭 조각 (풀기 조각은 네가 쓴 풀이 줄로 엔진이 만든다):\n${JSON.stringify(s.조각.map(c=>조각표of(c,s.급소)),null,1)}`,
+  ].filter(Boolean).join('\n\n');
+  const 사용=[];
+  let 줄=[],문제=[],시도=0;
+  while(시도<=루브릭재시도){
+    const user=시도===0?바탕:`${바탕}\n\n앞서 쓴 모범답안 줄:\n${줄.map((l,i)=>`${i+1}. ${l}`).join('\n')}\n\n고칠 것:\n${문제.map(x=>`- ${x}`).join('\n')}\n\n고쳐서 다시 쓴다.`;
+    const r=await 줄쓰기(user);
+    사용.push(r.usage);
+    줄=r.줄;문제=줄점검(줄,s);시도++;
+    if(!문제.length)break;
+  }
+  return {글:줄.join('\n'),시도,문제,usage:사용};
+}
+
 /** 소문항 하나 — 조각 문장 → 충족 확인 → 못 채운 조각만 다시 (2회까지) → 모범답안 */
 async function 소문항모범답안(s,{논제,제시문,계열}){
   const 조각표=c=>({id:c.id,파트:c.파트,요소:c.요소,실체:조각실체(c,s.급소),...(c.제시문?{제시문단락:`[${c.제시문.단락}]`}:{}),...(c.근거?{근거문장:`[${c.근거.단락}] ${c.근거.문장}`}:{}),...(c.경로?{경로:c.경로.map(p=>`${p.색}「${p.실체}」${p.단락?`[${p.단락}]`:''}`).join(' → '),급소핵심어:K글자(c,s.급소)}:{}),확인물음:c.확인물음,충족조건:c.충족조건,엔진모범조각틀:c.모범조각틀});
@@ -467,8 +559,9 @@ app.post('/api/rubric',async(req,res)=>{
   // 모범답안: 서술형 B — 소문항 순서대로 교사 모범답안 글. 세우기 이후 ~ 답구하기 이전 줄이 풀기 조각이 된다 (오종래 2026-10-16)
   //   한 칸 글(문항 등록창)도 받는다 — 소문항 「(1)」「(2)」 줄 머리로 엔진이 나눈다
   // 정답: 검증용(채점 기준 아님) — 모범답안 답구하기 줄과 대조해 어긋나면 교사 확인 · 핵심: 질문의 핵심 — 급소가 서지 않을 때 엔진 노드 고르기 (오종래 2026-10-16)
-  const {논제,계열,총배점,제시문,공통자료,이어받기,모범답안,정답,핵심}=req.body||{};
-  const 글칸=x=>Array.isArray(x)?x.map(v=>v==null?null:String(v)):typeof x==='string'&&x.trim()?x:null;
+  // 자동답안: 서술형 B — 모범답안이 없으면 엔진 인식·조각으로 Claude가 줄 모범답안을 쓰고, 그 글로 엔진 루브릭을 다시 돌려 풀기 조각을 낸다 (오종래 2026-10-16)
+  const {논제,계열,총배점,제시문,공통자료,이어받기,모범답안,정답,핵심,자동답안}=req.body||{};
+  const 글칸=x=>Array.isArray(x)?(x.some(v=>v!=null&&String(v).trim())?x.map(v=>v==null?null:String(v)):null):typeof x==='string'&&x.trim()?x:null;
   const t=String(논제||'').trim();
   if(!t){res.status(400).json({error:'확정 논제가 필요합니다'});return;}
   if(!['수리','인문사회국어'].includes(계열)){res.status(400).json({error:'계열(수리·인문사회국어)을 골라야 합니다'});return;}
@@ -477,10 +570,28 @@ app.post('/api/rubric',async(req,res)=>{
 
   // 제시문 — 인문논술 세우기 조각(연결 단락의 문장)을 엔진이 세는 데 쓴다
   // 공통자료: 서술형 B — 소문항 공통발문의 대화·자료를 제시문으로 (오종래 2026-10-14)
-  const r=await runAnalyze({파이프라인:'C',작업:'루브릭',논제:t,계열,총배점:배점,...(Array.isArray(제시문)&&제시문.length?{제시문}:{}),...(공통자료?{공통자료:true}:{}),...(이어받기?{이어받기:true}:{}),...(글칸(모범답안)?{모범답안:글칸(모범답안)}:{}),...(글칸(정답)?{정답:글칸(정답)}:{}),...(글칸(핵심)?{핵심:글칸(핵심)}:{})});
-  if(!r.ok||!r.단계||!r.단계.루브릭){res.status(r.러너실패?500:400).json({error:'엔진 루브릭 실패: '+((r.error&&r.error.사유)||'알 수 없음')});return;}
+  const 요청=답안=>({파이프라인:'C',작업:'루브릭',논제:t,계열,총배점:배점,...(Array.isArray(제시문)&&제시문.length?{제시문}:{}),...(공통자료?{공통자료:true}:{}),...(이어받기?{이어받기:true}:{}),...(글칸(답안)?{모범답안:글칸(답안)}:{}),...(글칸(정답)?{정답:글칸(정답)}:{}),...(글칸(핵심)?{핵심:글칸(핵심)}:{})});
+  const 실패=r=>!r.ok||!r.단계||!r.단계.루브릭;
+  let r=await runAnalyze(요청(모범답안));
+  if(실패(r)){res.status(r.러너실패?500:400).json({error:'엔진 루브릭 실패: '+((r.error&&r.error.사유)||'알 수 없음')});return;}
   const 소문항=[];
   try{
+    // 모범답안 자동 생성 — 교사 모범답안이 없을 때만. 소문항 순서대로, 단계형이면 앞 생성 글을 이어받는다
+    if(자동답안&&!글칸(모범답안)){
+      const 생성=[];
+      let 앞=null;
+      for(const s of r.단계.루브릭.소문항){
+        if(!s.조각||!s.조각.length){생성.push(null);continue;}
+        const g=await 줄모범답안(s,{논제:t,제시문,계열,앞답안:이어받기?앞:null});
+        생성.push(g);앞=g.글;
+      }
+      if(생성.some(Boolean)){
+        const r2=await runAnalyze(요청(생성.map(g=>g?g.글:null)));
+        if(실패(r2)){res.status(r2.러너실패?500:400).json({error:'엔진 루브릭 실패 (생성 모범답안): '+((r2.error&&r2.error.사유)||'알 수 없음')});return;}
+        r2.단계.루브릭.소문항.forEach((s,j)=>{if(생성[j])s.자동답안={시도:생성[j].시도,문제:생성[j].문제,usage:생성[j].usage};});
+        r=r2;
+      }
+    }
     // Claude 호출도 소문항마다 하나씩 차례로
     for(const s of r.단계.루브릭.소문항){
       소문항.push(s.조각&&s.조각.length?await 소문항모범답안(s,{논제:t,제시문,계열}):s);

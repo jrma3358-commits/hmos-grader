@@ -184,6 +184,8 @@ function 루브릭작업(논제글: string, 계열: string, 총배점: number, �
       return {
         ...소,
         급소: { 실체: k.실체, 노드: k.node.id, ...(핵심으로 ? { 핵심으로: true } : {}) },
+        // 5색 인식 — 모범답안이 없을 때 Claude가 이 인식·조각으로 모범답안을 쓴다 (오종래 2026-10-16)
+        인식: { 조합: s.a.graph.combination, 노드: s.a.graph.nodes.map((x: any) => ({ 색: x.color, 실체: x.entity })) },
         ...(답안글.trim() ? { 모범답안글: 답안글 } : {}),
         ...(정답몫.trim() ? { 정답검증: verify_answer(정답몫, 답안글, 뼈대) } : {}),
         물음,

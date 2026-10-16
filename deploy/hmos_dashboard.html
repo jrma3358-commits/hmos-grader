@@ -930,7 +930,7 @@
           <div class="card-title" style="margin-top: 16px;">모범답안 <span class="badge muted">선택</span></div>
           <textarea class="input-area" id="reg-model" style="min-height: 140px;" spellcheck="false" oninput="교사칸동기('모범답안', this.value)"
             placeholder="(1)&#10;근거·세우기 …&#10;풀이 단계 1 …&#10;풀이 단계 2 …&#10;답 …&#10;&#10;(2)&#10;…"></textarea>
-          <div class="c-meta" style="margin-top: 4px;">풀이 단계마다 줄을 바꿔 쓰면 풀기 조각이 생깁니다 (선택)</div>
+          <div class="c-meta" style="margin-top: 4px;">풀이 단계마다 줄을 바꿔 쓰면 분석 시작과 함께 풀기 조각이 생깁니다. 비워 두면 엔진 인식으로 Claude가 모범답안을 써서 5단계에 넣습니다 (선택)</div>
         </div>
 
         <div class="reg-row">
@@ -1760,6 +1760,12 @@ async function runAnalysis() {
     renderAll(currentData);
     목록완료({ AB: currentData }, B입력 ? [B입력.제시문, B입력.논제].filter(Boolean).join('\n\n') : q);
     showTab(1);
+    // 서술형 B — 분석 시작과 함께 4 루브릭 · 5 모범답안까지 (모범답안 있으면 그 글, 없으면 자동 생성, 오종래 2026-10-16)
+    if (isB) {
+      btn.textContent = '루브릭·모범답안 생성 중… (2~3분)';
+      await B자동루브릭(currentData, 지금문항());
+      if (currentData.B루브릭오류) alert('인식은 끝났지만 루브릭 자동 생성에 실패했습니다: ' + currentData.B루브릭오류);
+    }
   } catch (e) {
     목록실패('서버 연결 실패: ' + e.message, q);
     alert('서버 연결 실패: ' + e.message);
@@ -3186,8 +3192,10 @@ function renderB4() {
     <div class="c-meta">계열 인문사회국어 · 답구하기 = 급소 경로 흔적. 소문항 배점은 소문항의 「[N점]」(없으면 문항 「[총 N점]」, 그것도 없으면 10).
       세우기 = 공통 자료(대화)에서 「~의 방법으로」가 지목한 화자의 줄.
       풀기 = 5 모범답안에서 세우기 이후 ~ 답구하기 이전의 줄 하나에 조각 하나 (5에서 「모범답안으로 루브릭 맞추기」) — 배점은 근거·세우기·답구하기 몫을 뺀 나머지를 풀기 단계 수로 나눔, 판정은 교사.</div>
-    ${r ? '' : '<div class="c-meta" style="margin-top:8px;">아래 버튼을 눌러 루브릭을 생성하세요.</div>'}
-    <button class="type-btn" id="b-gen" style="margin-top:8px;" onclick="genB()">${r ? '루브릭 다시 생성' : '루브릭 생성'} (엔진 조각 → Claude 문장)</button>
+    ${currentData.B루브릭생성중 ? `<div class="c-meta" style="margin-top:8px;">분석 시작과 함께 루브릭을 만드는 중입니다 — ${String((지금문항() || {}).모범답안 || '').trim() ? '등록창 모범답안을 줄바꿈으로 나눠 풀기 조각으로' : '모범답안이 없어 엔진 인식(5색·급소)으로 Claude가 모범답안을 쓰고 줄바꿈으로 풀기 조각으로'} (2~3분)</div>`
+      : currentData.B루브릭오류 ? `<div class="flag-box" style="margin-top:8px;">자동 루브릭 생성 실패: ${esc(currentData.B루브릭오류)} — 아래 버튼으로 다시 만드세요</div>`
+      : r ? '' : '<div class="c-meta" style="margin-top:8px;">아래 버튼을 눌러 루브릭을 생성하세요.</div>'}
+    <button class="type-btn" id="b-gen" style="margin-top:8px;" onclick="genB()"${currentData.B루브릭생성중 ? ' disabled' : ''}>${r ? '루브릭 다시 생성' : '루브릭 생성'} (엔진 조각 → Claude 문장)</button>
     ${r ? `<div class="c-meta" style="margin-top:12px;">파트 지수 2:3:2:2 (봉인④) · 파트 배점 ÷ 조각 수 · 충족 경계 급소 도달 · 엔진 ${esc(r.엔진 ? r.엔진.commit : '—')}</div>
       ${r.소문항.map((s, j) => 루브릭소문항Html(s, -1, j)).join('')}` : ''}
   </div>`;
@@ -3202,29 +3210,66 @@ const 조각서명 = s => JSON.stringify((s.조각 || []).map(c => [c.id, c.배�
  *   세우기 이후 ~ 답구하기 이전 줄을 풀기 조각으로 (엔진 split_solve_lines, 라벨 없음).
  *   모범답안은 그대로 둔다. 조각(id·배점·충족조건)이 바뀐 소문항의 학생 채점만 지운다 — 있으면 묻는다
  */
+/**
+ * 서술형 B 루브릭 요청 (오종래 2026-10-16) — 0단계 교사 입력(정답·출제의도)과 함께.
+ * 모범답안이 있으면 그 글을 줄바꿈으로 나눠 풀기 조각으로, 없으면 서버가 엔진 인식(5색·급소)·조각으로 Claude 모범답안을 줄 단위로 써서
+ * 같은 줄바꿈 원칙으로 풀기 조각을 낸다 (자동답안). 실패하면 Error
+ */
+async function B루브릭요청(data, m, 모범답안) {
+  const 교사 = { ...(정답씀(m.파이프라인) && String(m.정답 || '').trim() ? { 정답: m.정답 } : {}), ...(String(m.핵심 || '').trim() ? { 핵심: m.핵심 } : {}) };
+  const 총 = (data.문항원문.match(/\[\s*총\s*(\d+(?:\.\d+)?)\s*점\s*\]/) || [])[1];
+  // 제시문 칸이 있으면 그것(1단계 두 칸), 없으면 엔진이 공통발문에서 뽑는다 · 단계형 이어받기 (2026-10-14)
+  const 제시문 = data.B입력 && data.B입력.제시문;
+  const { out } = await postJSON('/api/rubric', {
+    논제: data.문항원문, 계열: '인문사회국어', 총배점: 총 ? Number(총) : 10, 이어받기: true,
+    ...(제시문 ? { 제시문: [{ id: '제시문', 텍스트: 제시문 }] } : { 공통자료: true }),
+    ...(모범답안 ? { 모범답안 } : { 자동답안: true }),
+    ...교사,
+  });
+  if (out.error) throw new Error(out.error);
+  // 처음 생성 — 모범답안 글을 5단계 칸에 미리 넣는다. 교사 글은 교사가 쓴 글로, 자동 생성 글은 Claude 글로 (교사는 확인·수정만)
+  for (const s of out.소문항) {
+    if (!s.모범답안글) continue;
+    s.답안 = s.자동답안
+      ? { 글: s.모범답안글, 시도: s.자동답안.시도, 교사: null, 확정: null, 생성: true }
+      : { 글: '', 시도: 0, 교사: s.모범답안글, 확정: null };
+  }
+  return { 출처: '서술형', 텍스트: data.문항원문, 루브릭: out };
+}
+
+/** 분석 시작과 함께 — 서술형 B는 1단계 인식 직후 4 루브릭·5 모범답안까지 만든다. 실패해도 인식 결과는 남긴다 (오종래 2026-10-16) */
+async function B자동루브릭(data, m) {
+  data.B루브릭생성중 = true;
+  delete data.B루브릭오류;
+  if (data === currentData) { renderB4(); renderB5(); }
+  try {
+    data.B루브릭 = await B루브릭요청(data, m || {}, String((m && m.모범답안) || '').trim() ? m.모범답안 : null);
+  } catch (e) {
+    data.B루브릭오류 = e.message;
+  } finally {
+    delete data.B루브릭생성중;
+  }
+  if (data === currentData) {
+    renderB4(); renderB5();
+    if (data.B루브릭) document.querySelector('#nav-ab .nav-item[data-tab="3"]').classList.add('done');
+  }
+}
+
 async function genB(맞추기 = false) {
   const data = currentData;
   if (!data) return;
   const 옛 = data.B루브릭 && data.B루브릭.루브릭;
   if (!맞추기 && 옛 && !confirm('다시 만들면 이 문항의 학생 채점과 모범답안이 지워집니다. 다시 만들까요?')) return;
-  // 0단계 교사 입력 (2026-10-16) — 정답(검증)·출제의도는 늘, 모범답안은 맞추기면 5단계 칸, 처음 생성이면 0단계 칸(소문항 「(1)」「(2)」 머리로 엔진이 나눈다)
+  // 0단계 교사 입력 (2026-10-16) — 모범답안은 맞추기면 5단계 칸, 처음 생성이면 0단계 칸(소문항 「(1)」「(2)」 머리로 엔진이 나눈다) — 없으면 자동 생성
   const m = 지금문항() || {};
-  const 교사 = { ...(정답씀(m.파이프라인) && String(m.정답 || '').trim() ? { 정답: m.정답 } : {}), ...(String(m.핵심 || '').trim() ? { 핵심: m.핵심 } : {}) };
   const 모범답안 = 맞추기 && 옛 ? 옛.소문항.map(s => 지금답안(s).trim() || null) : (String(m.모범답안 || '').trim() ? m.모범답안 : null);
   if (맞추기 && !(모범답안 && 모범답안.some(Boolean))) { alert('모범답안을 먼저 쓰세요 — 풀이 단계마다 줄을 바꿔서.'); return; }
-  const 총 = (data.문항원문.match(/\[\s*총\s*(\d+(?:\.\d+)?)\s*점\s*\]/) || [])[1];
-  await withBusy(document.getElementById(맞추기 ? 'b-fit' : 'b-gen'), '엔진 조각 → 조각 문장 생성 중… (1~2분)', async () => {
-    // 제시문 칸이 있으면 그것(1단계 두 칸), 없으면 엔진이 공통발문에서 뽑는다 · 단계형 이어받기 (2026-10-14)
-    const 제시문 = data.B입력 && data.B입력.제시문;
-    const { out } = await postJSON('/api/rubric', {
-      논제: data.문항원문, 계열: '인문사회국어', 총배점: 총 ? Number(총) : 10, 이어받기: true,
-      ...(제시문 ? { 제시문: [{ id: '제시문', 텍스트: 제시문 }] } : { 공통자료: true }),
-      ...(모범답안 ? { 모범답안 } : {}),
-      ...교사,
-    });
-    if (out.error) { alert('루브릭 생성 실패: ' + out.error); return; }
-    // 처음 생성 — 엔진이 나눈 0단계 모범답안을 5단계 칸에 미리 넣는다 (교사가 쓴 글로)
-    if (!맞추기) for (const s of out.소문항) if (s.모범답안글) s.답안 = { 글: '', 시도: 0, 교사: s.모범답안글, 확정: null };
+  await withBusy(document.getElementById(맞추기 ? 'b-fit' : 'b-gen'), 모범답안 ? '엔진 조각 → 조각 문장 생성 중… (1~2분)' : '엔진 인식 → 모범답안 생성 → 조각 문장 생성 중… (2~3분)', async () => {
+    let h;
+    try { h = await B루브릭요청(data, m, 모범답안); }
+    catch (e) { alert('루브릭 생성 실패: ' + e.message); return; }
+    const out = h.루브릭;
+    delete data.B루브릭오류;
     if (맞추기) {
       const 지울 = out.소문항.map((s, j) => {
         const o = 옛.소문항[j];
@@ -3248,7 +3293,7 @@ async function genB(맞추기 = false) {
 function renderB5() {
   const box = document.getElementById('b-answer');
   const h = currentData && currentData.B루브릭;
-  if (!h || !h.루브릭) { box.innerHTML = '<div class="card c-empty">4 루브릭에서 루브릭을 만들면 표시됩니다</div>'; return; }
+  if (!h || !h.루브릭) { box.innerHTML = `<div class="card c-empty">${currentData && currentData.B루브릭생성중 ? '루브릭·모범답안을 만드는 중입니다…' : '4 루브릭에서 루브릭을 만들면 표시됩니다'}</div>`; return; }
   box.innerHTML = `<div class="card"><div class="card-title">서술형 모범답안</div>
     <div class="c-meta">모범답안은 라벨 없이 자연스럽게 쓰되, <strong>풀이 단계마다 줄을 바꿔</strong> 쓰세요.
       「모범답안으로 루브릭 맞추기」를 누르면 엔진이 답 줄(급소 핵심어가 나온 마지막 줄)과 세우기 줄(그 앞에서 세우기 실체가 나온 마지막 줄)을 찾고, 그 사이 줄을 하나씩 4 루브릭의 풀기 조각으로 만듭니다.</div>
@@ -3419,7 +3464,8 @@ function 모범소문항Html(s, i, j) {
         : s.답안
         ? `<textarea class="input-area" id="c9-ta-${키}" style="min-height:220px;"${i < 0 ? ` placeholder="${esc(줄안내)}"` : ''} oninput="답안수정(${i}, ${j}, this.value)">${esc(지금답안(s))}</textarea>
            <div class="chip-list" id="c9-tr-${키}" style="margin-top:8px;">${흔적Html(지금답안(s), s)}</div>
-           <div class="c-meta" style="margin-top:6px;">${s.답안.시도 ? `Claude ${s.답안.시도}회 이음${s.답안.교사 != null ? ' · 교사가 고침' : ''}` : '교사가 씀'} — 고치면 조각 흔적을 바로 다시 봅니다</div>
+           <div class="c-meta" style="margin-top:6px;">${s.답안.생성 ? `<span class="badge warn">자동 생성</span> 모범답안이 없어 엔진 인식(5색·급소)으로 Claude가 썼습니다 (${s.답안.시도}회) — 교사가 확인·수정하세요. 줄 하나가 풀이 단계 하나입니다${s.답안.교사 != null ? ' · 교사가 고침' : ''}${s.자동답안 && s.자동답안.문제 && s.자동답안.문제.length ? `<div class="flag-box" style="margin-top:6px;">줄바꿈 원칙 점검에 남은 것: ${s.자동답안.문제.map(esc).join(' / ')}</div>` : ''}`
+             : s.답안.시도 ? `Claude ${s.답안.시도}회 이음${s.답안.교사 != null ? ' · 교사가 고침' : ''}` : '교사가 씀'} — 고치면 조각 흔적을 바로 다시 봅니다</div>
            <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:8px;">
              <button class="type-btn" id="c9-btn-${키}" onclick="답안잇기(${i}, ${j})">다시 잇기 (Claude)</button>
              <button class="type-btn" onclick="답안확정(${i}, ${j})">교사 확정</button>
@@ -3829,7 +3875,7 @@ function 목록그리기() {
 const 분석실패글 = out => '분석 실패: ' + ((out.error && out.error.사유) || (typeof out.error === 'string' ? out.error : '알 수 없음'));
 
 /** 문항 하나 분석 — C는 논제·제시문을 자동으로 나눠 엔진에. 실패하면 사유를 담아 throw */
-async function 문항분석(원문, 파이프라인) {
+async function 문항분석(원문, 파이프라인, m = null) {
   if (파이프라인 === 'C-논술') {
     const 나눔 = splitRegistration(원문);
     if (!나눔) throw new Error('논제를 찾지 못했습니다 — 0단계 원문을 확인하세요');
@@ -3845,7 +3891,10 @@ async function 문항분석(원문, 파이프라인) {
   const 글 = 원문.trim();
   const { out } = await postJSON('/analyze', { 문항원문: 글, 파이프라인: 파이프라인.charAt(0) });
   if (!out.ok) throw new Error(분석실패글(out));
-  return { AB: fromEngine(out, 글, 파이프라인) };
+  const AB = fromEngine(out, 글, 파이프라인);
+  // 서술형 B — 인식과 함께 4 루브릭 · 5 모범답안까지 (실패는 4 루브릭에 사유로 남긴다, 오종래 2026-10-16)
+  if (파이프라인.startsWith('B')) await B자동루브릭(AB, m);
+  return { AB };
 }
 
 /** 전체 분석 — 대기·실패 문항을 차례로. 파이프라인은 문항마다 따로, 실패는 사유만 남기고 다음 문항으로 */
@@ -3867,7 +3916,7 @@ async function 전체분석() {
       목록그리기();
       const 원문 = m.원문, 파이프라인 = m.파이프라인;
       let 결과 = null, 사유 = '';
-      try { 결과 = await 문항분석(원문, 파이프라인); }
+      try { 결과 = await 문항분석(원문, 파이프라인, m); }
       catch (e) { 사유 = e.message; }
       // 분석 도중 원문·파이프라인을 고쳤으면 결과를 버리고 대기로 둔다
       if (m.원문 !== 원문 || m.파이프라인 !== 파이프라인) { 바뀜++; continue; }
