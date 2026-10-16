@@ -3412,7 +3412,8 @@ function 모범소문항Html(s, i, j) {
              <button class="type-btn" id="c9-btn-${키}" onclick="답안잇기(${i}, ${j})">다시 잇기 (Claude)</button>
              <button class="type-btn" onclick="답안확정(${i}, ${j})">교사 확정</button>
              <span id="c9-st-${키}">${확정Html(s)}</span>
-           </div>`
+           </div>
+           ${i >= 0 ? `<div id="c9-vf-${키}">${답안검증Html(s, i, j)}</div>` : ''}`
         : `<div class="c-meta">조각 문장을 루브릭 경로 순서(근거대기 → 세우기 → 답구하기)로 Claude가 한 문단으로 잇습니다. 새 사실은 더하지 않고, 조각마다 실체·급소 핵심어 글자를 남깁니다.</div>
            <div class="c-meta" style="margin:6px 0 8px;">아래 버튼을 눌러 모범답안을 생성하세요.</div>
            <button class="type-btn" id="c9-btn-${키}" onclick="답안잇기(${i}, ${j})">모범답안 잇기 (Claude)</button>`;
@@ -3451,6 +3452,7 @@ async function 답안잇기(i, j) {
     const { out } = await postJSON('/api/answer', { 소문항: s, 논제: x.텍스트, 계열: x.루브릭.계열, ...(앞답안 ? { 앞답안 } : {}) });
     if (out.error) { alert('모범답안 잇기 실패: ' + out.error); return; }
     s.답안 = { 글: out.모범답안, 시도: out.시도, 교사: null, 확정: null };
+    if (i >= 0) await 답안정답검증(i, j, out.모범답안); // C — 이은 문단을 바로 정답과 대조 (2026-10-16)
     다시그림9(i);
   });
 }
@@ -3463,16 +3465,62 @@ function 답안수정(i, j, 값) {
   if (s.답안.확정 && s.답안.확정.글 !== 값) s.답안.확정 = null;
   document.getElementById(`c9-tr-${i}-${j}`).innerHTML = 흔적Html(값, s);
   document.getElementById(`c9-st-${i}-${j}`).innerHTML = 확정Html(s);
+  const vf = document.getElementById(`c9-vf-${i}-${j}`);
+  if (vf) vf.innerHTML = 답안검증Html(s, i, j); // 고치면 정답 검증은 「다시 확인 필요」로 (확정 때 다시 본다)
   if (i >= 0) markC9();
 }
 
+// ── C 9단계 정답 검증 (오종래 2026-10-16) ── 정답은 채점 기준이 아니라 검증. 엔진(/api/verify)이 모범답안 문단을 문장으로 나눠
+//   답 문장(급소 핵심어가 마지막으로 나온 문장)과 0단계 정답을 대조한다. 잇기 직후와 교사 확정 때 돌리고, 어긋나면 교사 확인을 받는다.
+
+/** 0단계 정답 (편집 중 문항) */
+const 문항정답 = () => String((지금문항() || {}).정답 || '').trim();
+
+/** 엔진 정답 검증 → s.답안검증 {…결과, 글}. 정답이 없으면 지운다. 실패하면 null */
+async function 답안정답검증(i, j, 글) {
+  const s = 루브릭홀더(i).루브릭.소문항[j];
+  const 정답 = 문항정답();
+  if (!정답) { delete s.답안검증; return null; }
+  const { status, out } = await postJSON('/api/verify', { 소문항: { 번호: s.번호, 조각: s.조각 }, 모범답안: 글, 정답 });
+  if (status !== 200 || out.error) { alert('정답 검증 실패: ' + (out.error || status)); return null; }
+  s.답안검증 = { ...out, 글 };
+  delete s.답안정답확인; // 교사 확인은 검증한 그 글에 붙는다
+  return s.답안검증;
+}
+
+function 답안검증Html(s, i, j) {
+  const v = s.답안검증;
+  if (!문항정답()) return '<div class="c-meta" style="margin-top:6px;">정답 검증 안 함 — 0단계 정답이 없습니다</div>';
+  if (!v) return '<div class="c-meta" style="margin-top:6px;">정답 검증 — 교사 확정 때 엔진이 모범답안 답 문장과 정답을 대조합니다</div>';
+  if (v.글 !== 지금답안(s)) return '<div class="c-meta" style="margin-top:6px;"><span class="badge muted">정답 검증 다시 필요</span> 글을 고쳤습니다 — 교사 확정 때 다시 대조합니다</div>';
+  if (v.결과 === '일치') return `<div class="c-meta" style="margin-top:6px;"><span class="badge ok">정답 검증 통과</span> 정답 「${esc(v.정답)}」 = 답 문장 「${esc(v.답줄글 || '')}」</div>`;
+  if (v.결과 === '검증 안 함') return `<div class="c-meta" style="margin-top:6px;"><span class="badge muted">정답 검증 안 함</span> ${esc(v.사유)}</div>`;
+  return `<div class="flag-box" style="margin-top:8px;"><strong>문항 오류 또는 정답 오류</strong> — 정답 「${esc(v.정답)}」이(가) 모범답안 답 문장에 없습니다${v.빠진.length ? ` (없는 말: ${v.빠진.map(t => `「${esc(t)}」`).join(' ')})` : ''}.
+      <div style="margin-top:4px;">답 문장: 「${esc(v.답줄글 || '')}」</div>
+      <div style="margin-top:6px;">${s.답안정답확인 ? `<span class="badge ok">교사 확인 ✓ ${esc(s.답안정답확인)}</span>` : `<button class="type-btn" onclick="답안정답확인(${i}, ${j})">교사 확인함</button> <span class="c-meta">문항·정답·모범답안을 확인한 뒤 누르세요</span>`}</div></div>`;
+}
+
+function 답안정답확인(i, j) {
+  루브릭홀더(i).루브릭.소문항[j].답안정답확인 = new Date().toLocaleString('ko-KR');
+  다시그림9(i);
+}
+
 /** 교사 확정 — 빠진 흔적이 있으면 묻는다 */
-function 답안확정(i, j) {
+async function 답안확정(i, j) {
   const s = 루브릭홀더(i).루브릭.소문항[j];
   const 글 = 지금답안(s).trim();
   if (!글) { alert('확정할 모범답안이 없습니다.'); return; }
   const 빠짐 = 문단흔적(글, s).filter(x => !x.충족);
   if (빠짐.length && !confirm(`조각 흔적이 빠진 곳이 ${빠짐.length}개 있습니다 (${빠짐.map(x => x.id).join(', ')}). 그래도 확정할까요?`)) return;
+  // C — 확정하는 글로 정답 검증. 어긋나면 교사 확인을 받고 확정 (오종래 2026-10-16)
+  if (i >= 0 && 문항정답()) {
+    const v = s.답안검증 && s.답안검증.글 === 지금답안(s) ? s.답안검증 : await 답안정답검증(i, j, 지금답안(s));
+    if (!v) return;
+    if (v.결과 === '불일치' && !s.답안정답확인) {
+      if (!confirm(`문항 오류 또는 정답 오류 — 정답 「${v.정답}」이(가) 모범답안 답 문장 「${v.답줄글 || ''}」에 없습니다.\n문항·정답·모범답안을 확인했고 그래도 확정할까요?`)) { 다시그림9(i); return; }
+      s.답안정답확인 = new Date().toLocaleString('ko-KR');
+    }
+  }
   s.답안.확정 = { 글, 시각: new Date().toLocaleString('ko-KR') };
   다시그림9(i);
   if (i >= 0) markC9();

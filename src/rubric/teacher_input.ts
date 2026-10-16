@@ -4,8 +4,10 @@
 //                 엔진 급소가 서 있으면 건드리지 않고, 노드에 없는 말을 급소로 지어내지 않는다
 //   정답 검증   : 정답은 채점 기준이 아니라 검증이다 — 모범답안의 답구하기 줄(solve_lines.ts 답 줄)과 대조해
 //                 일치하면 통과, 불일치하면 「문항 오류 또는 정답 오류」로 교사 확인에 넘긴다
+//                 C 논술 9단계 모범답안은 한 문단이라 줄 대신 문장 단위로 본다 (답 문장 = 급소 핵심어가 마지막으로 나온 문장, 2026-10-16)
 import type { recognizeV2Analysis } from '../fq/pipeline.ts';
 import type { PathNode } from '../fq/v2/graph.ts';
+import { split_sentences } from './f2.ts';
 import { split_solve_lines } from './solve_lines.ts';
 import type { 조각뼈대 } from './types.ts';
 
@@ -49,22 +51,27 @@ export function apply_core_hint(a: V2Analysis, 핵심: string): V2Analysis {
 export interface 정답검증 {
   결과: '일치' | '불일치' | '검증 안 함';
   정답: string;
-  /** 모범답안에서 답구하기로 본 줄 */
+  /** 모범답안에서 답구하기로 본 줄 (문장 단위면 문장) */
   답줄글: string | null;
+  단위: '줄' | '문장';
   /** 답 줄에 없는 정답 낱말 */
   빠진: string[];
   사유: string;
 }
 
-/** 정답 ↔ 모범답안 답구하기 줄 — 정답 낱말(쉼표·줄바꿈으로 나눔)이 모두 답 줄에 있으면 일치 (띄어쓰기는 보지 않는다) */
-export function verify_answer(정답: string, 모범답안: string, 조각들: 조각뼈대[]): 정답검증 {
+/**
+ * 정답 ↔ 모범답안 답구하기 줄 — 정답 낱말(쉼표·줄바꿈으로 나눔)이 모두 답 줄에 있으면 일치 (띄어쓰기는 보지 않는다).
+ * 단위 「문장」이면 모범답안을 문장으로 나눠 답 문장과 대조한다 (C 논술 9단계 — 한 문단 모범답안)
+ */
+export function verify_answer(정답: string, 모범답안: string, 조각들: 조각뼈대[], 단위: '줄' | '문장' = '줄'): 정답검증 {
   const 답 = String(정답 ?? '').trim();
-  if (!답) return { 결과: '검증 안 함', 정답: '', 답줄글: null, 빠진: [], 사유: '정답이 없습니다' };
-  if (!String(모범답안 ?? '').trim()) return { 결과: '검증 안 함', 정답: 답, 답줄글: null, 빠진: [], 사유: '모범답안이 없어 대조하지 않았습니다' };
-  const 구간 = split_solve_lines(모범답안, 조각들);
-  const 줄 = 구간.답글;
+  const 이름 = 단위 === '문장' ? '문장' : '줄';
+  if (!답) return { 결과: '검증 안 함', 정답: '', 답줄글: null, 단위, 빠진: [], 사유: '정답이 없습니다' };
+  if (!String(모범답안 ?? '').trim()) return { 결과: '검증 안 함', 정답: 답, 답줄글: null, 단위, 빠진: [], 사유: '모범답안이 없어 대조하지 않았습니다' };
+  const 글 = 단위 === '문장' ? String(모범답안).split(/\r?\n/).flatMap(split_sentences).join('\n') : 모범답안;
+  const 줄 = split_solve_lines(글, 조각들).답글;
   const 빠진 = 낱말들(답).filter((t) => !붙여(줄).includes(붙여(t)));
   return 빠진.length
-    ? { 결과: '불일치', 정답: 답, 답줄글: 줄, 빠진, 사유: '문항 오류 또는 정답 오류 — 교사 확인이 필요합니다' }
-    : { 결과: '일치', 정답: 답, 답줄글: 줄, 빠진: [], 사유: '모범답안 답구하기 줄과 정답이 맞습니다' };
+    ? { 결과: '불일치', 정답: 답, 답줄글: 줄, 단위, 빠진, 사유: '문항 오류 또는 정답 오류 — 교사 확인이 필요합니다' }
+    : { 결과: '일치', 정답: 답, 답줄글: 줄, 단위, 빠진: [], 사유: `모범답안 답구하기 ${이름}과 정답이 맞습니다` };
 }
