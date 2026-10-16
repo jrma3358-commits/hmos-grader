@@ -14,7 +14,7 @@ export interface 이차식 {
   c: number;
 }
 
-export type 경로이름 = '인수분해' | '완전제곱식' | '근의 공식' | '근의 공식 2' | '판별식 D' | '판별식 D/4' | '방정식 세우기';
+export type 경로이름 = '인수분해' | '완전제곱식' | '근의 공식' | '근의 공식 2' | '판별식 D' | '판별식 D/4' | '방정식 세우기' | '근과 계수의 관계' | '식 변형';
 
 export interface 다경로검증 {
   결과: 'O' | 'X' | '판정불가';
@@ -106,7 +106,8 @@ export function evaluate(수식: string): number | null {
   };
   const 거듭 = (): number => {
     let v = 기본();
-    while (s[i] === '²') i++, (v = v * v);
+    // 「²」 「³」 — 세제곱은 q6 「(-1)³」 「(α+β)³」 (2026-10-16)
+    while (s[i] === '²' || s[i] === '³') v = s[i++] === '²' ? v * v : v * v * v;
     return v;
   };
   const 기본 = (): number => {
@@ -214,7 +215,7 @@ export function parse_parametric_quadratic(글: string): 문자이차식 | null 
 function 넣어계산(식: string, 값: Record<string, number>): number | null {
   let s = 정리(식);
   for (const [k, v] of Object.entries(값)) s = s.replaceAll(k, `(${v})`);
-  s = s.replace(/(\d|\)|²)\(/g, '$1*(');
+  s = s.replace(/(\d|\)|²|³)\(/g, '$1*(');
   return evaluate(s);
 }
 
@@ -321,4 +322,62 @@ export function resolve_subject(요청: unknown, 글: string): '수리' | '인�
   const 계열 = 요청 === '수리' ? '수리' : '인문사회국어';
   if (계열 === '인문사회국어' && 수학) throw Object.assign(new Error(계열오류글), { name: '계열오류' });
   return 계열;
+}
+
+// ── 근과 계수의 관계 · 식 변형 (오종래 2026-10-16 q6) ──
+//   ③ 근과 계수의 관계 — 학생의 「α+β=…」 「αβ=…」 값이 원식 계수에서 나온 -b/a · c/a와 같은가
+//   ④ 식 변형 — 양변에 α · β가 있는 등식(「α³+β³=(α+β)³-3αβ(α+β)」)에 수를 넣어 양변이 같은가 (항등식)
+//   ② 세우기 줄 조각은 모범 줄의 꼴로 검증을 고른다 (verify_setup): 근과 계수 줄 · 식 변형 줄 · 그 밖(풀이 경로 — 인수분해 등)
+
+const 근문자 = /[αβ]/;
+
+/** α · β에 수를 넣어 계산 — 생략된 곱셈(「3αβ」 「αβ(」 「)(」)을 채운다 */
+function 근넣어계산(식: string, a: number, b: number): number | null {
+  let s = 정리(식).replace(/α/g, `(${a})`).replace(/β/g, `(${b})`);
+  s = s.replace(/(\d|\)|²|³)\(/g, '$1*(');
+  return evaluate(s);
+}
+
+export function verify_vieta(학생답: string, 원: 이차식): 다경로검증 {
+  const 합 = -원.b / 원.a, 곱 = 원.c / 원.a;
+  const 시도: 다경로검증['시도'] = [];
+  for (const 마디 of 식마디들(학생답)) {
+    const s = 정리(마디);
+    const m = s.match(/^(α\+β|β\+α|αβ|βα|α\*β)=(.+)$/);
+    if (!m) continue;
+    const v = evaluate(m[2]);
+    if (v === null) continue;
+    const 기대 = /\+/.test(m[1]) ? 합 : 곱;
+    const 맞음 = 같다(v, 기대);
+    시도.push({ 경로: '근과 계수의 관계', 식: 마디, 맞음, 까닭: `${/\+/.test(m[1]) ? '-b/a' : 'c/a'} = ${기대} 과 ${맞음 ? '같다' : '다르다'}` });
+  }
+  const 틀린 = 시도.find((t) => !t.맞음);
+  if (시도.length && !틀린) return { 결과: 'O', 경로: '근과 계수의 관계', 시도 };
+  return { 결과: 시도.length ? 'X' : '판정불가', 시도 };
+}
+
+export function verify_identity(학생답: string): 다경로검증 {
+  const 표본 = [[1.3, -0.7], [2.1, 0.4], [-1.6, 2.9]];
+  const 시도: 다경로검증['시도'] = [];
+  for (const 마디 of 식마디들(학생답)) {
+    const 변 = 정리(마디).split('=');
+    // 이웃한 두 변이 모두 α · β를 품은 등식만 — 「α+β=-1」은 값이지 변형이 아니다
+    for (let i = 0; i + 1 < 변.length; i++) {
+      if (!근문자.test(변[i]) || !근문자.test(변[i + 1])) continue;
+      const 계산됨 = 표본.map(([a, b]) => [근넣어계산(변[i], a, b), 근넣어계산(변[i + 1], a, b)]);
+      if (계산됨.some(([l, r]) => l === null || r === null)) continue;
+      const 맞음 = 계산됨.every(([l, r]) => 같다(l!, r!));
+      시도.push({ 경로: '식 변형', 식: `${변[i]}=${변[i + 1]}`, 맞음, 까닭: 맞음 ? 'α · β에 수를 넣어도 양변이 같다 (항등식)' : '수를 넣으면 양변이 다르다' });
+    }
+  }
+  const 틀린 = 시도.find((t) => !t.맞음);
+  if (시도.length && !틀린) return { 결과: 'O', 경로: '식 변형', 시도 };
+  return { 결과: 시도.length ? 'X' : '판정불가', 시도 };
+}
+
+/** ② 세우기 줄 조각 검증 — 모범 줄의 꼴로 고른다: 근과 계수 줄 · 식 변형 줄 · 그 밖은 풀이 경로(verify_multipath) */
+export function verify_setup(모범줄: string, 학생답: string, 원: 이차식): 다경로검증 {
+  if (verify_vieta(모범줄, 원).시도.length) return verify_vieta(학생답, 원);
+  if (verify_identity(모범줄).시도.length) return verify_identity(학생답);
+  return verify_multipath(학생답, 원);
 }

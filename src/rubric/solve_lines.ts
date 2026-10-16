@@ -128,9 +128,11 @@ const 근의공식 = /\(\s*-\s*b\s*['′’]?\s*±\s*√/;
 const 부등식계산 = (마디: string) => /[<>≤≥≦≧]/.test(마디) && !/=/.test(마디);
 // [오종래 2026-10-16 q4 학생 2] 「D/4=…」 꼴도 풀기 — 등식(「D/4=-k+2=0」) · 부등식(「D/4=1-(k-1)=-k+2>0」) 모두
 const D4계산 = (마디: string) => /^D\s*\/\s*4\s*=/.test(마디);
+// [오종래 2026-10-16 q6 ②] 「=」로 시작하는 계산 줄도 풀기 — 「= (-1)³-3×(-2)×(-1)」 「= -1-6=-7」 (앞 줄 식을 이어 계산)
+const 이어계산 = (마디: string) => /^=/.test(마디);
 const 풀기마디 = (마디: string) =>
   !근거끝.test(마디) && !근의공식.test(마디) && /[0-9]/.test(마디) &&
-  ((/또는/.test(마디) && (마디.match(/=/g) ?? []).length >= 2) || (/±/.test(마디) && /=/.test(마디)) || 부등식계산(마디) || D4계산(마디));
+  ((/또는/.test(마디) && (마디.match(/=/g) ?? []).length >= 2) || (/±/.test(마디) && /=/.test(마디)) || 부등식계산(마디) || D4계산(마디) || 이어계산(마디));
 const 마디들 = (줄: string) => 줄.split(/[,，](?![^(]*\))/).map((x) => x.trim()).filter(Boolean);
 
 /** 글에서 풀기 조각 — 줄마다 「∴」 앞만(결론은 풀기가 아니다, 줄 중간 「∴」도 q4 ③), 쉼표 마디 중 풀기 마디 */
@@ -147,6 +149,8 @@ export function classify_math_lines(답안: string): 수리줄나누기 {
     if (결론) out.답 = { 줄: 결론, 값: answer_values(결론) }; // 결론이 여럿이면 마지막
     if (!l) continue;
     if (/하면[\s,，.]*$/.test(l)) out.근거대기.push(l);
+    // [오종래 2026-10-16 q6 ⑥] 「~이므로」로 끝나는 등식 줄(「x²+x-2=0의 두 근이 α, β이므로」)은 세우기가 아니다 — 미분류
+    else if (/=/.test(l) && /이므로[\s,，.]*$/.test(l)) out.미분류.push(l);
     else if (/=/.test(l)) {
       // 쉼표 마디 — 풀기 마디는 ③ 풀기, 나머지 등식 마디는 한데 묶어 ② 세우기
       const 풀기 = 마디들(l).filter(풀기마디);
@@ -160,7 +164,21 @@ export function classify_math_lines(답안: string): 수리줄나누기 {
       if (남은.length) out.미분류.push(남은.join(', '));
     } else out.미분류.push(l);
   }
+  // [오종래 2026-10-16 q6 ①] 「∴」 줄이 없으면 「=」가 있는 마지막 줄의 끝 값(수)이 답 — 「= -1-6=-7」 → -7
+  if (!out.답) {
+    const 끝줄 = 줄.filter((l) => l.includes('=')).at(-1);
+    const v = 끝줄 ? final_value(끝줄) : null;
+    if (끝줄 && v !== null) out.답 = { 줄: 끝줄, 값: [v], 끝값: true };
+  }
   return out;
+}
+
+/** 줄 끝 값 — 마지막 「=」 뒤가 수이면 그 수(1/2 = 0.5로 맞춘 글자), 아니면 null (2026-10-16 q6) */
+export function final_value(줄: string): string | null {
+  const 뒤 = String(줄 ?? '').replace(/∴/g, '').split('=').at(-1)!.replace(/\s+/g, '').replace(/[−–]/g, '-').replace(/[.。]$/, '');
+  if (!뒤) return null;
+  const v = 수맞춤(뒤);
+  return /^-?\d+(\.\d+)?$/.test(v) ? v : null;
 }
 
 /** 학생 답의 결론 — 「∴」가 있는 마지막 줄의 「∴」부터(줄 중간 「∴」도, q4 ③), 없으면 「=」가 있는 마지막 줄, 그것도 없으면 답 전체 */

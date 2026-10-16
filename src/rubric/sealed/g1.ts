@@ -15,8 +15,8 @@
 import type { PathNode } from '../../fq/v2/graph.ts';
 import type { 조각결과 } from '../g1.ts';
 import { K핵심어 } from './f2.ts';
-import { answer_values, solve_segments, student_answer_line } from '../solve_lines.ts';
-import { verify_discriminant, verify_equation, verify_multipath, type 경로이름 } from '../multipath.ts';
+import { answer_values, final_value, solve_segments, student_answer_line } from '../solve_lines.ts';
+import { verify_discriminant, verify_equation, verify_setup, type 경로이름 } from '../multipath.ts';
 import type { 계열, 급소K, 조각, 파트 } from '../types.ts';
 
 export interface 조각대조 {
@@ -133,6 +133,12 @@ export function 봉인6_조각대조(학생답: string, 조각: 조각, 맥락: 
   const 모범 = 조각.모범답;
   if (조각.파트 === '답구하기' && 모범?.값.length) {
     const 줄 = student_answer_line(학생답);
+    // [오종래 2026-10-16 q6 ①] 모범 답이 「∴」 없는 끝 값이면 학생 답도 마지막 줄 끝 수로 대조
+    if (모범.끝값) {
+      const v = final_value(줄);
+      const 같음 = v !== null && v === 모범.값[0];
+      return { 결과: 같음 ? 'O' : 'X', 근거: `모범 끝 값 ${모범.값[0]} · 학생 끝 값 ${v ?? '없음'} (「${줄}」) — ${같음 ? '일치' : '불일치'}` };
+    }
     // 모범 값의 문자(「k」 「x」)만 대조한다 — 「∴」 없이 「D=1-(k+1)>0, k<2」로 쓰면 「D=…」는 답이 아니다 (2026-10-16 q4 학생 3)
     const 문자of = (v: string) => (v.match(/^[A-Za-z](?:_?\w)?(?=<=|>=|[=<>≤≥≦≧])/) ?? [''])[0];
     const 물은문자 = new Set(모범.값.map(문자of));
@@ -149,7 +155,7 @@ export function 봉인6_조각대조(학생답: string, 조각: 조각, 맥락: 
   // [오종래 2026-10-16 q4 학생 2] 판별식 줄(「D=…」)이고 원식이 문자 계수면 — 학생의 D · D/4 사슬을 엔진이 검증한다
   // 🔆 다경로는 모범답안 줄의 경로와 다를 때만 — 같은 경로(모범이 인수분해, 학생도 인수분해)는 O만
   const 검증 = 조각.파트 === '세우기' && 조각.줄글 && 조각.node === null
-    ? 조각.원식 ? (답: string) => verify_multipath(답, 조각.원식!)
+    ? 조각.원식 ? (답: string) => verify_setup(조각.줄글!, 답, 조각.원식!) // 모범 줄 꼴로 — 근과 계수 · 식 변형 · 풀이 경로 (q6)
       : 조각.판별식원식 ? (답: string) => verify_discriminant(답, 조각.판별식원식!)
       : 조각.방정식원식 ? (답: string) => verify_equation(답, 조각.방정식원식!) // q4 학생 2 ① 방정식 세우기
       : null

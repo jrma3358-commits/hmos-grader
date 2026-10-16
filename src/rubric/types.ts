@@ -81,6 +81,8 @@ export interface 인식결과 {
 export interface 모범답 {
   줄: string;
   값: string[];
+  /** 「∴」 없이 마지막 줄 끝 수가 답 (2026-10-16 q6) — 값은 수 하나, 학생 답도 끝 수로 대조 */
+  끝값?: boolean;
 }
 
 /** F1 산출 (f1.ts project_parts) */
