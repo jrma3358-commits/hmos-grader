@@ -381,3 +381,35 @@ export function verify_setup(모범줄: string, 학생답: string, 원: 이차�
   if (verify_identity(모범줄).시도.length) return verify_identity(학생답);
   return verify_multipath(학생답, 원);
 }
+
+// ── 풀기 계산 검증 (오종래 2026-10-16) — 학생 계산 줄의 「=」 앞뒤 값이 같은가 ──
+//   한 줄의 「A=B=C」에서 이웃한 두 변을, 「=」로 시작하는 줄은 앞 줄의 마지막 변과 이어 본다.
+//   두 변이 모두 수로 계산되는 짝만 본다 — 문자식(「x+3=0」 「-4k+8>0」 「α+β」)은 계산하지 않는다.
+//   수로 계산되는 짝이 모두 같으면 O, 하나라도 다르면 X, 계산되는 짝이 없으면 판정불가(교사)
+
+export interface 계산검증 {
+  결과: 'O' | 'X' | '판정불가';
+  짝: { 왼: string; 오른: string; 같음: boolean }[];
+}
+
+export function verify_calculation(학생답: string): 계산검증 {
+  const 짝: 계산검증['짝'] = [];
+  let 앞끝 = '';
+  for (const 줄 of String(학생답 ?? '').split(/\r?\n/)) {
+    // 「또는」으로 이은 두 등식(「x=1 또는 x=-3」)은 한 사슬이 아니다 — 쉼표처럼 나눈다
+    for (const 마디 of 줄.replace(/∴/g, ',').split(/[,，](?![^(]*\))|또는/).map((x) => x.trim()).filter(Boolean)) {
+      if (!마디.includes('=')) continue;
+      const 변 = 마디.split('=').map((x) => x.trim().replace(/[가-힣].*$/, '').trim());
+      if (변[0] === '' && 앞끝) 변[0] = 앞끝; // 「= …」 — 앞 줄 마지막 변에 이어서
+      for (let i = 0; i + 1 < 변.length; i++) {
+        if (!변[i] || !변[i + 1]) continue;
+        const l = evaluate(변[i]), r = evaluate(변[i + 1]);
+        if (l === null || r === null || !Number.isFinite(l) || !Number.isFinite(r)) continue;
+        짝.push({ 왼: 변[i], 오른: 변[i + 1], 같음: 같다(l, r) });
+      }
+      앞끝 = 변.at(-1) ?? 앞끝;
+    }
+  }
+  if (!짝.length) return { 결과: '판정불가', 짝 };
+  return { 결과: 짝.every((p) => p.같음) ? 'O' : 'X', 짝 };
+}

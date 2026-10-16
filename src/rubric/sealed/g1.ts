@@ -16,7 +16,7 @@ import type { PathNode } from '../../fq/v2/graph.ts';
 import type { 조각결과 } from '../g1.ts';
 import { K핵심어 } from './f2.ts';
 import { answer_values, final_value, solve_segments, student_answer_line } from '../solve_lines.ts';
-import { verify_discriminant, verify_equation, verify_setup, type 경로이름 } from '../multipath.ts';
+import { verify_calculation, verify_discriminant, verify_equation, verify_setup, type 경로이름 } from '../multipath.ts';
 import type { 계열, 급소K, 조각, 파트 } from '../types.ts';
 
 export interface 조각대조 {
@@ -182,9 +182,15 @@ export function 봉인6_조각대조(학생답: string, 조각: 조각, 맥락: 
   }
   if (조각.줄글 && 조각.node === null) return { 결과: '판정불가', 근거: `모범답안 줄 「${조각.줄글}」 — 교사가 판정합니다` };
   // [오종래 2026-10-16 학생 1] 수리 모범답안 풀기 마디 조각 — 교사가 판정한다. 학생 답의 풀기 마디를 옆에 보인다
+  // [오종래 2026-10-16] 수리 풀기 — 학생 계산 줄의 「=」 앞뒤 값을 엔진이 직접 계산한다 (verify_calculation).
+  //   수로 계산되는 짝이 모두 같으면 O, 하나라도 다르면 X, 계산되는 짝이 없으면(문자식) 교사 판정
   if (조각.파트 === '풀기' && 조각.풀기글 && 조각.node === null) {
     const 학생 = solve_segments(학생답);
-    return { 결과: '판정불가', 근거: `모범답안 풀기 「${조각.풀기글}」 · 학생 풀기 ${학생.length ? 학생.map((x) => `「${x}」`).join(' ') : '없음'} — 교사가 판정합니다` };
+    const 보임 = `모범답안 풀기 「${조각.풀기글}」 · 학생 풀기 ${학생.length ? 학생.map((x) => `「${x}」`).join(' ') : '없음'}`;
+    const v = verify_calculation(학생답);
+    if (v.결과 === '판정불가') return { 결과: '판정불가', 근거: `${보임} — 수로 계산되는 줄이 없어 교사가 판정합니다` };
+    const 짝 = v.짝.map((p) => `${p.왼} ${p.같음 ? '=' : '≠'} ${p.오른}`).join(' · ');
+    return { 결과: v.결과, 근거: `계산 검증 ${v.결과 === 'O' ? '맞음' : '틀림'} — ${짝} (${보임})` };
   }
   if (조각.파트 === '답구하기') {
     const 실체 = 조각.node?.entity ?? 맥락.질문급소.node.entity;

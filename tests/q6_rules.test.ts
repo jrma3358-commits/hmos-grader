@@ -9,7 +9,7 @@ import { describe, it } from 'node:test';
 import { recognizeV2Analysis } from '../src/fq/pipeline.ts';
 import { derive_pieces, f2_input_from_v2 } from '../src/rubric/f2.ts';
 import { grade } from '../src/rubric/g1.ts';
-import { evaluate, verify_identity, verify_setup, verify_vieta } from '../src/rubric/multipath.ts';
+import { evaluate, verify_calculation, verify_identity, verify_setup, verify_vieta } from '../src/rubric/multipath.ts';
 import { classify_math_lines, final_value, solve_segments } from '../src/rubric/solve_lines.ts';
 import type { 조각 } from '../src/rubric/types.ts';
 
@@ -76,5 +76,29 @@ describe('q6 모범답안 자기 채점', () => {
   it('끝 값이 다르면 ④ X · 「∴ α³+β³=-7」도 끝 값으로 맞음', () => {
     assert.equal(grade('α+β=-1, αβ=-2\n= -1+6=5', 루브릭, '', k, '수리').파트별.답구하기.조각별[0].결과, 'X');
     assert.equal(grade('∴ α³+β³=-7', 루브릭, '', k, '수리').파트별.답구하기.조각별[0].결과, 'O');
+  });
+});
+
+// 풀기 계산 검증 (오종래 2026-10-16) — 「=」 앞뒤 값을 엔진이 계산: 맞으면 O, 틀리면 X, 문자식뿐이면 교사
+describe('풀기 계산 검증', () => {
+  it('「= …」 줄은 앞 줄 마지막 변과 이어 본다 — q6 모범은 모두 같아 O', () => {
+    const r = verify_calculation(모범);
+    assert.equal(r.결과, 'O');
+    assert.deepEqual(r.짝.map((p) => [p.왼, p.오른]), [['(-1)³-3×(-2)×(-1)', '-1-6'], ['-1-6', '-7']]);
+  });
+  it('계산이 틀리면 X — (-1)³-3×(-2)×(-1) ≠ -1+6', () => {
+    assert.equal(verify_calculation('= (-1)³-3×(-2)×(-1)\n= -1+6=5').결과, 'X');
+  });
+  it('문자식 · 부등식 · ± 줄뿐이면 판정불가', () => {
+    assert.equal(verify_calculation('D=-4k+8>0, 4k<8 ∴ k<2').결과, '판정불가');
+    assert.equal(verify_calculation('x = (-2±√16) / 2\n∴ x=1 또는 x=-3').결과, '판정불가');
+  });
+  it('G1 — 풀기 조각: 맞으면 O, 틀리면 X, 계산할 줄이 없으면 교사', () => {
+    const k = { 실체: 'α³+β³의 값', node: { id: 'n4', entity: 'α³+β³의 값', color: 'B', surface: '', switchId: '', index: 0 } } as any;
+    const 풀기: 조각 = { id: '풀기-1', 파트: '풀기', 요소: null, 수행질: '정확성', 확인물음: '', 충족조건: '', is_중심: false, node: null, 모범조각: '', 배점: 0.7, 풀기글: '= (-1)³-3×(-2)×(-1)' };
+    const 결과 = (답: string) => grade(답, [풀기], '', k, '수리').파트별.풀기.조각별[0].결과;
+    assert.equal(결과(모범), 'O');
+    assert.equal(결과('α³+β³=(α+β)³-3αβ(α+β)\n= (-1)³-3×(-2)×(-1)\n= -1+6=5'), 'X');
+    assert.equal(결과('α³+β³=(α+β)³-3αβ(α+β)'), '판정불가');
   });
 });
