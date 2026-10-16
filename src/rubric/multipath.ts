@@ -573,13 +573,40 @@ export function verify_definition(학생답: string, 원: 다항식조건): 다�
  * ② 나머지 정리 줄 검증 — 「f(2)=4+4+a=1」 「R=f(-1)=1-2-7=-8」.
  * f(c) 뒤의 변: 상수 문자가 있으면 모든 상수 값에서 P(c)와 같아야, 수면 그 c의 수 나머지 또는 참값에서의 P(c)와 같아야 맞다
  */
-export function verify_remainder_chain(학생답: string, 원: 다항식조건): 다경로검증 {
+/** 줄에 나오는 f(c)의 c들 — 「R=f(-1)=1-2-7=-8」 → [-1] (조각이 볼 c를 모범 줄에서 정한다, 2026-10-17 q7 학생 1) */
+export const remainder_points = (줄: string) => [...정리(줄).matchAll(/f\((-?\d+(?:\.\d+)?)\)/g)].map((m) => Number(m[1]));
+
+/**
+ * 대입 부호 오류 (2026-10-17 q7 학생 1) — f(c)를 항마다 펼친 학생 식(「1+2-7」)과 다항식 항의 값(1, -2, -7)이
+ * 항 하나의 부호만 다르면 그 항을 낸다: 「f(-1) 대입 부호 오류 — 2×(-1)=+2로 계산」. 아니면 null
+ */
+export function substitution_sign_error(원: 다항식조건, c: number, 학생식: string): string | null {
+  const 항들 = (식: string) => 정리(식).match(/[+-]?[^+-]+/g) ?? [];
+  const 다항항 = 항들(원.식);
+  const 학생항 = 항들(학생식);
+  if (원.참값 === null || 다항항.length !== 학생항.length) return null;
+  const 참값 = 원.참값;
+  const 다른 = 다항항
+    .map((t, i) => ({ t, i, 참: 넣어계산(t, { [원.문자]: 참값, x: c }), 학생: evaluate(학생항[i]) }))
+    .filter((x) => x.참 === null || x.학생 === null || !같다(x.참, x.학생));
+  if (다른.length !== 1) return null;
+  const { t, i, 참, 학생 } = 다른[0];
+  if (참 === null || 학생 === null || !같다(참, -학생)) return null;
+  const cs = c < 0 ? `(${c})` : `${c}`; // 음수만 괄호
+  const 대입 = t.replace(/^\+/, '').replace(/x²/, `${cs}²`).replace(/(\d)x/, `$1×${cs}`).replace(/x/, cs);
+  const 쓴항 = /^[+-]/.test(학생항[i]) ? 학생항[i] : `+${학생항[i]}`;
+  return `f(${c}) 대입 부호 오류 — ${대입}=${쓴항}로 계산`;
+}
+
+/** @param 볼근 주면 그 c의 f(c) 사슬만 본다 (② 「f(2)=…」 조각 · ③ 「R=f(-1)=…」 조각이 서로의 줄로 틀리지 않게) */
+export function verify_remainder_chain(학생답: string, 원: 다항식조건, 볼근?: number[]): 다경로검증 {
   const 시도: 다경로검증['시도'] = [];
   for (const d of 식마디들(학생답)) {
     const 변 = 정리(d).split('=');
     const at = 변.findIndex((e) => /^f\(-?\d+(\.\d+)?\)$/.test(e));
     if (at < 0) continue;
     const c = Number(변[at].slice(2, -1));
+    if (볼근 && 볼근.length && !볼근.some((x) => 같다(x, c))) continue;
     const 뒤 = 변.slice(at + 1).filter(Boolean);
     if (!뒤.length) continue;
     const 수나머지 = 원.조건.find((k) => 같다(k.근, c) && k.나머지 !== null)?.나머지;
@@ -593,9 +620,12 @@ export function verify_remainder_chain(학생답: string, 원: 다항식조건):
       const p = 원.참값 !== null ? 다항식값(원, c, 원.참값) : null;
       return p !== null && 같다(v, p);
     });
-    시도.push({ 경로: '나머지 정리', 식: d, 맞음, 까닭: 맞음 ? `f(${c})의 값이 다항식 ${원.식}에서 나온 값과 같다` : `f(${c})의 값이 다항식 ${원.식}에서 나온 값과 다르다` });
+    // 틀렸으면 — 상수 없는 수 식(「1+2-7」)에서 대입 부호 오류를 찾아 이름 붙인다
+    const 오류 = 맞음 ? null : 뒤.filter((e) => !new RegExp(원.문자).test(e) && evaluate(e) !== null).map((e) => substitution_sign_error(원, c, e)).find(Boolean) ?? null;
+    시도.push({ 경로: '나머지 정리', 식: d, 맞음, 까닭: 맞음 ? `f(${c})의 값이 다항식 ${원.식}에서 나온 값과 같다` : `f(${c})의 값이 다항식 ${원.식}에서 나온 값과 다르다`, ...(오류 ? { 오류 } : {}) });
   }
   const 틀린 = 시도.find((t) => !t.맞음);
   if (시도.length && !틀린) return { 결과: 'O', 경로: '나머지 정리', 시도 };
-  return { 결과: 시도.length ? 'X' : '판정불가', 시도 };
+  const 오류 = 시도.find((t) => t.오류)?.오류;
+  return { 결과: 시도.length ? 'X' : '판정불가', 시도, ...(오류 ? { 오류 } : {}) };
 }

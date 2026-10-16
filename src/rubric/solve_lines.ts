@@ -154,9 +154,12 @@ export const question_letters = (문항글: string) =>
 export function line_answer_values(줄: string): string[] {
   const { 결론 } = split_conclusion(줄);
   if (결론) return answer_values(결론);
-  const m = 줄.trim().match(/^([A-Za-z])\s*=/);
-  const v = m ? final_value(줄) : null;
-  return m && v !== null ? [`${m[1]}=${v}`] : [];
+  // 쉼표 마디마다 — 「f(2)=4+4+a=1, a=-7」의 「a=-7」 (2026-10-17 q7 학생 1)
+  return 마디들(줄).flatMap((마디) => {
+    const m = 마디.match(/^([A-Za-z])\s*=/);
+    const v = m ? final_value(마디) : null;
+    return m && v !== null ? [`${m[1]}=${v}`] : [];
+  });
 }
 
 /** @param 문항글 주면 — 「∴」 결론 말고도 문항 문자로 시작해 수로 끝나는 줄을 답 값에 더한다 (답이 둘인 문항, q7 ①) */

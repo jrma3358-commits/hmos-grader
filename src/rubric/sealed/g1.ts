@@ -16,7 +16,7 @@ import type { PathNode } from '../../fq/v2/graph.ts';
 import type { 조각결과 } from '../g1.ts';
 import { K핵심어 } from './f2.ts';
 import { answer_values, final_value, line_answer_values, solve_segments, student_answer_line } from '../solve_lines.ts';
-import { D혼동오류, verify_calculation, verify_definition, verify_discriminant, verify_equation, verify_remainder_chain, verify_setup, wrote_remainder, type 경로이름 } from '../multipath.ts';
+import { D혼동오류, remainder_points, verify_calculation, verify_definition, verify_discriminant, verify_equation, verify_remainder_chain, verify_setup, wrote_remainder, type 경로이름 } from '../multipath.ts';
 import type { 계열, 급소K, 조각, 파트 } from '../types.ts';
 
 export interface 조각대조 {
@@ -164,7 +164,8 @@ export function 봉인6_조각대조(학생답: string, 조각: 조각, 맥락: 
     ? 조각.원식 ? (답: string) => verify_setup(조각.줄글!, 답, 조각.원식!) // 모범 줄 꼴로 — 근과 계수 · 식 변형 · 풀이 경로 (q6)
       : 조각.판별식원식 ? (답: string) => verify_discriminant(답, 조각.판별식원식!)
       : 조각.방정식원식 ? (답: string) => verify_equation(답, 조각.방정식원식!) // q4 학생 2 ① 방정식 세우기
-      : 조각.나머지다항식 ? (답: string) => verify_remainder_chain(답, 조각.나머지다항식!) // q7 ③ 「f(2)=4+4+a=1」
+      // q7 ③ 「f(2)=4+4+a=1」 — 모범 줄의 c(f(2))만 본다. 다른 f(c) 줄(f(-1))은 그 줄의 조각이 본다 (2026-10-17 q7 학생 1)
+      : 조각.나머지다항식 ? (답: string) => verify_remainder_chain(답, 조각.나머지다항식!, remainder_points(조각.줄글 ?? ''))
       : null
     : null;
   if (검증) {
@@ -207,6 +208,14 @@ export function 봉인6_조각대조(학생답: string, 조각: 조각, 맥락: 
   if (조각.파트 === '풀기' && 조각.풀기글 && 조각.node === null) {
     const 학생 = solve_segments(학생답);
     const 보임 = `모범답안 풀기 「${조각.풀기글}」 · 학생 풀기 ${학생.length ? 학생.map((x) => `「${x}」`).join(' ') : '없음'}`;
+    // 다항식 문항의 「R=f(-1)=…」 풀기 — f(-1) 대입부터 본다. 틀리면 계산이 맞아도 X, 대입 부호 오류는 이름을 붙인다 (2026-10-17 q7 학생 1)
+    if (조각.나머지다항식) {
+      const 대입 = verify_remainder_chain(학생답, 조각.나머지다항식, remainder_points(조각.풀기글));
+      if (대입.결과 === 'X') {
+        const 시도 = 대입.시도.map((t) => `「${t.식}」 ${t.까닭}`).join(' · ');
+        return { 결과: 'X', 근거: `${대입.오류 ? `${대입.오류} — ` : '대입 틀림 — '}${시도} (${보임})`, ...(대입.오류 ? { 오류: 대입.오류 } : {}) };
+      }
+    }
     const v = verify_calculation(학생답);
     if (v.결과 === '판정불가') return { 결과: '판정불가', 근거: `${보임} — 수로 계산되는 줄이 없어 교사가 판정합니다` };
     const 짝 = v.짝.map((p) => `${p.왼} ${p.같음 ? '=' : '≠'} ${p.오른}`).join(' · ');
