@@ -230,6 +230,19 @@
     margin-bottom: 12px;
   }
   .flag-box::before { content: '⚑ '; font-weight: 700; }
+  /* 🔆 다경로 감지 박스 (2026-10-16) — 엔진이 수학적으로 검증한, 모범답안과 다른 올바른 경로 */
+  .multipath-box {
+    padding: 12px 16px;
+    background: #FFF8E6;
+    border: 1px solid #E8B64A;
+    border-left: 4px solid #C8860A;
+    border-radius: var(--radius);
+    margin-bottom: 16px;
+  }
+  .multipath-box .mp-head { font-weight: 700; color: #8A5A00; }
+  .multipath-box .mp-item { margin-top: 6px; font-size: 13px; }
+  .multipath-box .mp-draft { margin-top: 10px; padding: 10px 12px; background: var(--surface); border: 1px dashed #E8B64A; border-radius: var(--radius); font-size: 13px; }
+  .multipath-box .mp-draft code { font-family: inherit; background: #FFF3D6; padding: 0 4px; border-radius: 3px; }
 
   .rubric-table, .item-table { width: 100%; border-collapse: collapse; font-size: 13px; }
   .rubric-table th, .item-table th {
@@ -1061,8 +1074,29 @@ function 채점그리기() {
       </details>
     </div>`;
 
+  // 🔆 다경로 감지 박스 (2026-10-16) — 엔진이 ② 세우기에서 모범답안과 다른 올바른 경로를 검증했을 때만. 없으면 박스 없음.
+  //   새 채점기준 초안은 엔진 검증 결과(경로 · 학생 식 · 까닭)로만 짓는다 — Claude를 쓰지 않고, 루브릭에 반영하지도 않는다
+  const 다경로들 = rec ? (rec.엔진.조각별 || []).filter(x => x.다경로) : [];
+  const 다경로박스 = !다경로들.length ? '' : `<div class="multipath-box">
+      <div class="mp-head">🔆 다경로 감지 ${엔진배지}</div>
+      ${다경로들.map(x => `<div class="mp-item"><strong>${esc(x.다경로)}</strong> — 모범답안과 다른 올바른 경로 <span class="meta">(${esc(x.조각id)} · 「${esc(x.다경로식 || '')}」 ${esc(x.다경로까닭 || '')})</span></div>`).join('')}
+      <button class="type-btn sm" style="margin-top:10px;" onclick="const d = this.nextElementSibling; d.hidden = !d.hidden; this.textContent = d.hidden ? '새 채점기준 초안 보기' : '새 채점기준 초안 닫기';">새 채점기준 초안 보기</button>
+      <div class="mp-draft" hidden>
+        <div class="meta" style="margin-bottom:6px;">엔진 검증 결과로 만든 초안입니다 — 루브릭에는 아직 반영되지 않습니다.</div>
+        ${다경로들.map(x => {
+          const c = 조각of(x.조각id);
+          return `<div style="margin-top:6px;">
+            <strong>${파트번호[x.파트] || ''} ${esc(x.파트)} · ${esc(x.조각id)} · 배점 ${배점글(x.배점)}</strong>
+            <div>모범답안 경로: <code>${esc(c.줄글 || c.실체 || '')}</code></div>
+            <div>추가 경로 (${esc(x.다경로)}): <code>${esc(x.다경로식 || '')}</code></div>
+            <div>충족조건 초안: ${esc(x.다경로)} 경로로 원식을 옳게 나타냈다 — ${esc(x.다경로까닭 || '')}.</div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`;
+
   // 왼쪽 — 학생 답안
-  const 바뀜 = rec && G.초안[초안키] != null && G.초안[초안키] !== rec.답;
+  const 바뀜 =rec && G.초안[초안키] != null && G.초안[초안키] !== rec.답;
   const 왼 = `<div class="card">
       <div class="card-title">학생 답안</div>
       <div class="who">${esc(학생이름(st))}</div>
@@ -1114,7 +1148,7 @@ function 채점그리기() {
         <div class="note-item"><strong>부분점수 ${배점글(a.부분점수)} / ${배점글(a.만점)}</strong> — ${파트줄}${a.단계상한 != null ? ` · <span class="badge warn">단계 상한 ${배점글(a.단계상한)} — 앞 소문항 답구하기 X</span>` : ''}</div>
         <div class="note-item">무너진 지점: ${a.무너진지점 ? esc(a.무너진지점) : '없음'} · 약점: ${a.약점.length ? a.약점.map(esc).join(', ') : '없음'}</div>
       </div>` : ''}
-      <div class="meta" style="margin-top:8px;">인문: ① 실체 글자 · ② 세우기는 교사 판정 · ④ 급소 핵심어 + 경로 흔적 / 수리: ①②③ 답 인식 노드 일치 · ④ 급소 글자(값은 교사 확인). 같은 버튼을 다시 누르면 엔진 판정으로 돌아갑니다.</div>
+      <div class="meta" style="margin-top:8px;">인문: ① 실체 글자 · ② 세우기는 교사 판정 · ④ 급소 핵심어 + 경로 흔적 / 수리: ① 만남 조건은 판별식 · ② 세우기는 다경로 수학 검증(🔆, 원식이 없으면 교사) · ③ 풀기 줄은 교사 · ④ 모범 값 직접 대조. 같은 버튼을 다시 누르면 엔진 판정으로 돌아갑니다.</div>
     </div>`;
 
   // 오른쪽 — 모범답안 대조 + 최종 점수
@@ -1144,7 +1178,7 @@ function 채점그리기() {
       </details>
     </div>`;
 
-  box.innerHTML = 바 + 문제 + `<div class="grade-cols"><div>${왼}</div><div>${가운데}</div><div>${오른}</div></div>`;
+  box.innerHTML = 바 + 문제 + 다경로박스 + `<div class="grade-cols"><div>${왼}</div><div>${가운데}</div><div>${오른}</div></div>`;
   옆요약();
 }
 
