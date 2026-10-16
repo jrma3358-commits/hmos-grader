@@ -28,9 +28,13 @@ export interface 항목결과 {
   사유: string;
 }
 
+/**
+ * 파이프라인 — A(객관식·주관식)면 서술형 바탕→도달 관계 판정(봉인⑩)을 부르지 않는다. 그 판정은 서술형 B 전용 (오종래 2026-10-16).
+ * 주지 않으면 B와 같다
+ */
 export type 필터입력 =
-  | { 유형: '단독문제'; 텍스트: string }
-  | { 유형: '계단식 단계형'; 텍스트: string }
+  | { 유형: '단독문제'; 텍스트: string; 파이프라인?: 'A' | 'B' }
+  | { 유형: '계단식 단계형'; 텍스트: string; 파이프라인?: 'A' | 'B' }
   | ({ 유형: '인문사회논술' } & 논술문항);
 
 export interface 필터판정 {
@@ -80,14 +84,16 @@ function 공통항목(분석: 서술형분석 | 논술형분석, 앞: 항목결�
   return 항목;
 }
 
-/** 서술형(단독문제·계단식 소문항 하나) 판정 */
-function judge_descriptive(r: 서술형분석 | 급소불명거르기, 텍스트: string): 필터판정 {
+/** 서술형(단독문제·계단식 소문항 하나) 판정 — 관계판정이 false(파이프라인 A)면 관계 적절(봉인⑩) 항목을 돌리지 않는다 */
+function judge_descriptive(r: 서술형분석 | 급소불명거르기, 텍스트: string, 관계판정 = true): 필터판정 {
   if (r.판정 === '거르기') return 급소불명(r);
   const 앞: 항목결과[] = [
     { 증상: '급소 명확', 판정: '통과', 초석: 1, 사유: `급소 「${r.k.실체}」` },
-    봉인10_관계적절(r.실체, r.k)
-      ? { 증상: '관계 적절', 판정: '통과', 사유: r.실체.요약 }
-      : { 증상: '관계 적절', 판정: '거르기', 사유: r.실체.요약 },
+    ...(관계판정
+      ? [봉인10_관계적절(r.실체, r.k)
+          ? { 증상: '관계 적절', 판정: '통과', 사유: r.실체.요약 } as 항목결과
+          : { 증상: '관계 적절', 판정: '거르기', 사유: r.실체.요약 } as 항목결과]
+      : []),
   ];
   const 항목 = 공통항목(r, 앞, 텍스트);
   return { 판정: 묶기(항목.map((x) => x.판정)), 항목, 분석: r };
@@ -142,9 +148,9 @@ function judge_essay(문항: 논술문항): 필터판정 {
 export function judge_item(입력: 필터입력): 필터판정 | 계단식필터판정 {
   switch (입력.유형) {
     case '단독문제':
-      return judge_descriptive(analyze_descriptive(입력.텍스트), 입력.텍스트);
+      return judge_descriptive(analyze_descriptive(입력.텍스트), 입력.텍스트, 입력.파이프라인 !== 'A');
     case '계단식 단계형': {
-      const 소문항 = analyze_stepwise(입력.텍스트).map((s) => ({ 소문항: s.소문항, 판정: judge_descriptive(s.결과, s.소문항.텍스트) }));
+      const 소문항 = analyze_stepwise(입력.텍스트).map((s) => ({ 소문항: s.소문항, 판정: judge_descriptive(s.결과, s.소문항.텍스트, 입력.파이프라인 !== 'A') }));
       return { 판정: 묶기(소문항.map((s) => s.판정.판정)), 소문항 };
     }
     case '인문사회논술':
