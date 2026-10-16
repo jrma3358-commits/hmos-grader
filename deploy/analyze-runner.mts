@@ -28,8 +28,6 @@ const { essay_pivot_chunks } = await load('src/thesis/chunk.ts');
 const { 봉인14_6단계 } = await load('src/thesis/relate.ts');
 // 8단계 루브릭 — 엔진 F1~F5·문항평가 (src/rubric). GJ는 쓰지 않는다 (오종래 2026-10-14: GJ 검산 대신 조각 충족 여부)
 const { derive_pieces, f2_input_from_v2, f2_input_inherit, has_question, common_question, link_sentences, thesis_polarity, speaker_lines } = await load('src/rubric/f2.ts');
-// 공통 발문 「[총 N점]」을 소문항 수로 나누는 몫 — 봉인④-a 큰 나머지 방식 (오종래 2026-10-16 q4 ⑥)
-const { 봉인4a_반올림 } = await load('src/rubric/sealed/f5.ts');
 const { judge_element } = await load('src/rubric/f3.ts');
 const { specify_condition } = await load('src/rubric/f4.ts');
 const { allocate_points } = await load('src/rubric/f5.ts');
@@ -144,8 +142,8 @@ function 루브릭작업(논제글: string, 계열: string, 총배점: number, �
   const 급소들of = (s: any) => (s.a.pivot.ok ? (s.a.pivot.pivots ?? [s.a.pivot.pivot]).map((p: any) => ({ 번호: s.번호, 실체: p.node.entity })) : []);
   // 소문항 배점 — 소문항 글에 「[N점]」이 있으면 그 값, 없으면 요청 총배점 (2026-10-14)
   //   [오종래 2026-10-15 ③] 괄호 안 「N점」도 — 「(200자 내외, 4점)」. 여럿이면 마지막 것 (앞에 붙은 공통 발문의 「(16점)」이 아니라)
-  //   [오종래 2026-10-16 q4 ⑥] 자기 「[N점]」이 없고 공통 발문에 「[총 N점]」이 있으면 N을 소문항 수로 나눈다
-  const 소배점들 = sub_item_points(소문항들, 총배점, 봉인4a_반올림);
+  //   [오종래 2026-10-16 q4] 자기 「[N점]」이 없고 공통 발문에 「[총 N점]」이 있으면 소문항마다 N (나누기는 취소)
+  const 소배점들 = sub_item_points(소문항들, 총배점);
   return 소문항들.map((s: any, n: number) => {
     const 소배점 = 소배점들[n];
     const 답안글 = item_portion(모범답안, s.번호, n, true);

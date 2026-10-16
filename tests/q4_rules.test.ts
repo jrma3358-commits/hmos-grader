@@ -4,7 +4,7 @@
 //   ③ 줄 중간 「∴」 뒤도 결론
 //   ④ 등호 없는 부등식 계산 줄(-4k+8>0)도 풀기
 //   ⑤ 한 줄에 이어 쓴 「(n)」도 소문항 머리
-//   ⑥ 공통 발문 「[총 N점]」은 소문항 수로 나눈다 (봉인④-a)
+//   ⑥ 공통 발문 「[총 N점]」은 소문항마다 N (처음 확정한 나누기는 같은 날 취소)
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
@@ -12,7 +12,6 @@ import { describe, it } from 'node:test';
 import { recognizeV2Analysis } from '../src/fq/pipeline.ts';
 import { common_question, derive_pieces, f2_input_inherit, has_question } from '../src/rubric/f2.ts';
 import { grade } from '../src/rubric/g1.ts';
-import { 봉인4a_반올림 } from '../src/rubric/sealed/f5.ts';
 import { answer_values, classify_math_lines, solve_segments, split_conclusion, student_answer_line } from '../src/rubric/solve_lines.ts';
 import { item_portion, sub_item_points } from '../src/rubric/teacher_input.ts';
 import { split_thesis } from '../src/thesis/split.ts';
@@ -82,15 +81,14 @@ describe('⑤ 한 줄 소문항 머리', () => {
   });
 });
 
-describe('⑥ 공통 발문 「[총 N점]」 나누기', () => {
-  it('총 2점 ÷ 3 → 0.6 · 0.7 · 0.7 (합 2, 봉인④-a)', () => {
-    const ps = sub_item_points(split_thesis(논제), 10, 봉인4a_반올림);
-    assert.equal(Math.round(ps.reduce((a, b) => a + b, 0) * 10) / 10, 2);
-    assert.deepEqual(ps, [0.6, 0.7, 0.7]);
+describe('⑥ 공통 발문 「[총 N점]」 — 소문항마다 N (나누기 취소, 오종래 2026-10-16)', () => {
+  it('q4 [총 2점] → (1)(2)(3) 각 2점, 총 6점', () => {
+    const ps = sub_item_points(split_thesis(논제), 10);
+    assert.deepEqual(ps, [2, 2, 2]);
   });
   it('자기 「[N점]」이 있으면 그 값, 둘 다 없으면 요청 총배점', () => {
-    assert.deepEqual(sub_item_points([{ 텍스트: '(가) [3점]', 공통발문: '[총 9점]' }, { 텍스트: '(나)', 공통발문: '[총 9점]' }], 10, 봉인4a_반올림), [3, 4.5]);
-    assert.deepEqual(sub_item_points([{ 텍스트: 'x를 구하시오.', 공통발문: '' }], 5, 봉인4a_반올림), [5]);
+    assert.deepEqual(sub_item_points([{ 텍스트: '(가) [3점]', 공통발문: '[총 9점]' }, { 텍스트: '(나)', 공통발문: '[총 9점]' }], 10), [3, 9]);
+    assert.deepEqual(sub_item_points([{ 텍스트: 'x를 구하시오.', 공통발문: '' }], 5), [5]);
   });
 });
 
