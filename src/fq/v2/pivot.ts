@@ -37,8 +37,9 @@ export interface Pivot {
   node: PathNode;
   /** '강한 C 연결 B' = 강한 C(apply.strongC)에 연결된 B라서 급소다 (graph.ts) · 'Q 직전 B' = 마지막 Q 바로 앞의 B라서 급소다
    *  · '서술형태' = 서술형태 제약(apply.formPivot, C-F) 노드라서 급소다 — 이때만 급소가 B가 아니다
-   *  · '수량 값 B' = 「몇 ~」 수량 물음(apply.quantityHeads)이라 Q에 접힌 값 B가 급소다 — 노드는 그 Q, 실체는 「몇 ~」 */
-  reason: '최수렴 B' | '강한 C 연결 B' | 'Q 직전 B' | '서술형태' | '수량 값 B';
+   *  · '수량 값 B' = 「몇 ~」 수량 물음(apply.quantityHeads)이라 Q에 접힌 값 B가 급소다 — 노드는 그 Q, 실체는 「몇 ~」
+   *  · '질문의 핵심' = 급소가 서지 않은 문항에서 교사가 쓴 「질문의 핵심」 글자를 담은 엔진 노드를 골랐다 (rubric/teacher_input.ts, 2026-10-16) */
+  reason: '최수렴 B' | '강한 C 연결 B' | 'Q 직전 B' | '서술형태' | '수량 값 B' | '질문의 핵심';
   /** 급소의 실체값 — B 급소는 B가 묻는 실체(이름 뒤의 식·기호, 예: 「일반항 a_n」 → 「a_n」, 없으면 실체 그대로),
    *  서술형태 급소는 표지에서 서술 틀을 떼고 남은 말 (예: 「논박하는 방식으로」 → 「논박」) */
   keyword?: string;

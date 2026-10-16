@@ -13,6 +13,8 @@ export interface 풀기구간 {
   세우기끝: number | null;
   /** 답 시작 줄 (1부터) */
   답줄: number;
+  /** 답 줄의 글 — 정답 검증(teacher_input.ts)이 대조한다 */
+  답글: string;
   /** K 핵심어가 나오는 줄이 없어 마지막 줄을 답으로 보았다 */
   답대체: boolean;
   풀기: string[];
@@ -48,6 +50,7 @@ export function split_solve_lines(답안: string, 조각들: 조각뼈대[]): �
     줄수: 줄.length,
     세우기끝: 끝 >= 0 ? 끝 + 1 : null,
     답줄: 답i + 1,
+    답글: 줄[답i] ?? '',
     답대체,
     풀기: 답i > 앞끝 ? 줄.slice(앞끝 + 1, 답i) : [],
   };
