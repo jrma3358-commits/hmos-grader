@@ -9,7 +9,7 @@ import { describe, it } from 'node:test';
 import { recognizeV2Analysis } from '../src/fq/pipeline.ts';
 import { derive_pieces, f2_input_from_v2 } from '../src/rubric/f2.ts';
 import { grade } from '../src/rubric/g1.ts';
-import { evaluate, verify_calculation, verify_identity, verify_setup, verify_vieta } from '../src/rubric/multipath.ts';
+import { evaluate, verify_calculation, verify_direct_roots, verify_identity, verify_setup, verify_vieta } from '../src/rubric/multipath.ts';
 import { classify_math_lines, final_value, solve_segments } from '../src/rubric/solve_lines.ts';
 import type { 조각 } from '../src/rubric/types.ts';
 
@@ -176,5 +176,21 @@ describe('q6 학생 6 — 근의 성질(차수 낮추기) 다경로', () => {
     assert.equal(r.파트별.세우기.조각별[0].다경로, '근의 성질(차수 낮추기)');
     assert.equal(r.파트별.풀기.조각별[0].결과, 'O');
     assert.equal(r.파트별.답구하기.조각별[0].결과, 'O');
+  });
+});
+
+// q6 학생 5 (2026-10-16) — 방정식을 풀어 근을 직접 대입: 「답이 맞고 수학적으로 옳으면 경로 무관하게 O」
+describe('q6 학생 5 — 근 직접 대입 다경로', () => {
+  const 학생5 = 'x²+x-2=0을 풀면\n(x+2)(x-1)=0\n∴ x=-2 또는 x=1\n\nα=-2, β=1로 풀면\nα³+β³=(-2)³+1³=-7\n\n아래, α=1, β=-2로 놓아도 같다.\n∴ α³+β³=-7';
+  it('놓은 α · β가 원식의 두 근이면 O(어느 순서든), 아니면 X', () => {
+    assert.equal(verify_direct_roots(학생5, 원).결과, 'O');
+    assert.equal(verify_direct_roots('α=1, β=-2', 원).결과, 'O');
+    assert.equal(verify_direct_roots('α=2, β=-1', 원).결과, 'X');
+    assert.equal(verify_direct_roots('α³+β³=-7', 원).결과, '판정불가');
+  });
+  it('근과 계수 · 식 변형 줄 조각 — 그 꼴이 없으면 근 직접 대입으로 본다 (🔆)', () => {
+    assert.equal(verify_setup('α+β=-1, αβ=-2', 학생5, 원).경로, '근 직접 대입');
+    assert.equal(verify_setup('α³+β³=(α+β)³-3αβ(α+β)', 학생5, 원).경로, '근 직접 대입');
+    assert.equal(verify_setup('α+β=-1, αβ=-2', 'α+β=-1, αβ=-2', 원).경로, '근과 계수의 관계'); // 그 꼴을 쓰면 그대로
   });
 });

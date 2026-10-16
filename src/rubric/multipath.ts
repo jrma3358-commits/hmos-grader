@@ -14,7 +14,7 @@ export interface 이차식 {
   c: number;
 }
 
-export type 경로이름 = '인수분해' | '완전제곱식' | '근의 공식' | '근의 공식 2' | '판별식 D' | '판별식 D/4' | '방정식 세우기' | '근과 계수의 관계' | '식 변형' | '인수분해 공식' | '근의 성질(차수 낮추기)';
+export type 경로이름 = '인수분해' | '완전제곱식' | '근의 공식' | '근의 공식 2' | '판별식 D' | '판별식 D/4' | '방정식 세우기' | '근과 계수의 관계' | '식 변형' | '인수분해 공식' | '근의 성질(차수 낮추기)' | '근 직접 대입';
 
 export interface 다경로검증 {
   결과: 'O' | 'X' | '판정불가';
@@ -432,9 +432,28 @@ export function verify_identity(학생답: string, 원?: 이차식): 다경로�
 
 /** ② 세우기 줄 조각 검증 — 모범 줄의 꼴로 고른다: 근과 계수 줄 · 식 변형 줄 · 그 밖은 풀이 경로(verify_multipath) */
 export function verify_setup(모범줄: string, 학생답: string, 원: 이차식): 다경로검증 {
-  if (verify_vieta(모범줄, 원).시도.length) return verify_vieta(학생답, 원);
-  if (verify_identity(모범줄).시도.length) return verify_identity(학생답, 원);
+  // 근과 계수 · 식 변형 줄인데 학생이 그 꼴을 쓰지 않았으면 — 근을 직접 구해 넣은 경로인지 본다 (q6 학생 5)
+  const 아니면직접 = (v: 다경로검증) => (v.결과 === '판정불가' ? verify_direct_roots(학생답, 원) : v);
+  if (verify_vieta(모범줄, 원).시도.length) return 아니면직접(verify_vieta(학생답, 원));
+  if (verify_identity(모범줄).시도.length) return 아니면직접(verify_identity(학생답, 원));
   return verify_multipath(학생답, 원);
+}
+
+/**
+ * 근 직접 대입 (오종래 2026-10-16 q6 학생 5) — 방정식을 풀어 「α=-2, β=1」로 놓고 값을 바로 계산한 경로.
+ * 「답이 맞고 수학적으로 옳으면 경로 무관하게 O」 — 학생이 놓은 α · β가 원식의 두 근(어느 순서든)이면 맞다, 아니면 X
+ */
+export function verify_direct_roots(학생답: string, 원: 이차식): 다경로검증 {
+  const 근 = roots(원);
+  const 값of = (문자: 'α' | 'β') => 식마디들(학생답).map((d) => 정리(d).match(new RegExp(`^${문자}=(.+)$`))).filter(Boolean).map((m) => evaluate(m![1])).find((v) => v !== null && Number.isFinite(v));
+  const a = 값of('α'), b = 값of('β');
+  if (a === undefined || b === undefined || 근.length !== 2) return { 결과: '판정불가', 시도: [] };
+  const 맞음 = (같다(a!, 근[0]) && 같다(b!, 근[1])) || (같다(a!, 근[1]) && 같다(b!, 근[0]));
+  return {
+    결과: 맞음 ? 'O' : 'X',
+    ...(맞음 ? { 경로: '근 직접 대입' as const } : {}),
+    시도: [{ 경로: '근 직접 대입', 식: `α=${a}, β=${b}`, 맞음, 까닭: `원식의 근 ${근.join(', ')}과 ${맞음 ? '같다' : '다르다'}` }],
+  };
 }
 
 // ── 풀기 계산 검증 (오종래 2026-10-16) — 학생 계산 줄의 「=」 앞뒤 값이 같은가 ──
