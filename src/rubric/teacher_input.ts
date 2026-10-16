@@ -5,8 +5,8 @@
 //                 일치하면 통과, 불일치하면 「문항 오류 또는 정답 오류」로 교사 확인에 넘긴다
 //                 C 논술 9단계 모범답안은 한 문단이라 줄 대신 문장 단위로 본다 (답 문장 = 급소 핵심어가 마지막으로 나온 문장, 2026-10-16)
 import { split_sentences } from './f2.ts';
-import { split_solve_lines } from './solve_lines.ts';
-import type { 조각뼈대 } from './types.ts';
+import { answer_values, final_value, split_solve_lines } from './solve_lines.ts';
+import type { 모범답, 조각뼈대 } from './types.ts';
 
 // [오종래 2026-10-16 q4 ⑤] 줄 머리뿐 아니라 한 줄에 쉼표·쌍반점으로 이어 쓴 「(n)」도 소문항 머리 — 「(1) k<2, (2) k=2, (3) k>2」
 const 소문항머리 = /(?:^[ \t]*|[,，;；][ \t]*)\((\d+(?:-\d+)?)\)[ \t]*/gm;
@@ -72,4 +72,26 @@ export function verify_answer(정답: string, 모범답안: string, 조각들: �
   return 빠진.length
     ? { 결과: '불일치', 정답: 답, 답줄글: 줄, 단위, 빠진, 사유: '문항 오류 또는 정답 오류 — 교사 확인이 필요합니다' }
     : { 결과: '일치', 정답: 답, 답줄글: 줄, 단위, 빠진: [], 사유: `모범답안 답구하기 ${이름}과 정답이 맞습니다` };
+}
+
+/**
+ * 수리 정답 검증 — 값으로 (2026-10-16 q7 「답이 둘인 문항 — a와 R 두 값 함께 비교」).
+ * 정답 「a=-7, R=-8」의 값들과 모범답안 줄 나누기 답 값(「∴」 결론 · 「R=…=-8」 줄)이 같으면 일치.
+ * 끝 값 답(「∴」 없이 마지막 줄 끝 수, q6)이면 정답의 수와 대조. 정답에서 값을 못 뽑으면 null — 줄 대조(verify_answer)로
+ */
+export function verify_answer_values(정답: string, 답: 모범답 | null): 정답검증 | null {
+  const 글 = String(정답 ?? '').trim();
+  if (!글 || !답) return null;
+  if (답.끝값) {
+    const v = final_value(`=${글}`);
+    if (v === null) return null;
+    const 같음 = v === 답.값[0];
+    return { 결과: 같음 ? '일치' : '불일치', 정답: 글, 답줄글: 답.줄, 단위: '줄', 빠진: 같음 ? [] : [글], 사유: 같음 ? '모범답안 끝 값과 정답이 맞습니다' : '문항 오류 또는 정답 오류 — 교사 확인이 필요합니다' };
+  }
+  const 정답값 = answer_values(글);
+  if (!정답값.length) return null;
+  const 빠진 = 정답값.filter((v) => !답.값.includes(v));
+  return 빠진.length
+    ? { 결과: '불일치', 정답: 글, 답줄글: 답.줄, 단위: '줄', 빠진, 사유: '문항 오류 또는 정답 오류 — 교사 확인이 필요합니다' }
+    : { 결과: '일치', 정답: 글, 답줄글: 답.줄, 단위: '줄', 빠진: [], 사유: `모범답안 답 값(${답.값.join(', ')})과 정답이 맞습니다` };
 }

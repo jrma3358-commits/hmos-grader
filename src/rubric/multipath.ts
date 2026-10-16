@@ -14,7 +14,7 @@ export interface 이차식 {
   c: number;
 }
 
-export type 경로이름 = '인수분해' | '완전제곱식' | '근의 공식' | '근의 공식 2' | '판별식 D' | '판별식 D/4' | '방정식 세우기' | '근과 계수의 관계' | '식 변형' | '인수분해 공식' | '근의 성질(차수 낮추기)' | '근 직접 대입';
+export type 경로이름 = '인수분해' | '완전제곱식' | '근의 공식' | '근의 공식 2' | '판별식 D' | '판별식 D/4' | '방정식 세우기' | '근과 계수의 관계' | '식 변형' | '인수분해 공식' | '근의 성질(차수 낮추기)' | '근 직접 대입' | '나머지 정리';
 
 export interface 다경로검증 {
   결과: 'O' | 'X' | '판정불가';
@@ -488,4 +488,114 @@ export function verify_calculation(학생답: string): 계산검증 {
   }
   if (!짝.length) return { 결과: '판정불가', 짝 };
   return { 결과: 짝.every((p) => p.같음) ? 'O' : 'X', 짝 };
+}
+
+// ── 나머지 정리 (오종래 2026-10-16 q7) ──
+//   다항식 = 문항의 「다항식 x²+2x+a」(x 말고 문자 하나 — 상수). 조건 = 「x-2로 나누었을 때 나머지가 1」 → f(2)=1,
+//   「x+1로 나누었을 때의 나머지 R」 → f(-1) (나머지는 미지). 상수의 참값은 수 나머지 조건에서 엔진이 푼다
+
+export interface 나머지조건 {
+  /** 나누는 식 x-c의 c */
+  근: number;
+  /** 나머지 (수). 「나머지 R」처럼 미지면 null */
+  나머지: number | null;
+}
+
+export interface 다항식조건 {
+  식: string;
+  문자: string;
+  조건: 나머지조건[];
+  /** 수 나머지 조건으로 푼 상수 값 — 없으면 null */
+  참값: number | null;
+}
+
+/** 문항 글에서 다항식 · 나머지 조건 — 「다항식 …를 x-2로 나누었을 때 나머지가 1」. 없으면 null */
+export function parse_polynomial_conditions(글: string): 다항식조건 | null {
+  const s = String(글 ?? '');
+  const m = s.match(/다항식\s*([0-9x²³a-wyzA-Z+\-\s]+?)\s*(을|를|이|가|은|는|의)/);
+  if (!m) return null;
+  const 식 = 정리(m[1]);
+  const 문자들 = [...new Set(식.match(/[a-wyzA-Z]/g) ?? [])];
+  if (!/x/.test(식) || 문자들.length !== 1) return null;
+  const 조건: 나머지조건[] = [...s.matchAll(/x\s*([+\-])\s*(\d+(?:\.\d+)?)\s*로\s*나누었을\s*때의?\s*나머지(?:가|는)?\s*(-?\d+(?:\.\d+)?)?/g)].map((c) => ({
+    근: (c[1] === '-' ? 1 : -1) * Number(c[2]),
+    나머지: c[3] !== undefined ? Number(c[3]) : null,
+  }));
+  if (!조건.length) return null;
+  const 원: 다항식조건 = { 식, 문자: 문자들[0], 조건, 참값: null };
+  // 상수 참값 — 수 나머지 조건 하나로 P(c; t)=r을 푼다 (P는 상수에 대해 일차라고 보고, 두 값에서 직선으로)
+  const 수조건 = 조건.find((c) => c.나머지 !== null);
+  if (수조건) {
+    const g = (t: number) => (다항식값(원, 수조건.근, t) ?? NaN) - 수조건.나머지!;
+    const g0 = g(0), g1 = g(1);
+    if (Number.isFinite(g0) && Number.isFinite(g1) && !같다(g1, g0)) 원.참값 = -g0 / (g1 - g0);
+  }
+  return 원;
+}
+
+/** 다항식 값 P(x; t) */
+export function 다항식값(원: { 식: string; 문자: string }, x: number, t: number): number | null {
+  return 넣어계산(원.식, { [원.문자]: t, x });
+}
+
+/** ① 나머지 조건 — 학생이 f(c)를 썼는가, 수 나머지면 그 값과 같은 변이 있는가 (「f(2)=1」 「f(2)=4+4+a=1」) */
+export function wrote_remainder(학생답: string, 조건: 나머지조건): boolean {
+  const c = 같다(조건.근, Math.round(조건.근)) ? String(Math.round(조건.근)) : String(조건.근);
+  return 식마디들(학생답).some((d) => {
+    const 변 = 정리(d).split('=');
+    if (!변.includes(`f(${c})`)) return false;
+    if (조건.나머지 === null) return true;
+    return 변.some((e) => { const v = evaluate(e); return v !== null && 같다(v, 조건.나머지!); });
+  });
+}
+
+/** 학생이 f(x)를 같은 다항식으로 정의했는가 — 「f(x)=x²+2x+a」 (x · 상수에 여러 값을 넣어 본다). 없으면 판정불가 */
+export function verify_definition(학생답: string, 원: 다항식조건): 다경로검증 {
+  const 시도: 다경로검증['시도'] = [];
+  for (const d of 식마디들(학생답)) {
+    const m = 정리(d).match(/^f\(x\)=(.+)$/);
+    if (!m) continue;
+    // 상수 문자가 남은 정의는 모든 상수 값에서, 상수를 넣어 쓴 정의(「f(x)=x²+2x-7」)는 참값에서 같아야 맞다
+    const 상수있음 = new RegExp(원.문자).test(m[1]);
+    const 상수값들 = 상수있음 ? [-2, 0.7, 3] : 원.참값 !== null ? [원.참값] : [];
+    const 맞음 = 상수값들.length > 0 && [-1.5, 0.5, 2.3].every((x) => 상수값들.every((t) => {
+      const l = 넣어계산(m[1], { [원.문자]: t, x }), r = 다항식값(원, x, t);
+      return l !== null && r !== null && 같다(l, r);
+    }));
+    시도.push({ 경로: '나머지 정리', 식: d, 맞음, 까닭: 맞음 ? `다항식 ${원.식}과 같다` : `다항식 ${원.식}과 다르다` });
+  }
+  const 틀린 = 시도.find((t) => !t.맞음);
+  if (시도.length && !틀린) return { 결과: 'O', 경로: '나머지 정리', 시도 };
+  return { 결과: 시도.length ? 'X' : '판정불가', 시도 };
+}
+
+/**
+ * ② 나머지 정리 줄 검증 — 「f(2)=4+4+a=1」 「R=f(-1)=1-2-7=-8」.
+ * f(c) 뒤의 변: 상수 문자가 있으면 모든 상수 값에서 P(c)와 같아야, 수면 그 c의 수 나머지 또는 참값에서의 P(c)와 같아야 맞다
+ */
+export function verify_remainder_chain(학생답: string, 원: 다항식조건): 다경로검증 {
+  const 시도: 다경로검증['시도'] = [];
+  for (const d of 식마디들(학생답)) {
+    const 변 = 정리(d).split('=');
+    const at = 변.findIndex((e) => /^f\(-?\d+(\.\d+)?\)$/.test(e));
+    if (at < 0) continue;
+    const c = Number(변[at].slice(2, -1));
+    const 뒤 = 변.slice(at + 1).filter(Boolean);
+    if (!뒤.length) continue;
+    const 수나머지 = 원.조건.find((k) => 같다(k.근, c) && k.나머지 !== null)?.나머지;
+    const 맞음 = 뒤.every((e) => {
+      if (new RegExp(원.문자).test(e)) {
+        return [-2, 0.7, 3].every((t) => { const l = 넣어계산(e, { [원.문자]: t }), r = 다항식값(원, c, t); return l !== null && r !== null && 같다(l, r); });
+      }
+      const v = evaluate(e);
+      if (v === null) return true; // 계산할 수 없는 변은 보지 않는다
+      if (수나머지 != null && 같다(v, 수나머지)) return true;
+      const p = 원.참값 !== null ? 다항식값(원, c, 원.참값) : null;
+      return p !== null && 같다(v, p);
+    });
+    시도.push({ 경로: '나머지 정리', 식: d, 맞음, 까닭: 맞음 ? `f(${c})의 값이 다항식 ${원.식}에서 나온 값과 같다` : `f(${c})의 값이 다항식 ${원.식}에서 나온 값과 다르다` });
+  }
+  const 틀린 = 시도.find((t) => !t.맞음);
+  if (시도.length && !틀린) return { 결과: 'O', 경로: '나머지 정리', 시도 };
+  return { 결과: 시도.length ? 'X' : '판정불가', 시도 };
 }

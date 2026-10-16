@@ -15,8 +15,8 @@
 import type { PathNode } from '../../fq/v2/graph.ts';
 import type { 조각결과 } from '../g1.ts';
 import { K핵심어 } from './f2.ts';
-import { answer_values, final_value, solve_segments, student_answer_line } from '../solve_lines.ts';
-import { D혼동오류, verify_calculation, verify_discriminant, verify_equation, verify_setup, type 경로이름 } from '../multipath.ts';
+import { answer_values, final_value, line_answer_values, solve_segments, student_answer_line } from '../solve_lines.ts';
+import { D혼동오류, verify_calculation, verify_definition, verify_discriminant, verify_equation, verify_remainder_chain, verify_setup, wrote_remainder, type 경로이름 } from '../multipath.ts';
 import type { 계열, 급소K, 조각, 파트 } from '../types.ts';
 
 export interface 조각대조 {
@@ -144,7 +144,11 @@ export function 봉인6_조각대조(학생답: string, 조각: 조각, 맥락: 
     // 모범 값의 문자(「k」 「x」)만 대조한다 — 「∴」 없이 「D=1-(k+1)>0, k<2」로 쓰면 「D=…」는 답이 아니다 (2026-10-16 q4 학생 3)
     const 문자of = (v: string) => (v.match(/^[A-Za-z](?:_?\w)?(?=<=|>=|[=<>≤≥≦≧])/) ?? [''])[0];
     const 물은문자 = new Set(모범.값.map(문자of));
-    const 학생값 = answer_values(줄).filter((v) => 물은문자.has(문자of(v)));
+    // 답이 둘인 문항(a · R, q7 ①) — 결론 줄만이 아니라 「∴」 줄 · 「R=…=-8」 줄 모두에서 모은다
+    const 모은값 = 물은문자.size > 1
+      ? [...new Set([...answer_values(줄), ...String(학생답 ?? '').split(/\r?\n/).flatMap(line_answer_values)])].sort()
+      : answer_values(줄);
+    const 학생값 = 모은값.filter((v) => 물은문자.has(문자of(v)));
     const 같음 = 학생값.length === 모범.값.length && 학생값.every((v, i) => v === 모범.값[i]);
     return {
       결과: 같음 ? 'O' : 'X',
@@ -160,6 +164,7 @@ export function 봉인6_조각대조(학생답: string, 조각: 조각, 맥락: 
     ? 조각.원식 ? (답: string) => verify_setup(조각.줄글!, 답, 조각.원식!) // 모범 줄 꼴로 — 근과 계수 · 식 변형 · 풀이 경로 (q6)
       : 조각.판별식원식 ? (답: string) => verify_discriminant(답, 조각.판별식원식!)
       : 조각.방정식원식 ? (답: string) => verify_equation(답, 조각.방정식원식!) // q4 학생 2 ① 방정식 세우기
+      : 조각.나머지다항식 ? (답: string) => verify_remainder_chain(답, 조각.나머지다항식!) // q7 ③ 「f(2)=4+4+a=1」
       : null
     : null;
   if (검증) {
@@ -182,6 +187,18 @@ export function 봉인6_조각대조(학생답: string, 조각: 조각, 맥락: 
     if (v.결과 === 'X' && v.오류) return { 결과: 'X', 근거: `${v.오류 === D혼동오류 ? 'D/4를 D로 표기 오류 — ' : ''}${v.오류} (${시도})`, 오류: v.오류 };
     if (v.결과 === 'X') return { 결과: 'X', 근거: `경로 검증 실패 — ${시도}` };
     return { 결과: '판정불가', 근거: `모범답안 줄 「${조각.줄글}」 — 아는 경로 꼴이 없어 교사가 판정합니다` };
+  }
+  // [오종래 2026-10-16 q7] ① 나머지 조건 — 학생이 f(c)(수 나머지면 그 값)를 썼는가 · ① 다항식 정의 — f(x)를 같은 다항식으로 정의했는가
+  if (조각.파트 === '근거대기' && 조각.나머지조건) {
+    const k = 조각.나머지조건;
+    const hit = wrote_remainder(학생답, k);
+    return { 결과: hit ? 'O' : 'X', 근거: `나머지 정리 — f(${k.근})${k.나머지 !== null ? `=${k.나머지}` : ''} ${hit ? '있음' : '없음'}` };
+  }
+  if (조각.파트 === '근거대기' && 조각.정의다항식) {
+    const v = verify_definition(학생답, 조각.정의다항식);
+    const 시도 = v.시도.map((t) => `「${t.식}」 ${t.까닭}`).join(' · ');
+    if (v.결과 === '판정불가') return { 결과: 'X', 근거: `f(x) 정의 없음 — 다항식 ${조각.정의다항식.식}` };
+    return { 결과: v.결과, 근거: `f(x) 정의 ${v.결과 === 'O' ? '맞음' : '틀림'} — ${시도}` };
   }
   if (조각.줄글 && 조각.node === null) return { 결과: '판정불가', 근거: `모범답안 줄 「${조각.줄글}」 — 교사가 판정합니다` };
   // [오종래 2026-10-16 학생 1] 수리 모범답안 풀기 마디 조각 — 교사가 판정한다. 학생 답의 풀기 마디를 옆에 보인다

@@ -1,7 +1,7 @@
 // 루브릭 모듈의 자료구조 — 정본: 봉인/HMOS_루브릭_구현명세-3.md §1·§2
 import type { Color } from '../fq/types.ts';
 import type { PathNode } from '../fq/v2/graph.ts';
-import type { 문자이차식, 이차식 } from './multipath.ts';
+import type { 나머지조건, 다항식조건, 문자이차식, 이차식 } from './multipath.ts';
 
 export type 파트 = '근거대기' | '세우기' | '풀기' | '답구하기';
 export type 요소 = Lowercase<Color> | 'k';
@@ -75,6 +75,8 @@ export interface 인식결과 {
   교사줄?: { 근거대기: string[]; 세우기: string[]; 풀기?: string[]; 답: 모범답 | null };
   /** 수리 — 문항의 이차방정식 (수 계수, multipath.ts parse_quadratic). ② 세우기 줄 조각의 다경로 검증에 쓴다 (2026-10-16) */
   원식?: 이차식 | null;
+  /** 수리 — 문항의 다항식 · 나머지 조건 (multipath.ts parse_polynomial_conditions, 2026-10-16 q7) */
+  다항식?: 다항식조건 | null;
 }
 
 /** 수리 ④ 답구하기 모범 값 — 모범답안 「∴」 줄과 그 줄의 「x=값」들. 학생 답 값과 직접 대조한다 (오종래 2026-10-16 q5) */
@@ -119,6 +121,12 @@ export interface 조각 {
   판별식원식?: 문자이차식;
   /** 수리 ② 세우기 방정식 줄(「x²+2x+k-1=0」) — 문자 계수 원식. 학생이 세운 방정식이 같은지 엔진이 검증 (2026-10-16 q4 학생 2) */
   방정식원식?: 문자이차식;
+  /** 수리 ① 나머지 조건 조각 — 「x-2로 나누었을 때 나머지가 1」 → 학생이 f(2)=1을 썼는가 (2026-10-16 q7) */
+  나머지조건?: 나머지조건;
+  /** 수리 ① 다항식 정의 조각 — 학생이 f(x)를 같은 다항식으로 정의했는가 (q7) */
+  정의다항식?: 다항식조건;
+  /** 수리 ② 나머지 정리 줄 — 「f(2)=4+4+a=1」의 값이 다항식에서 나온 값과 같은가 (q7) */
+  나머지다항식?: 다항식조건;
   배점: number;
   모범조각: string;
 }

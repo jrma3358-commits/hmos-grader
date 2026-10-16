@@ -37,9 +37,9 @@ const { evaluate_item } = await load('src/rubric/item_eval.ts');
 // 수리 모범답안 줄 나누기 — 「~하면」 ① · 등식 ② · 「∴」 ④ 모범 값, 풀기 없음 (오종래 2026-10-16 q5)
 const { split_solve_lines, classify_math_lines } = await load('src/rubric/solve_lines.ts');
 // 문항 등록창의 정답(검증) · 출제의도(루브릭 참고 표시만) · 모범답안 소문항 나누기 (오종래 2026-10-16)
-const { item_portion, verify_answer, sub_item_points } = await load('src/rubric/teacher_input.ts');
+const { item_portion, verify_answer, verify_answer_values, sub_item_points } = await load('src/rubric/teacher_input.ts');
 // 수리 다경로 검증 — 문항의 이차방정식(원식)을 ② 세우기 줄 조각에 붙인다 (오종래 2026-10-16)
-const { parse_quadratic, resolve_subject } = await load('src/rubric/multipath.ts');
+const { parse_quadratic, parse_polynomial_conditions, resolve_subject } = await load('src/rubric/multipath.ts');
 // 8단계 학생 답안 채점 — 엔진 G1 (봉인⑥ 조각 대조 · 봉인④-b 게이트, 계열별, 오종래 2026-10-14)
 const { grade } = await load('src/rubric/g1.ts');
 const { 게이트사슬, 상한비 } = await load('src/rubric/sealed/g1.ts');
@@ -170,13 +170,17 @@ function 루브릭작업(논제글: string, 계열: string, 총배점: number, �
       const 앞급소 = 이어받기 && n > 0 ? 급소들of(소문항들[n - 1]) : [];
       // 원식 — 소문항 글(없으면 공통 발문)의 수 계수 이차방정식. 수리만 (2026-10-16 다경로)
       const 원식 = 계열 === '수리' ? (parse_quadratic(s.텍스트) ?? parse_quadratic(String(s.공통발문 ?? ''))) : null;
-      const 인식 = { ...입력.인식, ...(연결문장 ? { 연결문장, 단락연결 } : {}), ...(앞급소.length ? { 앞급소 } : {}), ...(원식 ? { 원식 } : {}) };
+      // 다항식 · 나머지 조건 (「다항식 …를 x-2로 나누었을 때 나머지가 1」) — 수 계수 이차방정식이 없는 수리 문항 (2026-10-16 q7)
+      const 문항글 = [s.공통발문, s.텍스트].filter(Boolean).join('\n');
+      const 다항식 = 계열 === '수리' && !원식 ? parse_polynomial_conditions(문항글) : null;
+      const 인식 = { ...입력.인식, ...(연결문장 ? { 연결문장, 단락연결 } : {}), ...(앞급소.length ? { 앞급소 } : {}), ...(원식 ? { 원식 } : {}), ...(다항식 ? { 다항식 } : {}) };
       // 계열이 ④ 답구하기를 가른다 — 인문사회국어 = 급소 K마다 경로 추적, 수리 = Q 대상 값 일치
       let 뼈대 = derive_pieces(물음, k, 인식, 계열).map((c: any) => ({ ...c, 요소: judge_element(c, 계열) }));
       // 서술형 B — 교사 모범답안(소문항 순서)에서 엔진 ② 세우기 실체 줄 뒤 ~ ④ 급소 K 줄 앞을 줄마다 풀기 조각으로 (오종래 2026-10-16)
       //   수리 계열도 같다 (같은 날 확대 — 줄이 있으면 봉인2_풀기가 세우기 1:1 대신 줄 조각을 낸다)
       //   [오종래 2026-10-16 q5] 수리는 줄 나누기 규칙으로 바뀜 — 「~하면」 줄 ① · 등식 줄 ② · 「∴」 줄 ④ 모범 값 · 풀기 없음 (세우기=풀기)
-      const 수리줄 = 계열 === '수리' && 답안글.trim() ? classify_math_lines(답안글) : null;
+      // 문항 글을 넘긴다 — 「∴」 말고도 문항 문자로 시작해 수로 끝나는 줄을 답 값에 (답이 둘인 문항, q7)
+      const 수리줄 = 계열 === '수리' && 답안글.trim() ? classify_math_lines(답안글, 문항글) : null;
       if (수리줄) 뼈대 = derive_pieces(물음, k, { ...인식, 교사줄: 수리줄 }, 계열).map((c: any) => ({ ...c, 요소: judge_element(c, 계열) }));
       const 풀기구간 = 답안글.trim() && !수리줄 ? split_solve_lines(답안글, 뼈대) : null;
       if (풀기구간 && 풀기구간.풀기.length) {
@@ -187,7 +191,7 @@ function 루브릭작업(논제글: string, 계열: string, 총배점: number, �
         id: c.id, 파트: c.파트, 요소: c.요소, 수행질: c.수행질, is_중심: c.is_중심, 확인물음: c.확인물음,
         // ④ 경로가 있으면 실체 = 경로의 K (엔진 급소 핵심어)
         실체: c.경로 ? c.경로[c.경로.length - 1].실체 : c.node ? c.node.entity : c.근거 ? c.근거.단락급소 : c.제시문 ? c.제시문.단락급소 : c.앞결과 ? c.앞결과.실체 : c.줄글 ? c.줄글 : null,
-        노드: c.node ? c.node.id : null, 근거: c.근거 ?? null, 경로: c.경로 ?? null, 제시문: c.제시문 ?? null, 앞결과: c.앞결과 ?? null, 풀기글: c.풀기글 ?? null, 줄글: c.줄글 ?? null, 모범답: c.모범답 ?? null, 원식: c.원식 ?? null, 판별식원식: c.판별식원식 ?? null, 방정식원식: c.방정식원식 ?? null, 배점: c.배점,
+        노드: c.node ? c.node.id : null, 근거: c.근거 ?? null, 경로: c.경로 ?? null, 제시문: c.제시문 ?? null, 앞결과: c.앞결과 ?? null, 풀기글: c.풀기글 ?? null, 줄글: c.줄글 ?? null, 모범답: c.모범답 ?? null, 원식: c.원식 ?? null, 판별식원식: c.판별식원식 ?? null, 방정식원식: c.방정식원식 ?? null, 나머지조건: c.나머지조건 ?? null, 정의다항식: c.정의다항식 ?? null, 나머지다항식: c.나머지다항식 ?? null, 배점: c.배점,
         충족조건: specify_condition(c, 계열), 모범조각틀: spread_piece(c, k, 계열),
       }));
       조각.sort((a: any, b: any) => 파트순서.indexOf(a.파트) - 파트순서.indexOf(b.파트));
@@ -199,7 +203,7 @@ function 루브릭작업(논제글: string, 계열: string, 총배점: number, �
         // 5색 인식 — 모범답안이 없을 때 Claude가 이 인식·조각으로 모범답안을 쓴다 (오종래 2026-10-16)
         인식: { 조합: s.a.graph.combination, 노드: s.a.graph.nodes.map((x: any) => ({ 색: x.color, 실체: x.entity })) },
         ...(답안글.trim() ? { 모범답안글: 답안글 } : {}),
-        ...(정답몫.trim() ? { 정답검증: verify_answer(정답몫, 답안글, 뼈대) } : {}),
+        ...(정답몫.trim() ? { 정답검증: (수리줄 ? verify_answer_values(정답몫, 수리줄.답) : null) ?? verify_answer(정답몫, 답안글, 뼈대) } : {}),
         물음,
         ...(풀기구간 ? { 풀기구간 } : {}),
         ...(수리줄 ? { 줄나누기: 수리줄 } : {}),
@@ -241,6 +245,7 @@ try {
       ...(c.원식 ? { 원식: c.원식 } : {}), // ② 세우기 다경로 검증의 원식 (2026-10-16)
       ...(c.판별식원식 ? { 판별식원식: c.판별식원식 } : {}), // ② 판별식 줄의 문자 계수 원식 (2026-10-16 q4 학생 2)
       ...(c.방정식원식 ? { 방정식원식: c.방정식원식 } : {}), // ② 방정식 줄의 문자 계수 원식 (2026-10-16 q4 학생 2)
+      ...(c.나머지조건 ? { 나머지조건: c.나머지조건 } : {}), ...(c.정의다항식 ? { 정의다항식: c.정의다항식 } : {}), ...(c.나머지다항식 ? { 나머지다항식: c.나머지다항식 } : {}), // q7 나머지 정리
       ...(c.앞결과 ? { 앞결과: c.앞결과 } : {}), // 단계형 앞 결과 조각 — 빠지면 실체가 없어 판정불가가 된다 (2026-10-14)
     }));
     if (!조각들.length) throw Object.assign(new Error('루브릭 조각이 없습니다'), { name: '입력오류' });

@@ -5,6 +5,7 @@
 //              (답 줄을 먼저 잡는다 — 세우기 실체는 대개 논제 주어라 답 줄에도 나온다, 오종래 2026-10-16 보완)
 //   풀기      = 그 사이의 빈 줄 아닌 줄들
 import type { 모범답, 조각뼈대 } from './types.ts';
+import { evaluate } from './multipath.ts';
 
 export interface 풀기구간 {
   /** 빈 줄을 뺀 줄 수 */
@@ -130,9 +131,14 @@ const 부등식계산 = (마디: string) => /[<>≤≥≦≧]/.test(마디) && !
 const D4계산 = (마디: string) => /^D\s*\/\s*4\s*=/.test(마디);
 // [오종래 2026-10-16 q6 ②] 「=」로 시작하는 계산 줄도 풀기 — 「= (-1)³-3×(-2)×(-1)」 「= -1-6=-7」 (앞 줄 식을 이어 계산)
 const 이어계산 = (마디: string) => /^=/.test(마디);
+// [오종래 2026-10-16 q7 ④] 수 계산 사슬이 있는 줄도 풀기 — 「R=f(-1)=1-2-7=-8」 (이웃한 두 변이 모두 수로 계산된다)
+const 수계산 = (마디: string) => {
+  const 변 = 마디.split('=').map((x) => x.trim());
+  return 변.some((e, i) => i + 1 < 변.length && e !== '' && 변[i + 1] !== '' && evaluate(e) !== null && evaluate(변[i + 1]) !== null);
+};
 const 풀기마디 = (마디: string) =>
   !근거끝.test(마디) && !근의공식.test(마디) && /[0-9]/.test(마디) &&
-  ((/또는/.test(마디) && (마디.match(/=/g) ?? []).length >= 2) || (/±/.test(마디) && /=/.test(마디)) || 부등식계산(마디) || D4계산(마디) || 이어계산(마디));
+  ((/또는/.test(마디) && (마디.match(/=/g) ?? []).length >= 2) || (/±/.test(마디) && /=/.test(마디)) || 부등식계산(마디) || D4계산(마디) || 이어계산(마디) || 수계산(마디));
 const 마디들 = (줄: string) => 줄.split(/[,，](?![^(]*\))/).map((x) => x.trim()).filter(Boolean);
 
 /** 글에서 풀기 조각 — 줄마다 「∴」 앞만(결론은 풀기가 아니다, 줄 중간 「∴」도 q4 ③), 쉼표 마디 중 풀기 마디 */
@@ -140,7 +146,21 @@ export function solve_segments(글: string): string[] {
   return String(글 ?? '').split(/\r?\n/).map((l) => split_conclusion(l.trim()).앞).filter(Boolean).flatMap(마디들).filter(풀기마디);
 }
 
-export function classify_math_lines(답안: string): 수리줄나누기 {
+/** 문항 글에 홀로 쓰인 문자들(「x」 「a」 「R」) — 답 값이 될 수 있는 문자 (「D」 「f」처럼 풀이에만 나오는 문자는 아니다) */
+export const question_letters = (문항글: string) =>
+  new Set([...String(문항글 ?? '').matchAll(/(?<![A-Za-z])([A-Za-z])(?![A-Za-z])/g)].map((m) => m[1]));
+
+/** 한 줄의 답 값 — 「∴」 결론, 아니면 「R=f(-1)=1-2-7=-8」처럼 문자 하나로 시작해 수로 끝나는 줄 (q7 ①) */
+export function line_answer_values(줄: string): string[] {
+  const { 결론 } = split_conclusion(줄);
+  if (결론) return answer_values(결론);
+  const m = 줄.trim().match(/^([A-Za-z])\s*=/);
+  const v = m ? final_value(줄) : null;
+  return m && v !== null ? [`${m[1]}=${v}`] : [];
+}
+
+/** @param 문항글 주면 — 「∴」 결론 말고도 문항 문자로 시작해 수로 끝나는 줄을 답 값에 더한다 (답이 둘인 문항, q7 ①) */
+export function classify_math_lines(답안: string, 문항글?: string): 수리줄나누기 {
   const 줄 = String(답안 ?? '').split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
   const out: 수리줄나누기 = { 근거대기: [], 세우기: [], 풀기: [], 답: null, 미분류: [] };
   for (const 원줄 of 줄) {
@@ -148,7 +168,8 @@ export function classify_math_lines(답안: string): 수리줄나누기 {
     const { 앞: l, 결론 } = split_conclusion(원줄);
     if (결론) out.답 = { 줄: 결론, 값: answer_values(결론) }; // 결론이 여럿이면 마지막
     if (!l) continue;
-    if (/하면[\s,，.]*$/.test(l)) out.근거대기.push(l);
+    // [오종래 2026-10-16 q7 ⑤] 「~로 놓으면」(「f(x)=x²+2x+a로 놓으면」)도 ① 근거대기
+    if (/(하면|로\s*놓으면)[\s,，.]*$/.test(l)) out.근거대기.push(l);
     // [오종래 2026-10-16 q6 ⑥] 「~이므로」로 끝나는 등식 줄(「x²+x-2=0의 두 근이 α, β이므로」)은 세우기가 아니다 — 미분류
     else if (/=/.test(l) && /이므로[\s,，.]*$/.test(l)) out.미분류.push(l);
     else if (/=/.test(l)) {
@@ -165,6 +186,15 @@ export function classify_math_lines(답안: string): 수리줄나누기 {
     } else out.미분류.push(l);
   }
   // [오종래 2026-10-16 q6 ①] 「∴」 줄이 없으면 「=」가 있는 마지막 줄의 끝 값(수)이 답 — 「= -1-6=-7」 → -7
+  // [오종래 2026-10-16 q7 ①] 답이 둘인 문항 — 「∴ a=-7」 말고 「R=f(-1)=…=-8」도 답 값 (문항에 나오는 문자만)
+  if (문항글) {
+    const 문자 = question_letters(문항글);
+    const 더 = 줄.filter((l) => !l.includes('∴')).flatMap(line_answer_values).filter((v) => 문자.has(v.match(/^[A-Za-z]/)?.[0] ?? ''));
+    if (더.length) {
+      const 값 = [...new Set([...(out.답?.값 ?? []), ...더])].sort();
+      out.답 = { 줄: out.답 ? `${out.답.줄} · ${더.join(', ')}` : 더.join(', '), 값 };
+    }
+  }
   if (!out.답) {
     const 끝줄 = 줄.filter((l) => l.includes('=')).at(-1);
     const v = 끝줄 ? final_value(끝줄) : null;
