@@ -77,8 +77,16 @@ const 결론표 = /^∴/;
 /** 결론 줄의 「x=값」들 — 띄어쓰기 무시, 「또는」·쉼표로 나뉜다. 값은 숫자면 수로 맞춘 글자 (1/2 = 0.5) */
 export function answer_values(줄: string): string[] {
   const s = String(줄 ?? '').replace(/∴/g, '').replace(/\s+/g, '').replace(/[−–]/g, '-');
-  const 값 = [...s.matchAll(/([A-Za-z](?:_?\w)?)=(.+?)(?=또는|이다|입니다|[,，.。]|[A-Za-z](?:_?\w)?=|$)/g)].map((m) => `${m[1]}=${수맞춤(m[2])}`);
+  const 값 = [...s.matchAll(/([A-Za-z](?:_?\w)?)=(.+?)(?=또는|이다|입니다|[,，.。]|[A-Za-z](?:_?\w)?=|$)/g)].flatMap((m) => 복부호(m[2]).map((v) => `${m[1]}=${수맞춤(v)}`));
   return [...new Set(값)].sort();
+}
+
+/** 「a±b」(수)는 두 값 a+b · a-b로 편다 — 완전제곱식 풀이 「x=-1±2」 = 「x=1 또는 x=-3」 (2026-10-16 학생 3). 수가 아니면 그대로 */
+function 복부호(v: string): string[] {
+  const m = v.match(/^\(?(-?\d+(?:\.\d+)?)\)?±\(?(\d+(?:\.\d+)?)\)?$/);
+  if (!m) return [v];
+  const [a, b] = [Number(m[1]), Number(m[2])];
+  return [String(a + b), String(a - b)];
 }
 
 /** 「-3/2」 「0.5」 「3」 같은 수는 수로 맞춘다 — 아니면 글자 그대로 */
