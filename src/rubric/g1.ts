@@ -18,6 +18,8 @@ export interface 조각결과 {
   /** O면 배점, X·판정불가면 0 */
   득점: number;
   판단근거: string;
+  /** 수리 ② 세우기 — 엔진이 검증한 다경로 (🔆, 2026-10-16) */
+  다경로?: string;
 }
 
 export interface 파트결과 {
@@ -59,7 +61,7 @@ export function grade(학생답: string, 루브릭: 조각[], 모범답안: stri
   const 조각별: 조각결과[] = 파트순.map((c) => {
     const 대조 = 봉인6_조각대조(학생답, c, { 답노드, 질문급소, 계열, 루브릭, 앞결과 });
     앞결과.set(c.id, 대조);
-    const { 결과, 근거 } = 대조;
+    const { 결과, 근거, 다경로 } = 대조;
     return {
       조각id: c.id,
       파트: c.파트,
@@ -68,6 +70,7 @@ export function grade(학생답: string, 루브릭: 조각[], 모범답안: stri
       배점: c.배점,
       득점: 결과 === 'O' ? c.배점 : 0,
       판단근거: 근거,
+      ...(다경로 ? { 다경로 } : {}),
     };
   });
 

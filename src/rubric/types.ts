@@ -1,6 +1,7 @@
 // 루브릭 모듈의 자료구조 — 정본: 봉인/HMOS_루브릭_구현명세-3.md §1·§2
 import type { Color } from '../fq/types.ts';
 import type { PathNode } from '../fq/v2/graph.ts';
+import type { 이차식 } from './multipath.ts';
 
 export type 파트 = '근거대기' | '세우기' | '풀기' | '답구하기';
 export type 요소 = Lowercase<Color> | 'k';
@@ -72,6 +73,8 @@ export interface 인식결과 {
   /** 수리 — 교사 모범답안 줄 나누기 (solve_lines.ts classify_math_lines, 오종래 2026-10-16 q5).
    *  「~하면」 줄 = ① 근거대기 조각 · 등식 줄 = ② 세우기 조각 · ③ 풀기 없음(세우기=풀기) · 「∴」 줄 = ④ 답구하기의 모범 값 */
   교사줄?: { 근거대기: string[]; 세우기: string[]; 풀기?: string[]; 답: 모범답 | null };
+  /** 수리 — 문항의 이차방정식 (수 계수, multipath.ts parse_quadratic). ② 세우기 줄 조각의 다경로 검증에 쓴다 (2026-10-16) */
+  원식?: 이차식 | null;
 }
 
 /** 수리 ④ 답구하기 모범 값 — 모범답안 「∴」 줄과 그 줄의 「x=값」들. 학생 답 값과 직접 대조한다 (오종래 2026-10-16 q5) */
@@ -108,6 +111,8 @@ export interface 조각 {
   줄글?: string;
   /** 수리 ④ — 모범답안 「∴」 줄 값. 있으면 학생 답 값과 직접 대조, 불일치면 X (오종래 2026-10-16 q5) */
   모범답?: 모범답;
+  /** 수리 ② 세우기 줄 — 원식이 있으면 학생 답의 다경로(인수분해 · 완전제곱식 · 근의 공식 1·2)를 엔진이 검증 (2026-10-16) */
+  원식?: 이차식;
   배점: number;
   모범조각: string;
 }
