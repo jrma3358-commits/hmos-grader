@@ -701,7 +701,7 @@ app.post('/api/verify',async(req,res)=>{
   // 소문항: /api/rubric 응답의 소문항 하나 (조각·번호) · 모범답안: 지금 모범답안 글 · 정답: 0단계 정답 (소문항 머리 (1-1)로 엔진이 나눈다)
   const {소문항:s,모범답안,정답}=req.body||{};
   if(!s||!Array.isArray(s.조각)){res.status(400).json({error:'루브릭 조각이 있는 소문항이 필요합니다'});return;}
-  const r=await runAnalyze({파이프라인:'C',작업:'정답검증',논제:'정답검증',번호:s.번호??null,조각:s.조각,모범답안:String(모범답안||''),정답:String(정답||''),단위:'문장'});
+  const r=await runAnalyze({파이프라인:'C',작업:'정답검증',논제:'정답검증',번호:s.번호??null,조각:s.조각,모범답안:String(모범답안||''),정답:String(정답||''),단위:req.body.단위==='줄'?'줄':'문장'});
   if(!r.ok||!r.단계||!r.단계.정답검증){res.status(r.러너실패?500:400).json({error:'엔진 정답 검증 실패: '+((r.error&&r.error.사유)||'알 수 없음')});return;}
   res.json(r.단계.정답검증);
 });

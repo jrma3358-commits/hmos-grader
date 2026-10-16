@@ -912,13 +912,13 @@
         <!-- 그림이 들어가는 편집기 — 글자는 [그림 n] 자리에 그림을 끼워 보이고, 꺼낼 때는 다시 [그림 n] 글자로 (regText) -->
         <div class="input-area" id="reg-input" contenteditable="true" spellcheck="false" onpaste="regPaste(event)" oninput="regInput()" data-placeholder="문항 원문을 붙여넣으세요.&#10;예) 4. 함수 f(x) = ... 가 실수 전체에서 연속일 때, 상수 a의 값은? [3점]"></div>
 
-        <!-- 교사 입력 (오종래 2026-10-16) — A: 정답(필수, 검증용) · 출제의도(선택) / B·C: 출제의도(필수), 정답 칸 없음 / B: 모범답안(선택).
+        <!-- 교사 입력 (오종래 2026-10-16) — A: 정답(필수, 검증용) · 출제의도(선택) / B·C: 출제의도(필수), 정답(선택, 검증용) / B: 모범답안(선택).
              소문항이 여럿이면 줄 머리 (1) (2) -->
         <div id="reg-answer-wrap">
-          <div class="card-title" style="margin-top: 16px;">정답 <span class="badge warn">필수</span></div>
+          <div class="card-title" style="margin-top: 16px;">정답 <span class="badge warn" id="reg-answer-badge">필수</span></div>
           <textarea class="input-area" id="reg-answer" style="min-height: 64px;" spellcheck="false" oninput="교사칸동기('정답', this.value)"
             placeholder="예) 3&#10;소문항이 여럿이면 줄 머리에 (1) (2)"></textarea>
-          <div class="c-meta" style="margin-top: 4px;">최종 답·핵심 키워드를 쓰세요</div>
+          <div class="c-meta" style="margin-top: 4px;" id="reg-answer-hint">최종 답·핵심 키워드를 쓰세요</div>
         </div>
 
         <div class="card-title" style="margin-top: 16px;">출제의도 <span class="badge muted" id="reg-core-badge">선택</span></div>
@@ -1687,9 +1687,13 @@ function selectType(type, btn) {
       : '문항 원문을 넣으세요 — 등록하면 1단계 문항 입력으로 넘어갑니다';
   document.getElementById('reg-title').textContent = isC ? '논제 + 제시문' : '문항 원문';
   document.getElementById('reg-model-wrap').style.display = isB ? '' : 'none'; // 모범답안 칸은 서술형 B만 (2026-10-16)
-  // A: 정답 필수 · 출제의도 선택 / B·C: 정답 칸 없음 · 출제의도 필수 (오종래 2026-10-16)
+  // A: 정답 필수 · 출제의도 선택 / B·C: 정답 선택(검증용 — 모범답안 답 줄과 대조) · 출제의도 필수 (오종래 2026-10-16)
   const 핵심필수 = isB || isC;
-  document.getElementById('reg-answer-wrap').style.display = 핵심필수 ? 'none' : '';
+  document.getElementById('reg-answer-badge').textContent = 핵심필수 ? '선택' : '필수';
+  document.getElementById('reg-answer-badge').className = 'badge ' + (핵심필수 ? 'muted' : 'warn');
+  document.getElementById('reg-answer-hint').textContent = 핵심필수
+    ? '최종 답·핵심 키워드 (선택) — 쓰면 모범답안 답 줄과 대조해 다르면 「문항 오류 또는 정답 오류」로 알립니다'
+    : '최종 답·핵심 키워드를 쓰세요';
   document.getElementById('reg-core-badge').textContent = 핵심필수 ? '필수' : '선택';
   document.getElementById('reg-core-badge').className = 'badge ' + (핵심필수 ? 'warn' : 'muted');
   document.getElementById('reg-core-hint').textContent = 핵심필수 ? '엔진이 급소를 더 정확히 잡습니다 (필수)' : '엔진이 급소를 더 정확히 잡습니다 (선택)';
@@ -3233,6 +3237,8 @@ async function B루브릭요청(data, m, 모범답안) {
     s.답안 = s.자동답안
       ? { 글: s.모범답안글, 시도: s.자동답안.시도, 교사: null, 확정: null, 생성: true }
       : { 글: '', 시도: 0, 교사: s.모범답안글, 확정: null };
+    // 엔진이 루브릭과 함께 대조한 결과(답 줄 ↔ 정답)를 5단계 칸 글에 붙인다 — 다르면 「문항 오류 또는 정답 오류」
+    if (s.정답검증 && s.정답검증.결과 !== '검증 안 함') s.답안검증 = { ...s.정답검증, 글: s.모범답안글 };
   }
   return { 출처: '서술형', 텍스트: data.문항원문, 루브릭: out };
 }
@@ -3460,7 +3466,8 @@ function 모범소문항Html(s, i, j) {
              <button class="type-btn" id="c9-btn-${키}" onclick="답안잇기(${i}, ${j})">모범답안 잇기 (Claude)</button>
              <button class="type-btn" onclick="답안확정(${i}, ${j})">교사 확정</button>
              <span id="c9-st-${키}">${확정Html(s)}</span>
-           </div>`
+           </div>
+           <div id="c9-vf-${키}">${답안검증Html(s, i, j)}</div>`
         : s.답안
         ? `<textarea class="input-area" id="c9-ta-${키}" style="min-height:220px;"${i < 0 ? ` placeholder="${esc(줄안내)}"` : ''} oninput="답안수정(${i}, ${j}, this.value)">${esc(지금답안(s))}</textarea>
            <div class="chip-list" id="c9-tr-${키}" style="margin-top:8px;">${흔적Html(지금답안(s), s)}</div>
@@ -3471,7 +3478,7 @@ function 모범소문항Html(s, i, j) {
              <button class="type-btn" onclick="답안확정(${i}, ${j})">교사 확정</button>
              <span id="c9-st-${키}">${확정Html(s)}</span>
            </div>
-           ${i >= 0 ? `<div id="c9-vf-${키}">${답안검증Html(s, i, j)}</div>` : ''}`
+           <div id="c9-vf-${키}">${답안검증Html(s, i, j)}</div>`
         : `<div class="c-meta">조각 문장을 루브릭 경로 순서(근거대기 → 세우기 → 답구하기)로 Claude가 한 문단으로 잇습니다. 새 사실은 더하지 않고, 조각마다 실체·급소 핵심어 글자를 남깁니다.</div>
            <div class="c-meta" style="margin:6px 0 8px;">아래 버튼을 눌러 모범답안을 생성하세요.</div>
            <button class="type-btn" id="c9-btn-${키}" onclick="답안잇기(${i}, ${j})">모범답안 잇기 (Claude)</button>`;
@@ -3510,7 +3517,7 @@ async function 답안잇기(i, j) {
     const { out } = await postJSON('/api/answer', { 소문항: s, 논제: x.텍스트, 계열: x.루브릭.계열, ...(앞답안 ? { 앞답안 } : {}) });
     if (out.error) { alert('모범답안 잇기 실패: ' + out.error); return; }
     s.답안 = { 글: out.모범답안, 시도: out.시도, 교사: null, 확정: null };
-    if (i >= 0) await 답안정답검증(i, j, out.모범답안); // C — 이은 문단을 바로 정답과 대조 (2026-10-16)
+    await 답안정답검증(i, j, out.모범답안); // 이은 글을 바로 정답과 대조 (2026-10-16)
     다시그림9(i);
   });
 }
@@ -3539,7 +3546,8 @@ async function 답안정답검증(i, j, 글) {
   const s = 루브릭홀더(i).루브릭.소문항[j];
   const 정답 = 문항정답();
   if (!정답) { delete s.답안검증; return null; }
-  const { status, out } = await postJSON('/api/verify', { 소문항: { 번호: s.번호, 조각: s.조각 }, 모범답안: 글, 정답 });
+  // 서술형 B(i < 0)는 줄 단위 — 답 줄(급소 핵심어가 나온 마지막 줄, 없으면 마지막 줄)과 대조. C는 문장 단위 (2026-10-16)
+  const { status, out } = await postJSON('/api/verify', { 소문항: { 번호: s.번호, 조각: s.조각 }, 모범답안: 글, 정답, 단위: i < 0 ? '줄' : '문장' });
   if (status !== 200 || out.error) { alert('정답 검증 실패: ' + (out.error || status)); return null; }
   s.답안검증 = { ...out, 글 };
   delete s.답안정답확인; // 교사 확인은 검증한 그 글에 붙는다
@@ -3548,14 +3556,21 @@ async function 답안정답검증(i, j, 글) {
 
 function 답안검증Html(s, i, j) {
   const v = s.답안검증;
-  if (!문항정답()) return ''; // 정답이 없으면(C는 정답 칸 없음) 검증 줄을 보이지 않는다
-  if (!v) return '<div class="c-meta" style="margin-top:6px;">정답 검증 — 교사 확정 때 엔진이 모범답안 답 문장과 정답을 대조합니다</div>';
-  if (v.글 !== 지금답안(s)) return '<div class="c-meta" style="margin-top:6px;"><span class="badge muted">정답 검증 다시 필요</span> 글을 고쳤습니다 — 교사 확정 때 다시 대조합니다</div>';
-  if (v.결과 === '일치') return `<div class="c-meta" style="margin-top:6px;"><span class="badge ok">정답 검증 통과</span> 정답 「${esc(v.정답)}」 = 답 문장 「${esc(v.답줄글 || '')}」</div>`;
+  if (!문항정답()) return ''; // 정답이 없으면(B·C는 정답 선택) 검증 줄을 보이지 않는다
+  const 답 = i < 0 ? '답 줄' : '답 문장';
+  if (!v) return `<div class="c-meta" style="margin-top:6px;">정답 검증 — 교사 확정 때 엔진이 모범답안 ${답}과 정답을 대조합니다</div>`;
+  if (v.글 !== 지금답안(s)) return `<div class="c-meta" style="margin-top:6px;"><span class="badge muted">정답 검증 다시 필요</span> 글을 고쳤습니다 — <button class="type-btn" onclick="답안다시검증(${i}, ${j})">지금 대조</button> 또는 교사 확정 때 다시 대조합니다</div>`;
+  if (v.결과 === '일치') return `<div class="c-meta" style="margin-top:6px;"><span class="badge ok">정답 검증 통과</span> 정답 「${esc(v.정답)}」 = ${답} 「${esc(v.답줄글 || '')}」</div>`;
   if (v.결과 === '검증 안 함') return `<div class="c-meta" style="margin-top:6px;"><span class="badge muted">정답 검증 안 함</span> ${esc(v.사유)}</div>`;
-  return `<div class="flag-box" style="margin-top:8px;"><strong>문항 오류 또는 정답 오류</strong> — 정답 「${esc(v.정답)}」이(가) 모범답안 답 문장에 없습니다${v.빠진.length ? ` (없는 말: ${v.빠진.map(t => `「${esc(t)}」`).join(' ')})` : ''}.
-      <div style="margin-top:4px;">답 문장: 「${esc(v.답줄글 || '')}」</div>
+  return `<div class="flag-box" style="margin-top:8px;"><strong>문항 오류 또는 정답 오류</strong> — 정답 「${esc(v.정답)}」이(가) 모범답안 ${답}에 없습니다${v.빠진.length ? ` (없는 말: ${v.빠진.map(t => `「${esc(t)}」`).join(' ')})` : ''}.
+      <div style="margin-top:4px;">${답}: 「${esc(v.답줄글 || '')}」</div>
       <div style="margin-top:6px;">${s.답안정답확인 ? `<span class="badge ok">교사 확인 ✓ ${esc(s.답안정답확인)}</span>` : `<button class="type-btn" onclick="답안정답확인(${i}, ${j})">교사 확인함</button> <span class="c-meta">문항·정답·모범답안을 확인한 뒤 누르세요</span>`}</div></div>`;
+}
+
+/** 고친 글로 바로 다시 대조 */
+async function 답안다시검증(i, j) {
+  await 답안정답검증(i, j, 지금답안(루브릭홀더(i).루브릭.소문항[j]));
+  다시그림9(i);
 }
 
 function 답안정답확인(i, j) {
@@ -3570,12 +3585,12 @@ async function 답안확정(i, j) {
   if (!글) { alert('확정할 모범답안이 없습니다.'); return; }
   const 빠짐 = 문단흔적(글, s).filter(x => !x.충족);
   if (빠짐.length && !confirm(`조각 흔적이 빠진 곳이 ${빠짐.length}개 있습니다 (${빠짐.map(x => x.id).join(', ')}). 그래도 확정할까요?`)) return;
-  // C — 확정하는 글로 정답 검증. 어긋나면 교사 확인을 받고 확정 (오종래 2026-10-16)
-  if (i >= 0 && 문항정답()) {
+  // B·C — 확정하는 글로 정답 검증. 어긋나면 교사 확인을 받고 확정 (오종래 2026-10-16)
+  if (문항정답()) {
     const v = s.답안검증 && s.답안검증.글 === 지금답안(s) ? s.답안검증 : await 답안정답검증(i, j, 지금답안(s));
     if (!v) return;
     if (v.결과 === '불일치' && !s.답안정답확인) {
-      if (!confirm(`문항 오류 또는 정답 오류 — 정답 「${v.정답}」이(가) 모범답안 답 문장 「${v.답줄글 || ''}」에 없습니다.\n문항·정답·모범답안을 확인했고 그래도 확정할까요?`)) { 다시그림9(i); return; }
+      if (!confirm(`문항 오류 또는 정답 오류 — 정답 「${v.정답}」이(가) 모범답안 ${i < 0 ? '답 줄' : '답 문장'} 「${v.답줄글 || ''}」에 없습니다.\n문항·정답·모범답안을 확인했고 그래도 확정할까요?`)) { 다시그림9(i); return; }
       s.답안정답확인 = new Date().toLocaleString('ko-KR');
     }
   }
@@ -3627,7 +3642,8 @@ function 상태맞춤(m) {
 const 필수칸 = 파이프라인 => (!파이프라인 ? null : 파이프라인.startsWith('A') ? '정답' : '핵심');
 
 /** 정답을 쓰는 파이프라인 — A만. B·C는 정답 칸이 없어 예전에 저장된 정답도 엔진에 보내지 않는다 */
-const 정답씀 = 파이프라인 => !!파이프라인 && 파이프라인.startsWith('A');
+// 정답은 A 필수 · B·C 선택 — 어느 쪽이든 쓰면 검증에 쓴다 (2026-10-16)
+const 정답씀 = 파이프라인 => !!파이프라인;
 
 /** 0단계 교사 입력(정답·핵심·모범답안) → 편집 중 문항. 필수 칸은 미입력↔대기만 바꾼다 (완료·실패는 그대로 — 인식 결과와 상관없다) */
 function 교사칸동기(칸, 값) {
