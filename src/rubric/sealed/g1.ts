@@ -16,7 +16,7 @@ import type { PathNode } from '../../fq/v2/graph.ts';
 import type { 조각결과 } from '../g1.ts';
 import { K핵심어 } from './f2.ts';
 import { answer_values, final_value, line_answer_values, solve_segments, student_answer_line } from '../solve_lines.ts';
-import { D혼동오류, named_remainder_values, remainder_points, verify_calculation, verify_definition, verify_discriminant, verify_equation, verify_remainder_chain, verify_setup, wrote_remainder, type 경로이름 } from '../multipath.ts';
+import { D혼동오류, named_remainder_values, remainder_points, verify_calculation, verify_definition, verify_discriminant, verify_equation, verify_remainder_chain, verify_division, verify_setup, wrote_remainder, type 경로이름, type 다항식조건 } from '../multipath.ts';
 import type { 계열, 급소K, 조각, 파트 } from '../types.ts';
 
 export interface 조각대조 {
@@ -168,7 +168,11 @@ export function 봉인6_조각대조(학생답: string, 조각: 조각, 맥락: 
       : 조각.판별식원식 ? (답: string) => verify_discriminant(답, 조각.판별식원식!)
       : 조각.방정식원식 ? (답: string) => verify_equation(답, 조각.방정식원식!) // q4 학생 2 ① 방정식 세우기
       // q7 ③ 「f(2)=4+4+a=1」 — 모범 줄의 c(f(2))만 본다. 다른 f(c) 줄(f(-1))은 그 줄의 조각이 본다 (2026-10-17 q7 학생 1)
-      : 조각.나머지다항식 ? (답: string) => verify_remainder_chain(답, 조각.나머지다항식!, remainder_points(조각.줄글 ?? ''))
+      //   f(c) 꼴이 없으면 직접 나눗셈 경로 (2026-10-17 q7 학생 2 — 🔆)
+      : 조각.나머지다항식 ? (답: string) => {
+        const v = verify_remainder_chain(답, 조각.나머지다항식!, remainder_points(조각.줄글 ?? ''));
+        return v.결과 === '판정불가' ? verify_division(답, 조각.나머지다항식!, remainder_points(조각.줄글 ?? '')) : v;
+      }
       : null
     : null;
   if (검증) {
@@ -193,14 +197,24 @@ export function 봉인6_조각대조(학생답: string, 조각: 조각, 맥락: 
     return { 결과: '판정불가', 근거: `모범답안 줄 「${조각.줄글}」 — 아는 경로 꼴이 없어 교사가 판정합니다` };
   }
   // [오종래 2026-10-16 q7] ① 나머지 조건 — 학생이 f(c)(수 나머지면 그 값)를 썼는가 · ① 다항식 정의 — f(x)를 같은 다항식으로 정의했는가
+  //   f 표기가 없으면 직접 나눗셈 경로로 본다 — 그 c로 나눈 나눗셈 · 피제식이 검증되면 O (오종래 2026-10-17 q7 학생 2)
+  const 나눗셈 = (원: 다항식조건 | undefined, 근?: number[]) => {
+    const v = 원 ? verify_division(학생답, 원, 근) : null;
+    return v && v.결과 === 'O' ? `🔆 다경로 — 직접 나눗셈 검증 (${v.시도.map((t) => `「${t.식}」 ${t.까닭}`).join(' · ')})` : null;
+  };
+  const 문항다항식 = 맥락.루브릭.map((c) => c.나머지다항식 ?? c.정의다항식).find(Boolean);
   if (조각.파트 === '근거대기' && 조각.나머지조건) {
     const k = 조각.나머지조건;
     const hit = wrote_remainder(학생답, k);
+    const 나눔 = hit ? null : 나눗셈(문항다항식, [k.근]);
+    if (나눔) return { 결과: 'O', 근거: 나눔 };
     return { 결과: hit ? 'O' : 'X', 근거: `나머지 정리 — f(${k.근})${k.나머지 !== null ? `=${k.나머지}` : ''} ${hit ? '있음' : '없음'}` };
   }
   if (조각.파트 === '근거대기' && 조각.정의다항식) {
     const v = verify_definition(학생답, 조각.정의다항식);
     const 시도 = v.시도.map((t) => `「${t.식}」 ${t.까닭}`).join(' · ');
+    const 나눔 = v.결과 === '판정불가' ? 나눗셈(조각.정의다항식) : null;
+    if (나눔) return { 결과: 'O', 근거: 나눔 };
     if (v.결과 === '판정불가') return { 결과: 'X', 근거: `f(x) 정의 없음 — 다항식 ${조각.정의다항식.식}` };
     return { 결과: v.결과, 근거: `f(x) 정의 ${v.결과 === 'O' ? '맞음' : '틀림'} — ${시도}` };
   }
@@ -217,6 +231,13 @@ export function 봉인6_조각대조(학생답: string, 조각: 조각, 맥락: 
       if (대입.결과 === 'X') {
         const 시도 = 대입.시도.map((t) => `「${t.식}」 ${t.까닭}`).join(' · ');
         return { 결과: 'X', 근거: `${대입.오류 ? `${대입.오류} — ` : '대입 틀림 — '}${시도} (${보임})`, ...(대입.오류 ? { 오류: 대입.오류 } : {}) };
+      }
+      // f(c) 꼴이 없으면 그 c로 직접 나눈 나눗셈을 본다 — 검증되면 O(🔆), 틀리면 X (2026-10-17 q7 학생 2)
+      if (대입.결과 === '판정불가') {
+        const d = verify_division(학생답, 조각.나머지다항식, remainder_points(조각.풀기글));
+        const 시도 = d.시도.map((t) => `「${t.식}」 ${t.까닭}`).join(' · ');
+        if (d.결과 === 'O') return { 결과: 'O', 근거: `🔆 다경로 — 직접 나눗셈 검증 (${시도})`, 다경로: '직접 나눗셈', 다경로식: d.시도[0].식, 다경로까닭: d.시도[0].까닭 };
+        if (d.결과 === 'X') return { 결과: 'X', 근거: `직접 나눗셈 틀림 — ${시도} (${보임})` };
       }
     }
     const v = verify_calculation(학생답);

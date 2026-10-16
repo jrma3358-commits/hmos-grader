@@ -155,7 +155,8 @@ export function line_answer_values(줄: string): string[] {
   const { 결론 } = split_conclusion(줄);
   if (결론) return answer_values(결론);
   // 쉼표 마디마다 — 「f(2)=4+4+a=1, a=-7」의 「a=-7」 (2026-10-17 q7 학생 1)
-  return 마디들(줄).flatMap((마디) => {
+  // 한글 낱말 뒤도 마디 — 「a+8=1이므로 a=-7」의 「a=-7」 (2026-10-17 q7 학생 2)
+  return 마디들(줄).flatMap((x) => x.split(/[가-힣]+/)).map((x) => x.trim()).filter(Boolean).flatMap((마디) => {
     const m = 마디.match(/^([A-Za-z])\s*=/);
     const v = m ? final_value(마디) : null;
     return m && v !== null ? [`${m[1]}=${v}`] : [];

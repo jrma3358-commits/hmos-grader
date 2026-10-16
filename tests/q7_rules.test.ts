@@ -8,8 +8,9 @@ import { describe, it } from 'node:test';
 import { recognizeV2Analysis } from '../src/fq/pipeline.ts';
 import { derive_pieces, f2_input_from_v2 } from '../src/rubric/f2.ts';
 import { grade } from '../src/rubric/g1.ts';
-import { named_remainder_values, parse_polynomial_conditions, remainder_points, substitution_sign_error, verify_definition, verify_remainder_chain, wrote_remainder } from '../src/rubric/multipath.ts';
+import { named_remainder_values, parse_polynomial_conditions, remainder_points, substitution_sign_error, verify_definition, verify_division, verify_remainder_chain, wrote_remainder } from '../src/rubric/multipath.ts';
 import { classify_math_lines, line_answer_values, solve_segments } from '../src/rubric/solve_lines.ts';
+import { verify_calculation } from '../src/rubric/multipath.ts';
 import { verify_answer_values } from '../src/rubric/teacher_input.ts';
 
 const 문항 = '다항식 x²+2x+a를 x-2로 나누었을 때 나머지가 1이었다.\n상수 a의 값과 주어진 다항식을 x+1로 나누었을 때의 나머지 R을 구하고\n풀이 과정을 서술하시오.';
@@ -128,5 +129,32 @@ describe('R=f(-1) 읽기 · 점수 반올림', () => {
     const r = grade('f(2)=4+4+a=1, a=-7\nf(-1)=1-2-7=-8', 조각들, '', 입력.k, '수리');
     assert.equal(r.만점, Math.round(조각들.length * 0.1 * 10) / 10);
     assert.equal(String(r.부분점수).length <= 4, true);
+  });
+});
+
+// 2026-10-17 q7 학생 2 — 나머지 정리 대신 직접 나눗셈 경로 (🔆) · 「이므로」에서 사슬 끊기 · 「이므로」 뒤 답 값
+describe('직접 나눗셈 경로', () => {
+  const 학생2 = '다항식 x²+2x+a를 x-2로 직접 나눗셈하면\n몫: x+4, 나머지: a+8\na+8=1이므로 a=-7\n\nx²+2x-7을 x+1로 직접 나눗셈하면\n몫: x+1, 나머지: -8\n∴ R=-8';
+  it('몫×(x-c)+나머지 ≡ 피제식 · 수 나머지는 「a+8=1」 — 맞음, 몫 · 나머지 · 조건이 틀리면 X', () => {
+    assert.equal(verify_division(학생2, 원).결과, 'O');
+    assert.equal(verify_division(학생2, 원, [2]).시도.length, 1);
+    assert.equal(verify_division('x²+2x+a를 x-2로 나누면\n몫: x+3, 나머지: a+8\na+8=1', 원).결과, 'X');
+    assert.equal(verify_division('x²+2x+a를 x-2로 나누면\n몫: x+4, 나머지: a+8', 원).결과, 'X'); // 나머지를 1과 같다고 쓰지 않음
+    assert.equal(verify_division('x²+2x-7을 x+1로 나누면\n몫: x+1, 나머지: -6', 원).결과, 'X');
+    assert.equal(verify_division('f(2)=4+4+a=1', 원).결과, '판정불가');
+  });
+  it('「a+8=1이므로 a=-7」 — 한 사슬이 아니다 · a=-7은 답 값', () => {
+    assert.equal(verify_calculation('a+8=1이므로 a=-7').짝.length, 0);
+    assert.deepEqual(line_answer_values('a+8=1이므로 a=-7'), ['a=-7']);
+  });
+  it('G1 — 모든 조각 O (5점), ② ③ 🔆 다경로 직접 나눗셈', () => {
+    const 입력 = f2_input_from_v2(recognizeV2Analysis(문항));
+    assert.ok(입력.ok);
+    const cs = derive_pieces(입력.물음, 입력.k, { ...입력.인식, 교사줄: classify_math_lines(모범, 문항), 다항식: 원 }, '수리');
+    const r = grade(학생2, cs.map((c) => ({ ...c, 충족조건: '', 모범조각: '', 배점: 1 })) as any, '', 입력.k, '수리');
+    const 결과 = Object.values(r.파트별).flatMap((p) => p.조각별.map((x) => x.결과));
+    assert.ok(결과.every((x) => x === 'O'), 결과.join(','));
+    assert.equal(r.파트별.세우기.조각별[0].다경로, '직접 나눗셈');
+    assert.equal(r.파트별.풀기.조각별[0].다경로, '직접 나눗셈');
   });
 });
