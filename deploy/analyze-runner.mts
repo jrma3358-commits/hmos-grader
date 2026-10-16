@@ -33,8 +33,8 @@ const { specify_condition } = await load('src/rubric/f4.ts');
 const { allocate_points } = await load('src/rubric/f5.ts');
 const { spread_piece } = await load('src/rubric/f6.ts');
 const { evaluate_item } = await load('src/rubric/item_eval.ts');
-// 서술형 B 교사 모범답안 라벨 [근거][세우기][풀기-n][답] — [풀기-n]이 ③ 풀기 조각 (오종래 2026-10-16)
-const { parse_answer_labels } = await load('src/rubric/labels.ts');
+// 서술형 B 교사 모범답안 — 세우기 이후 ~ 답구하기 이전 줄이 ③ 풀기 조각 (오종래 2026-10-16)
+const { split_solve_lines } = await load('src/rubric/solve_lines.ts');
 // 8단계 학생 답안 채점 — 엔진 G1 (봉인⑥ 조각 대조 · 봉인④-b 게이트, 계열별, 오종래 2026-10-14)
 const { grade } = await load('src/rubric/g1.ts');
 const { 게이트사슬, 상한비 } = await load('src/rubric/sealed/g1.ts');
@@ -141,9 +141,8 @@ function 루브릭작업(논제글: string, 계열: string, 총배점: number, �
     //   [오종래 2026-10-15 ③] 괄호 안 「N점」도 — 「(200자 내외, 4점)」. 여럿이면 마지막 것 (앞에 붙은 공통 발문의 「(16점)」이 아니라)
     const 점 = [...String(s.텍스트).matchAll(/[\[(][^\[\]()]*?(\d+(?:\.\d+)?)\s*점\s*[\])]/g)].at(-1);
     const 소배점 = 점 ? Number(점[1]) : 총배점;
-    // 서술형 B — 교사 모범답안(소문항 순서)의 라벨 구간. [풀기-n]만 조각이 된다 (오종래 2026-10-16)
-    const 라벨 = 모범답안[n] ? parse_answer_labels(String(모범답안[n])) : null;
-    const 소 = { 번호: s.번호, 텍스트: s.텍스트, 공통발문: s.공통발문, 배점: 소배점, ...(라벨 ? { 라벨 } : {}) };
+    const 답안글 = 모범답안[n] ? String(모범답안[n]) : '';
+    const 소 = { 번호: s.번호, 텍스트: s.텍스트, 공통발문: s.공통발문, 배점: 소배점 };
     if (연결멈춤) return { ...소, 멈춤: 연결멈춤 };
     try {
       const 입력 = f2_input_from_v2(s.a);
@@ -159,9 +158,14 @@ function 루브릭작업(논제글: string, 계열: string, 총배점: number, �
         단락연결 = [...단락연결, ...화자.flatMap((l: any) => K노드.map((id: string) => ({ 노드: id, 단락: l.라벨, 단락급소: l.단락급소 })))];
       }
       const 앞급소 = 이어받기 && n > 0 ? 급소들of(소문항들[n - 1]) : [];
-      const 인식 = { ...입력.인식, ...(연결문장 ? { 연결문장, 단락연결 } : {}), ...(앞급소.length ? { 앞급소 } : {}), ...(라벨 && 라벨.풀기.length ? { 교사풀기: 라벨.풀기 } : {}) };
+      const 인식 = { ...입력.인식, ...(연결문장 ? { 연결문장, 단락연결 } : {}), ...(앞급소.length ? { 앞급소 } : {}) };
       // 계열이 ④ 답구하기를 가른다 — 인문사회국어 = 급소 K마다 경로 추적, 수리 = Q 대상 값 일치
-      const 뼈대 = derive_pieces(물음, k, 인식, 계열).map((c: any) => ({ ...c, 요소: judge_element(c, 계열) }));
+      let 뼈대 = derive_pieces(물음, k, 인식, 계열).map((c: any) => ({ ...c, 요소: judge_element(c, 계열) }));
+      // 서술형 B — 교사 모범답안(소문항 순서)에서 엔진 ② 세우기 실체 줄 뒤 ~ ④ 급소 K 줄 앞을 줄마다 풀기 조각으로 (오종래 2026-10-16)
+      const 풀기구간 = 답안글.trim() && 계열 === '인문사회국어' ? split_solve_lines(답안글, 뼈대) : null;
+      if (풀기구간 && 풀기구간.풀기.length) {
+        뼈대 = derive_pieces(물음, k, { ...인식, 교사풀기: 풀기구간.풀기 }, 계열).map((c: any) => ({ ...c, 요소: judge_element(c, 계열) }));
+      }
       const 배점 = allocate_points(뼈대, 소배점, 계열);
       const 조각 = 배점.조각들.map((c: any) => ({
         id: c.id, 파트: c.파트, 요소: c.요소, 수행질: c.수행질, is_중심: c.is_중심, 확인물음: c.확인물음,
@@ -175,6 +179,7 @@ function 루브릭작업(논제글: string, 계열: string, 총배점: number, �
         ...소,
         급소: { 실체: k.실체, 노드: k.node.id },
         물음,
+        ...(풀기구간 ? { 풀기구간 } : {}),
         ...(연결문장 ? { 연결단락: [...new Set(연결문장.map((x: any) => x.단락))] } : {}),
         조각,
         // 부분채점기준은 문항 분석에서 뽑지 않는다 — 부분점수는 학생 답안 채점(작업 '채점')에서만 (오종래 2026-10-14)
