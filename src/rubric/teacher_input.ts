@@ -31,6 +31,14 @@ export function item_portion(값: unknown, 번호: string | null, n: number, 모
 const 낱말들 = (글: string) => 글.split(/[,，·\n]/).map((t) => t.trim()).filter(Boolean);
 const 붙여 = (t: string) => t.replace(/\s+/g, '');
 
+// 괄호 (오종래 2026-10-16) — 정답 검증은 괄호를 보지 않는다: 기호만 뗀 꼴(「연구개발(R&D) 지원」 → 「연구개발R&D지원」 ⊃ 「R&D 지원」)과
+//   괄호 안 내용까지 뗀 꼴(→ 「연구개발지원」 ⊃ 「연구개발 지원」) 가운데 하나라도 맞으면 일치
+const 괄호기호 = /[()（）[\]［］]/g;
+const 괄호구간 = /[(（[［][^()（）[\]［］]*[)）\]］]/g;
+const 꼴들 = (t: string) => [...new Set([t, t.replace(괄호기호, ''), t.replace(괄호구간, '')].map(붙여))].filter(Boolean);
+/** 정답 낱말이 답 줄에 있는가 — 띄어쓰기·괄호 무시 */
+const 담겼나 = (줄: string, 낱말: string) => 꼴들(낱말).some((k) => 꼴들(줄).some((l) => l.includes(k)));
+
 /**
  * 질문의 핵심 — 급소가 서지 않은 인식에만. 그 실패의 후보 노드부터, 없으면 Q가 아닌 모든 노드에서
  * 핵심 낱말을 담은 노드를 찾는다 (B 먼저, 같으면 뒤 노드 — 물음에 가까운 쪽). 못 찾으면 인식 그대로
@@ -60,7 +68,7 @@ export interface 정답검증 {
 }
 
 /**
- * 정답 ↔ 모범답안 답구하기 줄 — 정답 낱말(쉼표·줄바꿈으로 나눔)이 모두 답 줄에 있으면 일치 (띄어쓰기는 보지 않는다).
+ * 정답 ↔ 모범답안 답구하기 줄 — 정답 낱말(쉼표·줄바꿈으로 나눔)이 모두 답 줄에 있으면 일치 (띄어쓰기·괄호는 보지 않는다).
  * 단위 「문장」이면 모범답안을 문장으로 나눠 답 문장과 대조한다 (C 논술 9단계 — 한 문단 모범답안)
  */
 export function verify_answer(정답: string, 모범답안: string, 조각들: 조각뼈대[], 단위: '줄' | '문장' = '줄'): 정답검증 {
@@ -70,7 +78,7 @@ export function verify_answer(정답: string, 모범답안: string, 조각들: �
   if (!String(모범답안 ?? '').trim()) return { 결과: '검증 안 함', 정답: 답, 답줄글: null, 단위, 빠진: [], 사유: '모범답안이 없어 대조하지 않았습니다' };
   const 글 = 단위 === '문장' ? String(모범답안).split(/\r?\n/).flatMap(split_sentences).join('\n') : 모범답안;
   const 줄 = split_solve_lines(글, 조각들).답글;
-  const 빠진 = 낱말들(답).filter((t) => !붙여(줄).includes(붙여(t)));
+  const 빠진 = 낱말들(답).filter((t) => !담겼나(줄, t));
   return 빠진.length
     ? { 결과: '불일치', 정답: 답, 답줄글: 줄, 단위, 빠진, 사유: '문항 오류 또는 정답 오류 — 교사 확인이 필요합니다' }
     : { 결과: '일치', 정답: 답, 답줄글: 줄, 단위, 빠진: [], 사유: `모범답안 답구하기 ${이름}과 정답이 맞습니다` };
