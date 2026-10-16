@@ -798,10 +798,10 @@
       <span id="type-display">문항 유형 선택 필요</span>
     </div>
 
-    <!-- 채점 솔루션 /grader (2026-10-15) — 문항 목록이 이 화면 메모리에만 있어 새 탭으로 연다 -->
+    <!-- 채점 솔루션 /grader (2026-10-15) — 문항 목록이 이 화면 메모리에만 있어 새 탭으로 연다. 이 탭을 열어 두면 루브릭이 자동 연결된다 (2026-10-16) -->
     <a class="pipeline-badge" href="/grader" target="_blank" rel="noopener" style="display:block; margin-top:8px; text-decoration:none;">
       <strong style="color: var(--accent);">채점 솔루션 →</strong>
-      <span>「목록 저장」 파일을 불러와 학생 답안을 채점합니다 (새 탭)</span>
+      <span>분석한 문항의 확정 루브릭이 자동으로 연결됩니다 — 이 탭을 닫지 마세요 (새 탭)</span>
     </a>
   </aside>
 
@@ -4016,20 +4016,35 @@ async function 전체분석() {
   else 목록그리기();
 }
 
-/** 목록 저장 — 문항마다 이름·파이프라인·원문·그림·상태·분석 결과를 .json 하나로 */
-function 목록저장() {
-  if (목록.돌리는중) { alert('전체 분석이 끝난 뒤 저장하세요.'); return; }
+/** 문항 목록 자료 — 「목록 저장」 파일과 /grader 자동 연결이 같은 모양을 쓴다 */
+function 목록자료() {
   현재결과담기();
   const 그림만 = m => {
     const 그림 = {};
     for (const x of m.원문.matchAll(/\[그림\s*(\d+)\]/g)) if (m.그림[x[1]]) 그림[x[1]] = m.그림[x[1]];
     return 그림;
   };
-  내려받기({
+  return {
     종류: 'HMOS 문항 목록', 버전: 1,
     문항: 목록.문항.map(m => ({ 이름: m.이름, 파이프라인: m.파이프라인, 원문: m.원문, 그림: 그림만(m), 정답: m.정답, 핵심: m.핵심, 모범답안: m.모범답안, 상태: m.상태, 사유: m.사유, 결과: m.결과 })),
-  }, '문항목록');
+  };
 }
+
+/** 목록 저장 — 문항마다 이름·파이프라인·원문·그림·상태·분석 결과를 .json 하나로 */
+function 목록저장() {
+  if (목록.돌리는중) { alert('전체 분석이 끝난 뒤 저장하세요.'); return; }
+  내려받기(목록자료(), '문항목록');
+}
+
+// /grader 루브릭 자동 연결 (오종래 2026-10-16) — 같은 서버의 채점 솔루션 탭이 요청하면 지금 목록(분석 결과·확정 루브릭)을 그대로 보낸다.
+// 파일 없이 탭끼리만 오간다 (BroadcastChannel, 같은 브라우저·같은 주소).
+const 채점연결 = 'BroadcastChannel' in window ? new BroadcastChannel('hmos-문항목록') : null;
+if (채점연결) 채점연결.onmessage = e => {
+  if (!e.data || e.data.요청 !== '목록') return;
+  if (목록.돌리는중) { 채점연결.postMessage({ 응답: '목록', 바쁨: true }); return; }
+  try { 채점연결.postMessage({ 응답: '목록', 목록: 목록자료(), 시각: Date.now() }); }
+  catch (err) { 채점연결.postMessage({ 응답: '목록', 오류: err.message }); }
+};
 
 /** 불러온 문항 하나 — 모양이 안 맞는 값은 버리고, 상태는 원문·파이프라인·결과에 맞춘다 */
 function 불러온문항(x) {
