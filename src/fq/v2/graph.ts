@@ -184,6 +184,13 @@ const STEM_END = /(?<=^|\n)[ \t]*(?:\(\d+\)|\d+\)|[①-⑳])/;
 /** 실체 머리에 붙은 소문항 머리 — 그래프를 만든 뒤 실체에서 뗀다 */
 const SUB_HEAD_PREFIX = /^\s*(?:\(\d+\)|\d+\)|[①-⑳])\s*/;
 
+/** 관형형 수식어 떼기 [오종래 2026-10-07] — 실체 머리의 「한글+는」 어절을 뒤에 남는 말이 있을 때만 뗀다. 머리의 쉼표·공백은 둔다 */
+function stripAdnominal(entity: string): string {
+  let m: RegExpMatchArray | null;
+  while ((m = entity.match(/^([\s,]*)[가-힣]+는\s+(?=\S)/))) entity = m[1] + entity.slice(m[0].length);
+  return entity;
+}
+
 /**
  * 표지로 문장을 훑어 경로 그래프를 만든다.
  *
@@ -739,6 +746,8 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
     );
     return rule ? rule.color : h.c.sw.color;
   };
+  /** 조사 연쇄가 넘긴 실체로 선 노드 (「것만을」의 「것」) — 아래 의존명사 빼기에서 건드리지 않는다 */
+  const carriedNodes = new Set<string>();
   const mathNodes = new Set<PathNode>();
   /** 수식 노드 바로 뒤에 붙은 명사구 연결 조사 — 다음 B 노드의 실체를 이 수식 노드에 이어 붙인다 */
   let attachTo: { node: PathNode; at: number } | undefined;
@@ -847,7 +856,8 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
 
     // 조사 연쇄의 실체 [오종래 2026-10-01] — 「것만을」: 「만」은 선택 기준(자기 색, 실체 = 표층형 「만」),
     //   「것」은 앞 제약에 걸린 대상이라 연쇄 끝 표지(「을」)의 노드가 끌고 나온다.
-    if (entity === '' && carried?.at === hit.at) entity = carried.entity;
+    const fromCarry = entity === '' && carried?.at === hit.at;
+    if (fromCarry) entity = carried!.entity;
     carried = undefined;
     if (hit.chained && entity !== '') {
       carried = { at: hit.end, entity };
@@ -903,6 +913,7 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
 
     link(node);
     if (hit.math) mathNodes.add(node);
+    if (fromCarry) carriedNodes.add(node.id);
     cursor = hit.end;
 
     // 「~의 N에」 묶음 [오종래 2026-10-07] — 명사구 연결 「의」가 다음 노드가 B가 아니어서 노드로 섰고, 바로 뒤 어절이 「한글 명사+에」이면
@@ -1178,8 +1189,7 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
   //   뒤에 남는 말이 있을 때만 자른다. 머리의 쉼표·공백은 그대로 둔다.
   for (const node of nodes) {
     if (node.color !== 'B') continue;
-    let m: RegExpMatchArray | null;
-    while ((m = node.entity.match(/^([\s,]*)[가-힣]+는\s+(?=\S)/))) node.entity = m[1] + node.entity.slice(m[0].length);
+    node.entity = stripAdnominal(node.entity);
   }
 
   // 소문항 번호 떼기 [오종래 2026-10-08] — 실체 머리에 붙은 「(1)」「1)」「①」은 실체가 아니다 (서술형문항 2 C「(1) n = 1, 2, 3」 → 「n = 1, 2, 3」).
@@ -1207,6 +1217,26 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
       node.color = 'P';
       node.stemPinnedBy = pin.id;
     }
+  }
+
+  // 의존명사 [오종래 2026-10-16] — 다 세운 뒤에도 실체가 봉인 의존명사(apply.boundNouns, 예: 「것」) 하나뿐인 B 노드는 뺀다
+  //   (서술형 B 화자 줄 「…의 증가, 감소를 따져보는 것은 어때?」 — 수식어 떼기 뒤 B「것」이 남아 급소가 갈렸다).
+  //   앞말과 합쳐진 「것」(병렬 덩이 「자유이고 평등인 것」)·Q·접힌 노드·조사 연쇄로 선 노드(「것만을」)는 그대로.
+  //   들어오던 간선은 다음 노드로 넘기고, 나가던 간선은 버린다.
+  const boundNouns = table.apply.boundNouns ?? [];
+  for (let i = nodes.length - 1; i >= 0; i--) {
+    const node = nodes[i];
+    if (node.color !== 'B' || node.foldedFrom !== undefined || carriedNodes.has(node.id) || !boundNouns.includes(node.entity.trim())) continue;
+    const next = nodes[i + 1];
+    for (let k = edges.length - 1; k >= 0; k--) {
+      const e = edges[k];
+      if (e.from === node.id) edges.splice(k, 1);
+      else if (e.to === node.id) {
+        if (next) edges[k] = { ...e, to: next.id };
+        else edges.splice(k, 1);
+      }
+    }
+    nodes.splice(i, 1);
   }
 
   // 조합은 접기 전 색으로 센다 [오종래 2026-10-01] — 판단기준(Q에 접힌 B)은 급소 판정에서만 B이고,

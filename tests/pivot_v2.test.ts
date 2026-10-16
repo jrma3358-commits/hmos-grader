@@ -2189,3 +2189,32 @@ describe('주격 「이」 관형절 꾸밈 명사 · 소문항 번호 전처리
     assert.equal(stripScoreMarks('f(2)의 값과 [가]'), 'f(2)의 값과 [가]');
   });
 });
+
+describe('의존명사 — 실체가 「것」 하나뿐인 B 노드는 뺀다 (apply.boundNouns, 오종래 2026-10-16)', () => {
+  // B = SB(~을·~은), Q = SQ(어휘형 「설명하시오」)
+  const sw = (id: string, kind: SealedSwitch['kind'], markers: string[], color: Color, lexical?: boolean) =>
+    ({ id, kind, markers, intent: '', color, lexical }) as SealedSwitch;
+  const table = (boundNouns?: string[]): SealedTable => ({
+    version: 1,
+    source: { document: '(테스트)', sections: [] },
+    switches: [sw('SB', '조사·어미', ['~을', '~은'], 'B'), sw('SQ', '조사·어미', ['설명하시오'], 'Q', true)],
+    lights: [],
+    matrix: [],
+    symbols: [],
+    forms: [],
+    apply: { longestMatchFirst: true, precedence: [], boundNouns },
+    pending: [],
+  });
+  const q = '함수의 증감을 따져보는 것은 설명하시오';
+
+  it('수식어 떼기 뒤 「것」만 남은 B는 빠지고, 간선은 다음 노드로 넘어간다', () => {
+    const g = build_path_graph(q, table(['것']));
+    assert.deepEqual(g.nodes.map((n) => `${n.color}:${n.entity.trim()}`), ['B:함수의 증감', 'Q:설명하시오']);
+    assert.ok(g.edges.every((e) => g.nodes.some((n) => n.id === e.from) && g.nodes.some((n) => n.id === e.to)));
+  });
+
+  it('목록이 없으면 그대로 · 「것」이 실체의 일부면 그대로', () => {
+    assert.ok(build_path_graph(q, table()).nodes.some((n) => n.entity.trim() === '것'));
+    assert.ok(build_path_graph('바른 것과 그른 것을 설명하시오', table(['것'])).nodes.length >= 1);
+  });
+});
