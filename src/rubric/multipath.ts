@@ -225,7 +225,8 @@ function 계수at(원: 문자이차식, k: number): 이차식 | null {
 export function verify_discriminant(학생답: string, 원: 문자이차식): 다경로검증 {
   const 시료 = [-2.5, 0.7, 3.1];
   const 시도: 다경로검증['시도'] = [];
-  for (const 마디 of 마디들(학생답)) {
+  // 한글 말 사이의 식도 — 「판별식 D=1-(k+1)>0」 (2026-10-16 q4 학생 3)
+  for (const 마디 of 마디들(학생답).flatMap((d) => d.split(/[가-힣]+/)).map((x) => x.trim()).filter(Boolean)) {
     const m = 정리(마디).match(/^D(\/4)?=(.+)$/);
     if (!m) continue;
     const 사등분 = !!m[1];

@@ -1115,6 +1115,9 @@ function 채점그리기() {
   const 교사확인 = !a ? '' : 필요.length
     ? `<div class="flag-box">교사 판정이 필요한 조각 ${필요.length}개 — ${필요.map(id => `<strong>${esc(id)}</strong>`).join(', ')}. 노란 줄에서 O 또는 X를 누르세요.</div>`
     : Object.keys(rec.교사).length ? `<div class="note-item" style="margin-bottom:12px;">교사가 고친 조각 ${Object.keys(rec.교사).map(esc).join(', ')} — 점수는 고친 판정으로 셉니다</div>` : '';
+  // 엔진 경고 (2026-10-16) — 답은 맞으나 세우기 과정 검증 실패 등. 점수는 바꾸지 않는다
+  const 엔진경고 = a && (rec.엔진.경고 || []).length
+    ? rec.엔진.경고.map(w => `<div class="flag-box">${엔진배지} ${esc(w)}</div>`).join('') : '';
   const 행 = a
     ? a.조각.map((x, k) => {
         const c = 조각of(x.조각id);
@@ -1140,7 +1143,7 @@ function 채점그리기() {
   }).join(' · ') : '';
   const 가운데 = `<div class="card">
       <div class="card-title">${엔진배지}루브릭 조각 O/X</div>
-      ${a ? 교사확인 : '<div class="meta" style="margin-bottom:10px;">왼쪽에서 「엔진 채점」을 누르면 조각마다 판정이 나옵니다.</div>'}
+      ${a ? 엔진경고 + 교사확인 : '<div class="meta" style="margin-bottom:10px;">왼쪽에서 「엔진 채점」을 누르면 조각마다 판정이 나옵니다.</div>'}
       <div class="table-wrap"><table class="rubric-table">
         <thead><tr><th>파트</th><th>실체 · 충족조건</th><th>엔진</th><th>판정</th><th>득점</th></tr></thead>
         <tbody>${행}</tbody>

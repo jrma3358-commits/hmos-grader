@@ -146,3 +146,29 @@ describe('수학 문항 계열 고정', () => {
     assert.equal(resolve_subject('인문사회국어', '철수의 방법으로 설명하시오.'), '인문사회국어');
   });
 });
+
+// q4 학생 3 (2026-10-16) — 세우기 과정 오류 · 답은 맞음
+describe('q4 학생 3 — 과정 오류 · 답 맞음', () => {
+  const 원식 = parse_parametric_quadratic('x²+x+k=-x+1, x²+2x+k-1=0')!;
+  const k = { 실체: 'k의 범위', node: { id: '공통-n6', entity: 'k의 범위', color: 'B', surface: '', switchId: '', index: 0 } } as any;
+  const 루브릭: 조각[] = [
+    { id: '세우기-2', 파트: '세우기', 요소: 'c', 수행질: null, 확인물음: '', 충족조건: '', is_중심: false, node: null, 모범조각: '', 배점: 0.4, 줄글: 'D=2²-4×1×(k-1)>0', 판별식원식: 원식 },
+    { id: '답구하기-1', 파트: '답구하기', 요소: 'k', 수행질: null, 확인물음: '', 충족조건: '', is_중심: true, node: null, 모범조각: '', 배점: 0.5, 모범답: { 줄: '∴ k<2', 값: ['k<2'] } },
+  ];
+  const 학생3 = 'x²+x+k=-x+1, x²+2x+k-1=0\n판별식 D=1-(k+1)>0, k<2';
+  it('한글 뒤 「판별식 D=1-(k+1)>0」도 판별식 사슬로 검증 — 계산 오류라 X', () => {
+    assert.equal(verify_discriminant(학생3, 원식).결과, 'X');
+  });
+  it('「∴」 없는 결론 줄의 「D=…」는 답이 아니다 — 물은 문자 k만 대조해 ④ O', () => {
+    const r = grade(학생3, 루브릭, '', k, '수리');
+    assert.equal(r.파트별.답구하기.조각별[0].결과, 'O');
+    assert.equal(r.파트별.세우기.조각별[0].결과, 'X');
+  });
+  it('답은 맞고 세우기 과정이 틀리면 경고 — 점수는 규칙 그대로', () => {
+    const r = grade(학생3, 루브릭, '', k, '수리');
+    assert.equal(r.경고.length, 1);
+    assert.match(r.경고[0], /답은 맞으나 세우기 과정 검증 실패 \(세우기-2\)/);
+    assert.equal(r.부분점수, 0.5);
+    assert.deepEqual(grade('D/4=1-(k-1)=-k+2>0 ∴ k<2', 루브릭, '', k, '수리').경고, []);
+  });
+});

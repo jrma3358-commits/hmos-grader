@@ -129,7 +129,10 @@ export function 봉인6_조각대조(학생답: string, 조각: 조각, 맥락: 
   const 모범 = 조각.모범답;
   if (조각.파트 === '답구하기' && 모범?.값.length) {
     const 줄 = student_answer_line(학생답);
-    const 학생값 = answer_values(줄);
+    // 모범 값의 문자(「k」 「x」)만 대조한다 — 「∴」 없이 「D=1-(k+1)>0, k<2」로 쓰면 「D=…」는 답이 아니다 (2026-10-16 q4 학생 3)
+    const 문자of = (v: string) => (v.match(/^[A-Za-z](?:_?\w)?(?=<=|>=|[=<>≤≥≦≧])/) ?? [''])[0];
+    const 물은문자 = new Set(모범.값.map(문자of));
+    const 학생값 = answer_values(줄).filter((v) => 물은문자.has(문자of(v)));
     const 같음 = 학생값.length === 모범.값.length && 학생값.every((v, i) => v === 모범.값[i]);
     return {
       결과: 같음 ? 'O' : 'X',
