@@ -205,8 +205,9 @@ describe('풀기 조각 — 공식 정의 제외', () => {
   it('문자로만 된 근의 공식 줄은 빼고 숫자 계산 줄만', () => {
     const 학생4 = "x²+2x-3=0에서 x의 계수 2는 짝수이므로\nax²+2b'x+c=0의 근의 공식\nx = (-b'±√(b'²-ac)) / a\n를 이용하면\nx = (-1±√(1-1×(-3))) / 1 = -1±2\n∴ x=1 또는 x=-3";
     assert.deepEqual(solve_segments(학생4), ['x = (-1±√(1-1×(-3))) / 1 = -1±2']);
-    // 한계: 일반 근의 공식은 숫자 4·2가 있어 지금 규칙으로는 풀기로 잡힌다
-    assert.deepEqual(solve_segments('x=(-b±√(b²-4ac))/2a'), ['x=(-b±√(b²-4ac))/2a']);
+    // 근의 공식 패턴 「(-b±√…)」 「(-b'±√…)」은 숫자 4·2가 있어도 공식 — 풀기 아님 (2026-10-16)
+    assert.deepEqual(solve_segments('x=(-b±√(b²-4ac))/2a'), []);
+    assert.deepEqual(solve_segments("x = ( -b' ± √(b'²-ac) ) / a\nx = (-1 ± 2) / 2"), ['x = (-1 ± 2) / 2']);
     assert.deepEqual(solve_segments("x=(-b'±√(b'²-ac))/a\nx+1=±√4"), ['x+1=±√4']);
   });
 });
