@@ -12,6 +12,7 @@ import { describe, it } from 'node:test';
 import { recognizeV2Analysis } from '../src/fq/pipeline.ts';
 import { common_question, derive_pieces, f2_input_inherit, has_question } from '../src/rubric/f2.ts';
 import { grade } from '../src/rubric/g1.ts';
+import { 판별식썼나, 판별식조건 } from '../src/rubric/sealed/g1.ts';
 import { answer_values, classify_math_lines, solve_segments, split_conclusion, student_answer_line } from '../src/rubric/solve_lines.ts';
 import { item_portion, sub_item_points } from '../src/rubric/teacher_input.ts';
 import { split_thesis } from '../src/thesis/split.ts';
@@ -109,5 +110,33 @@ describe('q4 학생 1 — 소문항 몫과 결론 값', () => {
   it('(1)(2)(3) 몫의 결론 — k<2 · k=2 · k>2', () => {
     const 값 = ['1', '2', '3'].map((b, n) => answer_values(student_answer_line(item_portion(학생1, b, n))));
     assert.deepEqual(값, [['k<2'], ['k=2'], ['k>2']]);
+  });
+});
+
+// 2026-10-16 — ① 만남 조건 조각은 판별식 조건으로 엔진이 판정 · 「~에서」 조건 문장은 풀기 아님
+describe('① 만남 조건 ↔ 판별식', () => {
+  it('조건 문장 → D 기호', () => {
+    assert.equal(판별식조건('서로 다른 두 점'), '>');
+    assert.equal(판별식조건('한 점에서 만난다.'), '=');
+    assert.equal(판별식조건('접한다'), '=');
+    assert.equal(판별식조건('만나지 않는다.'), '<');
+    assert.equal(판별식조건('직선 y=-x+1'), null);
+  });
+  it('「D>0」 「D=-4k+8>0」 모두 D>0으로 본다 · 줄을 넘어 잇지 않는다', () => {
+    assert.equal(판별식썼나('D>0에서', '>'), true);
+    assert.equal(판별식썼나('D=-4k+8>0, 4k<8', '>'), true);
+    assert.equal(판별식썼나('D=-4k+8=0 ∴ k=2', '='), true);
+    assert.equal(판별식썼나('D=2²-4×1×(k-1)=-4k+8', '='), false);
+    assert.equal(판별식썼나('D=-4k+8\n만나지 않으므로 x<0', '<'), false);
+  });
+  it('조각 판정 — 조건과 판별식이 맞으면 O, 없으면 X', () => {
+    const k = { 실체: 'k의 범위', node: { id: '공통-n6', entity: 'k의 범위', color: 'B', surface: '', switchId: '', index: 0 } } as any;
+    const 조건조각 = (entity: string): 조각 => ({ id: '근거대기-1', 파트: '근거대기', 요소: 'b', 수행질: null, 확인물음: '', 충족조건: '', is_중심: false, node: { id: 'n1', entity, color: 'B', surface: '', switchId: '', index: 0 } as any, 모범조각: '', 배점: 0.4 });
+    assert.equal(grade('서로 다른 두 점에서 만나므로 D>0에서\n∴ k<2', [조건조각('서로 다른 두 점')], '', k, '수리').파트별.근거대기.조각별[0].결과, 'O');
+    assert.equal(grade('∴ k<2', [조건조각('서로 다른 두 점')], '', k, '수리').파트별.근거대기.조각별[0].결과, 'X');
+    assert.equal(grade('접하므로 D>0에서', [조건조각('한 점에서 만난다.')], '', k, '수리').파트별.근거대기.조각별[0].결과, 'X');
+  });
+  it('「~에서」로 끝나는 조건 문장은 풀기가 아니다', () => {
+    assert.deepEqual(solve_segments('서로 다른 두 점에서 만나므로 D>0에서\nD=-4k+8>0, 4k<8 ∴ k<2'), ['4k<8']);
   });
 });
