@@ -66,6 +66,8 @@ export function split_solve_lines(답안: string, 조각들: 조각뼈대[]): �
 export interface 수리줄나누기 {
   근거대기: string[];
   세우기: string[];
+  /** 「또는」으로 이은 등식 마디 (2026-10-16 학생 1) — 없으면 세우기=풀기 */
+  풀기: string[];
   답: 모범답 | null;
   미분류: string[];
 }
@@ -87,14 +89,30 @@ function 수맞춤(v: string): string {
   return Number.isFinite(n) ? String(Math.round(n * 1e9) / 1e9) : v;
 }
 
+// [오종래 2026-10-16 학생 1] 풀기 조각이 명시적으로 있으면 엔진이 잡는다 — 인수분해 문항이라도.
+//   풀기 조각 = 「또는」으로 이은 등식들 (「x+3=0 또는 x-1=0」). 한 줄에 세우기와 함께 쉼표로 이어 써도
+//   (「(x+3)(x-1)=0, x+3=0 또는 x-1=0」) 쉼표 마디마다 본다. 「∴」 결론 줄은 풀기가 아니다
+const 풀기마디 = (마디: string) => /또는/.test(마디) && (마디.match(/=/g) ?? []).length >= 2;
+const 마디들 = (줄: string) => 줄.split(/[,，](?![^(]*\))/).map((x) => x.trim()).filter(Boolean);
+
+/** 글에서 풀기 조각 — 「∴」 줄을 뺀 줄의 쉼표 마디 중 「또는」으로 이은 등식들 */
+export function solve_segments(글: string): string[] {
+  return String(글 ?? '').split(/\r?\n/).map((l) => l.trim()).filter((l) => l && !결론표.test(l)).flatMap(마디들).filter(풀기마디);
+}
+
 export function classify_math_lines(답안: string): 수리줄나누기 {
   const 줄 = String(답안 ?? '').split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
-  const out: 수리줄나누기 = { 근거대기: [], 세우기: [], 답: null, 미분류: [] };
+  const out: 수리줄나누기 = { 근거대기: [], 세우기: [], 풀기: [], 답: null, 미분류: [] };
   for (const l of 줄) {
     if (결론표.test(l)) out.답 = { 줄: l, 값: answer_values(l) }; // 결론 줄이 여럿이면 마지막
     else if (/하면[\s,，.]*$/.test(l)) out.근거대기.push(l);
-    else if (/=/.test(l)) out.세우기.push(l);
-    else out.미분류.push(l);
+    else if (/=/.test(l)) {
+      // 쉼표 마디 — 풀기 마디는 ③ 풀기, 나머지 등식 마디는 한데 묶어 ② 세우기
+      const 풀기 = 마디들(l).filter(풀기마디);
+      const 세우기 = 마디들(l).filter((x) => !풀기마디(x));
+      out.풀기.push(...풀기);
+      if (세우기.length) out.세우기.push(풀기.length ? 세우기.join(', ') : l);
+    } else out.미분류.push(l);
   }
   return out;
 }

@@ -15,7 +15,7 @@
 import type { PathNode } from '../../fq/v2/graph.ts';
 import type { 조각결과 } from '../g1.ts';
 import { K핵심어 } from './f2.ts';
-import { answer_values, student_answer_line } from '../solve_lines.ts';
+import { answer_values, solve_segments, student_answer_line } from '../solve_lines.ts';
 import type { 계열, 급소K, 조각, 파트 } from '../types.ts';
 
 export interface 조각대조 {
@@ -111,6 +111,11 @@ export function 봉인6_조각대조(학생답: string, 조각: 조각, 맥락: 
   }
   // [오종래 2026-10-16 q5] 수리 모범답안 줄 조각(①「~하면」 줄 · ② 등식 줄)은 노드가 없다 — 교사가 판정한다 (범위 확정: 세우기 교사)
   if (조각.줄글 && 조각.node === null) return { 결과: '판정불가', 근거: `모범답안 줄 「${조각.줄글}」 — 교사가 판정합니다` };
+  // [오종래 2026-10-16 학생 1] 수리 모범답안 풀기 마디 조각 — 교사가 판정한다. 학생 답의 풀기 마디를 옆에 보인다
+  if (조각.파트 === '풀기' && 조각.풀기글 && 조각.node === null) {
+    const 학생 = solve_segments(학생답);
+    return { 결과: '판정불가', 근거: `모범답안 풀기 「${조각.풀기글}」 · 학생 풀기 ${학생.length ? 학생.map((x) => `「${x}」`).join(' ') : '없음'} — 교사가 판정합니다` };
+  }
   if (조각.파트 === '답구하기') {
     const 실체 = 조각.node?.entity ?? 맥락.질문급소.node.entity;
     const 글자 = 수리K글자(실체);
@@ -136,6 +141,7 @@ export function 봉인6_조각대조(학생답: string, 조각: 조각, 맥락: 
 //   상한 = 상한을 받는 파트 배점합의 1/3 (소수 첫째 자리 반올림, ④-a와 같은 자릿수)
 // [오종래 2026-10-14] 인문사회국어는 풀기가 없어 사슬을 건너뛰어 잇는다: 답구하기 X → 세우기 상한 · 세우기 X → 근거대기 상한 (1/3 그대로)
 // [오종래 2026-10-16] 수리도 풀기(③) 조각이 없는 문항(모범답안 줄 나누기 — 세우기=풀기)은 인문 사슬과 같이 건너뛴다: 답구하기 X → 세우기 상한
+// [오종래 2026-10-16 학생 1] 루브릭에 풀기 조각이 없어도 학생 답에 풀기 마디(「x+3=0 또는 x-1=0」)가 있으면 정상 흐름(④→③→②→①) — g1.ts가 풀기있음을 넘긴다
 const 게이트수리: readonly [X파트: 파트, 상한파트: 파트][] = [
   ['답구하기', '풀기'],
   ['풀기', '세우기'],
@@ -158,9 +164,10 @@ export function 봉인4b_게이트(
   조각별: 조각결과[],
   파트배점: Record<파트, number>,
   계열?: 계열,
+  풀기있음 = 조각별.some((r) => r.파트 === '풀기'),
 ): Partial<Record<파트, number>> {
   const 상한: Partial<Record<파트, number>> = {};
-  for (const [X파트, 상한파트] of 게이트사슬(계열, 조각별.some((r) => r.파트 === '풀기'))) {
+  for (const [X파트, 상한파트] of 게이트사슬(계열, 풀기있음)) {
     if (조각별.some((r) => r.파트 === X파트 && r.결과 === 'X')) {
       상한[상한파트] = Math.round(파트배점[상한파트] * 상한비 * 10) / 10;
     }

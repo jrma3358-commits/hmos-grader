@@ -10,7 +10,7 @@ import { recognizeV2Analysis } from '../src/fq/pipeline.ts';
 import { derive_pieces, f2_input_from_v2 } from '../src/rubric/f2.ts';
 import { grade } from '../src/rubric/g1.ts';
 import { 봉인4b_게이트 } from '../src/rubric/sealed/g1.ts';
-import { answer_values, classify_math_lines, student_answer_line } from '../src/rubric/solve_lines.ts';
+import { answer_values, classify_math_lines, solve_segments, student_answer_line } from '../src/rubric/solve_lines.ts';
 import type { 조각 } from '../src/rubric/types.ts';
 
 const q5 = '이차방정식 x²+2x-3=0의 두 근을 구하고, 풀이 과정을 서술하시오. [5점]';
@@ -88,5 +88,44 @@ describe('(c) ④ 값 직접 대조', () => {
     const r = grade('(x+3)(x-1)=0\n∴ x=-3 또는 x=1', 루브릭, '', k, '수리');
     assert.equal(r.파트별.답구하기.조각별[0].결과, 'O');
     assert.equal(r.파트별.답구하기.파트점수, 2);
+  });
+});
+
+// 학생 1 (오종래 2026-10-16) — 풀기 조각이 명시적으로 있으면 엔진이 잡는다 (인수분해 문항이라도), 있으면 게이트 정상 흐름
+describe('풀기 조각 인식 — 「또는」으로 이은 등식', () => {
+  const 학생1 = 'x²+2x-3=0의 좌변을 인수분해하면\n(x+3)(x-1)=0, x+3=0 또는 x-1=0\n∴ x=-3 또는 x=1';
+  const 조각of = (c: Partial<조각> & Pick<조각, 'id' | '파트' | '배점'>): 조각 => ({
+    요소: null, 수행질: null, 확인물음: '', 충족조건: '', is_중심: false, node: null, 모범조각: '', ...c,
+  });
+  const k = { 실체: '두 근', node: { id: 'n1', entity: '두 근', color: 'B', surface: '', switchId: '', index: 0 } } as any;
+  const q5루브릭 = [
+    조각of({ id: '세우기-1', 파트: '세우기', 요소: 'c', 배점: 3, 줄글: '(x+3)(x-1)=0' }),
+    조각of({ id: '답구하기-1', 파트: '답구하기', 배점: 2, 모범답: { 줄: '∴ x=1 또는 x=-3', 값: ['x=-3', 'x=1'] } }),
+  ];
+
+  it('한 줄 안 쉼표 마디에서 풀기를 가른다 — 세우기 마디는 ②로', () => {
+    assert.deepEqual(solve_segments(학생1), ['x+3=0 또는 x-1=0']);
+    const r = classify_math_lines('(x+3)(x-1)=0, x+3=0 또는 x-1=0\n∴ x=-3 또는 x=1');
+    assert.deepEqual(r.세우기, ['(x+3)(x-1)=0']);
+    assert.deepEqual(r.풀기, ['x+3=0 또는 x-1=0']);
+    assert.deepEqual(classify_math_lines(모범).풀기, []);
+  });
+  it('모범답안에 풀기 마디가 있으면 ③ 풀기 조각', () => {
+    const 입력 = f2_input_from_v2(recognizeV2Analysis(q5));
+    assert.ok(입력.ok);
+    const cs = derive_pieces(입력.물음, 입력.k, { ...입력.인식, 교사줄: classify_math_lines('(x+3)(x-1)=0\nx+3=0 또는 x-1=0\n∴ x=1 또는 x=-3') }, '수리');
+    assert.deepEqual(cs.map((c) => c.id), ['세우기-1', '풀기-1', '답구하기-1']);
+    assert.equal(cs[1].풀기글, 'x+3=0 또는 x-1=0');
+  });
+  it('학생 1 — ④ O, 학생 풀기 인식, 게이트 정상 흐름', () => {
+    const r = grade(학생1, q5루브릭, '', k, '수리');
+    assert.equal(r.파트별.답구하기.조각별[0].결과, 'O');
+    assert.deepEqual(r.학생풀기, ['x+3=0 또는 x-1=0']);
+    assert.equal(r.풀기있음, true);
+  });
+  it('학생 풀기가 있으면 ④ X여도 ② 상한 없음 (④→③), 없으면 ④→②', () => {
+    const 틀린풀기 = '(x+3)(x-1)=0, x+3=0 또는 x-1=0\n∴ x=3 또는 x=-1';
+    assert.equal(grade(틀린풀기, q5루브릭, '', k, '수리').파트별.세우기.상한, null);
+    assert.equal(grade('(x+3)(x-1)=0\n∴ x=3 또는 x=-1', q5루브릭, '', k, '수리').파트별.세우기.상한, 1);
   });
 });

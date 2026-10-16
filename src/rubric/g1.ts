@@ -3,6 +3,7 @@
 // 모범답안은 증인이지 심판이 아니다 — 판정에 쓰지 않고 결과 옆에 참고로 세운다.
 import { recognizeV2Path } from '../fq/pipeline.ts';
 import { 봉인4b_게이트, 봉인6_조각대조, type 조각대조 } from './sealed/g1.ts';
+import { solve_segments } from './solve_lines.ts';
 import type { 계열, 급소K, 요소, 조각, 파트 } from './types.ts';
 
 const 파트순서: 파트[] = ['근거대기', '세우기', '풀기', '답구하기'];
@@ -38,6 +39,10 @@ export interface 채점결과 {
   약점: { 파트: 파트; 요소: 요소 | null }[];
   /** 판정불가로 0점 처리된 조각 id — 하나라도 있으면 이 채점은 확정이 아니다 */
   판정불가: string[];
+  /** 수리 — 학생 답에서 엔진이 잡은 풀기 마디 (2026-10-16 학생 1) */
+  학생풀기: string[];
+  /** 루브릭 풀기 조각 또는 학생 풀기가 있는가 — 게이트 사슬을 가른다 */
+  풀기있음: boolean;
   /** 참고 견본 — 판정에 쓰지 않았다 */
   모범답안: string;
 }
@@ -70,7 +75,10 @@ export function grade(학생답: string, 루브릭: 조각[], 모범답안: stri
   const 파트배점 = Object.fromEntries(
     파트순서.map((p) => [p, 합(조각별.filter((r) => r.파트 === p), (r) => r.배점)]),
   ) as Record<파트, number>;
-  const 상한 = 봉인4b_게이트(조각별, 파트배점, 계열); // 계열별 사슬 (2026-10-14)
+  // 수리 — 학생 답의 풀기 마디(「x+3=0 또는 x-1=0」)도 풀기로 인식한다. 있으면 게이트는 정상 흐름 (오종래 2026-10-16 학생 1)
+  const 학생풀기 = 계열 === '수리' ? solve_segments(학생답) : [];
+  const 풀기있음 = 조각별.some((r) => r.파트 === '풀기') || 학생풀기.length > 0;
+  const 상한 = 봉인4b_게이트(조각별, 파트배점, 계열, 풀기있음); // 계열별 사슬 (2026-10-14)
 
   const 파트별 = Object.fromEntries(
     파트순서.map((p) => {
@@ -95,6 +103,8 @@ export function grade(학생답: string, 루브릭: 조각[], 모범답안: stri
     무너진지점: 파트순서.find((p) => X.some((r) => r.파트 === p)) ?? null,
     약점: X.map((r) => ({ 파트: r.파트, 요소: r.요소 })),
     판정불가: 조각별.filter((r) => r.결과 === '판정불가').map((r) => r.조각id),
+    학생풀기,
+    풀기있음,
     모범답안,
   };
 }
