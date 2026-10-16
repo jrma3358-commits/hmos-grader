@@ -924,7 +924,7 @@
         <div class="card-title" style="margin-top: 16px;">출제의도 <span class="badge muted" id="reg-core-badge">선택</span></div>
         <input type="text" id="reg-core" spellcheck="false" oninput="교사칸동기('핵심', this.value)" placeholder="예) 증가, 감소"
           style="width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius); font: inherit;">
-        <div class="c-meta" style="margin-top: 4px;" id="reg-core-hint">엔진이 급소를 더 정확히 잡습니다 (선택)</div>
+        <div class="c-meta" style="margin-top: 4px;" id="reg-core-hint">루브릭 화면에 참고로 표시됩니다 (선택)</div>
 
         <div id="reg-model-wrap" style="display: none;">
           <div class="card-title" style="margin-top: 16px;">모범답안 <span class="badge muted">선택</span></div>
@@ -1696,7 +1696,7 @@ function selectType(type, btn) {
     : '최종 답·핵심 키워드를 쓰세요';
   document.getElementById('reg-core-badge').textContent = 핵심필수 ? '필수' : '선택';
   document.getElementById('reg-core-badge').className = 'badge ' + (핵심필수 ? 'warn' : 'muted');
-  document.getElementById('reg-core-hint').textContent = 핵심필수 ? '엔진이 급소를 더 정확히 잡습니다 (필수)' : '엔진이 급소를 더 정확히 잡습니다 (선택)';
+  document.getElementById('reg-core-hint').textContent = 핵심필수 ? '루브릭 화면에 참고로 표시됩니다 — 급소는 엔진이 잡습니다 (필수)' : '루브릭 화면에 참고로 표시됩니다 — 급소는 엔진이 잡습니다 (선택)';
   document.getElementById('reg-core').placeholder = isC ? '예) 보호무역, 대응조치 — 소논제가 여럿이면 (1-1) … (1-2) …' : '예) 증가, 감소';
   // A는 4 루브릭 · 5 모범답안을 숨기니 교사 확정을 4로 — 0 등록 → 1 입력 → 2 인식 → 3 평가 → 4 교사 확정 (오종래 2026-10-16)
   document.getElementById('nav-confirm-num').textContent = isA ? '4' : '6';
@@ -3045,6 +3045,11 @@ function 정답검증Html(s, i, j) {
       <div style="margin-top:6px;">${s.정답확인 ? `<span class="badge ok">교사 확인 ✓ ${esc(s.정답확인)}</span>` : `<button class="type-btn" onclick="정답확인(${i}, ${j})">교사 확인함</button> <span class="c-meta">문항·정답·모범답안을 확인한 뒤 누르세요</span>`}</div></div>`;
 }
 
+/** 출제의도 — 교사가 0단계에 쓴 글을 참고로만 보인다. 급소·조각·채점에는 쓰지 않는다 (오종래 2026-10-16) */
+const 출제의도Html = s => (s.출제의도
+  ? `<div class="c-meta" style="margin-top:4px;"><span class="badge muted">참고</span> 출제의도 「${esc(s.출제의도)}」 <span style="color:var(--text-sub);">— 교사 입력, 급소·조각에는 쓰지 않음</span></div>`
+  : '');
+
 /** 정답 불일치 교사 확인 */
 function 정답확인(i, j) {
   루브릭홀더(i).루브릭.소문항[j].정답확인 = new Date().toLocaleString('ko-KR');
@@ -3053,7 +3058,7 @@ function 정답확인(i, j) {
 
 function 루브릭소문항Html(s, i, j) {
   const 이름 = esc(단위이름(s.번호));
-  if (s.멈춤) return `<div class="flag-box">${이름} 엔진이 조각을 뽑지 못했습니다 — ${esc(s.멈춤.사유 || s.멈춤.멈춤 || '알 수 없음')}</div>`;
+  if (s.멈춤) return `<div class="flag-box">${이름} 엔진이 조각을 뽑지 못했습니다 — ${esc(s.멈춤.사유 || s.멈춤.멈춤 || '알 수 없음')}</div>${출제의도Html(s)}`;
   const 행of = c => `<tr>
       <td style="white-space:nowrap;">${i < 0 ? '' : `${파트번호[c.파트] || ''} ${esc(c.파트)}`}</td>
       <td>${esc(c.id)}${c.is_중심 ? ' <span class="badge ok">중심</span>' : ''}${c.풀기글 ? ' <span class="badge muted">모범답안 줄</span>' : ''}</td>
@@ -3079,7 +3084,7 @@ function 루브릭소문항Html(s, i, j) {
   const 연결 = s.연결단락
     ? `<div class="c-meta" style="margin-top:4px;">세우기 = 엔진 연결 단락의 문장 — ${s.연결단락.length ? `${s.연결단락.map(l => `[${esc(l)}]`).join('·')} ${s.조각.filter(c => c.파트 === '세우기').length}문장` : '연결된 단락이 없어 세우기 조각 없음'}${i < 0 ? '' : ' · 논술은 풀기 없음'}</div>`
     : '';
-  return `<div class="c-row"><strong>${이름}</strong> ${엔진배지}급소 「${esc(displayEntity(s.급소.실체))}」${s.급소.핵심으로 ? ' <span class="badge muted" title="엔진 급소가 서지 않아 교사가 쓴 출제의도를 담은 엔진 노드를 골랐습니다">출제의도로 고름</span>' : ''}${연결}${정답검증Html(s, i, j)}${풀기경고}
+  return `<div class="c-row"><strong>${이름}</strong> ${엔진배지}급소 「${esc(displayEntity(s.급소.실체))}」${출제의도Html(s)}${연결}${정답검증Html(s, i, j)}${풀기경고}
       <div class="c-table-wrap" style="margin-top:8px;"><table class="rubric-table">
         <thead><tr><th>파트</th><th>조각</th><th>요소</th><th>실체</th><th>확인물음</th><th>채점기준 (충족조건 · O/X)</th><th>배점</th></tr></thead>
         <tbody>${행}</tbody></table></div>

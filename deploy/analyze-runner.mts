@@ -35,8 +35,8 @@ const { spread_piece } = await load('src/rubric/f6.ts');
 const { evaluate_item } = await load('src/rubric/item_eval.ts');
 // 서술형 B 교사 모범답안 — 세우기 이후 ~ 답구하기 이전 줄이 ③ 풀기 조각 (오종래 2026-10-16)
 const { split_solve_lines } = await load('src/rubric/solve_lines.ts');
-// 문항 등록창의 정답(검증) · 질문의 핵심(급소가 서지 않을 때 고르기) · 모범답안 소문항 나누기 (오종래 2026-10-16)
-const { item_portion, apply_core_hint, verify_answer } = await load('src/rubric/teacher_input.ts');
+// 문항 등록창의 정답(검증) · 출제의도(루브릭 참고 표시만) · 모범답안 소문항 나누기 (오종래 2026-10-16)
+const { item_portion, verify_answer } = await load('src/rubric/teacher_input.ts');
 // 8단계 학생 답안 채점 — 엔진 G1 (봉인⑥ 조각 대조 · 봉인④-b 게이트, 계열별, 오종래 2026-10-14)
 const { grade } = await load('src/rubric/g1.ts');
 const { 게이트사슬, 상한비 } = await load('src/rubric/sealed/g1.ts');
@@ -88,8 +88,8 @@ const 파트순서 = ['근거대기', '세우기', '풀기', '답구하기'];
  * 인문논술(계열 인문사회국어) ② 세우기 = 소문항 급소와 엔진이 연결한 제시문 단락(정합 연결)의 문장 수 — 3·4단계와 같은 정합을 다시 돌려 연결을 얻는다 (봉인②, 오종래 2026-10-14)
  */
 function 루브릭작업(논제글: string, 계열: string, 총배점: number, 제시문목록: { id: string; 텍스트: string }[] | null, 공통자료 = false, 이어받기 = false, 모범답안: unknown = [], 정답: unknown = '', 핵심: unknown = '') {
-  // 질문의 핵심 — 급소가 서지 않은 소문항만 엔진 노드 중 그 글자를 담은 노드로 (제시문 정합·화자 지정보다 먼저)
-  const 소문항들 = split_thesis(논제글).map((s: any, n: number) => ({ ...s, a: apply_core_hint(fq.recognizeV2Analysis(s.텍스트), item_portion(핵심, s.번호, n)) }));
+  // 출제의도는 급소를 고르거나 바꾸지 않는다 — 소문항 몫을 루브릭 화면 참고 정보로만 낸다 (오종래 2026-10-16, 급소 대체 제거)
+  const 소문항들 = split_thesis(논제글).map((s: any) => ({ ...s, a: fq.recognizeV2Analysis(s.텍스트) }));
   // 서술형 B (오종래 2026-10-14) — 제시문을 따로 받지 않는다. 소문항 공통발문의 첫 빈 줄 뒤 글(대화·자료)을 제시문으로 본다
   if (공통자료 && !제시문목록) {
     const 자료 = String(소문항들[0]?.공통발문 ?? '').split(/\r?\n\s*\r?\n/).slice(1).join('\n\n').trim();
@@ -145,13 +145,13 @@ function 루브릭작업(논제글: string, 계열: string, 총배점: number, �
     const 점 = [...String(s.텍스트).matchAll(/[\[(][^\[\]()]*?(\d+(?:\.\d+)?)\s*점\s*[\])]/g)].at(-1);
     const 소배점 = 점 ? Number(점[1]) : 총배점;
     const 답안글 = item_portion(모범답안, s.번호, n, true);
-    const 소 = { 번호: s.번호, 텍스트: s.텍스트, 공통발문: s.공통발문, 배점: 소배점 };
+    const 의도 = item_portion(핵심, s.번호, n).trim();
+    const 소 = { 번호: s.번호, 텍스트: s.텍스트, 공통발문: s.공통발문, 배점: 소배점, ...(의도 ? { 출제의도: 의도 } : {}) };
     if (연결멈춤) return { ...소, 멈춤: 연결멈춤 };
     try {
       const 입력 = f2_input_from_v2(s.a);
       if (!입력.ok) return { ...소, 멈춤: { 멈춤: 입력.flag, 종류: '급소', 사유: `급소가 서지 않아 조각을 뽑지 못했습니다 (${입력.flag})` } };
       const { 물음, k } = 입력;
-      const 핵심으로 = s.a.pivot.ok && s.a.pivot.pivot.reason === '질문의 핵심';
       let 연결문장 = 연결of(s.번호);
       let 단락연결 = 단락연결of(s.번호);
       const 화자 = 화자of(s);
@@ -183,7 +183,7 @@ function 루브릭작업(논제글: string, 계열: string, 총배점: number, �
       const 정답몫 = item_portion(정답, s.번호, n);
       return {
         ...소,
-        급소: { 실체: k.실체, 노드: k.node.id, ...(핵심으로 ? { 핵심으로: true } : {}) },
+        급소: { 실체: k.실체, 노드: k.node.id },
         // 5색 인식 — 모범답안이 없을 때 Claude가 이 인식·조각으로 모범답안을 쓴다 (오종래 2026-10-16)
         인식: { 조합: s.a.graph.combination, 노드: s.a.graph.nodes.map((x: any) => ({ 색: x.color, 실체: x.entity })) },
         ...(답안글.trim() ? { 모범답안글: 답안글 } : {}),

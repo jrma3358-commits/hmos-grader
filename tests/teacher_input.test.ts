@@ -1,9 +1,8 @@
-// 문항 등록창 교사 입력 (오종래 2026-10-16) — 소문항 나누기 · 질문의 핵심(급소가 서지 않을 때만) · 정답 검증(채점 기준 아님)
+// 문항 등록창 교사 입력 (오종래 2026-10-16) — 소문항 나누기 · 정답 검증(채점 기준 아님). 출제의도는 급소를 바꾸지 않는다(참고 표시만)
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { recognizeV2Analysis } from '../src/fq/pipeline.ts';
-import { apply_core_hint, item_portion, verify_answer } from '../src/rubric/teacher_input.ts';
+import { item_portion, verify_answer } from '../src/rubric/teacher_input.ts';
 
 describe('소문항 나누기 — 줄 머리 「(1)」「(2)」', () => {
   const 글 = '(1)\n첫째 답\n둘째 줄\n\n(2) 둘째 답';
@@ -20,23 +19,6 @@ describe('소문항 나누기 — 줄 머리 「(1)」「(2)」', () => {
   it('배열이면 n째 그대로', () => {
     assert.equal(item_portion(['가', null], '2', 1), '');
     assert.equal(item_portion(['가', '나'], '2', 1), '나');
-  });
-});
-
-describe('질문의 핵심 — 엔진 급소가 서지 않을 때만, 엔진 노드 중에서', () => {
-  it('NO_B → 핵심 글자를 담은 노드가 급소 (띄어쓰기 무시)', () => {
-    const a = recognizeV2Analysis('평등하고 자유로운 사회인 것을 설명하시오.');
-    assert.equal(a.pivot.ok, false);
-    const b = apply_core_hint(a, '자유로운사회');
-    assert.ok(b.pivot.ok);
-    assert.equal(b.pivot.pivot.reason, '질문의 핵심');
-    assert.equal(b.pivot.pivot.node.entity.trim(), '평등하고 자유로운 사회');
-  });
-  it('엔진 급소가 서 있으면 그대로 · 노드에 없는 말은 급소로 짓지 않는다', () => {
-    const a = recognizeV2Analysis("철수의 방법으로 '0 ≤ x < π/2일 때 부등식 sinx ≥ xcosx가 성립한다.'를 증명하시오.");
-    assert.equal(apply_core_hint(a, '철수'), a);
-    const f = recognizeV2Analysis('평등하고 자유로운 사회인 것을 설명하시오.');
-    assert.equal(apply_core_hint(f, '정의').pivot.ok, false);
   });
 });
 

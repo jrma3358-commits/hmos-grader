@@ -1,17 +1,12 @@
-// 교사 입력 — 문항 등록창의 정답 · 질문의 핵심 · 모범답안 (오종래 2026-10-16).
-//   소문항몫   : 한 칸에 쓴 글을 소문항 (1)(2)…으로 나눈다 — 줄 머리 「(1)」「(2)」. 머리가 없으면 정답·핵심은 모든 소문항, 모범답안은 첫 소문항
-//   질문의 핵심 : 엔진 급소가 서지 않았을 때(NO_B·MULTIPLE_CONVERGENCE)만, 엔진이 잡은 노드 중 그 글자를 담은 노드를 급소로 고른다.
-//                 엔진 급소가 서 있으면 건드리지 않고, 노드에 없는 말을 급소로 지어내지 않는다
+// 교사 입력 — 문항 등록창의 정답 · 출제의도 · 모범답안 (오종래 2026-10-16).
+//   소문항몫   : 한 칸에 쓴 글을 소문항 (1)(2)…으로 나눈다 — 줄 머리 「(1)」「(2)」. 머리가 없으면 정답·출제의도는 모든 소문항, 모범답안은 첫 소문항
+//   출제의도   : 루브릭 화면 참고 정보로만 — 급소를 고르거나 바꾸지 않는다 (옛 apply_core_hint 급소 대체는 오종래 2026-10-16 제거)
 //   정답 검증   : 정답은 채점 기준이 아니라 검증이다 — 모범답안의 답구하기 줄(solve_lines.ts 답 줄)과 대조해
 //                 일치하면 통과, 불일치하면 「문항 오류 또는 정답 오류」로 교사 확인에 넘긴다
 //                 C 논술 9단계 모범답안은 한 문단이라 줄 대신 문장 단위로 본다 (답 문장 = 급소 핵심어가 마지막으로 나온 문장, 2026-10-16)
-import type { recognizeV2Analysis } from '../fq/pipeline.ts';
-import type { PathNode } from '../fq/v2/graph.ts';
 import { split_sentences } from './f2.ts';
 import { split_solve_lines } from './solve_lines.ts';
 import type { 조각뼈대 } from './types.ts';
-
-type V2Analysis = ReturnType<typeof recognizeV2Analysis>;
 
 const 소문항머리 = /^[ \t]*\((\d+(?:-\d+)?)\)[ \t]*/gm;
 
@@ -38,23 +33,6 @@ const 괄호구간 = /[(（[［][^()（）[\]［］]*[)）\]］]/g;
 const 꼴들 = (t: string) => [...new Set([t, t.replace(괄호기호, ''), t.replace(괄호구간, '')].map(붙여))].filter(Boolean);
 /** 정답 낱말이 답 줄에 있는가 — 띄어쓰기·괄호 무시 */
 const 담겼나 = (줄: string, 낱말: string) => 꼴들(낱말).some((k) => 꼴들(줄).some((l) => l.includes(k)));
-
-/**
- * 질문의 핵심 — 급소가 서지 않은 인식에만. 그 실패의 후보 노드부터, 없으면 Q가 아닌 모든 노드에서
- * 핵심 낱말을 담은 노드를 찾는다 (B 먼저, 같으면 뒤 노드 — 물음에 가까운 쪽). 못 찾으면 인식 그대로
- */
-export function apply_core_hint(a: V2Analysis, 핵심: string): V2Analysis {
-  const 낱말 = 낱말들(핵심).map(붙여);
-  if (a.pivot.ok || !낱말.length) return a;
-  const 담음 = (n: PathNode) => 낱말.some((t) => 붙여(n.entity).includes(t));
-  const 고름 = (ns: PathNode[]) => {
-    const 맞음 = ns.filter((n) => n.color !== 'Q' && 담음(n));
-    return 맞음.filter((n) => n.color === 'B').at(-1) ?? 맞음.at(-1);
-  };
-  const node = 고름(a.pivot.candidates) ?? 고름(a.graph.nodes);
-  if (!node) return a;
-  return { ...a, pivot: { ok: true, pivot: { node, reason: '질문의 핵심', keyword: node.entity.trim().replace(/^[\s,]+/, ''), convergence: 0, sameAsDeepest: false } } };
-}
 
 export interface 정답검증 {
   결과: '일치' | '불일치' | '검증 안 함';
