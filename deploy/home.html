@@ -149,8 +149,11 @@
     --c-target: #2A7A4B;
     --c-question: #B02020;
     --c-situation: #7B3FB5;
-    --c-definition: #C05C1A;
+    --c-definition: #F5C518;
     --c-condition: #1E6FA8;
+    --c-core: #C8860A;
+    position: relative;
+    overflow: hidden; /* 빛줄기가 섹션 밖(가로 스크롤 포함)으로 새지 않게 */
     min-height: min(100vh, 900px);
     display: flex;
     align-items: center;
@@ -163,6 +166,8 @@
   }
   .pivot .wrap { width: 100%; }
   .pivot-slogan {
+    position: relative;
+    z-index: 1; /* 빛줄기 위로 */
     font-family: var(--serif);
     font-size: clamp(24px, 3.6vw, 40px);
     font-weight: 700;
@@ -174,20 +179,23 @@
   .pivot-net { display: block; width: 100%; max-width: 860px; height: auto; margin: 40px auto 0; overflow: visible; }
   .pivot-net .edge-base { fill: none; stroke-width: 1.4; opacity: 0.28; }
   .pivot-net .edge-flow { fill: none; stroke-width: 2.6; stroke-linecap: round; stroke-dasharray: 10 22; animation: pivot-flow 2.4s linear infinite; }
-  .pivot-net .edge-web { fill: none; stroke: var(--brown-sub); stroke-width: 1; opacity: 0.16; stroke-dasharray: 2 6; }
+  .pivot-net .ray { animation: pivot-ray 4.8s ease-in-out infinite; }
+  .pivot-net .link-base { fill: none; stroke-width: 1.8; opacity: 0.5; }
+  .pivot-net .link-flow { fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-dasharray: 3 14; opacity: 0.8; animation: pivot-flow 3.2s linear infinite; }
+  .pivot-net .synapse { opacity: 0.7; }
   .pivot-net .dendrite { stroke-width: 1.2; opacity: 0.45; }
   .pivot-net .twig { opacity: 0.55; }
   .pivot-net .node-halo { opacity: 0.14; transform-box: fill-box; transform-origin: center; animation: pivot-breathe 3.2s ease-in-out infinite; }
   .pivot-net .node-core { stroke: #fff; stroke-width: 3; }
   .pivot-net .node-label { font: 700 19px var(--sans); fill: #fff; text-anchor: middle; dominant-baseline: central; letter-spacing: -0.5px; }
-  .pivot-net .core-ring { fill: none; stroke: var(--terracotta); transform-box: fill-box; transform-origin: center; animation: pivot-ring 2.4s ease-out infinite; }
+  .pivot-net .node-label.dark { fill: var(--brown); } /* 노랑(정의) 위 흰 글자는 안 보임 */
+  .pivot-net .core-ring { fill: none; stroke: var(--c-core); transform-box: fill-box; transform-origin: center; animation: pivot-ring 2.4s ease-out infinite; }
   .pivot-net .core-ring.r2 { animation-delay: 1.2s; }
-  .pivot-net .core { fill: var(--terracotta); }
+  .pivot-net .core { fill: var(--c-core); }
   .pivot-net .core-label { font: 700 24px var(--serif); fill: #fff; text-anchor: middle; dominant-baseline: central; }
-  .pivot-legend { margin-top: 28px; display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 22px; font-size: 15px; color: var(--brown-sub); }
-  .pivot-legend span { display: inline-flex; align-items: center; gap: 8px; }
-  .pivot-legend i { width: 10px; height: 10px; border-radius: 50%; }
   @keyframes pivot-flow { to { stroke-dashoffset: -32; } }
+  @keyframes pivot-ray { 0%, 100% { opacity: 0.45; } 50% { opacity: 1; } }
+  @media (prefers-reduced-motion: reduce) { .pivot-net .ray, .pivot-net .link-flow { animation: none; } }
   @keyframes pivot-breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.18); } }
   @keyframes pivot-ring { from { transform: scale(1); opacity: 0.7; } to { transform: scale(2.1); opacity: 0; } }
 
@@ -356,14 +364,7 @@
     <div class="wrap">
       <h2 class="pivot-slogan" id="pivot-title">질문의 <span class="accent">급소</span>를 읽는<br>우리 모두의 언어인식 AI</h2>
       <!-- 그림은 아래 스크립트가 그린다 (다섯 마디 · 가지 · 급소로 흐르는 신호) -->
-      <svg class="pivot-net" id="pivot-net" viewBox="0 0 800 540" role="img" aria-label="대상·질문·상황·정의·조건 다섯 색이 신경망처럼 가운데 급소로 이어지는 그림"></svg>
-      <div class="pivot-legend" aria-hidden="true">
-        <span><i style="background: var(--c-target)"></i>대상</span>
-        <span><i style="background: var(--c-question)"></i>질문</span>
-        <span><i style="background: var(--c-situation)"></i>상황</span>
-        <span><i style="background: var(--c-definition)"></i>정의</span>
-        <span><i style="background: var(--c-condition)"></i>조건</span>
-      </div>
+      <svg class="pivot-net" id="pivot-net" viewBox="0 0 800 540" role="img" aria-label="대상·질문·상황·정의·조건 다섯 색이 신경망처럼 서로 이어지고 가운데 급소로 모이며, 급소에서 사방으로 빛줄기가 뻗는 그림"></svg>
     </div>
   </section>
 
@@ -504,13 +505,13 @@ AI는 질문에 답을 내놓는다.
     const cx = 400, cy = 270, rx = 300, ry = 205;
     // SVG 속성(fill·stroke)엔 var()가 브라우저마다 안 먹으므로 실제 값으로 푼다
     const css = getComputedStyle(svg), 값 = v => css.getPropertyValue(v).trim();
-    const 테라코타 = 값('--terracotta');
+    const 금 = 값('--c-core');
     const 마디 = [
       ['대상', '--c-target'], ['질문', '--c-question'], ['상황', '--c-situation'],
-      ['정의', '--c-definition'], ['조건', '--c-condition'],
-    ].map(([이름, 변수], i) => {
+      ['정의', '--c-definition', true], ['조건', '--c-condition'],
+    ].map(([이름, 변수, 어두운글자], i) => {
       const a = (-90 + i * 72) * Math.PI / 180;
-      return { 이름, 색: 값(변수), x: cx + rx * Math.cos(a), y: cy + ry * Math.sin(a), a };
+      return { 이름, 색: 값(변수), 어두운글자, x: cx + rx * Math.cos(a), y: cy + ry * Math.sin(a), a };
     });
     const 만들기 = (tag, attrs, 부모 = svg) => {
       const el = document.createElementNS(NS, tag);
@@ -524,13 +525,62 @@ AI는 질문에 답을 내놓는다.
       return `M${x1.toFixed(1)},${y1.toFixed(1)} Q${(mx - dy / L * bend).toFixed(1)},${(my + dx / L * bend).toFixed(1)} ${x2.toFixed(1)},${y2.toFixed(1)}`;
     };
     const defs = 만들기('defs', {});
-    const 층 = { web: 만들기('g', {}), den: 만들기('g', {}), edge: 만들기('g', {}), dot: 만들기('g', {}), node: 만들기('g', {}) };
+    const 층 = { ray: 만들기('g', {}), web: 만들기('g', {}), den: 만들기('g', {}), edge: 만들기('g', {}), dot: 만들기('g', {}), node: 만들기('g', {}) };
+    // 두 색 선형 그라디언트 (userSpaceOnUse — 선 방향 그대로)
+    const 그라디언트 = (id, x1, y1, x2, y2, 색1, 색2) =>
+      만들기('linearGradient', { id, gradientUnits: 'userSpaceOnUse', x1, y1, x2, y2 }, defs)
+        .append(...[['0', 색1], ['1', 색2]].map(([o, c]) => {
+          const s = document.createElementNS(NS, 'stop');
+          s.setAttribute('offset', o);
+          s.setAttribute('style', `stop-color: ${c}`);
+          return s;
+        }));
 
-    // 이웃 마디끼리 · 하나 건너 마디끼리 옅은 그물
+    // 빛줄기 — 급소에서 사방으로 뻗는 가는 쐐기. 섹션(overflow: hidden) 끝까지 닿도록 길게
+    const 길이 = 1800;
+    const 빛 = 만들기('radialGradient', { id: 'ray-grad', gradientUnits: 'userSpaceOnUse', cx, cy, r: 길이 }, defs);
+    [['0', 0.55], ['0.18', 0.28], ['0.5', 0.1], ['1', 0]].forEach(([o, op]) => {
+      const s = document.createElementNS(NS, 'stop');
+      s.setAttribute('offset', o);
+      s.setAttribute('style', `stop-color: ${금}; stop-opacity: ${op}`);
+      빛.appendChild(s);
+    });
+    const 줄수 = 32;
+    for (let k = 0; k < 줄수; k++) {
+      const a = (k / 줄수) * Math.PI * 2 + 0.05, w = (k % 2 ? 0.006 : 0.016) + (k % 3) * 0.004; // 굵고 가는 줄을 번갈아
+      const 끝 = s => `${(cx + Math.cos(a + s * w) * 길이).toFixed(1)},${(cy + Math.sin(a + s * w) * 길이).toFixed(1)}`;
+      const ray = 만들기('polygon', { class: 'ray', points: `${cx},${cy} ${끝(-1)} ${끝(1)}`, fill: 'url(#ray-grad)' }, 층.ray);
+      ray.style.animationDelay = `${-((k * 0.73) % 4.8).toFixed(2)}s`;
+    }
+    // 급소 둘레 금빛 후광
+    const 후광 = 만들기('radialGradient', { id: 'core-glow', cx: 0.5, cy: 0.5, r: 0.5 }, defs);
+    [['0', 0.4], ['1', 0]].forEach(([o, op]) => {
+      const s = document.createElementNS(NS, 'stop');
+      s.setAttribute('offset', o);
+      s.setAttribute('style', `stop-color: ${금}; stop-opacity: ${op}`);
+      후광.appendChild(s);
+    });
+    만들기('circle', { cx, cy, r: 170, fill: 'url(#core-glow)' }, 층.ray);
+
+    // 신경망 — 이웃 마디끼리(오각형) · 하나 건너 마디끼리(별) 두 색 그라디언트 선, 가운데 시냅스 점, 마디 사이를 오가는 신호
     마디.forEach((m, i) => {
       for (const j of [1, 2]) {
-        const n = 마디[(i + j) % 5];
-        만들기('path', { class: 'edge-web', d: 휜선(m.x, m.y, n.x, n.y, j === 1 ? -26 : 18) }, 층.web);
+        const n = 마디[(i + j) % 5], id = `pl${i}${j}`, bend = j === 1 ? -26 : 18;
+        그라디언트(id, m.x, m.y, n.x, n.y, m.색, n.색);
+        const d = 휜선(m.x, m.y, n.x, n.y, bend);
+        만들기('path', { class: 'link-base', d, stroke: `url(#${id})` }, 층.web);
+        const flow = 만들기('path', { class: 'link-flow', d, stroke: `url(#${id})` }, 층.web);
+        flow.style.animationDelay = `${-(i * 0.6 + j * 0.3)}s`;
+        // 시냅스 — 휜 선의 한가운데(t = 0.5) 점
+        const dx = n.x - m.x, dy = n.y - m.y, L = Math.hypot(dx, dy) || 1;
+        const sx = (m.x + n.x) / 2 - dy / L * bend / 2, sy = (m.y + n.y) / 2 + dx / L * bend / 2;
+        만들기('circle', { class: 'synapse', cx: sx.toFixed(1), cy: sy.toFixed(1), r: 3.2, fill: j === 1 ? m.색 : n.색 }, 층.web);
+        if (움직임) {
+          const dot = 만들기('circle', { r: 3.4, fill: m.색, opacity: 0 }, 층.dot);
+          const begin = `${(i * 0.7 + j * 0.9).toFixed(1)}s`;
+          만들기('animateMotion', { dur: '3.6s', repeatCount: 'indefinite', begin, path: d }, dot);
+          만들기('animate', { attributeName: 'opacity', values: '0;0.9;0.9;0', keyTimes: '0;0.1;0.85;1', dur: '3.6s', repeatCount: 'indefinite', begin }, dot);
+        }
       }
     });
 
@@ -542,14 +592,8 @@ AI는 질문에 답을 내놓는다.
         만들기('path', { class: 'dendrite', d: 휜선(m.x, m.y, tx, ty, k * 8 || 6), stroke: m.색, fill: 'none' }, 층.den);
         만들기('circle', { class: 'twig', cx: tx.toFixed(1), cy: ty.toFixed(1), r: 4, fill: m.색 }, 층.den);
       }
-      // 마디 → 급소: 마디 색에서 테라코타로 번지는 그라디언트
-      만들기('linearGradient', { id: `pg${i}`, gradientUnits: 'userSpaceOnUse', x1: m.x, y1: m.y, x2: cx, y2: cy }, defs)
-        .append(...[['0', m.색], ['1', 테라코타]].map(([o, c]) => {
-          const s = document.createElementNS(NS, 'stop');
-          s.setAttribute('offset', o);
-          s.setAttribute('style', `stop-color: ${c}`);
-          return s;
-        }));
+      // 마디 → 급소: 마디 색에서 금색으로 번지는 그라디언트
+      그라디언트(`pg${i}`, m.x, m.y, cx, cy, m.색, 금);
       const d = 휜선(m.x, m.y, cx, cy, i % 2 ? 34 : -34);
       만들기('path', { class: 'edge-base', d, stroke: `url(#pg${i})` }, 층.edge);
       const flow = 만들기('path', { class: 'edge-flow', d, stroke: `url(#pg${i})` }, 층.edge);
@@ -566,7 +610,7 @@ AI는 질문에 답을 내놓는다.
       const halo = 만들기('circle', { class: 'node-halo', cx: m.x, cy: m.y, r: 52, fill: m.색 }, 층.node);
       halo.style.animationDelay = `${-i * 0.6}s`;
       만들기('circle', { class: 'node-core', cx: m.x, cy: m.y, r: 38, fill: m.색 }, 층.node);
-      만들기('text', { class: 'node-label', x: m.x, y: m.y }, 층.node).textContent = m.이름;
+      만들기('text', { class: m.어두운글자 ? 'node-label dark' : 'node-label', x: m.x, y: m.y }, 층.node).textContent = m.이름;
     });
 
     // 급소
