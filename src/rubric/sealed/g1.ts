@@ -16,7 +16,7 @@ import type { PathNode } from '../../fq/v2/graph.ts';
 import type { 조각결과 } from '../g1.ts';
 import { K핵심어 } from './f2.ts';
 import { answer_values, solve_segments, student_answer_line } from '../solve_lines.ts';
-import { verify_discriminant, verify_multipath, type 경로이름 } from '../multipath.ts';
+import { verify_discriminant, verify_equation, verify_multipath, type 경로이름 } from '../multipath.ts';
 import type { 계열, 급소K, 조각, 파트 } from '../types.ts';
 
 export interface 조각대조 {
@@ -142,7 +142,10 @@ export function 봉인6_조각대조(학생답: string, 조각: 조각, 맥락: 
   // [오종래 2026-10-16 q4 학생 2] 판별식 줄(「D=…」)이고 원식이 문자 계수면 — 학생의 D · D/4 사슬을 엔진이 검증한다
   // 🔆 다경로는 모범답안 줄의 경로와 다를 때만 — 같은 경로(모범이 인수분해, 학생도 인수분해)는 O만
   const 검증 = 조각.파트 === '세우기' && 조각.줄글 && 조각.node === null
-    ? 조각.원식 ? (답: string) => verify_multipath(답, 조각.원식!) : 조각.판별식원식 ? (답: string) => verify_discriminant(답, 조각.판별식원식!) : null
+    ? 조각.원식 ? (답: string) => verify_multipath(답, 조각.원식!)
+      : 조각.판별식원식 ? (답: string) => verify_discriminant(답, 조각.판별식원식!)
+      : 조각.방정식원식 ? (답: string) => verify_equation(답, 조각.방정식원식!) // q4 학생 2 ① 방정식 세우기
+      : null
     : null;
   if (검증) {
     const v = 검증(학생답);

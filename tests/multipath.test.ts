@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 import { grade } from '../src/rubric/g1.ts';
-import { evaluate, parse_parametric_quadratic, parse_poly, parse_quadratic, roots, verify_discriminant, verify_multipath } from '../src/rubric/multipath.ts';
+import { evaluate, parse_parametric_quadratic, parse_poly, parse_quadratic, roots, verify_discriminant, verify_equation, verify_multipath } from '../src/rubric/multipath.ts';
 import type { 조각 } from '../src/rubric/types.ts';
 
 const 원 = { a: 1, b: 2, c: -3 };
@@ -102,5 +102,25 @@ describe('판별식 경로 D · D/4', () => {
     const r = grade(q5.학생1, [인수분해조각], '', k, '수리').파트별.세우기.조각별[0];
     assert.equal(r.결과, 'O');
     assert.equal(r.다경로, undefined);
+  });
+});
+
+// q4 학생 2 (2026-10-16) — ② 방정식 세우기: 학생 방정식이 원식과 같은 방정식이면 O (모범과 같은 경로라 🔆 없음)
+describe('방정식 세우기 검증', () => {
+  const 원식 = parse_parametric_quadratic('x²+x+k=-x+1, x²+2x+k-1=0')!;
+  it('이항한 꼴 · 정리한 꼴 모두 같은 방정식, 한글 사이에 쓴 식도 나눠 본다', () => {
+    assert.equal(verify_equation('-x+1=x²+x+k\nx²+2x+k-1=0', 원식).결과, 'O');
+    assert.equal(verify_equation('x²+x+k=-x+1에서 x²+2x+k-1=0', 원식).결과, 'O');
+    assert.equal(verify_equation('x²+2x+k+1=0', 원식).결과, 'X');
+    assert.equal(verify_equation('D/4=-k+2=0 ∴ k=2', 원식).결과, '판정불가');
+    assert.equal(verify_equation('y=x²+x+k와 y=-x+1', 원식).결과, '판정불가');
+  });
+  it('G1 — 방정식원식 조각: 같은 방정식이면 O, 🔆 없음', () => {
+    const k = { 실체: 'k의 범위', node: { id: '공통-n6', entity: 'k의 범위', color: 'B', surface: '', switchId: '', index: 0 } } as any;
+    const 조각1: 조각 = { id: '세우기-1', 파트: '세우기', 요소: 'c', 수행질: null, 확인물음: '', 충족조건: '', is_중심: false, node: null, 모범조각: '', 배점: 0.3, 줄글: 'x²+x+k=-x+1, x²+2x+k-1=0', 방정식원식: 원식 };
+    const r = grade('-x+1=x²+x+k\nx²+2x+k-1=0', [조각1], '', k, '수리').파트별.세우기.조각별[0];
+    assert.equal(r.결과, 'O');
+    assert.equal(r.다경로, undefined);
+    assert.equal(grade('x²+2x+k+1=0', [조각1], '', k, '수리').파트별.세우기.조각별[0].결과, 'X');
   });
 });

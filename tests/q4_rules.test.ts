@@ -150,3 +150,12 @@ describe('① 판별식 조건 — D/4', () => {
     assert.equal(판별식썼나('D/4=-k+2<0 ∴ k>2', '>'), false);
   });
 });
+
+// 2026-10-16 q4 학생 2 — 「D/4=…」도 풀기 (등식 · 부등식)
+describe('풀기 — D/4', () => {
+  it('「D/4=1-(k-1)=-k+2>0」 · 「D/4=-k+2=0」은 풀기, 「D=…」는 아니다', () => {
+    assert.deepEqual(solve_segments('D/4=1-(k-1)=-k+2>0 ∴ k<2'), ['D/4=1-(k-1)=-k+2>0']);
+    assert.deepEqual(solve_segments('D/4=-k+2=0 ∴ k=2'), ['D/4=-k+2=0']);
+    assert.deepEqual(solve_segments('D=-4k+8=0 ∴ k=2'), []);
+  });
+});

@@ -14,7 +14,7 @@ export interface 이차식 {
   c: number;
 }
 
-export type 경로이름 = '인수분해' | '완전제곱식' | '근의 공식' | '근의 공식 2' | '판별식 D' | '판별식 D/4';
+export type 경로이름 = '인수분해' | '완전제곱식' | '근의 공식' | '근의 공식 2' | '판별식 D' | '판별식 D/4' | '방정식 세우기';
 
 export interface 다경로검증 {
   결과: 'O' | 'X' | '판정불가';
@@ -249,6 +249,37 @@ export function verify_discriminant(학생답: string, 원: 문자이차식): �
       맞음,
       까닭: 맞음 ? `${사등분 ? '(b/2)²-ac' : 'b²-4ac'}와 같다 (원식 ${원.식}=0)` : `${사등분 ? '(b/2)²-ac' : 'b²-4ac'}와 다르다 (원식 ${원.식}=0)`,
     });
+  }
+  const 맞은 = 시도.find((t) => t.맞음);
+  if (맞은) return { 결과: 'O', 경로: 맞은.경로, 시도 };
+  return { 결과: 시도.length ? 'X' : '판정불가', 시도 };
+}
+
+// ── 방정식 세우기 검증 (오종래 2026-10-16 q4 학생 2) — 학생이 세운 이차방정식(「x²+2x+k-1=0」 「-x+1=x²+x+k」)이
+//   원식과 같은 방정식인가: (좌변 - 우변)이 원식의 0 아닌 상수배인지 x · 문자에 여러 값을 넣어 본다.
+//   모범답안과 같은 경로(방정식 세우기)라 🔆 다경로가 아니다
+
+/** 마디 안 한글 말(「에서」 「이므로」)에서도 나눈다 — 「x²+x+k=-x+1에서 x²+2x+k-1=0」 → 식 둘 */
+const 식마디들 = (답: string) => 마디들(답).flatMap((d) => d.split(/[가-힣]+/)).map((x) => x.trim()).filter(Boolean);
+
+export function verify_equation(학생답: string, 원: 문자이차식): 다경로검증 {
+  const 점들 = [-2, 0.5, 1.7, 3].flatMap((x) => [-1.3, 0.6, 2.2].map((k) => ({ x, k })));
+  const G = (p: { x: number; k: number }) => 넣어계산(원.식, { [원.문자]: p.k, x: p.x });
+  const 시도: 다경로검증['시도'] = [];
+  for (const 마디 of 식마디들(학생답)) {
+    const s = 정리(마디);
+    if (!s.includes('x²') || /^D/.test(s)) continue; // 판별식 줄은 아니다
+    const 변 = s.split('=');
+    if (변.length !== 2 || !변[0] || !변[1]) continue;
+    const F = (p: { x: number; k: number }) => {
+      const l = 넣어계산(변[0], { [원.문자]: p.k, x: p.x }), r = 넣어계산(변[1], { [원.문자]: p.k, x: p.x });
+      return l === null || r === null ? null : l - r;
+    };
+    if (점들.some((p) => F(p) === null)) continue; // 다른 문자가 섞였다 — 이 원식의 식이 아니다
+    const 기준 = 점들.find((p) => !같다(G(p) ?? 0, 0))!;
+    const λ = F(기준)! / G(기준)!;
+    const 맞음 = !같다(λ, 0) && 점들.every((p) => 같다(F(p)!, λ * G(p)!));
+    시도.push({ 경로: '방정식 세우기', 식: 마디, 맞음, 까닭: 맞음 ? `원식 ${원.식}=0과 같은 방정식` : `원식 ${원.식}=0과 다른 방정식` });
   }
   const 맞은 = 시도.find((t) => t.맞음);
   if (맞은) return { 결과: 'O', 경로: 맞은.경로, 시도 };
