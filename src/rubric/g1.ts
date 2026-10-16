@@ -8,6 +8,9 @@ import type { 계열, 급소K, 요소, 조각, 파트 } from './types.ts';
 
 const 파트순서: 파트[] = ['근거대기', '세우기', '풀기', '답구하기'];
 
+/** 점수 0.1 단위 반올림 — 0.1점 조각을 더할 때 생기는 부동소수 끝수(1.6999999999999997)를 없앤다 (오종래 2026-10-17) */
+const 점수반올림 = (x: number) => Math.round(x * 10) / 10;
+
 /** 체크리스트 한 줄 (자취) */
 export interface 조각결과 {
   조각id: string;
@@ -84,7 +87,7 @@ export function grade(학생답: string, 루브릭: 조각[], 모범답안: stri
 
   const 합 = (rs: 조각결과[], f: (r: 조각결과) => number) => rs.reduce((a, r) => a + f(r), 0);
   const 파트배점 = Object.fromEntries(
-    파트순서.map((p) => [p, 합(조각별.filter((r) => r.파트 === p), (r) => r.배점)]),
+    파트순서.map((p) => [p, 점수반올림(합(조각별.filter((r) => r.파트 === p), (r) => r.배점))]),
   ) as Record<파트, number>;
   // 수리 — 학생 답의 풀기 마디(「x+3=0 또는 x-1=0」)도 풀기로 인식한다. 있으면 게이트는 정상 흐름 (오종래 2026-10-16 학생 1)
   const 학생풀기 = 계열 === '수리' ? solve_segments(학생답) : [];
@@ -99,7 +102,7 @@ export function grade(학생답: string, 루브릭: 조각[], 모범답안: stri
       const 결과: 파트결과 = {
         조각별: 안,
         배점합: 파트배점[p],
-        파트점수: cap === null ? 원점수 : Math.min(원점수, cap),
+        파트점수: 점수반올림(cap === null ? 원점수 : Math.min(원점수, cap)),
         상한: cap,
       };
       return [p, 결과];
@@ -117,8 +120,8 @@ export function grade(학생답: string, 루브릭: 조각[], 모범답안: stri
   ];
   return {
     파트별,
-    부분점수: 파트순서.reduce((a, p) => a + 파트별[p].파트점수, 0),
-    만점: 합(조각별, (r) => r.배점),
+    부분점수: 점수반올림(파트순서.reduce((a, p) => a + 파트별[p].파트점수, 0)),
+    만점: 점수반올림(합(조각별, (r) => r.배점)),
     무너진지점: 파트순서.find((p) => X.some((r) => r.파트 === p)) ?? null,
     약점: X.map((r) => ({ 파트: r.파트, 요소: r.요소 })),
     판정불가: 조각별.filter((r) => r.결과 === '판정불가').map((r) => r.조각id),

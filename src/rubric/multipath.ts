@@ -499,6 +499,8 @@ export interface 나머지조건 {
   근: number;
   /** 나머지 (수). 「나머지 R」처럼 미지면 null */
   나머지: number | null;
+  /** 미지 나머지의 이름 — 「나머지 R」의 R. 학생이 「R=」 없이 쓴 f(c) 값을 이 이름의 답으로 읽는다 (2026-10-17) */
+  이름?: string;
 }
 
 export interface 다항식조건 {
@@ -517,9 +519,10 @@ export function parse_polynomial_conditions(글: string): 다항식조건 | null
   const 식 = 정리(m[1]);
   const 문자들 = [...new Set(식.match(/[a-wyzA-Z]/g) ?? [])];
   if (!/x/.test(식) || 문자들.length !== 1) return null;
-  const 조건: 나머지조건[] = [...s.matchAll(/x\s*([+\-])\s*(\d+(?:\.\d+)?)\s*로\s*나누었을\s*때의?\s*나머지(?:가|는)?\s*(-?\d+(?:\.\d+)?)?/g)].map((c) => ({
+  const 조건: 나머지조건[] = [...s.matchAll(/x\s*([+\-])\s*(\d+(?:\.\d+)?)\s*로\s*나누었을\s*때의?\s*나머지(?:가|는)?\s*(?:(-?\d+(?:\.\d+)?)|([A-Za-z])(?![A-Za-z]))?/g)].map((c) => ({
     근: (c[1] === '-' ? 1 : -1) * Number(c[2]),
     나머지: c[3] !== undefined ? Number(c[3]) : null,
+    ...(c[4] ? { 이름: c[4] } : {}),
   }));
   if (!조건.length) return null;
   const 원: 다항식조건 = { 식, 문자: 문자들[0], 조건, 참값: null };
@@ -628,4 +631,21 @@ export function verify_remainder_chain(학생답: string, 원: 다항식조건, 
   if (시도.length && !틀린) return { 결과: 'O', 경로: '나머지 정리', 시도 };
   const 오류 = 시도.find((t) => t.오류)?.오류;
   return { 결과: 시도.length ? 'X' : '판정불가', 시도, ...(오류 ? { 오류 } : {}) };
+}
+
+/**
+ * 이름 붙은 나머지의 학생 값 (오종래 2026-10-17 q7) — 문항이 「x+1로 나누었을 때의 나머지 R」로 R=f(-1)을 정했으므로
+ * 학생이 「R=」 없이 쓴 「f(-1)=1+2-7=-4」의 끝 값을 「R=-4」로 읽는다. 끝이 수인 f(c) 사슬의 마지막 것
+ */
+export function named_remainder_values(학생답: string, 원: 다항식조건): string[] {
+  return 원.조건.flatMap((k) => {
+    if (!k.이름) return [];
+    const 끝값들 = 식마디들(학생답).flatMap((d) => {
+      const 변 = 정리(d).split('=');
+      if (!변.some((e) => /^f\(-?\d+(\.\d+)?\)$/.test(e) && 같다(Number(e.slice(2, -1)), k.근))) return [];
+      const v = evaluate(변.at(-1)!);
+      return v !== null && Number.isFinite(v) ? [v] : [];
+    });
+    return 끝값들.length ? [`${k.이름}=${String(Math.round(끝값들.at(-1)! * 1e9) / 1e9)}`] : [];
+  });
 }

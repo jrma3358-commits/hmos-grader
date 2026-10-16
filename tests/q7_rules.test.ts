@@ -8,7 +8,7 @@ import { describe, it } from 'node:test';
 import { recognizeV2Analysis } from '../src/fq/pipeline.ts';
 import { derive_pieces, f2_input_from_v2 } from '../src/rubric/f2.ts';
 import { grade } from '../src/rubric/g1.ts';
-import { parse_polynomial_conditions, remainder_points, substitution_sign_error, verify_definition, verify_remainder_chain, wrote_remainder } from '../src/rubric/multipath.ts';
+import { named_remainder_values, parse_polynomial_conditions, remainder_points, substitution_sign_error, verify_definition, verify_remainder_chain, wrote_remainder } from '../src/rubric/multipath.ts';
 import { classify_math_lines, line_answer_values, solve_segments } from '../src/rubric/solve_lines.ts';
 import { verify_answer_values } from '../src/rubric/teacher_input.ts';
 
@@ -19,7 +19,7 @@ const 원 = parse_polynomial_conditions(문항)!;
 describe('다항식 · 나머지 조건', () => {
   it('다항식 x²+2x+a · 조건 f(2)=1, f(-1)=? · 상수 참값 a=-7', () => {
     assert.equal(원.식, 'x²+2x+a');
-    assert.deepEqual(원.조건, [{ 근: 2, 나머지: 1 }, { 근: -1, 나머지: null }]);
+    assert.deepEqual(원.조건, [{ 근: 2, 나머지: 1 }, { 근: -1, 나머지: null, 이름: 'R' }]); // 「나머지 R」 — R=f(-1) (2026-10-17)
     assert.equal(원.참값, -7);
   });
 });
@@ -107,5 +107,26 @@ describe('q7 학생 1 — 대입 부호 오류', () => {
     assert.match(r.파트별.풀기.조각별[0].판단근거, /^f\(-1\) 대입 부호 오류 — 2×\(-1\)=\+2로 계산/);
     assert.equal(r.파트별.답구하기.조각별[0].결과, 'X');
     assert.ok(r.경고.includes('풀기-1: f(-1) 대입 부호 오류 — 2×(-1)=+2로 계산'));
+  });
+});
+
+// 2026-10-17 — R=f(-1): 「R=」 없이 쓴 f(-1) 계산 결과도 R 값 · 점수 0.1 단위 반올림
+describe('R=f(-1) 읽기 · 점수 반올림', () => {
+  it('「f(-1)=1+2-7=-4」 → R=-4, 「R=」로 쓰면 그대로', () => {
+    assert.deepEqual(named_remainder_values('f(-1)=1+2-7=-4', 원), ['R=-4']);
+    assert.deepEqual(named_remainder_values('f(2)=4+4+a=1', 원), []);
+  });
+  it('G1 ④ — 「R=」 없이 f(-1)=-8이면 R 맞음 (a=-7과 함께 O)', () => {
+    const 입력 = f2_input_from_v2(recognizeV2Analysis(문항));
+    assert.ok(입력.ok);
+    const cs = derive_pieces(입력.물음, 입력.k, { ...입력.인식, 교사줄: classify_math_lines(모범, 문항), 다항식: 원 }, '수리');
+    const 조각들 = cs.map((c) => ({ ...c, 충족조건: '', 모범조각: '', 배점: 0.1 })) as any;
+    const 답 = (학생: string) => grade(학생, 조각들, '', 입력.k, '수리').파트별.답구하기.조각별[0];
+    assert.equal(답('f(2)=4+4+a=1, a=-7\nf(-1)=1-2-7=-8').결과, 'O');
+    assert.match(답('f(2)=4+4+a=1, a=-7\nf(-1)=1+2-7=-4').판단근거, /학생 값 R=-4, a=-7/);
+    // 점수는 0.1 단위 — 0.1점 조각 여럿을 더해도 끝수가 없다
+    const r = grade('f(2)=4+4+a=1, a=-7\nf(-1)=1-2-7=-8', 조각들, '', 입력.k, '수리');
+    assert.equal(r.만점, Math.round(조각들.length * 0.1 * 10) / 10);
+    assert.equal(String(r.부분점수).length <= 4, true);
   });
 });

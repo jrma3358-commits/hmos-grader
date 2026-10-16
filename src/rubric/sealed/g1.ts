@@ -16,7 +16,7 @@ import type { PathNode } from '../../fq/v2/graph.ts';
 import type { 조각결과 } from '../g1.ts';
 import { K핵심어 } from './f2.ts';
 import { answer_values, final_value, line_answer_values, solve_segments, student_answer_line } from '../solve_lines.ts';
-import { D혼동오류, remainder_points, verify_calculation, verify_definition, verify_discriminant, verify_equation, verify_remainder_chain, verify_setup, wrote_remainder, type 경로이름 } from '../multipath.ts';
+import { D혼동오류, named_remainder_values, remainder_points, verify_calculation, verify_definition, verify_discriminant, verify_equation, verify_remainder_chain, verify_setup, wrote_remainder, type 경로이름 } from '../multipath.ts';
 import type { 계열, 급소K, 조각, 파트 } from '../types.ts';
 
 export interface 조각대조 {
@@ -145,9 +145,12 @@ export function 봉인6_조각대조(학생답: string, 조각: 조각, 맥락: 
     const 문자of = (v: string) => (v.match(/^[A-Za-z](?:_?\w)?(?=<=|>=|[=<>≤≥≦≧])/) ?? [''])[0];
     const 물은문자 = new Set(모범.값.map(문자of));
     // 답이 둘인 문항(a · R, q7 ①) — 결론 줄만이 아니라 「∴」 줄 · 「R=…=-8」 줄 모두에서 모은다
-    const 모은값 = 물은문자.size > 1
-      ? [...new Set([...answer_values(줄), ...String(학생답 ?? '').split(/\r?\n/).flatMap(line_answer_values)])].sort()
+    const 쓴값 = 물은문자.size > 1
+      ? [...new Set([...answer_values(줄), ...String(학생답 ?? '').split(/\r?\n/).flatMap(line_answer_values)])]
       : answer_values(줄);
+    // [오종래 2026-10-17 q7] 「나머지 R」(R=f(-1)) — 학생이 「R=」로 쓰지 않았으면 f(-1) 계산 결과를 R 값으로
+    const 이름값 = 조각.나머지다항식 ? named_remainder_values(학생답, 조각.나머지다항식).filter((v) => !쓴값.some((w) => 문자of(w) === 문자of(v))) : [];
+    const 모은값 = [...쓴값, ...이름값].sort();
     const 학생값 = 모은값.filter((v) => 물은문자.has(문자of(v)));
     const 같음 = 학생값.length === 모범.값.length && 학생값.every((v, i) => v === 모범.값[i]);
     return {
