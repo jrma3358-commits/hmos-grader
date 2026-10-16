@@ -4,7 +4,7 @@
 //   세우기 끝 = 답 줄 앞에서 엔진 ② 세우기 조각의 실체(단락 급소·노드)가 마지막으로 나온 줄
 //              (답 줄을 먼저 잡는다 — 세우기 실체는 대개 논제 주어라 답 줄에도 나온다, 오종래 2026-10-16 보완)
 //   풀기      = 그 사이의 빈 줄 아닌 줄들
-import type { 조각뼈대 } from './types.ts';
+import type { 모범답, 조각뼈대 } from './types.ts';
 
 export interface 풀기구간 {
   /** 빈 줄을 뺀 줄 수 */
@@ -54,4 +54,53 @@ export function split_solve_lines(답안: string, 조각들: 조각뼈대[]): �
     답대체,
     풀기: 답i > 앞끝 ? 줄.slice(앞끝 + 1, 답i) : [],
   };
+}
+
+// ── 수리 모범답안 줄 나누기 (오종래 2026-10-16 q5) — 계열 수리만. 인문 서술형 B는 위 split_solve_lines 그대로 ──
+//   「~하면」으로 끝나는 줄 → ① 근거대기
+//   「∴」 결론 줄          → ④ 답구하기 (모범 값 = 그 줄의 「x=값」들, 학생 답 값과 직접 대조)
+//   식 세우는 줄 (등식)    → ② 세우기
+//   ③ 풀기는 없다 — 인수분해처럼 세우기가 곧 풀기 (세우기=풀기)
+//   어느 것에도 들지 않는 줄은 조각을 내지 않고 미분류로 보인다
+
+export interface 수리줄나누기 {
+  근거대기: string[];
+  세우기: string[];
+  답: 모범답 | null;
+  미분류: string[];
+}
+
+const 결론표 = /^∴/;
+
+/** 결론 줄의 「x=값」들 — 띄어쓰기 무시, 「또는」·쉼표로 나뉜다. 값은 숫자면 수로 맞춘 글자 (1/2 = 0.5) */
+export function answer_values(줄: string): string[] {
+  const s = String(줄 ?? '').replace(/∴/g, '').replace(/\s+/g, '').replace(/[−–]/g, '-');
+  const 값 = [...s.matchAll(/([A-Za-z](?:_?\w)?)=(.+?)(?=또는|이다|입니다|[,，.。]|[A-Za-z](?:_?\w)?=|$)/g)].map((m) => `${m[1]}=${수맞춤(m[2])}`);
+  return [...new Set(값)].sort();
+}
+
+/** 「-3/2」 「0.5」 「3」 같은 수는 수로 맞춘다 — 아니면 글자 그대로 */
+function 수맞춤(v: string): string {
+  const m = v.match(/^\(?(-?\d+(?:\.\d+)?)\)?(?:\/\(?(-?\d+(?:\.\d+)?)\)?)?$/);
+  if (!m) return v;
+  const n = Number(m[1]) / (m[2] ? Number(m[2]) : 1);
+  return Number.isFinite(n) ? String(Math.round(n * 1e9) / 1e9) : v;
+}
+
+export function classify_math_lines(답안: string): 수리줄나누기 {
+  const 줄 = String(답안 ?? '').split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const out: 수리줄나누기 = { 근거대기: [], 세우기: [], 답: null, 미분류: [] };
+  for (const l of 줄) {
+    if (결론표.test(l)) out.답 = { 줄: l, 값: answer_values(l) }; // 결론 줄이 여럿이면 마지막
+    else if (/하면[\s,，.]*$/.test(l)) out.근거대기.push(l);
+    else if (/=/.test(l)) out.세우기.push(l);
+    else out.미분류.push(l);
+  }
+  return out;
+}
+
+/** 학생 답의 결론 줄 — 「∴」 줄 중 마지막, 없으면 「=」가 있는 마지막 줄, 그것도 없으면 답 전체 */
+export function student_answer_line(학생답: string): string {
+  const 줄 = String(학생답 ?? '').split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  return 줄.filter((l) => 결론표.test(l)).at(-1) ?? 줄.filter((l) => l.includes('=')).at(-1) ?? 줄.join(' ');
 }

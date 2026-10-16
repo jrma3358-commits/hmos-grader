@@ -15,6 +15,7 @@
 import type { PathNode } from '../../fq/v2/graph.ts';
 import type { 조각결과 } from '../g1.ts';
 import { K핵심어 } from './f2.ts';
+import { answer_values, student_answer_line } from '../solve_lines.ts';
 import type { 계열, 급소K, 조각, 파트 } from '../types.ts';
 
 export interface 조각대조 {
@@ -97,6 +98,19 @@ export function 봉인6_조각대조(학생답: string, 조각: 조각, 맥락: 
         return 경로대조(학생답, 조각);
     }
   }
+  // [오종래 2026-10-16 q5] 수리 ④ — 모범 값(모범답안 「∴」 줄)이 있으면 학생 답 값과 직접 대조. 불일치면 X (답구하기 0점)
+  const 모범 = 조각.모범답;
+  if (조각.파트 === '답구하기' && 모범?.값.length) {
+    const 줄 = student_answer_line(학생답);
+    const 학생값 = answer_values(줄);
+    const 같음 = 학생값.length === 모범.값.length && 학생값.every((v, i) => v === 모범.값[i]);
+    return {
+      결과: 같음 ? 'O' : 'X',
+      근거: `모범 값 ${모범.값.join(', ')} · 학생 값 ${학생값.length ? 학생값.join(', ') : '없음'} (「${줄}」) — ${같음 ? '일치' : '불일치'}`,
+    };
+  }
+  // [오종래 2026-10-16 q5] 수리 모범답안 줄 조각(①「~하면」 줄 · ② 등식 줄)은 노드가 없다 — 교사가 판정한다 (범위 확정: 세우기 교사)
+  if (조각.줄글 && 조각.node === null) return { 결과: '판정불가', 근거: `모범답안 줄 「${조각.줄글}」 — 교사가 판정합니다` };
   if (조각.파트 === '답구하기') {
     const 실체 = 조각.node?.entity ?? 맥락.질문급소.node.entity;
     const 글자 = 수리K글자(실체);

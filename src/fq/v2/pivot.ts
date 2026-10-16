@@ -151,6 +151,19 @@ function isWritingForm(graph: PathGraph, node: PathNode): boolean {
 }
 
 /**
+ * 작성 지시 「풀이 과정」 [오종래 2026-10-16 q5] — 「~고」로 끝난 직접 Q(앞에 B가 있는) 뒤 물음의 B가 「풀이 과정」「과정」이면
+ * 묻는 대상이 아니라 작성 지시다. 급소·④ 답구하기 대상·① 근거대기에서 뺀다 — 「~고」 앞 B가 급소다
+ * (「이차방정식 x²+2x-3=0의 두 근을 구하고, 풀이 과정을 서술하시오」 → 「…두 근」).
+ * 범위는 「풀이 과정」류만 (오종래 2026-10-16 확정) — 「A를 구하고, B를 구하시오」 같은 두 답 물음 · C 논술은 그대로다.
+ */
+export function 풀이과정B(nodes: readonly PathNode[], node: PathNode): boolean {
+  if (node.color !== 'B' || !/^(풀이\s*)?과정$/.test(node.entity.trim().replace(/^[\s,，]+/, ''))) return false;
+  const at = nodes.indexOf(node);
+  const 고Q = nodes.findIndex((n, i) => i < at && n.color === 'Q' && /고$/.test(n.surface.trim() || n.entity.trim()));
+  return 고Q > 0 && nodes.slice(0, 고Q).some((n) => n.color === 'B');
+}
+
+/**
  * B 급소의 실체값 [오종래 2026-10-05] — 급소는 B 노드 이름이 아니라 B가 묻는 실체를 낸다.
  * 실체가 「한글 이름 + 식·기호」(예: 「일반항 a_n」 「점 C(0, -1)」)면 실체값 = 식·기호, 이름은 따로 둔다. 아니면 실체 그대로.
  * [오종래 2026-10-06] 실체 머리의 쉼표·공백은 뗀다 — 앞 조각에서 끌려온 것이다 (수능_3 「, k」 → 「k」). 노드 실체는 그대로다.
@@ -414,6 +427,8 @@ export function analyze_pivot(graph: PathGraph, table?: SealedTable): PivotAnaly
     // 곁 B [오종래 2026-10-13] — 관점 앞 B(「…의 경쟁력 측면에서」)·소유격 수식 B(「B국 기업의 경쟁력과」)는 묻는 대상이 아니다.
     //   다른 B가 있으면 그 B가 급소다
     if (hasOtherThanAspect && 곁B(graph.nodes, node)) return false;
+    // 작성 지시 「풀이 과정」 [오종래 2026-10-16 q5] — 「~고」 앞 B가 급소다 (풀이과정B)
+    if (풀이과정B(graph.nodes, node)) return false;
     // 작성 형식 블록 [오종래 2026-10-05] — 「풀이 과정과 답을 서술하시오」의 「풀이 과정」(P)과 「답」(B)은 한 묶음의 작성 형식이라
     //   급소가 될 수 없다. 그 앞 B가 급소다 (예: 수학서술형 12 「일반항 a_n을 구하는 풀이 과정과 답을」 → 「일반항 a_n」).
     return !isWritingForm(graph, node);
