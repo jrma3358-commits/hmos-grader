@@ -16,7 +16,7 @@ import type { PathNode } from '../../fq/v2/graph.ts';
 import type { 조각결과 } from '../g1.ts';
 import { K핵심어 } from './f2.ts';
 import { answer_values, final_value, solve_segments, student_answer_line } from '../solve_lines.ts';
-import { verify_calculation, verify_discriminant, verify_equation, verify_setup, type 경로이름 } from '../multipath.ts';
+import { D혼동오류, verify_calculation, verify_discriminant, verify_equation, verify_setup, type 경로이름 } from '../multipath.ts';
 import type { 계열, 급소K, 조각, 파트 } from '../types.ts';
 
 export interface 조각대조 {
@@ -135,9 +135,11 @@ export function 봉인6_조각대조(학생답: string, 조각: 조각, 맥락: 
     const 줄 = student_answer_line(학생답);
     // [오종래 2026-10-16 q6 ①] 모범 답이 「∴」 없는 끝 값이면 학생 답도 마지막 줄 끝 수로 대조
     if (모범.끝값) {
-      const v = final_value(줄);
+      // 학생 끝 값 — 끝이 수인 마지막 「=」 줄 (「∴ α³+β³=(α+β)³+…」처럼 식으로 끝난 결론 줄은 건너뛴다, q6 학생 2)
+      const 끝줄 = String(학생답 ?? '').split(/\r?\n/).map((l) => l.trim()).filter((l) => l.includes('=') && final_value(l) !== null).at(-1) ?? 줄;
+      const v = final_value(끝줄);
       const 같음 = v !== null && v === 모범.값[0];
-      return { 결과: 같음 ? 'O' : 'X', 근거: `모범 끝 값 ${모범.값[0]} · 학생 끝 값 ${v ?? '없음'} (「${줄}」) — ${같음 ? '일치' : '불일치'}` };
+      return { 결과: 같음 ? 'O' : 'X', 근거: `모범 끝 값 ${모범.값[0]} · 학생 끝 값 ${v ?? '없음'} (「${끝줄}」) — ${같음 ? '일치' : '불일치'}` };
     }
     // 모범 값의 문자(「k」 「x」)만 대조한다 — 「∴」 없이 「D=1-(k+1)>0, k<2」로 쓰면 「D=…」는 답이 아니다 (2026-10-16 q4 학생 3)
     const 문자of = (v: string) => (v.match(/^[A-Za-z](?:_?\w)?(?=<=|>=|[=<>≤≥≦≧])/) ?? [''])[0];
@@ -176,7 +178,8 @@ export function 봉인6_조각대조(학생답: string, 조각: 조각, 맥락: 
       return { 결과: 'O', 근거: `🔆 다경로 — ${v.경로} 검증 (${시도})`, 다경로: v.경로, 다경로식: 맞은.식, 다경로까닭: 맞은.까닭 };
     }
     // D와 D/4 혼동 (2026-10-16) — 세우기 감점(X), 오류 이름을 같이 낸다. ④ 답구하기는 값으로 따로 본다
-    if (v.결과 === 'X' && v.오류) return { 결과: 'X', 근거: `D/4를 D로 표기 오류 — ${v.오류} (${시도})`, 오류: v.오류 };
+    //   공식 부호 오류(「α³+β³ 공식 부호 오류 — +3αβ → -3αβ」, q6 학생 2)도 같은 자리 — 오류 이름을 근거 앞에
+    if (v.결과 === 'X' && v.오류) return { 결과: 'X', 근거: `${v.오류 === D혼동오류 ? 'D/4를 D로 표기 오류 — ' : ''}${v.오류} (${시도})`, 오류: v.오류 };
     if (v.결과 === 'X') return { 결과: 'X', 근거: `경로 검증 실패 — ${시도}` };
     return { 결과: '판정불가', 근거: `모범답안 줄 「${조각.줄글}」 — 아는 경로 꼴이 없어 교사가 판정합니다` };
   }
