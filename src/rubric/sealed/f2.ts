@@ -28,6 +28,7 @@ import type { PathNode } from '../../fq/v2/graph.ts';
 import type { 경로표지, 계열, 급소K, 인식결과, 조각뼈대, 파트, 파트별물음, 요소 } from '../types.ts';
 import { 기호뿐 } from '../../thesis/sign.ts';
 import { 풀이과정B } from '../../fq/v2/pivot.ts';
+import { parse_parametric_quadratic } from '../multipath.ts';
 //
 // [오종래 2026-10-16 q5] 수리 교사 모범답안 줄 (인식결과.교사줄, solve_lines.ts classify_math_lines):
 //   ① 근거대기 = 노드 조각 + 「~하면」 줄마다 하나 · ② 세우기 = 노드 조각 + 등식 줄마다 하나
@@ -127,7 +128,11 @@ export function 봉인2_세우기(물음: 파트별물음 | null, k: 급소K, �
   if (!인문(계열)) {
     const 노드 = piecesFromNodes('세우기', ['C', 'P'], 물음, k, 인식, qTargets(인식));
     // 원식(수 계수 이차방정식)이 있으면 세우기 줄 조각에 붙인다 — 채점이 다경로를 수학적으로 검증한다 (2026-10-16)
-    const 줄 = 줄조각('세우기', 인식.교사줄?.세우기 ?? [], 물음, 'c').map((c) => (인식.원식 ? { ...c, 원식: 인식.원식 } : c));
+    // 원식이 없고(문자 계수) 세우기 줄이 판별식(「D=…」 「D/4=…」)이면 모범답안 세우기 줄의 문자 계수 이차방정식을 붙인다 (2026-10-16 q4 학생 2)
+    const 문자원식 = 인식.원식 ? null : parse_parametric_quadratic((인식.교사줄?.세우기 ?? []).join('\n'));
+    const 줄 = 줄조각('세우기', 인식.교사줄?.세우기 ?? [], 물음, 'c').map((c) =>
+      인식.원식 ? { ...c, 원식: 인식.원식 } : 문자원식 && /^\s*D\s*(\/\s*4)?\s*=/.test(c.줄글 ?? '') ? { ...c, 판별식원식: 문자원식 } : c,
+    );
     return 인식.교사줄 ? 번호매김([...노드, ...줄]) : 노드;
   }
   return (인식.연결문장 ?? []).map((근거, i) => ({

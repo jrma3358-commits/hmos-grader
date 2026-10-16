@@ -1,7 +1,7 @@
 // 루브릭 모듈의 자료구조 — 정본: 봉인/HMOS_루브릭_구현명세-3.md §1·§2
 import type { Color } from '../fq/types.ts';
 import type { PathNode } from '../fq/v2/graph.ts';
-import type { 이차식 } from './multipath.ts';
+import type { 문자이차식, 이차식 } from './multipath.ts';
 
 export type 파트 = '근거대기' | '세우기' | '풀기' | '답구하기';
 export type 요소 = Lowercase<Color> | 'k';
@@ -113,6 +113,8 @@ export interface 조각 {
   모범답?: 모범답;
   /** 수리 ② 세우기 줄 — 원식이 있으면 학생 답의 다경로(인수분해 · 완전제곱식 · 근의 공식 1·2)를 엔진이 검증 (2026-10-16) */
   원식?: 이차식;
+  /** 수리 ② 세우기 판별식 줄(「D=…」) — 문자 계수 원식(모범답안의 「x²+2x+k-1=0」). 학생의 D · D/4 사슬을 엔진이 검증 (2026-10-16 q4 학생 2) */
+  판별식원식?: 문자이차식;
   배점: number;
   모범조각: string;
 }

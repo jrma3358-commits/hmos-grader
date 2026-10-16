@@ -14,7 +14,7 @@ export interface 이차식 {
   c: number;
 }
 
-export type 경로이름 = '인수분해' | '완전제곱식' | '근의 공식' | '근의 공식 2';
+export type 경로이름 = '인수분해' | '완전제곱식' | '근의 공식' | '근의 공식 2' | '판별식 D' | '판별식 D/4';
 
 export interface 다경로검증 {
   결과: 'O' | 'X' | '판정불가';
@@ -181,6 +181,75 @@ function 근의공식(마디: string, 원: 이차식): 다경로검증['시도']
 /** 학생 답에서 다경로 꼴을 찾아 원식으로 검증한다 */
 export function verify_multipath(학생답: string, 원: 이차식): 다경로검증 {
   const 시도 = 마디들(학생답).flatMap((d) => [인수분해(d, 원), 완전제곱식(d, 원), 근의공식(d, 원)].filter((x) => x !== null));
+  const 맞은 = 시도.find((t) => t.맞음);
+  if (맞은) return { 결과: 'O', 경로: 맞은.경로, 시도 };
+  return { 결과: 시도.length ? 'X' : '판정불가', 시도 };
+}
+
+// ── 판별식 경로 (오종래 2026-10-16 q4 학생 2) — 문자 계수(「k」) 이차방정식의 판별식 D · D/4 ──
+//   원식 = 모범답안 세우기 줄의 「x²+2x+k-1=0」 (x 말고 문자 하나). 학생의 「D=… = …」 「D/4=… = …」 사슬의 식마다
+//   문자에 여러 값을 넣어 b²-4ac(D) · (b/2)²-ac(D/4)와 같은지 본다. 끝의 「>0」 「<0」 「=0」은 조건이라 떼고 본다
+
+/** 문자 계수 이차방정식 — 식(좌변, 우변 0) · 문자 */
+export interface 문자이차식 {
+  식: string;
+  문자: string;
+}
+
+/** 글에서 문자 계수 이차방정식 「…x²…=0」 — x 말고 문자가 꼭 하나. 없으면 null */
+export function parse_parametric_quadratic(글: string): 문자이차식 | null {
+  for (const m of 정리(글).matchAll(/([^=,，\n]*x²[^=,，\n]*)=0(?![0-9.])/g)) {
+    const 문자들 = [...new Set((m[1].match(/[a-wyzA-Z]/g) ?? []))];
+    if (문자들.length === 1) return { 식: m[1].replace(/^[^0-9a-zA-Z(+\-]+/, ''), 문자: 문자들[0] };
+  }
+  return null;
+}
+
+/** 식에 값을 넣어 계산 — 문자 · x를 괄호 수로 바꾸고 생략된 곱셈(「2x」 「2(」 「)(」)을 채운다 */
+function 넣어계산(식: string, 값: Record<string, number>): number | null {
+  let s = 정리(식);
+  for (const [k, v] of Object.entries(값)) s = s.replaceAll(k, `(${v})`);
+  s = s.replace(/(\d|\)|²)\(/g, '$1*(');
+  return evaluate(s);
+}
+
+/** 문자 값 k에서 원식의 계수 a, b, c — x = 0, 1, -1을 넣어 푼다 */
+function 계수at(원: 문자이차식, k: number): 이차식 | null {
+  const P = (x: number) => 넣어계산(원.식, { [원.문자]: k, x });
+  const p0 = P(0), p1 = P(1), m1 = P(-1);
+  if (p0 === null || p1 === null || m1 === null) return null;
+  return { a: (p1 + m1) / 2 - p0, b: (p1 - m1) / 2, c: p0 };
+}
+
+/** 학생 답의 판별식 사슬을 원식으로 검증한다 — 사슬의 모든 식이 맞으면 맞음 */
+export function verify_discriminant(학생답: string, 원: 문자이차식): 다경로검증 {
+  const 시료 = [-2.5, 0.7, 3.1];
+  const 시도: 다경로검증['시도'] = [];
+  for (const 마디 of 마디들(학생답)) {
+    const m = 정리(마디).match(/^D(\/4)?=(.+)$/);
+    if (!m) continue;
+    const 사등분 = !!m[1];
+    const 변 = m[2].split('=');
+    변[변.length - 1] = 변[변.length - 1].replace(/[<>≤≥≦≧]0$/, '');
+    if (변.length > 1 && 변[변.length - 1] === '0') 변.pop(); // 「…=0」 조건
+    const 식들 = 변.filter(Boolean);
+    if (!식들.length) continue;
+    const 맞음 = 식들.every((e) =>
+      시료.every((k) => {
+        const q = 계수at(원, k);
+        const v = 넣어계산(e, { [원.문자]: k });
+        if (!q || v === null) return false;
+        const 기대 = 사등분 ? (q.b / 2) ** 2 - q.a * q.c : q.b ** 2 - 4 * q.a * q.c;
+        return 같다(v, 기대);
+      }),
+    );
+    시도.push({
+      경로: 사등분 ? '판별식 D/4' : '판별식 D',
+      식: 마디,
+      맞음,
+      까닭: 맞음 ? `${사등분 ? '(b/2)²-ac' : 'b²-4ac'}와 같다 (원식 ${원.식}=0)` : `${사등분 ? '(b/2)²-ac' : 'b²-4ac'}와 다르다 (원식 ${원.식}=0)`,
+    });
+  }
   const 맞은 = 시도.find((t) => t.맞음);
   if (맞은) return { 결과: 'O', 경로: 맞은.경로, 시도 };
   return { 결과: 시도.length ? 'X' : '판정불가', 시도 };

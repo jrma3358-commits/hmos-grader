@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 import { grade } from '../src/rubric/g1.ts';
-import { evaluate, parse_poly, parse_quadratic, roots, verify_multipath } from '../src/rubric/multipath.ts';
+import { evaluate, parse_parametric_quadratic, parse_poly, parse_quadratic, roots, verify_discriminant, verify_multipath } from '../src/rubric/multipath.ts';
 import type { 조각 } from '../src/rubric/types.ts';
 
 const 원 = { a: 1, b: 2, c: -3 };
@@ -68,5 +68,39 @@ describe('G1 — ② 세우기 줄 조각에 원식이 있으면 엔진 판정 (
   });
   it('원식이 없으면(q4 문자 계수) 그대로 교사 판정', () => {
     assert.equal(grade(q5.학생6, [세우기()], '', k, '수리').파트별.세우기.조각별[0].결과, '판정불가');
+  });
+});
+
+// q4 학생 2 (2026-10-16) — 판별식 D · D/4 경로 (문자 계수 원식) · 모범답안과 같은 경로면 🔆 없음
+describe('판별식 경로 D · D/4', () => {
+  const 원식 = parse_parametric_quadratic('x²+x+k=-x+1, x²+2x+k-1=0')!;
+  it('문자 계수 원식을 모범답안 세우기 줄에서 뽑는다 — 수 계수 식은 아니다', () => {
+    assert.deepEqual(원식, { 식: 'x²+2x+k-1', 문자: 'k' });
+    assert.equal(parse_parametric_quadratic('이차방정식 x²+2x-3=0의'), null);
+  });
+  it('D/4 사슬의 식마다 (b/2)²-ac, D 사슬은 b²-4ac — 끝 조건(>0 · =0 · <0)은 뗀다', () => {
+    assert.deepEqual([verify_discriminant('D/4=1-(k-1)=-k+2>0 ∴ k<2', 원식).결과, verify_discriminant('D/4=1-(k-1)=-k+2>0', 원식).경로], ['O', '판별식 D/4']);
+    assert.equal(verify_discriminant('D/4=-k+2=0 ∴ k=2', 원식).결과, 'O');
+    assert.equal(verify_discriminant('D=2²-4×1×(k-1)>0', 원식).경로, '판별식 D');
+    assert.equal(verify_discriminant('D/4=1-(k+1)=-k>0', 원식).결과, 'X');
+    assert.equal(verify_discriminant('∴ k<2', 원식).결과, '판정불가');
+  });
+  const k = { 실체: 'k의 범위', node: { id: '공통-n6', entity: 'k의 범위', color: 'B', surface: '', switchId: '', index: 0 } } as any;
+  const 판별식조각: 조각 = { id: '세우기-2', 파트: '세우기', 요소: 'c', 수행질: null, 확인물음: '', 충족조건: '', is_중심: false, node: null, 모범조각: '', 배점: 0.4, 줄글: 'D=2²-4×1×(k-1)>0', 판별식원식: 원식 };
+  it('학생 2 — D/4는 모범(D)과 다른 올바른 경로 → O 🔆', () => {
+    const r = grade('방정식의 판별식을 D라 하면\nD/4=1-(k-1)=-k+2>0 ∴ k<2', [판별식조각], '', k, '수리').파트별.세우기.조각별[0];
+    assert.equal(r.결과, 'O');
+    assert.equal(r.다경로, '판별식 D/4');
+  });
+  it('학생 1 — D는 모범과 같은 경로 → O, 🔆 없음', () => {
+    const r = grade('D=2²-4×1×(k-1)=-4k+8\nD=-4k+8>0, 4k<8 ∴ k<2', [판별식조각], '', k, '수리').파트별.세우기.조각별[0];
+    assert.equal(r.결과, 'O');
+    assert.equal(r.다경로, undefined);
+  });
+  it('q5 학생 1 — 모범과 같은 인수분해 → O, 🔆 없음', () => {
+    const 인수분해조각: 조각 = { ...판별식조각, id: '세우기-1', 줄글: '(x+3)(x-1)=0', 판별식원식: undefined, 원식: 원 };
+    const r = grade(q5.학생1, [인수분해조각], '', k, '수리').파트별.세우기.조각별[0];
+    assert.equal(r.결과, 'O');
+    assert.equal(r.다경로, undefined);
   });
 });

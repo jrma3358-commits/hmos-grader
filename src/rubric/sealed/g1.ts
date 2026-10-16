@@ -16,7 +16,7 @@ import type { PathNode } from '../../fq/v2/graph.ts';
 import type { 조각결과 } from '../g1.ts';
 import { K핵심어 } from './f2.ts';
 import { answer_values, solve_segments, student_answer_line } from '../solve_lines.ts';
-import { verify_multipath, type 경로이름 } from '../multipath.ts';
+import { verify_discriminant, verify_multipath, type 경로이름 } from '../multipath.ts';
 import type { 계열, 급소K, 조각, 파트 } from '../types.ts';
 
 export interface 조각대조 {
@@ -109,7 +109,8 @@ export function 판별식조건(문장: string): '>' | '=' | '<' | null {
 export function 판별식썼나(학생답: string, 조건: '>' | '=' | '<'): boolean {
   // 줄은 잇지 않는다 — 띄어쓰기만 무시. D 뒤 식에는 한글·쉼표·「∴」가 들어가지 않는다
   const t = String(학생답 ?? '').replace(/[ \t]+/g, '');
-  return [...t.matchAll(/D(?:=[^<>=≤≥\n,，∴가-힣]*)?([<>=])0(?![0-9.])/g)].some((m) => m[1] === 조건);
+  // 「D/4」도 같은 부호라 판별식 조건이다 · 사슬(「D/4=1-(k-1)=-k+2>0」)도 (2026-10-16 q4 학생 2)
+  return [...t.matchAll(/D(?:\/4)?(?:=[^<>=≤≥\n,，∴가-힣]*)*([<>=])0(?![0-9.])/g)].some((m) => m[1] === 조건);
 }
 
 export function 봉인6_조각대조(학생답: string, 조각: 조각, 맥락: 대조맥락): 조각대조 {
@@ -138,15 +139,22 @@ export function 봉인6_조각대조(학생답: string, 조각: 조각, 맥락: 
   // [오종래 2026-10-16 q5] 수리 모범답안 줄 조각(①「~하면」 줄 · ② 등식 줄)은 노드가 없다 — 교사가 판정한다 (범위 확정: 세우기 교사)
   // [오종래 2026-10-16] 수리 ② 세우기 줄 — 원식이 있으면 다경로를 엔진이 수학적으로 검증한다 (multipath.ts).
   //   검증된 경로가 있으면 O(🔆 다경로), 경로 꼴은 있는데 모두 틀리면 X, 아는 경로 꼴이 없으면 판정불가(교사)
-  if (조각.파트 === '세우기' && 조각.줄글 && 조각.node === null && 조각.원식) {
-    const v = verify_multipath(학생답, 조각.원식);
+  // [오종래 2026-10-16 q4 학생 2] 판별식 줄(「D=…」)이고 원식이 문자 계수면 — 학생의 D · D/4 사슬을 엔진이 검증한다
+  // 🔆 다경로는 모범답안 줄의 경로와 다를 때만 — 같은 경로(모범이 인수분해, 학생도 인수분해)는 O만
+  const 검증 = 조각.파트 === '세우기' && 조각.줄글 && 조각.node === null
+    ? 조각.원식 ? (답: string) => verify_multipath(답, 조각.원식!) : 조각.판별식원식 ? (답: string) => verify_discriminant(답, 조각.판별식원식!) : null
+    : null;
+  if (검증) {
+    const v = 검증(학생답);
+    const 모범경로 = 검증(조각.줄글!).경로;
     const 시도 = v.시도.map((t) => `${t.경로} 「${t.식}」 ${t.까닭}`).join(' · ');
     if (v.결과 === 'O') {
       const 맞은 = v.시도.find((t) => t.맞음)!;
+      if (v.경로 === 모범경로) return { 결과: 'O', 근거: `모범답안과 같은 경로 — ${v.경로} 검증 (${시도})` };
       return { 결과: 'O', 근거: `🔆 다경로 — ${v.경로} 검증 (${시도})`, 다경로: v.경로, 다경로식: 맞은.식, 다경로까닭: 맞은.까닭 };
     }
-    if (v.결과 === 'X') return { 결과: 'X', 근거: `다경로 검증 실패 — ${시도}` };
-    return { 결과: '판정불가', 근거: `모범답안 줄 「${조각.줄글}」 — 아는 경로 꼴(인수분해 · 완전제곱식 · 근의 공식)이 없어 교사가 판정합니다` };
+    if (v.결과 === 'X') return { 결과: 'X', 근거: `경로 검증 실패 — ${시도}` };
+    return { 결과: '판정불가', 근거: `모범답안 줄 「${조각.줄글}」 — 아는 경로 꼴이 없어 교사가 판정합니다` };
   }
   if (조각.줄글 && 조각.node === null) return { 결과: '판정불가', 근거: `모범답안 줄 「${조각.줄글}」 — 교사가 판정합니다` };
   // [오종래 2026-10-16 학생 1] 수리 모범답안 풀기 마디 조각 — 교사가 판정한다. 학생 답의 풀기 마디를 옆에 보인다
