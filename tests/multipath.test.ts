@@ -210,3 +210,13 @@ describe('D와 D/4 혼동 · 앞 소문항 방정식', () => {
     assert.equal(grade('D/4=-k+2=0', [방정식], '', k, '수리', 'x²+2x+k+1=0').파트별.세우기.조각별[0].결과, 'X');
   });
 });
+
+// 2026-10-16 q7 — 「x²」 다항식은 등호가 없어도 수학 문항 (「자동」 계열이 인문으로 가지 않게)
+describe('수학 문항 — 등호 없는 다항식', () => {
+  it('「다항식 x²+2x+a를 x-2로 나누었을 때」는 수학 문항 → 자동이면 수리', () => {
+    const q7 = '다항식 x²+2x+a를 x-2로 나누었을 때 나머지가 1이었다.';
+    assert.equal(is_math_item(q7), true);
+    assert.equal(resolve_subject('자동', q7), '수리');
+    assert.throws(() => resolve_subject('인문사회국어', q7), (e: Error) => e.name === '계열오류');
+  });
+});

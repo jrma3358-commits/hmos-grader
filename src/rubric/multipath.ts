@@ -312,6 +312,8 @@ export const 계열오류글 = '이 문항은 수리 계열로 채점해야 합�
 
 export function is_math_item(글: string): boolean {
   const s = 정리(글);
+  // 「x²」 「x³」 다항식은 등호가 없어도 수학 문항 — 「다항식 x²+2x+a를 x-2로 나누었을 때」 (q7, 2026-10-16)
+  if (/(?<![a-zA-Z])x[²³]/.test(s)) return true;
   return /=/.test(s) && /(?<![a-zA-Z])x(?:²|[=+\-<>*/)])|\dx(?![a-zA-Z])|[=+\-(*/]x(?![a-zA-Z])/.test(s);
 }
 
