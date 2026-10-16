@@ -23,6 +23,38 @@ export function f2_input_from_v2(
   };
 }
 
+/**
+ * 공통 발문 급소 물려받기 (오종래 2026-10-16 q4 ①) — 소문항 글에 물음(Q)이 없으면(「(2) 접한다.」) 공통 발문
+ * (「… k의 값 또는 k의 범위를 구하시오.」)의 급소를 물려받는다. 물려받는 것은 급소 노드와 그 물음(Q)까지뿐 —
+ * 공통 발문의 다른 노드(「직선 y=-x+1」 「다음 조건」)는 소문항 조각이 되지 않는다. ①② 노드 조각은 소문항 자기 노드로만.
+ * 공통 발문 노드 id는 「공통-」을 붙여 소문항 노드 id와 겹치지 않게 한다
+ * @param 자기 소문항 글 인식 · @param 공통 공통 발문 물음 인식
+ */
+export function f2_input_inherit(
+  자기: V2Analysis,
+  공통: V2Analysis,
+): { ok: true; 물음: 파트별물음; k: 급소K; 인식: 인식결과 } | PivotFailure {
+  const c = f2_input_from_v2(공통);
+  if (!c.ok) return c;
+  const ns = 공통.graph.nodes;
+  const at = ns.findIndex((n) => n.id === c.k.node.id);
+  const q = ns.findIndex((n, i) => i > at && n.color === 'Q');
+  const 꼬리 = ns.slice(at, q < 0 ? at + 1 : q + 1).map((n) => ({ ...n, id: `공통-${n.id}` }));
+  const k: 급소K = { ...c.k, node: 꼬리[0] };
+  return {
+    ok: true,
+    물음: c.물음,
+    k,
+    인식: { 조합: c.인식.조합, nodes: [...자기.graph.nodes.filter((n) => n.color !== 'Q'), ...꼬리], 급소들: [k] },
+  };
+}
+
+/** 소문항 글에 직접 물음(Q 노드)이 있는가 — 없으면 공통 발문 급소를 물려받는다 (q4 ①) */
+export const has_question = (v2: V2Analysis) => v2.graph.nodes.some((n) => n.color === 'Q');
+
+/** 공통 발문의 물음 부분 — 첫 빈 줄 앞 (뒤는 대화·자료, 서술형 B 공통자료와 같은 경계) */
+export const common_question = (공통발문: string) => String(공통발문 ?? '').split(/\r?\n\s*\r?\n/)[0].trim();
+
 /** 문장으로 나눈다 — 문장 끝 부호(. ? ! 。) 뒤 공백·줄바꿈에서. 빈 문장은 버린다 */
 export function split_sentences(텍스트: string): string[] {
   return 텍스트

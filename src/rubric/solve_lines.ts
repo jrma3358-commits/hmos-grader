@@ -72,12 +72,27 @@ export interface 수리줄나누기 {
   미분류: string[];
 }
 
-const 결론표 = /^∴/;
+/**
+ * 줄 중간 「∴」 (오종래 2026-10-16 q4 ③) — 「D=-4k+8=0 ∴ k=2」의 「∴」 뒤도 결론이다. 앞(「D=-4k+8=0」)과 결론(「∴ k=2」)으로 나눈다.
+ * 「∴」가 없으면 결론 null
+ */
+export function split_conclusion(줄: string): { 앞: string; 결론: string | null } {
+  const i = 줄.indexOf('∴');
+  return i < 0 ? { 앞: 줄, 결론: null } : { 앞: 줄.slice(0, i).trim(), 결론: 줄.slice(i).trim() };
+}
 
-/** 결론 줄의 「x=값」들 — 띄어쓰기 무시, 「또는」·쉼표로 나뉜다. 값은 숫자면 수로 맞춘 글자 (1/2 = 0.5) */
+/** 비교 기호 — 등호 · 부등호 (오종래 2026-10-16 q4 ②). 「<=」「≦」는 「≤」로, 「>=」「≧」는 「≥」로 맞춘다 */
+const 비교 = '(?:<=|>=|[=<>≤≥≦≧])';
+const 기호맞춤 = (op: string) => ({ '<=': '≤', '≦': '≤', '>=': '≥', '≧': '≥' } as Record<string, string>)[op] ?? op;
+const 값꼴 = new RegExp(`([A-Za-z](?:_?\\w)?)(${비교})(.+?)(?=또는|이다|입니다|[,，.。]|[A-Za-z](?:_?\\w)?${비교}|$)`, 'g');
+
+/**
+ * 결론 줄의 「x=값」들 — 띄어쓰기 무시, 「또는」·쉼표로 나뉜다. 값은 숫자면 수로 맞춘 글자 (1/2 = 0.5)
+ * [오종래 2026-10-16 q4 ②] 부등식 답도 — 「k<2」 「k>2」 「k≥1」은 기호째 값이다 (「k<2」 ≠ 「k>2」 ≠ 「k=2」)
+ */
 export function answer_values(줄: string): string[] {
   const s = String(줄 ?? '').replace(/∴/g, '').replace(/\s+/g, '').replace(/[−–]/g, '-');
-  const 값 = [...s.matchAll(/([A-Za-z](?:_?\w)?)=(.+?)(?=또는|이다|입니다|[,，.。]|[A-Za-z](?:_?\w)?=|$)/g)].flatMap((m) => 복부호(m[2]).map((v) => `${m[1]}=${수맞춤(v)}`));
+  const 값 = [...s.matchAll(값꼴)].flatMap((m) => 복부호(m[3]).map((v) => `${m[1]}${기호맞춤(m[2])}${수맞춤(v)}`));
   return [...new Set(값)].sort();
 }
 
@@ -108,34 +123,46 @@ const 근거끝 = /(하면|이므로)[\s,，.]*$/;
 //   풀기는 실제 숫자(0-9)가 들어간 계산 줄만. 위첨자 「²」는 숫자로 세지 않는다 (지수 표기라 공식에도 나온다)
 // [오종래 2026-10-16] 근의 공식 패턴 — 「(-b±√…)」 「(-b'±√…)」 꼴 등식은 숫자(4·2)가 있어도 공식이다 (「x=(-b±√(b²-4ac))/2a」)
 const 근의공식 = /\(\s*-\s*b\s*['′’]?\s*±\s*√/;
+// [오종래 2026-10-16 q4 ④] 부등식 계산 줄도 풀기 — 「-4k+8>0」 (등호 없는 부등식). 「D=2²-4×1×(k-1)>0」처럼 등호가 있으면 식 세우기 그대로
+const 부등식계산 = (마디: string) => /[<>≤≥≦≧]/.test(마디) && !/=/.test(마디);
 const 풀기마디 = (마디: string) =>
-  !근거끝.test(마디) && !근의공식.test(마디) && /[0-9]/.test(마디) && ((/또는/.test(마디) && (마디.match(/=/g) ?? []).length >= 2) || (/±/.test(마디) && /=/.test(마디)));
+  !근거끝.test(마디) && !근의공식.test(마디) && /[0-9]/.test(마디) &&
+  ((/또는/.test(마디) && (마디.match(/=/g) ?? []).length >= 2) || (/±/.test(마디) && /=/.test(마디)) || 부등식계산(마디));
 const 마디들 = (줄: string) => 줄.split(/[,，](?![^(]*\))/).map((x) => x.trim()).filter(Boolean);
 
-/** 글에서 풀기 조각 — 「∴」 줄을 뺀 줄의 쉼표 마디 중 「또는」으로 이은 등식들 */
+/** 글에서 풀기 조각 — 줄마다 「∴」 앞만(결론은 풀기가 아니다, 줄 중간 「∴」도 q4 ③), 쉼표 마디 중 풀기 마디 */
 export function solve_segments(글: string): string[] {
-  return String(글 ?? '').split(/\r?\n/).map((l) => l.trim()).filter((l) => l && !결론표.test(l)).flatMap(마디들).filter(풀기마디);
+  return String(글 ?? '').split(/\r?\n/).map((l) => split_conclusion(l.trim()).앞).filter(Boolean).flatMap(마디들).filter(풀기마디);
 }
 
 export function classify_math_lines(답안: string): 수리줄나누기 {
   const 줄 = String(답안 ?? '').split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
   const out: 수리줄나누기 = { 근거대기: [], 세우기: [], 풀기: [], 답: null, 미분류: [] };
-  for (const l of 줄) {
-    if (결론표.test(l)) out.답 = { 줄: l, 값: answer_values(l) }; // 결론 줄이 여럿이면 마지막
-    else if (/하면[\s,，.]*$/.test(l)) out.근거대기.push(l);
+  for (const 원줄 of 줄) {
+    // 줄 중간 「∴」 — 뒤는 결론, 앞은 여느 줄처럼 (q4 ③)
+    const { 앞: l, 결론 } = split_conclusion(원줄);
+    if (결론) out.답 = { 줄: 결론, 값: answer_values(결론) }; // 결론이 여럿이면 마지막
+    if (!l) continue;
+    if (/하면[\s,，.]*$/.test(l)) out.근거대기.push(l);
     else if (/=/.test(l)) {
       // 쉼표 마디 — 풀기 마디는 ③ 풀기, 나머지 등식 마디는 한데 묶어 ② 세우기
       const 풀기 = 마디들(l).filter(풀기마디);
       const 세우기 = 마디들(l).filter((x) => !풀기마디(x));
       out.풀기.push(...풀기);
       if (세우기.length) out.세우기.push(풀기.length ? 세우기.join(', ') : l);
+    } else if (마디들(l).some(풀기마디)) {
+      // 등호 없는 부등식 계산 줄 (q4 ④) — 풀기 마디는 ③, 나머지 마디는 미분류
+      out.풀기.push(...마디들(l).filter(풀기마디));
+      const 남은 = 마디들(l).filter((x) => !풀기마디(x));
+      if (남은.length) out.미분류.push(남은.join(', '));
     } else out.미분류.push(l);
   }
   return out;
 }
 
-/** 학생 답의 결론 줄 — 「∴」 줄 중 마지막, 없으면 「=」가 있는 마지막 줄, 그것도 없으면 답 전체 */
+/** 학생 답의 결론 — 「∴」가 있는 마지막 줄의 「∴」부터(줄 중간 「∴」도, q4 ③), 없으면 「=」가 있는 마지막 줄, 그것도 없으면 답 전체 */
 export function student_answer_line(학생답: string): string {
   const 줄 = String(학생답 ?? '').split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
-  return 줄.filter((l) => 결론표.test(l)).at(-1) ?? 줄.filter((l) => l.includes('=')).at(-1) ?? 줄.join(' ');
+  const 결론줄 = 줄.filter((l) => l.includes('∴')).at(-1);
+  return 결론줄 ? split_conclusion(결론줄).결론! : (줄.filter((l) => l.includes('=')).at(-1) ?? 줄.join(' '));
 }

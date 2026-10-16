@@ -27,7 +27,9 @@ const { align_passage } = await load('src/thesis/align.ts');
 const { essay_pivot_chunks } = await load('src/thesis/chunk.ts');
 const { 봉인14_6단계 } = await load('src/thesis/relate.ts');
 // 8단계 루브릭 — 엔진 F1~F5·문항평가 (src/rubric). GJ는 쓰지 않는다 (오종래 2026-10-14: GJ 검산 대신 조각 충족 여부)
-const { derive_pieces, f2_input_from_v2, link_sentences, thesis_polarity, speaker_lines } = await load('src/rubric/f2.ts');
+const { derive_pieces, f2_input_from_v2, f2_input_inherit, has_question, common_question, link_sentences, thesis_polarity, speaker_lines } = await load('src/rubric/f2.ts');
+// 공통 발문 「[총 N점]」을 소문항 수로 나누는 몫 — 봉인④-a 큰 나머지 방식 (오종래 2026-10-16 q4 ⑥)
+const { 봉인4a_반올림 } = await load('src/rubric/sealed/f5.ts');
 const { judge_element } = await load('src/rubric/f3.ts');
 const { specify_condition } = await load('src/rubric/f4.ts');
 const { allocate_points } = await load('src/rubric/f5.ts');
@@ -37,7 +39,7 @@ const { evaluate_item } = await load('src/rubric/item_eval.ts');
 // 수리 모범답안 줄 나누기 — 「~하면」 ① · 등식 ② · 「∴」 ④ 모범 값, 풀기 없음 (오종래 2026-10-16 q5)
 const { split_solve_lines, classify_math_lines } = await load('src/rubric/solve_lines.ts');
 // 문항 등록창의 정답(검증) · 출제의도(루브릭 참고 표시만) · 모범답안 소문항 나누기 (오종래 2026-10-16)
-const { item_portion, verify_answer } = await load('src/rubric/teacher_input.ts');
+const { item_portion, verify_answer, sub_item_points } = await load('src/rubric/teacher_input.ts');
 // 8단계 학생 답안 채점 — 엔진 G1 (봉인⑥ 조각 대조 · 봉인④-b 게이트, 계열별, 오종래 2026-10-14)
 const { grade } = await load('src/rubric/g1.ts');
 const { 게이트사슬, 상한비 } = await load('src/rubric/sealed/g1.ts');
@@ -140,17 +142,20 @@ function 루브릭작업(논제글: string, 계열: string, 총배점: number, �
   }
   // 단계형 이어받기 (서술형 B, 오종래 2026-10-14) — (n)은 (n-1)의 급소 K를 ① 「앞 결과」 조각으로 받는다
   const 급소들of = (s: any) => (s.a.pivot.ok ? (s.a.pivot.pivots ?? [s.a.pivot.pivot]).map((p: any) => ({ 번호: s.번호, 실체: p.node.entity })) : []);
+  // 소문항 배점 — 소문항 글에 「[N점]」이 있으면 그 값, 없으면 요청 총배점 (2026-10-14)
+  //   [오종래 2026-10-15 ③] 괄호 안 「N점」도 — 「(200자 내외, 4점)」. 여럿이면 마지막 것 (앞에 붙은 공통 발문의 「(16점)」이 아니라)
+  //   [오종래 2026-10-16 q4 ⑥] 자기 「[N점]」이 없고 공통 발문에 「[총 N점]」이 있으면 N을 소문항 수로 나눈다
+  const 소배점들 = sub_item_points(소문항들, 총배점, 봉인4a_반올림);
   return 소문항들.map((s: any, n: number) => {
-    // 소문항 배점 — 소문항 글에 「[N점]」이 있으면 그 값, 없으면 요청 총배점 (2026-10-14)
-    //   [오종래 2026-10-15 ③] 괄호 안 「N점」도 — 「(200자 내외, 4점)」. 여럿이면 마지막 것 (앞에 붙은 공통 발문의 「(16점)」이 아니라)
-    const 점 = [...String(s.텍스트).matchAll(/[\[(][^\[\]()]*?(\d+(?:\.\d+)?)\s*점\s*[\])]/g)].at(-1);
-    const 소배점 = 점 ? Number(점[1]) : 총배점;
+    const 소배점 = 소배점들[n];
     const 답안글 = item_portion(모범답안, s.번호, n, true);
     const 의도 = item_portion(핵심, s.번호, n).trim();
     const 소 = { 번호: s.번호, 텍스트: s.텍스트, 공통발문: s.공통발문, 배점: 소배점, ...(의도 ? { 출제의도: 의도 } : {}) };
     if (연결멈춤) return { ...소, 멈춤: 연결멈춤 };
     try {
-      const 입력 = f2_input_from_v2(s.a);
+      // [오종래 2026-10-16 q4 ①] 소문항 글에 물음이 없으면 공통 발문 급소를 물려받는다 (급소와 그 물음만 — ①② 노드는 소문항 자기 것)
+      const 물려받을물음 = !has_question(s.a) ? common_question(s.공통발문) : '';
+      const 입력 = 물려받을물음 ? f2_input_inherit(s.a, fq.recognizeV2Analysis(물려받을물음)) : f2_input_from_v2(s.a);
       if (!입력.ok) return { ...소, 멈춤: { 멈춤: 입력.flag, 종류: '급소', 사유: `급소가 서지 않아 조각을 뽑지 못했습니다 (${입력.flag})` } };
       const { 물음, k } = 입력;
       let 연결문장 = 연결of(s.번호);
@@ -188,7 +193,7 @@ function 루브릭작업(논제글: string, 계열: string, 총배점: number, �
       const 정답몫 = item_portion(정답, s.번호, n);
       return {
         ...소,
-        급소: { 실체: k.실체, 노드: k.node.id },
+        급소: { 실체: k.실체, 노드: k.node.id, ...(물려받을물음 ? { 물려받음: '공통 발문' } : {}) },
         // 5색 인식 — 모범답안이 없을 때 Claude가 이 인식·조각으로 모범답안을 쓴다 (오종래 2026-10-16)
         인식: { 조합: s.a.graph.combination, 노드: s.a.graph.nodes.map((x: any) => ({ 색: x.color, 실체: x.entity })) },
         ...(답안글.trim() ? { 모범답안글: 답안글 } : {}),

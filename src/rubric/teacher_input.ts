@@ -8,7 +8,24 @@ import { split_sentences } from './f2.ts';
 import { split_solve_lines } from './solve_lines.ts';
 import type { 조각뼈대 } from './types.ts';
 
-const 소문항머리 = /^[ \t]*\((\d+(?:-\d+)?)\)[ \t]*/gm;
+// [오종래 2026-10-16 q4 ⑤] 줄 머리뿐 아니라 한 줄에 쉼표·쌍반점으로 이어 쓴 「(n)」도 소문항 머리 — 「(1) k<2, (2) k=2, (3) k>2」
+const 소문항머리 = /(?:^[ \t]*|[,，;；][ \t]*)\((\d+(?:-\d+)?)\)[ \t]*/gm;
+
+/**
+ * 소문항 배점 (오종래 2026-10-16 q4 ⑥) — 소문항 글에 자기 「[N점]」이 있으면 그 값. 없고 공통 발문에 「[총 N점]」이 있으면
+ * N을 소문항 수로 나눈다 (봉인④-a 큰 나머지 방식, 0.1 단위 — 합이 N과 맞다). 둘 다 없으면 요청 총배점 그대로
+ * @param 반올림 봉인④-a (sealed/f5.ts 봉인4a_반올림) — 몫을 0.1 단위로 맞춘다
+ */
+export function sub_item_points(
+  소문항들: { 텍스트: string; 공통발문?: string }[],
+  총배점: number,
+  반올림: (전체: number, 몫: number[]) => number[],
+): number[] {
+  const 자기 = 소문항들.map((s) => [...String(s.텍스트).matchAll(/[\[(][^\[\]()]*?(\d+(?:\.\d+)?)\s*점\s*[\])]/g)].at(-1));
+  const 총 = String(소문항들[0]?.공통발문 ?? '').match(/[\[(]\s*총\s*(\d+(?:\.\d+)?)\s*점\s*[\])]/);
+  const 나눌 = 총 ? 반올림(Number(총[1]), 소문항들.map(() => Number(총[1]) / 소문항들.length)) : [];
+  return 소문항들.map((_, n) => (자기[n] ? Number(자기[n]![1]) : 총 ? 나눌[n] : 총배점));
+}
 
 /** 한 칸 글 → 이 소문항(번호, 몇째)의 몫. 배열이면 n째 그대로 */
 export function item_portion(값: unknown, 번호: string | null, n: number, 모범답안 = false): string {
