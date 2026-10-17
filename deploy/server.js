@@ -103,7 +103,10 @@ app.get('/api/results',(req,res)=>{
       const j=JSON.parse(fs.readFileSync(path.join(검증폴더,파일),'utf8'));
       if(!j||!j.루브릭||!Array.isArray(j.채점))continue;
       const 합=k=>j.채점.reduce((a,g)=>a+Number((g.out&&g.out[k])||0),0);
-      목록.push({파일,문항번호:(파일.match(/^q\d+/)||[''])[0],학생:j.학생||null,부분점수:Math.round(합('부분점수')*100)/100,만점:Math.round(합('만점')*100)/100,엔진:(j.채점[0]&&j.채점[0].out&&j.채점[0].out.엔진&&j.채점[0].out.엔진.commit)||null});
+      // 조각 요약 · 문항 · 학생 답 앞부분 — 탭7 채점 샘플 카드 (2026-10-17). 판정 · 오류 · 다경로는 JSON(엔진 출력) 그대로
+      const 조각=j.채점.flatMap(g=>((g.out&&g.out.조각별)||[]).map(c=>({번호:g.번호??null,id:c.조각id,파트:c.파트,결과:c.결과,득점:c.득점,배점:c.배점,...(c.오류?{오류:c.오류}:{}),...(c.다경로?{다경로:c.다경로,다경로식:c.다경로식||''}:{})})));
+      목록.push({파일,문항번호:(파일.match(/^q\d+/)||[''])[0],학생:j.학생||null,부분점수:Math.round(합('부분점수')*100)/100,만점:Math.round(합('만점')*100)/100,엔진:(j.채점[0]&&j.채점[0].out&&j.채점[0].out.엔진&&j.채점[0].out.엔진.commit)||null,
+        문항:String(j.문항||'').slice(0,400),학생답:String(j.학생답||'').slice(0,400),조각});
     }catch(_){}
   }
   res.json({ok:true,목록});

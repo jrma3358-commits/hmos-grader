@@ -112,6 +112,35 @@ th{font-size:11.5px;color:var(--muted);font-weight:600;background:var(--ivory)}
 .cmp{display:flex;gap:24px;flex-wrap:wrap;align-items:baseline}
 .cmp div{font-size:13px;color:var(--muted)}
 .cmp b{font-size:24px;color:var(--teal);font-variant-numeric:tabular-nums;margin-left:6px}
+/* 채점 샘플 */
+.qgroup{margin-bottom:28px}
+.qhead{display:flex;align-items:baseline;gap:10px;margin-bottom:4px}
+.qhead .qn{font-family:'Noto Serif KR',serif;font-size:17px;font-weight:600;color:var(--teal)}
+.qtext{font-size:13px;color:var(--muted);margin-bottom:12px;line-height:1.6}
+.lane{font-size:12px;font-weight:700;letter-spacing:.04em;margin:14px 0 8px}
+.lane.ok{color:var(--ok)}
+.lane.no{color:var(--no)}
+.samples{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+.sample{background:var(--white);border:1px solid var(--line);border-radius:8px;padding:14px 16px;cursor:pointer;display:flex;flex-direction:column;gap:8px}
+.sample:hover{border-color:var(--teal-mid)}
+.sample.ok{border-top:3px solid var(--ok)}
+.sample.multi-path{border-top:3px solid var(--gold)}
+.sample.no{border-top:3px solid var(--no)}
+.sample-head{display:flex;align-items:baseline;gap:8px}
+.sample-head .who{font-weight:600}
+.sample-head .sc{margin-left:auto;font-size:20px;font-weight:700;color:var(--teal);font-variant-numeric:tabular-nums}
+.sample-head .sc small{font-size:12px;color:var(--muted);font-weight:400}
+.path-name{font-size:13px;line-height:1.55}
+.path-name .m{color:#8A6A10;font-weight:600}
+.path-name .e{color:var(--no);font-weight:600}
+.where{font-size:12px;color:#555;line-height:1.6}
+.strip{display:flex;flex-wrap:wrap;gap:4px}
+.dot{min-width:26px;height:22px;padding:0 5px;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700}
+.dot.O{background:var(--ok-bg);color:var(--ok)}
+.dot.X{background:var(--no-bg);color:var(--no)}
+.dot.U{background:var(--un-bg);color:var(--un)}
+.ans{font-size:12px;color:#555;background:var(--ivory);border-radius:6px;padding:7px 9px;white-space:pre-wrap;line-height:1.55;max-height:5.6em;overflow:hidden}
+.same-err{font-size:12px;color:var(--muted)}
 </style>
 </head>
 <body>
@@ -123,6 +152,7 @@ th{font-size:11.5px;color:var(--muted);font-weight:600;background:var(--ivory)}
   <button class="tab" data-tab="4"><span class="tab-num">4</span>루브릭</button>
   <button class="tab" data-tab="5"><span class="tab-num">5</span>모범답안</button>
   <button class="tab" data-tab="6"><span class="tab-num">6</span>교사 확정</button>
+  <button class="tab" data-tab="7"><span class="tab-num">7</span>채점 샘플</button>
 </nav>
 <div class="recbar">
   <label for="rec-select">채점 결과</label>
@@ -136,6 +166,7 @@ th{font-size:11.5px;color:var(--muted);font-weight:600;background:var(--ivory)}
   <section class="panel" id="p4"></section>
   <section class="panel" id="p5"></section>
   <section class="panel" id="p6"></section>
+  <section class="panel" id="p7"></section>
 </div>
 
 <script>
@@ -174,12 +205,14 @@ async function 목록받기() {
   } catch (e) {
     sel.innerHTML = '<option value="">불러오지 못함</option>';
     $('#rec-info').innerHTML = `<span style="color:var(--no)">${esc(e.message)}</span>`;
+    $('#p7').innerHTML = '<div class="sec-title">채점 샘플</div>' + `<div class="err">${esc(e.message)}</div>`;
     return;
   }
   const 묶음 = {};
   for (const x of [...목록].sort((a, b) => a.파일.localeCompare(b.파일, 'ko', { numeric: true }))) (묶음[x.문항번호 || '기타'] ??= []).push(x);
   sel.innerHTML = '<option value="">— 검증/ 채점 결과를 고르세요 —</option>' + Object.keys(묶음).sort().map((k) =>
     `<optgroup label="${esc(k)}">${묶음[k].map((x) => `<option value="${esc(x.파일)}">${esc(x.학생 || x.파일)} · ${점(x.부분점수)}/${점(x.만점)} · ${esc(x.파일)}</option>`).join('')}</optgroup>`).join('');
+  그리기7();
   let 처음 = '';
   try { 처음 = new URLSearchParams(location.search).get('f') || localStorage.getItem('hmos-d2-file') || ''; } catch (_) {}
   if (처음 && 목록.some((x) => x.파일 === 처음)) { sel.value = 처음; 열기(처음); }
@@ -423,6 +456,78 @@ function 내려받기() {
   a.download = (기록키.startsWith('파일:') ? 기록키.slice(3).replace(/\.json$/, '') : 'hmos_새채점') + '_교사확정.json';
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+// ── 탭7 채점 샘플 ── q3~q7 대표 답안 카드 (검증/ 폴더 JSON — /api/results 요약). 판정 · 오류 · 다경로는 엔진 출력 그대로, 화면은 고르기만 한다
+//   고르기: 모범 · 학생N 파일만 (규칙반영 · 실채점 · 재채점 같은 작업 파일은 빼고), 「_최종」이 있으면 그 판
+//   정답 경로 = 모범 + 만점이면서 🔆 다경로가 있는 답 · 오류 경로 = 오류 이름 묶음마다 대표 하나 (같은 오류인 학생은 카드 아래에)
+const 학생번호 = (x) => Number((x.파일.match(/_학생(\d+)/) || [0, 0])[1]);
+function 샘플고르기() {
+  const 대상 = 목록.filter((x) => /^q[3-7]_(모범|학생\d+)(_최종)?_\d{8}\.json$/.test(x.파일));
+  const 키 = (f) => f.replace('_최종', '').replace(/_\d{8}\.json$/, '');
+  const 최종 = new Set(대상.filter((x) => x.파일.includes('_최종')).map((x) => 키(x.파일)));
+  return 대상.filter((x) => x.파일.includes('_최종') || !최종.has(키(x.파일)));
+}
+const 만점임 = (x) => Number(x.부분점수) >= Number(x.만점) - 1e-9;
+const 점띠 = (x) => `<div class="strip">${(x.조각 || []).map((c) => `<span class="dot ${c.결과 === 'O' ? 'O' : c.결과 === 'X' ? 'X' : 'U'}" title="${esc((c.번호 ? '(' + c.번호 + ') ' : '') + c.id + ' · ' + c.파트 + ' · ' + 점(c.득점) + '/' + 점(c.배점))}">${c.결과 === '판정불가' ? '?' : esc(c.결과)}</span>`).join('')}</div>`;
+const 누구 = (x) => (x.파일.includes('_모범') ? '모범답안' : x.학생 || x.파일);
+
+function 샘플카드(x, 갈래, 같은) {
+  const 조각 = x.조각 || [];
+  const 다 = [...new Set(조각.filter((c) => c.다경로).map((c) => c.다경로))];
+  const 오류 = [...new Set(조각.filter((c) => c.오류).map((c) => c.오류))];
+  const 자리 = (c) => `${c.번호 ? '(' + esc(c.번호) + ') ' : ''}${esc(c.id)}`;
+  let 경로 = '', 어디 = '';
+  if (갈래 === 'ok') {
+    경로 = 다.length ? `<span class="m">🔆 ${다.map(esc).join(' · ')}</span>` : '모범 경로';
+    어디 = 조각.filter((c) => c.다경로).map((c) => `${자리(c)} — ${esc(c.다경로식 || c.다경로)}`).join('<br>');
+  } else {
+    const X = 조각.filter((c) => c.결과 === 'X'), U = 조각.filter((c) => c.결과 === '판정불가');
+    경로 = 오류.length ? 오류.map((e) => `<span class="e">${esc(e)}</span>`).join('<br>') : `오류 이름 없음 — X ${X.length}개${U.length ? ` · 판정불가 ${U.length}개` : ''}`;
+    어디 = [...X, ...U].map((c) => `${자리(c)} ${esc(c.파트)} ${점(c.득점)}/${점(c.배점)}${c.오류 ? ' · ' + esc(c.오류) : c.결과 === '판정불가' ? ' · 판정불가' : ''}`).join('<br>');
+  }
+  const 꼴 = 갈래 === 'ok' ? (다.length ? 'multi-path' : 'ok') : 'no';
+  return `<div class="sample ${꼴}" data-file="${esc(x.파일)}" title="눌러서 탭3에서 보기">
+    <div class="sample-head"><span class="who">${esc(누구(x))}</span><span class="sc">${점(x.부분점수)} <small>/ ${점(x.만점)}</small></span></div>
+    <div class="path-name">${경로}</div>
+    ${어디 ? `<div class="where">${어디}</div>` : ''}
+    ${점띠(x)}
+    ${x.학생답 ? `<div class="ans">${esc(x.학생답)}</div>` : ''}
+    ${같은 && 같은.length ? `<div class="same-err">같은 오류: ${같은.map((y) => esc(누구(y))).join(' · ')}</div>` : ''}
+  </div>`;
+}
+
+function 그리기7() {
+  const 고른 = 샘플고르기();
+  if (!고른.length) { $('#p7').innerHTML = '<div class="sec-title">채점 샘플</div>' + 비었음('검증/ 폴더에 q3~q7 채점 결과가 없습니다.'); return; }
+  const 문항들 = [...new Set(고른.map((x) => x.문항번호))].sort((a, b) => a.localeCompare(b, 'ko', { numeric: true }));
+  $('#p7').innerHTML = '<div class="sec-title">채점 샘플</div><div class="sec-sub">q3~q7 대표 답안입니다. 검증/ 폴더 채점 결과 JSON에서 바로 읽습니다. 카드를 누르면 탭3에서 조각별로 볼 수 있습니다.</div>' + 문항들.map((q) => {
+    const xs = 고른.filter((x) => x.문항번호 === q).sort((a, b) => 학생번호(a) - 학생번호(b));
+    const 모범 = xs.filter((x) => x.파일.includes('_모범'));
+    const 다경로 = xs.filter((x) => !x.파일.includes('_모범') && 만점임(x) && (x.조각 || []).some((c) => c.다경로));
+    const 틀린 = xs.filter((x) => !x.파일.includes('_모범') && !만점임(x));
+    // 오류 묶음 — 이름이 있으면 이름 묶음, 없으면 X · 판정불가 자리 묶음
+    const 묶음 = new Map();
+    for (const x of 틀린) {
+      const 이름 = [...new Set((x.조각 || []).filter((c) => c.오류).map((c) => c.오류))].sort();
+      const 키 = 이름.length ? '오류:' + 이름.join('|') : '자리:' + (x.조각 || []).filter((c) => c.결과 !== 'O').map((c) => `${c.번호}/${c.id}/${c.결과}`).join('|');
+      if (!묶음.has(키)) 묶음.set(키, []);
+      묶음.get(키).push(x);
+    }
+    const 문항글 = (xs.find((x) => x.문항) || {}).문항 || '';
+    return `<div class="qgroup">
+      <div class="qhead"><span class="qn">${esc(q)}</span><span class="muted" style="font-size:12px">답안 ${xs.length}개</span></div>
+      <div class="qtext">${esc(문항글.length > 160 ? 문항글.slice(0, 160) + '…' : 문항글)}</div>
+      <div class="lane ok">정답 경로 — 모범 ${다경로.length ? '+ 🔆 다경로 ' + 다경로.length : ''}</div>
+      <div class="samples">${[...모범, ...다경로].map((x) => 샘플카드(x, 'ok')).join('') || '<span class="muted">없음</span>'}</div>
+      <div class="lane no">오류 경로${묶음.size ? ' — ' + 묶음.size + '가지' : ''}</div>
+      <div class="samples">${[...묶음.values()].map((g) => 샘플카드(g[0], 'no', g.slice(1))).join('') || '<span class="muted">감점된 답안 없음</span>'}</div>
+    </div>`;
+  }).join('');
+  document.querySelectorAll('#p7 .sample').forEach((el) => el.addEventListener('click', () => {
+    $('#rec-select').value = el.dataset.file;
+    열기(el.dataset.file).then(() => 탭(3));
+  }));
 }
 
 // ── 시작 ──
