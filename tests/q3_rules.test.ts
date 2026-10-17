@@ -172,3 +172,31 @@ describe('여사건 경로 (q3 학생 3)', () => {
     for (const x of r.파트별.세우기.조각별) assert.match(x.판단근거, /^양 끝 모두 자음만 뺌 — 여사건 계산 오류/);
   });
 });
+
+// q3 학생 4 (오종래 2026-10-17) — 양 끝 모음 조합을 (i)(ii)(iii)으로 나열 · 경우마다 「→ 4!」 · ∴ 3×4!=72 (경우 나누기 변형)
+const 학생4 = '(i)  a,(b,c,d,e),a → 4!\n(ii) a,(a,b,c,d),e → 4!\n(iii) e,(a,b,c,d),a → 4!\n\n∴ 3×4! = 3×24 = 72(가지)';
+
+describe('경우 나누기 변형 — 나열 · 「→ 4!」 · 「3×4!」 (q3 학생 4)', () => {
+  it('경우 값 24 · 24 · 24, 합 줄 「3×4!=3×24=72」 — O', () => {
+    const v = verify_case_split(학생4, 72, 문항정보);
+    assert.equal(v.결과, 'O');
+    assert.deepEqual(v.경우값, [24, 24, 24]);
+  });
+  it('나열한 카드가 원소와 다르거나 · 가운데 나열 수가 경우 값과 다르면 X', () => {
+    assert.equal(verify_case_split('(i) a,(b,c,d,d),a → 4!\n(ii) a,(a,b,c,d),e → 4!\n(iii) e,(a,b,c,d),a → 4!\n∴ 3×4!=72', 72, 문항정보).결과, 'X');
+    assert.equal(verify_case_split('(i) b,(a,a,c,d),e → 4!\n(ii) a,(a,b,c,d),e → 4!\n(iii) e,(a,b,c,d),a → 4!\n∴ 3×4!=72', 72, 문항정보).결과, 'X');
+  });
+  it('「∴」 줄은 마지막 경우에 들지 않는다 — 학생 1 결과 그대로', () => {
+    assert.deepEqual(verify_case_split(학생1, 72, 문항정보).경우값, [24, 48]);
+  });
+  it('채점 — 모든 조각 O (① 🔆 · ② 둘 🔆 경우 나누기)', () => {
+    const 입력 = f2_input_from_v2(recognizeV2Analysis(문항));
+    assert.ok(입력.ok);
+    const cs = derive_pieces(입력.물음, 입력.k, { ...입력.인식, 교사줄: classify_math_lines(모범, 문항), 경우의수: 문항정보 }, '수리');
+    const r = grade(학생4, cs.map((c) => ({ ...c, 충족조건: '', 모범조각: '', 배점: 1 })) as any, '', 입력.k, '수리');
+    const 조각 = Object.values(r.파트별).flatMap((p) => p.조각별);
+    assert.ok(조각.every((x) => x.결과 === 'O'), 조각.map((x) => `${x.결과} ${x.판단근거}`).join('\n'));
+    assert.match(r.파트별.근거대기.조각별[0].판단근거, /🔆.*경우로 나누어 처리/);
+    for (const x of r.파트별.세우기.조각별) assert.match(x.판단근거, /🔆 다경로 — 경우 나누기/);
+  });
+});

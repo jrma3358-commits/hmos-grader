@@ -1087,29 +1087,56 @@ export interface 경우나누기검증 extends 다경로검증 {
   경우값: number[];
 }
 
-/** 경우 나누기 경로 — 경우 끝 값들과 합 줄을 검증한다. 경우 표지가 둘 미만이거나 경우 식 · 합 줄이 없으면 판정불가 */
-export function verify_case_split(학생답: string, 모범끝값: number | null): 경우나누기검증 {
+/** 결론 줄 — 「∴」 「따라서」로 시작하면 마지막 경우 블록이 거기서 끝난다 (「∴ 3×4!=…」가 경우 식으로 읽히지 않게, q3 학생 4) */
+const 결론줄 = /^\s*(?:∴|따라서|그러므로|즉)/;
+/** 경우 줄에 적은 나열 — 「a,(b,c,d,e),a」: 양 끝 · 가운데 (q3 학생 4) */
+const 나열꼴 = /^\s*([A-Za-z0-9])\s*[,，]\s*\(([^()]*)\)\s*[,，]\s*([A-Za-z0-9])/;
+
+/**
+ * 경우 나누기 경로 — 경우 끝 값들과 합 줄을 검증한다. 경우 표지가 둘 미만이거나 경우 식 · 합 줄이 없으면 판정불가
+ * 경우 식은 「→ 4!=24」 꼴이고, 「=」가 없으면 「→ 4!」의 식 값 (q3 학생 4).
+ * 문항이 있고 경우 줄에 나열(「a,(b,c,d,e),a」)을 적었으면 — 카드가 문항 원소와 같고 경우 값이 가운데 나열 수(4!)와 같아야 한다
+ * 합 줄은 「24+48」(순서 무관) 또는 경우 값이 모두 같을 때 「3×4!」(경우 수 × 값)
+ */
+export function verify_case_split(학생답: string, 모범끝값: number | null, 문항?: 경우의수문항): 경우나누기검증 {
   const 블록: string[][] = [];
+  let 끝남 = false;
   for (const l of String(학생답 ?? '').split(/\r?\n/)) {
-    if (경우표지.test(l)) 블록.push([l.replace(경우표지, '')]);
-    else 블록.at(-1)?.push(l);
+    if (결론줄.test(l)) 끝남 = true;
+    else if (경우표지.test(l)) 블록.push([l.replace(경우표지, '')]);
+    else if (!끝남) 블록.at(-1)?.push(l);
   }
   const 시도: 다경로검증['시도'] = [];
   const 경우값: number[] = [];
   if (블록.length < 2 || 모범끝값 === null) return { 결과: '판정불가', 시도, 경우값 };
   for (const b of 블록) {
-    const 끝 = 계산마디들(b.join('\n')).filter((d) => /[!PC*]/.test(d)).at(-1);
+    const 마디끝 = 계산마디들(b.join('\n')).filter((d) => /[!PC*]/.test(d)).at(-1);
+    const 화살 = 마디끝 ? null : b.map((l) => l.match(/[→⇒]\s*([^→⇒=]+?)\s*(?:\(가지\)|가지)?\s*$/)?.[1]).filter(Boolean).at(-1);
+    const 끝 = 마디끝 ?? (화살 ? 정리(화살) : undefined);
     const 값 = 끝 ? 끝.split('=').filter(Boolean).map(evaluate) : [];
     if (!끝 || 값.some((v) => v === null)) return { 결과: '판정불가', 시도, 경우값 };
     const 같음 = 값.every((v) => 같다(v!, 값[0]!));
     시도.push({ 경로: '경우 나누기', 식: 끝, 맞음: 같음, 까닭: 같음 ? `경우 값 ${값[0]}` : `변의 값이 다르다 (${값.join(' ≠ ')})` });
     if (!같음) return { 결과: 'X', 시도, 경우값 };
+    const 나열 = 문항?.원소.length ? b[0].match(나열꼴) : null;
+    if (나열) {
+      const 가운데 = 나열[2].split(/[,，]/).map((x) => x.trim()).filter(Boolean);
+      const 카드 = [나열[1], ...가운데, 나열[3]].sort().join(',');
+      const 가운데수 = count_arrangements(가운데);
+      const 맞음 = 카드 === [...문항!.원소].sort().join(',') && 같다(가운데수, 값[0]!);
+      시도.push({ 경로: '경우 나누기', 식: 나열[0].trim(), 맞음, 까닭: 카드 !== [...문항!.원소].sort().join(',') ? `카드가 문항 원소 ${문항!.원소.join(',')}과 다르다` : `가운데 나열 수 ${가운데수} — 경우 값 ${값[0]}과 ${맞음 ? '같다' : '다르다'}` });
+      if (!맞음) return { 결과: 'X', 시도, 경우값 };
+    }
     경우값.push(값[0]!);
   }
-  // 합 줄 — 첫 변이 경우 값들의 합(「24+48」, 순서 무관)인 마디
+  // 합 줄 — 첫 변이 경우 값들의 합(「24+48」, 순서 무관)인 마디 · 경우 값이 모두 같으면 「3×4!」(경우 수 × 값)도
   const 차례 = [...경우값].sort((x, y) => x - y);
+  const 모두같음 = 경우값.every((v) => 같다(v, 경우값[0]));
   const 합식 = 계산마디들(학생답).find((d) => {
-    const 항 = d.split('=')[0].split('+').map(evaluate);
+    const 첫 = d.split('=')[0];
+    const 곱 = 첫.split('*');
+    if (모두같음 && 곱.length === 2 && 곱.some((x, i) => /^\d+$/.test(x) && Number(x) === 경우값.length && 같다(evaluate(곱[1 - i]) ?? NaN, 경우값[0]))) return true;
+    const 항 = 첫.split('+').map(evaluate);
     return 항.length === 경우값.length && 항.every((v) => v !== null) && (항 as number[]).sort((x, y) => x - y).every((v, i) => 같다(v, 차례[i]));
   });
   if (!합식) return { 결과: '판정불가', 시도, 경우값 };
@@ -1124,8 +1151,8 @@ export function verify_case_split(학생답: string, 모범끝값: number | null
  * ② 세우기 줄 — 경우 나누기로 (q3 학생 1 「양 끝 1/2!×3P2=3」). 모범 끝 값 72 = 줄 값 3 × 나머지 인수 24이므로
  * 경우 값마다 나머지 인수로 나눈 몫의 합(24÷24 + 48÷24 = 1+2)이 줄 값 3이면 O
  */
-export function verify_case_split_line(모범줄: string, 학생답: string, 모범끝값: number | null): 다경로검증 {
-  const v = verify_case_split(학생답, 모범끝값);
+export function verify_case_split_line(모범줄: string, 학생답: string, 모범끝값: number | null, 문항?: 경우의수문항): 다경로검증 {
+  const v = verify_case_split(학생답, 모범끝값, 문항);
   const 줄값 = counting_line_value(모범줄);
   if (v.결과 !== 'O' || 줄값 === null || 모범끝값 === null || 같다(줄값, 0)) return v;
   const 인수 = 모범끝값 / 줄값;

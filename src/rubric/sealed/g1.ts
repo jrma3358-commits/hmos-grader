@@ -180,7 +180,7 @@ export function 봉인6_조각대조(학생답: string, 조각: 조각, 맥락: 
       : 조각.경우의수 ? (답: string) => {
         const v = verify_counting_line(조각.줄글!, 답);
         if (v.결과 === 'O') return v;
-        const w = verify_case_split_line(조각.줄글!, 답, 모범끝값(맥락));
+        const w = verify_case_split_line(조각.줄글!, 답, 모범끝값(맥락), 조각.경우의수);
         if (w.결과 !== '판정불가') return w;
         // 여사건 「전체-뺀 값=결과」 (2026-10-17 q3 학생 3, 오류 「양 끝 모두 자음만 뺌 — 여사건 계산 오류」)
         const c = verify_complement(답, 조각.경우의수!, 모범끝값(맥락));
@@ -236,7 +236,7 @@ export function 봉인6_조각대조(학생답: string, 조각: 조각, 맥락: 
     const hit = wrote_same_permutation(학생답, 조각.경우의수);
     const 같은것 = 조각.경우의수.중복.map((d) => `${d.원소} ${d.개수}개 → ÷${d.개수}!`).join(' · ');
     // [오종래 2026-10-17 q3 학생 1] ÷n!이 없어도 같은 것을 경우로 나누어 센 경로가 검증되면 O (🔆)
-    const 나눔 = hit ? null : verify_case_split(학생답, 모범끝값(맥락));
+    const 나눔 = hit ? null : verify_case_split(학생답, 모범끝값(맥락), 조각.경우의수);
     if (나눔?.결과 === 'O') {
       const 식 = 나눔.시도.map((t) => t.식).join(' · ');
       const 까닭 = 나눔.시도.map((t) => t.까닭).join(' · ');
