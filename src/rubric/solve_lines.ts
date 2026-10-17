@@ -172,6 +172,15 @@ export function classify_math_lines(답안: string, 문항글?: string): 수리�
     // 줄 중간 「∴」 — 뒤는 결론, 앞은 여느 줄처럼 (q4 ③)
     const { 앞: l, 결론 } = split_conclusion(원줄);
     if (결론) out.답 = { 줄: 결론, 값: answer_values(결론) }; // 결론이 여럿이면 마지막
+    // [오종래 2026-10-17 q3] 「∴ 3×24=72(가지)」 — 문자 값이 없는 수 계산 결론: 계산(3×24=72)은 ③ 풀기, 끝 값(72)이 답
+    if (결론 && !out.답!.값.length) {
+      const 계산 = 결론.replace(/∴/g, '').replace(/\([가-힣]+\)/g, '').trim();
+      const v = final_value(결론);
+      if (v !== null && 수계산(계산)) {
+        out.풀기.push(계산);
+        out.답 = { 줄: 결론, 값: [v], 끝값: true };
+      }
+    }
     if (!l) continue;
     // [오종래 2026-10-16 q7 ⑤] 「~로 놓으면」(「f(x)=x²+2x+a로 놓으면」)도 ① 근거대기
     if (/(하면|로\s*놓으면)[\s,，.]*$/.test(l)) out.근거대기.push(l);
@@ -210,7 +219,8 @@ export function classify_math_lines(답안: string, 문항글?: string): 수리�
 
 /** 줄 끝 값 — 마지막 「=」 뒤가 수이면 그 수(1/2 = 0.5로 맞춘 글자), 아니면 null (2026-10-16 q6) */
 export function final_value(줄: string): string | null {
-  const 뒤 = String(줄 ?? '').replace(/∴/g, '').split('=').at(-1)!.replace(/\s+/g, '').replace(/[−–]/g, '-').replace(/[.。]$/, '');
+  // 단위 「72(가지)」 「72가지」는 뗀다 (2026-10-17 q3)
+  const 뒤 = String(줄 ?? '').replace(/∴/g, '').split('=').at(-1)!.replace(/\s+/g, '').replace(/[−–]/g, '-').replace(/[.。]$/, '').replace(/\(?[가-힣]+\)?$/, '');
   if (!뒤) return null;
   const v = 수맞춤(뒤);
   return /^-?\d+(\.\d+)?$/.test(v) ? v : null;

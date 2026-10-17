@@ -1,7 +1,7 @@
 // 루브릭 모듈의 자료구조 — 정본: 봉인/HMOS_루브릭_구현명세-3.md §1·§2
 import type { Color } from '../fq/types.ts';
 import type { PathNode } from '../fq/v2/graph.ts';
-import type { 나머지조건, 다항식조건, 문자이차식, 이차식 } from './multipath.ts';
+import type { 경우의수문항, 나머지조건, 다항식조건, 문자이차식, 이차식 } from './multipath.ts';
 
 export type 파트 = '근거대기' | '세우기' | '풀기' | '답구하기';
 export type 요소 = Lowercase<Color> | 'k';
@@ -77,6 +77,8 @@ export interface 인식결과 {
   원식?: 이차식 | null;
   /** 수리 — 문항의 다항식 · 나머지 조건 (multipath.ts parse_polynomial_conditions, 2026-10-16 q7) */
   다항식?: 다항식조건 | null;
+  /** 수리 — 경우의 수 문항 (multipath.ts parse_counting_item, 2026-10-17 q3). 모범답안 줄이 있으면 노드 조각 없이 줄 조각으로 (안 A) */
+  경우의수?: 경우의수문항 | null;
 }
 
 /** 수리 ④ 답구하기 모범 값 — 모범답안 「∴」 줄과 그 줄의 「x=값」들. 학생 답 값과 직접 대조한다 (오종래 2026-10-16 q5) */
@@ -127,6 +129,8 @@ export interface 조각 {
   정의다항식?: 다항식조건;
   /** 수리 ② 나머지 정리 줄 — 「f(2)=4+4+a=1」의 값이 다항식에서 나온 값과 같은가 (q7) */
   나머지다항식?: 다항식조건;
+  /** 수리 경우의 수 문항 (2026-10-17 q3) — ① 같은 것이 있는 순열(÷2!) 조각 · ② 줄의 식 검증 */
+  경우의수?: 경우의수문항;
   배점: number;
   모범조각: string;
 }

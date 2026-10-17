@@ -14,7 +14,7 @@ export interface 이차식 {
   c: number;
 }
 
-export type 경로이름 = '인수분해' | '완전제곱식' | '근의 공식' | '근의 공식 2' | '판별식 D' | '판별식 D/4' | '방정식 세우기' | '근과 계수의 관계' | '식 변형' | '인수분해 공식' | '근의 성질(차수 낮추기)' | '근 직접 대입' | '나머지 정리' | '직접 나눗셈' | '인수분해 역산' | '몫·나머지꼴';
+export type 경로이름 = '인수분해' | '완전제곱식' | '근의 공식' | '근의 공식 2' | '판별식 D' | '판별식 D/4' | '방정식 세우기' | '근과 계수의 관계' | '식 변형' | '인수분해 공식' | '근의 성질(차수 낮추기)' | '근 직접 대입' | '나머지 정리' | '직접 나눗셈' | '인수분해 역산' | '몫·나머지꼴' | '경우의 수 식';
 
 export interface 다경로검증 {
   결과: 'O' | 'X' | '판정불가';
@@ -80,7 +80,15 @@ export function roots(원: 이차식): number[] {
   return [(-원.b - r) / (2 * 원.a), (-원.b + r) / (2 * 원.a)].sort((x, y) => x - y);
 }
 
-// ── 산술 해석기 — 수 · + - * / · 괄호 · √ · ² 만 ──
+// ── 산술 해석기 — 수 · + - * / · 괄호 · √ · ² · 계승 「n!」 · 순열 「nPr」 · 조합 「nCr」 (2026-10-17 q3) ──
+
+/** n! — 0 이상 정수만, 아니면 NaN */
+const 계승 = (n: number) => {
+  if (!Number.isInteger(n) || n < 0 || n > 170) return NaN;
+  let v = 1;
+  for (let i = 2; i <= n; i++) v *= i;
+  return v;
+};
 
 /** 수식을 계산한다. 문자가 있거나 해석이 안 되면 null, 음수 제곱근은 NaN */
 export function evaluate(수식: string): number | null {
@@ -106,8 +114,8 @@ export function evaluate(수식: string): number | null {
   };
   const 거듭 = (): number => {
     let v = 기본();
-    // 「²」 「³」 — 세제곱은 q6 「(-1)³」 「(α+β)³」 (2026-10-16)
-    while (s[i] === '²' || s[i] === '³') v = s[i++] === '²' ? v * v : v * v * v;
+    // 「²」 「³」 — 세제곱은 q6 「(-1)³」 「(α+β)³」 (2026-10-16) · 「!」 계승은 나눗셈보다 먼저 — 「1/2!」 = 1/(2!) (2026-10-17 q3)
+    while (s[i] === '²' || s[i] === '³' || s[i] === '!') v = s[i] === '!' ? (i++, 계승(v)) : s[i++] === '²' ? v * v : v * v * v;
     return v;
   };
   const 기본 = (): number => {
@@ -121,6 +129,15 @@ export function evaluate(수식: string): number | null {
     const m = /^\d+(?:\.\d+)?/.exec(s.slice(i));
     if (!m) 실패();
     i += m![0].length;
+    // 「3P2」 순열 · 「5C2」 조합 (2026-10-17 q3)
+    const pc = /^([PC])(\d+)/.exec(s.slice(i));
+    if (pc) {
+      i += pc[0].length;
+      const n = Number(m![0]), r = Number(pc[2]);
+      if (!Number.isInteger(n) || r > n) return NaN;
+      const 순열 = 계승(n) / 계승(n - r);
+      return pc[1] === 'P' ? 순열 : 순열 / 계승(r);
+    }
     return Number(m![0]);
   };
   try {
@@ -314,6 +331,8 @@ export function is_math_item(글: string): boolean {
   const s = 정리(글);
   // 「x²」 「x³」 다항식은 등호가 없어도 수학 문항 — 「다항식 x²+2x+a를 x-2로 나누었을 때」 (q7, 2026-10-16)
   if (/(?<![a-zA-Z])x[²³]/.test(s)) return true;
+  // 경우의 수 · 확률 · 순열 「3P2」 · 조합 「5C2」 · 계승 「4!」 문항 (2026-10-17 q3)
+  if (/경우의수|확률|\d[PC]\d|\d!/.test(s)) return true;
   return /=/.test(s) && /(?<![a-zA-Z])x(?:²|[=+\-<>*/)])|\dx(?![a-zA-Z])|[=+\-(*/]x(?![a-zA-Z])/.test(s);
 }
 
@@ -471,7 +490,8 @@ export interface 계산검증 {
 export function verify_calculation(학생답: string): 계산검증 {
   const 짝: 계산검증['짝'] = [];
   let 앞끝 = '';
-  for (const 줄 of String(학생답 ?? '').split(/\r?\n/)) {
+  // 라벨 「양 끝 모음 나열:」 · 단위 「72(가지)」는 뗀다 (2026-10-17 q3)
+  for (const 줄 of String(학생답 ?? '').split(/\r?\n/).map((l) => l.replace(/\([가-힣]+\)/g, '').replace(/[:：]/g, ','))) {
     // 「또는」으로 이은 두 등식(「x=1 또는 x=-3」)은 한 사슬이 아니다 — 쉼표처럼 나눈다
     // 한글 낱말(「이므로」 「이고」)에서도 사슬을 끊는다 — 「a+8=1이므로 a=-7」은 「a+8=1」 · 「a=-7」 (2026-10-17 q7 학생 2)
     for (const 마디 of 줄.replace(/∴/g, ',').split(/[,，](?![^(]*\))|또는|[가-힣]+/).map((x) => x.trim()).filter(Boolean)) {
@@ -897,5 +917,64 @@ export function verify_quotient_form(학생답: string, 원: 다항식조건, �
   }
   const 틀린 = 시도.find((t) => !t.맞음);
   if (시도.length && !틀린) return { 결과: 'O', 경로: '몫·나머지꼴', 시도 };
+  return { 결과: 시도.length ? 'X' : '판정불가', 시도 };
+}
+
+// ── 경우의 수 (오종래 2026-10-17 q3 순열, 안 A 확정) — 모범답안 줄 조각으로 채점한다 ──
+//   문항 노드 조각은 만들지 않는다. ① 근거대기 = 같은 것이 있는 순열(÷2!)을 썼는가 · ② 세우기 = 줄의 식(1/2!×3P2=3, 4!=24) 검증
+//   ③ 풀기 = 「∴ 3×24=72(가지)」의 계산 검증 · ④ 답구하기 = 끝 값 72 일치
+
+export interface 경우의수문항 {
+  /** 문항의 나열 대상 — 「a,a,b,c,d,e」 */
+  원소: string[];
+  /** 같은 것 — 「a」 2개 */
+  중복: { 원소: string; 개수: number }[];
+}
+
+/** 문항 글에서 경우의 수 문항 — 「경우의 수」가 있어야. 「a,a,b,c,d,e」 같은 나열 대상이 있으면 같은 것을 센다. 없으면 null */
+export function parse_counting_item(글: string): 경우의수문항 | null {
+  const s = String(글 ?? '');
+  if (!/경우의\s*수/.test(s)) return null;
+  const m = s.match(/(?<![A-Za-z0-9])((?:[A-Za-z0-9]\s*[,，]\s*){2,}[A-Za-z0-9])(?![A-Za-z0-9])/);
+  const 원소 = m ? m[1].split(/[,，]/).map((x) => x.trim()) : [];
+  const 수 = new Map<string, number>();
+  for (const x of 원소) 수.set(x, (수.get(x) ?? 0) + 1);
+  return { 원소, 중복: [...수].filter(([, n]) => n > 1).map(([원소, 개수]) => ({ 원소, 개수 })) };
+}
+
+/** ① 같은 것이 있는 순열 — 같은 것 n개마다 「÷n!」 「/n!」(「1/2!×3P2」)을 썼는가. 같은 것이 없는 문항이면 null */
+export function wrote_same_permutation(학생답: string, 문항: 경우의수문항): boolean | null {
+  if (!문항.중복.length) return null;
+  const s = 정리(학생답);
+  return 문항.중복.every((d) => new RegExp(`/\\(?${d.개수}!`).test(s));
+}
+
+/** 줄의 계산 마디 — 「라벨: 식=값(단위)」에서 라벨(「:」 앞)과 단위(「(가지)」)를 뗀다 */
+const 계산마디들 = (답: string) =>
+  String(답 ?? '')
+    .split(/\r?\n/)
+    .map((l) => l.replace(/^[^:：]*[:：]/, '').replace(/∴/g, '').replace(/\([가-힣]+\)/g, ''))
+    .flatMap((l) => l.split(/[,，](?![^(]*\))/))
+    .map((x) => 정리(x).replace(/[가-힣.。]+$/, ''))
+    .filter((x) => x.includes('='));
+
+/**
+ * ② 세우기 줄 (경우의 수) — 모범 줄 「1/2!×3P2=3」의 값(3)을 학생이 순열 · 조합 · 계승 식(!, P, C)으로 맞게 세웠는가.
+ * 학생 마디의 변이 모두 같고(「4!=24」) 그 값이 모범 값과 같으면 O. 순열 · 조합 · 계승 식은 있는데 그런 마디가 없으면 X
+ * (「3P2=6」 — ÷2!을 빠뜨림 · 「4!=12」 — 계산 틀림), 그런 식이 하나도 없으면 판정불가
+ */
+export function verify_counting_line(모범줄: string, 학생답: string): 다경로검증 {
+  const 모범 = 계산마디들(모범줄).map((d) => evaluate(d.split('=').at(-1)!)).find((v) => v !== null) ?? null;
+  const 시도: 다경로검증['시도'] = [];
+  for (const d of 계산마디들(학생답)) {
+    const 변 = d.split('=').filter(Boolean);
+    if (!변.some((e) => /[!PC]/.test(e))) continue;
+    const 값 = 변.map(evaluate);
+    if (값.some((v) => v === null)) continue;
+    const 같음 = 값.every((v) => 같다(v!, 값[0]!));
+    시도.push({ 경로: '경우의 수 식', 식: d, 맞음: 같음 && 모범 !== null && 같다(값[0]!, 모범), 까닭: !같음 ? `변의 값이 다르다 (${값.join(' ≠ ')})` : `계산 값 ${값[0]} — 모범 값 ${모범}과 ${모범 !== null && 같다(값[0]!, 모범) ? '같다' : '다르다'}` });
+  }
+  const 맞은 = 시도.find((t) => t.맞음);
+  if (맞은) return { 결과: 'O', 경로: '경우의 수 식', 시도: [맞은] };
   return { 결과: 시도.length ? 'X' : '판정불가', 시도 };
 }

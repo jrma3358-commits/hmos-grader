@@ -16,7 +16,7 @@ import type { PathNode } from '../../fq/v2/graph.ts';
 import type { 조각결과 } from '../g1.ts';
 import { K핵심어 } from './f2.ts';
 import { answer_values, final_value, line_answer_values, solve_segments, student_answer_line } from '../solve_lines.ts';
-import { D혼동오류, named_remainder_values, remainder_points, verify_calculation, verify_definition, verify_discriminant, verify_equation, verify_remainder_chain, verify_division, verify_remainder_alternatives, verify_setup, verify_substitution, wrote_remainder, type 경로이름, type 다항식조건 } from '../multipath.ts';
+import { D혼동오류, named_remainder_values, remainder_points, verify_calculation, verify_definition, verify_discriminant, verify_equation, verify_remainder_chain, verify_counting_line, verify_division, verify_remainder_alternatives, wrote_same_permutation, verify_setup, verify_substitution, wrote_remainder, type 경로이름, type 다항식조건 } from '../multipath.ts';
 import type { 계열, 급소K, 조각, 파트 } from '../types.ts';
 
 export interface 조각대조 {
@@ -169,6 +169,8 @@ export function 봉인6_조각대조(학생답: string, 조각: 조각, 맥락: 
       : 조각.방정식원식 ? (답: string) => verify_equation(답, 조각.방정식원식!) // q4 학생 2 ① 방정식 세우기
       // q7 ③ 「f(2)=4+4+a=1」 — 모범 줄의 c(f(2))만 본다. 다른 f(c) 줄(f(-1))은 그 줄의 조각이 본다 (2026-10-17 q7 학생 1)
       //   f(c) 꼴이 없으면 직접 나눗셈 경로 (2026-10-17 q7 학생 2 — 🔆)
+      // q3 경우의 수 줄 — 「1/2!×3P2=3」 「4!=24」 식을 엔진이 계산해 모범 값과 대조 (2026-10-17)
+      : 조각.경우의수 ? (답: string) => verify_counting_line(조각.줄글!, 답)
       : 조각.나머지다항식 ? (답: string) => {
         const v = verify_remainder_chain(답, 조각.나머지다항식!, remainder_points(조각.줄글 ?? ''));
         // f(c) 꼴이 없으면 직접 나눗셈 · 인수분해 역산(q7 학생 4) · f 없이 대입
@@ -207,6 +209,12 @@ export function 봉인6_조각대조(학생답: string, 조각: 조각, 맥락: 
     return v.경로 === '나머지 정리' ? `나머지 정리 (f 없이 대입) — ${시도}` : `🔆 다경로 — ${v.경로} 검증 (${시도})`;
   };
   const 문항다항식 = 맥락.루브릭.map((c) => c.나머지다항식 ?? c.정의다항식).find(Boolean);
+  // [오종래 2026-10-17 q3] ① 같은 것이 있는 순열 — 같은 것 n개마다 「÷n!」 「/n!」을 썼는가
+  if (조각.파트 === '근거대기' && 조각.경우의수) {
+    const hit = wrote_same_permutation(학생답, 조각.경우의수);
+    const 같은것 = 조각.경우의수.중복.map((d) => `${d.원소} ${d.개수}개 → ÷${d.개수}!`).join(' · ');
+    return { 결과: hit ? 'O' : 'X', 근거: `같은 것이 있는 순열 — ${같은것} ${hit ? '있음' : '없음'}` };
+  }
   if (조각.파트 === '근거대기' && 조각.나머지조건) {
     const k = 조각.나머지조건;
     const hit = wrote_remainder(학생답, k);
