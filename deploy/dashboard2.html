@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HMOS — 채점 대시보드</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=Noto+Serif+KR:wght@400;600&display=swap" rel="stylesheet">
+<style>
+/* 6탭 대시보드 (오종래 2026-10-17) — 문항 입력 · 인식 결과 · 채점 결과 · 루브릭 · 모범답안 · 교사 확정.
+   판정 · 값 · 다경로 · 오류 이름은 모두 엔진 출력 그대로 보인다. 화면이 새로 판정하지 않는다 (교사 확정 탭의 재집계만 — 엔진 게이트 사슬 · 상한비 그대로) */
+:root{--teal:#1A4A4A;--teal-mid:#2A6060;--gold:#C8A84B;--gold-lt:#F6EFD9;--ivory:#F7F5F0;--ivory-dk:#EDE9E1;--line:#DDD8CC;--muted:#7A7A7E;--ink:#1C1C1E;--white:#FFFFFF;--radius:6px;
+  --B:#2A7A2A;--C:#1A5A9A;--P:#7A2A9A;--D:#C85A00;--Q:#C82020;--ok:#2E7D32;--ok-bg:#E8F5E9;--no:#C62828;--no-bg:#FFEBEE;--un:#8D6E00;--un-bg:#FFF8E1}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Noto Sans KR',sans-serif;background:var(--ivory);color:var(--ink);min-height:100vh;display:flex;flex-direction:column;font-size:14px}
+button{font-family:inherit}
+.topbar{min-height:54px;background:var(--teal);display:flex;align-items:center;padding:0 24px;gap:4px;position:sticky;top:0;z-index:100;flex-wrap:wrap}
+.brand{font-family:'Noto Serif KR',serif;font-size:17px;font-weight:600;color:#fff;margin-right:28px;text-decoration:none}
+.brand em{font-style:normal;color:var(--gold);font-size:11px;font-family:'Noto Sans KR',sans-serif;font-weight:300;margin-left:6px}
+.tab{display:flex;align-items:center;gap:7px;padding:0 14px;height:54px;border:none;background:transparent;font-size:13px;color:rgba(255,255,255,.55);border-bottom:3px solid transparent;cursor:pointer}
+.tab:hover{color:rgba(255,255,255,.85)}
+.tab.active{color:#fff;border-bottom-color:var(--gold);font-weight:500}
+.tab-num{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;background:rgba(255,255,255,.12)}
+.tab.active .tab-num{background:var(--gold);color:var(--teal)}
+.recbar{background:var(--white);border-bottom:1px solid var(--line);padding:10px 24px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.recbar label{font-size:12px;color:var(--muted)}
+.recbar select{padding:6px 10px;border:1px solid var(--line);border-radius:var(--radius);font-family:inherit;font-size:13px;min-width:280px;max-width:100%;background:var(--white)}
+.recinfo{font-size:13px;color:var(--ink);display:flex;gap:14px;flex-wrap:wrap;align-items:center}
+.recinfo .score{font-weight:700;color:var(--teal)}
+.content{flex:1;max-width:1040px;width:100%;margin:0 auto;padding:28px 24px 60px}
+.panel{display:none}
+.panel.active{display:block}
+.sec-title{font-family:'Noto Serif KR',serif;font-size:18px;font-weight:600;color:var(--teal);margin-bottom:6px}
+.sec-sub{font-size:13px;color:var(--muted);margin-bottom:18px}
+.card{background:var(--white);border:1px solid var(--line);border-radius:8px;padding:18px 20px;margin-bottom:16px}
+.card h3{font-size:14px;font-weight:600;color:var(--teal);margin-bottom:10px}
+.label{font-size:11px;font-weight:600;color:var(--muted);letter-spacing:.04em;margin-bottom:6px}
+.pre{white-space:pre-wrap;line-height:1.75;font-size:14px}
+.muted{color:var(--muted)}
+.empty{padding:40px;text-align:center;color:var(--muted);background:var(--white);border:1px dashed var(--line);border-radius:8px}
+.err{padding:14px 16px;background:var(--no-bg);color:var(--no);border-radius:6px;margin-bottom:12px;font-size:13px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media (max-width:760px){.topbar{flex-wrap:nowrap;overflow-x:auto}.brand{margin-right:12px;white-space:nowrap}.tab{white-space:nowrap;flex:none}.grid2{grid-template-columns:1fr}.content{padding:20px 16px 48px}.topbar,.recbar{padding-left:16px;padding-right:16px}}
+/* 입력 */
+.field{margin-bottom:12px}
+.field textarea,.field input,.field select{width:100%;padding:10px 12px;border:1.5px solid #C8C4BA;border-radius:6px;font-family:inherit;font-size:14px;line-height:1.7;background:var(--white);outline:none}
+.field textarea:focus,.field input:focus{border-color:var(--teal-mid)}
+.field textarea{resize:vertical;min-height:90px}
+.row{display:flex;gap:12px;flex-wrap:wrap}
+.row>.field{flex:1;min-width:140px}
+.run-btn{display:inline-flex;align-items:center;gap:8px;padding:10px 22px;background:var(--teal);color:#fff;border:none;border-radius:var(--radius);font-size:13.5px;font-weight:500;cursor:pointer}
+.run-btn:hover{background:var(--teal-mid)}
+.run-btn:disabled{background:var(--muted);cursor:not-allowed}
+.ghost-btn{padding:9px 18px;background:var(--ivory-dk);color:var(--ink);border:none;border-radius:var(--radius);font-size:13px;cursor:pointer}
+.status{font-size:13px;color:var(--muted);margin-left:12px}
+/* 인식 */
+.chip{display:inline-block;padding:4px 11px;border-radius:14px;font-size:12.5px;font-weight:500;color:#fff;margin:0 6px 6px 0}
+.node-list{display:flex;flex-wrap:wrap;gap:6px}
+.node{display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--ivory);border-radius:6px;border:1px solid var(--ivory-dk);font-size:13px}
+.node b{min-width:22px;height:22px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:11px;color:#fff}
+.node.key{border:1.5px solid var(--gold);background:var(--gold-lt)}
+.pivot{border:1.5px solid var(--gold);border-radius:8px;padding:14px 18px;background:var(--white);margin-bottom:14px}
+.pivot .t{font-size:11px;color:var(--gold);font-weight:700;margin-bottom:4px}
+.pivot .e{font-size:16px;font-weight:600}
+/* 채점 */
+.scorebox{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:6px}
+.scorebox .big{font-size:34px;font-weight:700;color:var(--teal);font-variant-numeric:tabular-nums}
+.scorebox .of{font-size:16px;color:var(--muted)}
+.tags{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 4px}
+.tag{font-size:12px;padding:3px 9px;border-radius:12px;background:var(--ivory-dk);color:var(--ink)}
+.tag.no{background:var(--no-bg);color:var(--no)}
+.tag.un{background:var(--un-bg);color:var(--un)}
+.piece{border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin-top:10px;background:var(--white)}
+.piece-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.mark{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;flex:none}
+.mark.O{background:var(--ok-bg);color:var(--ok);border:1.5px solid var(--ok)}
+.mark.X{background:var(--no-bg);color:var(--no);border:1.5px solid var(--no)}
+.mark.U{background:var(--un-bg);color:var(--un);border:1.5px solid var(--un);font-size:12px}
+.pid{font-weight:600}
+.part{font-size:12px;color:var(--muted)}
+.pts{margin-left:auto;font-variant-numeric:tabular-nums;font-size:13px;color:var(--muted)}
+.pts b{color:var(--ink)}
+.errline{margin-top:8px;font-size:13px;line-height:1.6;display:flex;gap:6px;align-items:baseline;cursor:pointer}
+.errline .ename{color:var(--no);font-weight:600;white-space:nowrap}
+.errline .why{color:#444;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1}
+.errline.open .why{white-space:normal}
+.vals{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+.val{border-radius:6px;padding:7px 10px;font-size:13px;background:var(--ivory)}
+.val .k{font-size:11px;color:var(--muted);display:block;margin-bottom:2px}
+.val .v{font-weight:600;font-variant-numeric:tabular-nums;word-break:break-all}
+.vals.same .val.s{background:var(--ok-bg)}
+.vals.diff .val.s{background:var(--no-bg)}
+.multi{margin-top:8px;border:1.5px solid var(--gold);background:var(--gold-lt);border-radius:6px;padding:9px 12px;font-size:13px;line-height:1.6}
+.multi .h{font-weight:700;color:#8A6A10;margin-bottom:2px}
+.multi code{font-family:inherit;background:rgba(255,255,255,.7);padding:1px 6px;border-radius:4px}
+.warn{margin-top:10px;font-size:13px;color:var(--un);background:var(--un-bg);border-radius:6px;padding:8px 12px}
+/* 루브릭 표 */
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{border-bottom:1px solid var(--ivory-dk);padding:8px 8px;text-align:left;vertical-align:top;line-height:1.55}
+th{font-size:11.5px;color:var(--muted);font-weight:600;background:var(--ivory)}
+.tbl-wrap{overflow-x:auto}
+/* 교사 확정 */
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.seg button{border:none;background:var(--white);padding:6px 12px;font-size:13px;cursor:pointer;color:var(--muted)}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button.on.O{background:var(--ok-bg);color:var(--ok);font-weight:700}
+.seg button.on.X{background:var(--no-bg);color:var(--no);font-weight:700}
+.seg button.on.U{background:var(--un-bg);color:var(--un);font-weight:700}
+.changed{font-size:12px;color:#8A6A10;background:var(--gold-lt);padding:2px 8px;border-radius:10px;white-space:nowrap}
+.fix{display:flex;align-items:center;gap:8px}
+#p6 td:first-child,#p6 td:nth-child(2),#p6 td:nth-child(3){white-space:nowrap}
+.cmp{display:flex;gap:24px;flex-wrap:wrap;align-items:baseline}
+.cmp div{font-size:13px;color:var(--muted)}
+.cmp b{font-size:24px;color:var(--teal);font-variant-numeric:tabular-nums;margin-left:6px}
+</style>
+</head>
+<body>
+<nav class="topbar">
+  <a class="brand" href="/">HMOS <em>채점 대시보드</em></a>
+  <button class="tab active" data-tab="1"><span class="tab-num">1</span>문항 입력</button>
+  <button class="tab" data-tab="2"><span class="tab-num">2</span>인식 결과</button>
+  <button class="tab" data-tab="3"><span class="tab-num">3</span>채점 결과</button>
+  <button class="tab" data-tab="4"><span class="tab-num">4</span>루브릭</button>
+  <button class="tab" data-tab="5"><span class="tab-num">5</span>모범답안</button>
+  <button class="tab" data-tab="6"><span class="tab-num">6</span>교사 확정</button>
+</nav>
+<div class="recbar">
+  <label for="rec-select">채점 결과</label>
+  <select id="rec-select"><option value="">불러오는 중…</option></select>
+  <div class="recinfo" id="rec-info"></div>
+</div>
+<div class="content">
+  <section class="panel active" id="p1"></section>
+  <section class="panel" id="p2"></section>
+  <section class="panel" id="p3"></section>
+  <section class="panel" id="p4"></section>
+  <section class="panel" id="p5"></section>
+  <section class="panel" id="p6"></section>
+</div>
+
+<script>
+// ── 상태 ── 지금 보는 기록 하나: 검증/ 폴더 JSON 또는 탭1에서 새로 채점한 결과 (같은 꼴: 문항 · 계열 · 정답 · 모범답안 · 학생답 · 루브릭 · 채점)
+let 목록 = [];
+let 기록 = null;
+let 기록키 = '';
+let 교사 = {}; // 소문항 자리 → { 조각id: 'O'|'X'|'판정불가' } — 엔진 판정과 다를 때만
+
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+const 점 = (x) => (Math.round(Number(x || 0) * 10) / 10).toFixed(1); // 총점 0.1 단위
+const 색 = { B: 'var(--B)', C: 'var(--C)', P: 'var(--P)', D: 'var(--D)', Q: 'var(--Q)' };
+const 색이름 = { B: '대상', C: '제약', P: '상황', D: '정의', Q: '질문' };
+const 파트들 = ['근거대기', '세우기', '풀기', '답구하기'];
+
+function 탭(n) {
+  document.querySelectorAll('.tab').forEach((b) => b.classList.toggle('active', b.dataset.tab === String(n)));
+  document.querySelectorAll('.panel').forEach((p) => p.classList.toggle('active', p.id === 'p' + n));
+  try { localStorage.setItem('hmos-d2-tab', String(n)); } catch (_) {}
+}
+document.querySelectorAll('.tab').forEach((b) => b.addEventListener('click', () => 탭(b.dataset.tab)));
+
+async function 받기(url, opt) {
+  const r = await fetch(url, { credentials: 'same-origin', ...opt });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`);
+  return j;
+}
+
+// ── 기록 고르기 ──
+async function 목록받기() {
+  const sel = $('#rec-select');
+  try {
+    목록 = (await 받기('/api/results')).목록 || [];
+  } catch (e) {
+    sel.innerHTML = '<option value="">불러오지 못함</option>';
+    $('#rec-info').innerHTML = `<span style="color:var(--no)">${esc(e.message)}</span>`;
+    return;
+  }
+  const 묶음 = {};
+  for (const x of [...목록].sort((a, b) => a.파일.localeCompare(b.파일, 'ko', { numeric: true }))) (묶음[x.문항번호 || '기타'] ??= []).push(x);
+  sel.innerHTML = '<option value="">— 검증/ 채점 결과를 고르세요 —</option>' + Object.keys(묶음).sort().map((k) =>
+    `<optgroup label="${esc(k)}">${묶음[k].map((x) => `<option value="${esc(x.파일)}">${esc(x.학생 || x.파일)} · ${점(x.부분점수)}/${점(x.만점)} · ${esc(x.파일)}</option>`).join('')}</optgroup>`).join('');
+  let 처음 = '';
+  try { 처음 = new URLSearchParams(location.search).get('f') || localStorage.getItem('hmos-d2-file') || ''; } catch (_) {}
+  if (처음 && 목록.some((x) => x.파일 === 처음)) { sel.value = 처음; 열기(처음); }
+}
+$('#rec-select').addEventListener('change', (e) => e.target.value && 열기(e.target.value));
+
+async function 열기(파일) {
+  try {
+    const j = await 받기('/api/results/' + encodeURIComponent(파일));
+    보이기(j, '파일:' + 파일);
+    try { localStorage.setItem('hmos-d2-file', 파일); } catch (_) {}
+  } catch (e) {
+    $('#rec-info').innerHTML = `<span style="color:var(--no)">${esc(e.message)}</span>`;
+  }
+}
+
+function 보이기(j, 키) {
+  기록 = j;
+  기록키 = 키;
+  교사 = {};
+  try { 교사 = JSON.parse(localStorage.getItem('hmos-d2-teacher:' + 키) || '{}'); } catch (_) {}
+  그리기();
+}
+
+const 소문항들 = () => (기록?.루브릭?.out?.소문항 || []);
+const 채점of = (s, i) => (기록?.채점 || []).find((g) => (g.번호 ?? null) === (s.번호 ?? null)) || (기록?.채점 || [])[i];
+const 자리 = (s, i) => String(s.번호 ?? i);
+
+function 그리기() {
+  const 총 = (기록?.채점 || []).reduce((a, g) => a + Number(g.out?.부분점수 || 0), 0);
+  const 만 = (기록?.채점 || []).reduce((a, g) => a + Number(g.out?.만점 || 0), 0);
+  const 엔진 = (기록?.채점 || [])[0]?.out?.엔진?.commit;
+  $('#rec-info').innerHTML = 기록 ? `<span>${esc(기록.학생 || '학생')}</span><span class="score">${점(총)} / ${점(만)}</span><span class="muted">계열 ${esc(기록.계열 || '')}${엔진 ? ` · 엔진 ${esc(엔진)}` : ''}</span>` : '';
+  그리기1(); 그리기2(); 그리기3(); 그리기4(); 그리기5(); 그리기6();
+}
+
+const 비었음 = (글) => `<div class="empty">${글}</div>`;
+
+// ── 탭1 문항 입력 ── 지금 기록의 문항 · 학생 답 + 새로 채점 (엔진 /api/rubric → /api/grade)
+function 그리기1() {
+  const 지금 = 기록 ? `
+    <div class="card"><h3>지금 보는 문항</h3><div class="pre">${esc(기록.문항)}</div>
+      <div class="grid2" style="margin-top:14px">
+        <div><div class="label">학생 답안 — ${esc(기록.학생 || '')}</div><div class="pre" style="background:var(--ivory);padding:10px 12px;border-radius:6px">${esc(기록.학생답)}</div></div>
+        <div><div class="label">정답 (검증용)</div><div class="pre">${esc(기록.정답 || '—')}</div></div>
+      </div></div>` : '';
+  $('#p1').innerHTML = `
+    <div class="sec-title">문항 입력</div>
+    <div class="sec-sub">위에서 저장된 채점 결과를 고르거나, 새 문항과 학생 답안을 넣어 엔진으로 채점하세요.</div>
+    ${지금}
+    <div class="card"><h3>새로 채점</h3>
+      <div class="field"><div class="label">문항 (논제)</div><textarea id="in-q" placeholder="예) a,a,b,c,d,e가 쓰인 6장 카드를 일렬로 나열할 때 양 끝이 모음이 오는 경우의 수를 구하고 풀이 과정을 서술하시오."></textarea></div>
+      <div class="row">
+        <div class="field"><div class="label">계열</div><select id="in-s"><option value="자동">자동</option><option value="수리">수리</option><option value="인문사회국어">인문사회국어</option></select></div>
+        <div class="field"><div class="label">총배점</div><input id="in-p" type="number" min="0.1" step="0.1" value="5"></div>
+        <div class="field"><div class="label">학생 이름</div><input id="in-n" placeholder="학생 1"></div>
+      </div>
+      <div class="field"><div class="label">정답 (검증용)</div><input id="in-a" placeholder="72가지"></div>
+      <div class="field"><div class="label">모범답안</div><textarea id="in-m"></textarea></div>
+      <div class="field"><div class="label">학생 답안</div><textarea id="in-st"></textarea></div>
+      <button class="run-btn" id="in-run">루브릭 만들고 채점 →</button><span class="status" id="in-status"></span>
+    </div>`;
+  $('#in-run').addEventListener('click', 새채점);
+}
+
+async function 새채점() {
+  const 문항 = $('#in-q').value.trim(), 학생답 = $('#in-st').value.trim(), 모범답안 = $('#in-m').value.trim();
+  const st = $('#in-status'), btn = $('#in-run');
+  if (!문항 || !학생답) { st.textContent = '문항과 학생 답안을 넣으세요'; return; }
+  btn.disabled = true;
+  try {
+    st.textContent = '루브릭 만드는 중… (엔진 · 조각 문장)';
+    const 계열 = $('#in-s').value;
+    const 루브릭 = await 받기('/api/rubric', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ 논제: 문항, 계열, 총배점: Number($('#in-p').value) || 5, 이어받기: true, 공통자료: true, 모범답안: 모범답안 || undefined, 정답: $('#in-a').value.trim() || undefined }) });
+    const 채점 = [];
+    for (const s of 루브릭.소문항 || []) {
+      if (!s.조각 || !s.조각.length) { 채점.push({ 번호: s.번호 ?? null, 건너뜀: s.멈춤 || '조각 없음' }); continue; }
+      st.textContent = `채점 중… ${s.번호 ? '(' + s.번호 + ')' : ''}`;
+      const out = await 받기('/api/grade', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ 소문항: s, 학생답, 계열: 루브릭.계열 }) });
+      채점.push({ 번호: s.번호 ?? null, status: 200, out });
+    }
+    st.textContent = '채점 끝 — 탭3에서 보세요';
+    $('#rec-select').value = '';
+    보이기({ 학생: $('#in-n').value.trim() || '새 학생', 문항, 계열: 루브릭.계열, 정답: $('#in-a').value.trim(), 모범답안, 학생답, 루브릭: { status: 200, out: 루브릭 }, 채점 }, '새:' + Date.now());
+    탭(3);
+  } catch (e) {
+    st.textContent = '';
+    $('#p1 .card:last-child').insertAdjacentHTML('afterbegin', `<div class="err">${esc(e.message)}</div>`);
+  } finally { btn.disabled = false; }
+}
+
+// ── 탭2 인식 결과 ── 5색 노드 · 조합 · 급소 (엔진 인식 그대로)
+function 그리기2() {
+  if (!기록) { $('#p2').innerHTML = '<div class="sec-title">인식 결과</div>' + 비었음('채점 결과를 고르면 엔진 인식(5색 · 급소)이 여기 나옵니다.'); return; }
+  $('#p2').innerHTML = '<div class="sec-title">인식 결과</div><div class="sec-sub">엔진이 문항에서 읽은 5색 노드와 급소입니다.</div>' + 소문항들().map((s) => {
+    const 노드 = s.인식?.노드 || [];
+    const 급소 = s.급소 || {};
+    const 쓴색 = [...new Set(노드.map((n) => n.색))];
+    return `<div class="card">
+      ${s.번호 ? `<h3>소문항 (${esc(s.번호)})</h3>` : ''}
+      <div class="pivot"><div class="t">급소 (K)</div><div class="e">${급소.실체 ? esc(급소.실체) : '<span class="muted">급소 없음</span>'}</div>${s.멈춤 ? `<div class="muted" style="margin-top:6px;font-size:12px">멈춤: ${esc(s.멈춤)}</div>` : ''}</div>
+      <div class="label">조합</div>
+      <div style="margin-bottom:12px">${(s.인식?.조합 || []).map((c) => `<span class="chip" style="background:${색[c] || '#888'}">${esc(c)} ${esc(색이름[c] || '')}</span>`).join('') || '<span class="muted">—</span>'}</div>
+      <div class="label">5색 노드 (나온 차례)</div>
+      <div class="node-list">${노드.map((n) => `<div class="node${급소.실체 && n.실체 === 급소.실체 ? ' key' : ''}"><b style="background:${색[n.색] || '#888'}">${esc(n.색)}</b>${esc(n.실체)}</div>`).join('') || '<span class="muted">노드 없음</span>'}</div>
+      <div style="margin-top:12px;font-size:12px" class="muted">${['B', 'C', 'P', 'D', 'Q'].map((c) => `${c} ${색이름[c]} ${노드.filter((n) => n.색 === c).length}`).join(' · ')}${쓴색.some((c) => !색[c]) ? ' · 기타 ' + 쓴색.filter((c) => !색[c]).join(',') : ''}</div>
+    </div>`;
+  }).join('');
+}
+
+// ── 탭3 채점 결과 ── 조각별 O/X · 오류 이름 · 설명 한 줄 · 학생 값 vs 모범 값 · 🔆 다경로 · 총점 0.1
+const 표지 = (r) => r === 'O' ? '<div class="mark O">O</div>' : r === 'X' ? '<div class="mark X">X</div>' : '<div class="mark U">?</div>';
+
+function 조각카드(x) {
+  const 오류 = x.오류 || '';
+  const 설명 = x.판단근거 || '';
+  const 값 = x.학생값 !== undefined || x.모범값 !== undefined
+    ? `<div class="vals ${x.결과 === 'O' ? 'same' : x.결과 === 'X' ? 'diff' : ''}"><div class="val s"><span class="k">학생 값</span><span class="v">${esc(x.학생값 ?? '—')}</span></div><div class="val"><span class="k">모범 값</span><span class="v">${esc(x.모범값 ?? '—')}</span></div></div>` : '';
+  const 다 = x.다경로 ? `<div class="multi"><div class="h">🔆 다경로 — ${esc(x.다경로)}</div>${x.다경로식 ? `<div>식 <code>${esc(x.다경로식)}</code></div>` : ''}${x.다경로까닭 ? `<div class="muted" style="color:#5A4A1A">${esc(x.다경로까닭)}</div>` : ''}</div>` : '';
+  return `<div class="piece">
+    <div class="piece-head">${표지(x.결과)}<span class="pid">${esc(x.조각id)}</span><span class="part">${esc(x.파트)}${x.요소 ? ' · ' + esc(x.요소) : ''}</span><span class="pts"><b>${점(x.득점)}</b> / ${점(x.배점)}</span></div>
+    <div class="errline" title="눌러서 펼치기">${오류 ? `<span class="ename">${esc(오류)}</span>` : ''}<span class="why">${esc(오류 && 설명.startsWith(오류) ? 설명.slice(오류.length).replace(/^\s*[(—-]\s*/, '').replace(/\)\s*$/, '') : 설명)}</span></div>
+    ${값}${다}
+  </div>`;
+}
+
+function 그리기3() {
+  if (!기록) { $('#p3').innerHTML = '<div class="sec-title">채점 결과</div>' + 비었음('검증/ 폴더의 채점 결과를 고르거나 탭1에서 새로 채점하세요.'); return; }
+  $('#p3').innerHTML = '<div class="sec-title">채점 결과</div><div class="sec-sub">판정 · 값 · 다경로 · 오류 이름은 모두 엔진 출력입니다. 설명 줄을 누르면 판단근거 전체가 펼쳐집니다.</div>' + 소문항들().map((s, i) => {
+    const g = 채점of(s, i);
+    if (!g || !g.out || !g.out.조각별) return `<div class="card">${s.번호 ? `<h3>소문항 (${esc(s.번호)})</h3>` : ''}<div class="muted">${esc(g?.건너뜀 || g?.out?.error || '채점 없음')}</div></div>`;
+    const o = g.out;
+    return `<div class="card">
+      ${s.번호 ? `<h3>소문항 (${esc(s.번호)})</h3>` : ''}
+      <div class="scorebox"><span class="big">${점(o.부분점수)}</span><span class="of">/ ${점(o.만점)}점</span></div>
+      <div class="tags">
+        ${o.무너진지점 ? `<span class="tag no">무너진 지점 · ${esc(o.무너진지점)}</span>` : '<span class="tag">무너진 지점 없음</span>'}
+        ${o.판정불가?.length ? `<span class="tag un">교사 판정 ${o.판정불가.length}개</span>` : ''}
+        ${파트들.map((p) => o.파트별?.[p] ? `<span class="tag">${p} ${점(o.파트별[p].파트점수)}/${점(o.파트별[p].배점합)}${o.파트별[p].상한 != null ? ` (상한 ${점(o.파트별[p].상한)})` : ''}</span>` : '').join('')}
+      </div>
+      ${o.조각별.map(조각카드).join('')}
+      ${(o.경고 || []).filter((w) => !o.조각별.some((x) => x.오류 && w.endsWith(x.오류))).map((w) => `<div class="warn">⚠ ${esc(w)}</div>`).join('')}
+    </div>`;
+  }).join('');
+  document.querySelectorAll('#p3 .errline').forEach((el) => el.addEventListener('click', () => el.classList.toggle('open')));
+}
+
+// ── 탭4 루브릭 ── 조각 · 배점 · 충족조건 (엔진 루브릭)
+function 그리기4() {
+  if (!기록) { $('#p4').innerHTML = '<div class="sec-title">루브릭</div>' + 비었음('채점 결과를 고르면 루브릭이 나옵니다.'); return; }
+  const out = 기록.루브릭?.out || {};
+  $('#p4').innerHTML = `<div class="sec-title">루브릭</div><div class="sec-sub">계열 ${esc(out.계열 || '')} · 총배점 ${점(out.총배점)}${out.엔진?.commit ? ` · 엔진 ${esc(out.엔진.commit)}` : ''}</div>` + 소문항들().map((s) => `
+    <div class="card">
+      ${s.번호 ? `<h3>소문항 (${esc(s.번호)}) · ${점(s.배점)}점</h3>` : `<h3>배점 ${점(s.배점)}점</h3>`}
+      <div class="tbl-wrap"><table>
+        <tr><th>조각</th><th>파트</th><th>배점</th><th>실체 · 모범 줄</th><th>충족조건</th></tr>
+        ${(s.조각 || []).map((c) => `<tr><td><b>${esc(c.id)}</b>${c.is_중심 ? ' <span class="tag" style="font-size:11px">중심</span>' : ''}</td><td>${esc(c.파트)}${c.요소 ? ' · ' + esc(c.요소) : ''}</td><td>${점(c.배점)}</td><td>${esc(c.줄글 || c.풀기글 || c.실체 || (c.모범답 ? c.모범답.줄 : '') || '—')}</td><td>${esc(c.충족조건 || '')}</td></tr>`).join('')}
+      </table></div>
+      ${s.물음 ? `<div style="margin-top:12px" class="muted">${파트들.filter((p) => s.물음[p]).map((p) => `<div><b style="color:var(--ink)">${p}</b> — ${esc(s.물음[p])}</div>`).join('')}</div>` : ''}
+    </div>`).join('');
+}
+
+// ── 탭5 모범답안 ── 교사 모범답안 · 조각 문장으로 이은 모범답안 · 정답 검증
+function 그리기5() {
+  if (!기록) { $('#p5').innerHTML = '<div class="sec-title">모범답안</div>' + 비었음('채점 결과를 고르면 모범답안이 나옵니다.'); return; }
+  $('#p5').innerHTML = `<div class="sec-title">모범답안</div><div class="sec-sub">교사 모범답안은 채점 견본이고, 판정에는 루브릭 조각만 씁니다.</div>
+    <div class="grid2">
+      <div class="card"><h3>교사 모범답안</h3><div class="pre">${esc(기록.모범답안 || '—')}</div></div>
+      <div class="card"><h3>정답 (검증용)</h3><div class="pre">${esc(기록.정답 || '—')}</div></div>
+    </div>` + 소문항들().map((s) => {
+    const v = s.정답검증;
+    return `<div class="card">
+      <h3>${s.번호 ? `소문항 (${esc(s.번호)}) — ` : ''}조각 문장으로 이은 모범답안</h3>
+      <div class="pre">${esc(s.모범답안 || '—')}</div>
+      ${s.충족 ? `<div class="muted" style="margin-top:10px;font-size:12px">조각 문장 충족 ${s.충족.충족수}/${s.충족.조각수}</div>` : ''}
+      ${v ? `<div class="${v.결과 === '일치' ? 'tag' : 'tag no'}" style="display:inline-block;margin-top:10px">정답 검증 · ${esc(v.결과)} — ${esc(v.사유 || '')}</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+// ── 탭6 교사 확정 ── 조각 판정을 교사가 확정 · 고친다. 점수는 엔진 게이트 사슬 · 상한비로 다시 센다 (엔진 g1 집계 · /dashboard 채점집계와 같은 계산)
+function 재집계(o, 고침) {
+  const 조각 = o.조각별.map((x) => ({ ...x, 판정: 고침[x.조각id] ?? x.결과 }));
+  const 합 = (xs, f) => xs.reduce((a, x) => a + f(x), 0);
+  const 파트배점 = Object.fromEntries(파트들.map((p) => [p, 합(조각.filter((x) => x.파트 === p), (x) => x.배점)]));
+  const 상한 = {};
+  for (const [X파트, 상한파트] of o.게이트?.사슬 || []) {
+    if (조각.some((x) => x.파트 === X파트 && x.판정 === 'X')) 상한[상한파트] = Math.round(파트배점[상한파트] * o.게이트.상한비 * 10) / 10;
+  }
+  const 점수 = 합(파트들, (p) => { const 원 = 합(조각.filter((x) => x.파트 === p && x.판정 === 'O'), (x) => x.배점); return 상한[p] != null ? Math.min(원, 상한[p]) : 원; });
+  return { 부분점수: Math.round(점수 * 100) / 100, 만점: Math.round(합(조각, (x) => x.배점) * 100) / 100, 판정불가: 조각.filter((x) => x.판정 === '판정불가').map((x) => x.조각id), 조각 };
+}
+
+function 저장교사() { try { localStorage.setItem('hmos-d2-teacher:' + 기록키, JSON.stringify(교사)); } catch (_) {} }
+
+function 그리기6() {
+  if (!기록) { $('#p6').innerHTML = '<div class="sec-title">교사 확정</div>' + 비었음('채점 결과를 고르면 교사가 조각 판정을 확정할 수 있습니다.'); return; }
+  $('#p6').innerHTML = '<div class="sec-title">교사 확정</div><div class="sec-sub">엔진 판정을 확인하고, 판정불가 조각은 O/X로 정하세요. 고친 판정은 이 브라우저에만 남고, 「확정 내려받기」로 JSON 파일을 받습니다. 원본 채점 결과는 바뀌지 않습니다.</div>' + 소문항들().map((s, i) => {
+    const g = 채점of(s, i);
+    if (!g?.out?.조각별) return '';
+    const k = 자리(s, i);
+    const 고침 = 교사[k] || {};
+    const r = 재집계(g.out, 고침);
+    return `<div class="card" data-k="${esc(k)}" data-i="${i}">
+      ${s.번호 ? `<h3>소문항 (${esc(s.번호)})</h3>` : ''}
+      <div class="cmp"><div>엔진<b>${점(g.out.부분점수)}</b></div><div>확정<b>${점(r.부분점수)}</b></div><div>만점 ${점(r.만점)}</div>${r.판정불가.length ? `<span class="tag un">아직 판정불가 ${r.판정불가.length}개</span>` : '<span class="tag">모든 조각 판정됨</span>'}</div>
+      <div class="tbl-wrap" style="margin-top:12px"><table>
+        <tr><th>조각</th><th>엔진</th><th>교사 확정</th><th>판단근거</th></tr>
+        ${r.조각.map((x) => `<tr><td><b>${esc(x.조각id)}</b><div class="muted" style="font-size:12px">${esc(x.파트)} · ${점(x.배점)}</div></td><td>${표지(x.결과)}</td>
+          <td><div class="fix"><div class="seg">${['O', 'X', '판정불가'].map((v) => `<button data-id="${esc(x.조각id)}" data-v="${v}" class="${x.판정 === v ? 'on ' + (v === '판정불가' ? 'U' : v) : ''}">${v === '판정불가' ? '?' : v}</button>`).join('')}</div>${x.판정 !== x.결과 ? '<span class="changed">고침</span>' : ''}</div></td>
+          <td style="font-size:12.5px">${x.오류 ? `<b style="color:var(--no)">${esc(x.오류)}</b><br>` : ''}${esc(x.판단근거)}</td></tr>`).join('')}
+      </table></div>
+    </div>`;
+  }).join('') + `<div style="display:flex;gap:10px;flex-wrap:wrap"><button class="run-btn" id="t-down">확정 내려받기 (JSON)</button><button class="ghost-btn" id="t-reset">교사 판정 지우기</button></div>`;
+  document.querySelectorAll('#p6 .seg button').forEach((b) => b.addEventListener('click', () => {
+    const card = b.closest('.card');
+    const k = card.dataset.k, i = Number(card.dataset.i);
+    const g = 채점of(소문항들()[i], i);
+    const 엔진값 = g.out.조각별.find((x) => x.조각id === b.dataset.id)?.결과;
+    교사[k] = { ...(교사[k] || {}) };
+    if (b.dataset.v === 엔진값) delete 교사[k][b.dataset.id]; else 교사[k][b.dataset.id] = b.dataset.v;
+    저장교사();
+    그리기6();
+  }));
+  $('#t-reset').addEventListener('click', () => { 교사 = {}; 저장교사(); 그리기6(); });
+  $('#t-down').addEventListener('click', 내려받기);
+}
+
+function 내려받기() {
+  const 확정 = 소문항들().map((s, i) => {
+    const g = 채점of(s, i);
+    if (!g?.out?.조각별) return null;
+    const 고침 = 교사[자리(s, i)] || {};
+    const r = 재집계(g.out, 고침);
+    return { 번호: s.번호 ?? null, 엔진점수: g.out.부분점수, 확정점수: r.부분점수, 만점: r.만점, 판정불가: r.판정불가, 고친조각: Object.entries(고침).map(([조각id, 교사판정]) => ({ 조각id, 엔진판정: g.out.조각별.find((x) => x.조각id === 조각id)?.결과, 교사판정 })) };
+  }).filter(Boolean);
+  const 글 = JSON.stringify({ 원본: 기록키, 학생: 기록.학생, 문항: 기록.문항, 엔진: (기록.채점 || [])[0]?.out?.엔진 || null, 확정일시: new Date().toISOString(), 소문항: 확정 }, null, 1);
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([글], { type: 'application/json' }));
+  a.download = (기록키.startsWith('파일:') ? 기록키.slice(3).replace(/\.json$/, '') : 'hmos_새채점') + '_교사확정.json';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+// ── 시작 ──
+그리기();
+try { const t = localStorage.getItem('hmos-d2-tab'); if (t) 탭(t); } catch (_) {}
+목록받기();
+</script>
+</body>
+</html>

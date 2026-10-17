@@ -82,6 +82,40 @@ app.get('/grader',(req,res)=>{
   res.sendFile(path.join(__dirname,'grader.html'));
 });
 app.get('/grader.html',(req,res)=>res.redirect(302,'/grader'));
+// /dashboard2 = 6탭 채점 대시보드 (오종래 2026-10-17) — 문항 입력 · 인식 결과 · 채점 결과 · 루브릭 · 모범답안 · 교사 확정. /dashboard처럼 접속 쿠키가 있어야
+app.get('/dashboard2',(req,res)=>{
+  if(!접속됨(req)){res.redirect(302,'/?login=1');return;}
+  res.setHeader('Cache-Control','no-store');
+  res.sendFile(path.join(__dirname,'dashboard2.html'));
+});
+app.get('/dashboard2.html',(req,res)=>res.redirect(302,'/dashboard2'));
+
+// ── GET /api/results · /api/results/:파일 — 검증/ 폴더 채점 결과 JSON (dashboard2 탭3, 오종래 2026-10-17) ──
+// nginx가 .json 주소와 /hmos-grader 경로를 막아 API로 읽는다. 읽기만 한다. GET은 아래 접속 검사를 지나므로 여기서 쿠키를 본다
+const 검증폴더=path.join(process.env.HMOS_GRADER||GRADER,'검증');
+const 검증파일들=()=>{try{return fs.readdirSync(검증폴더).filter(f=>f.endsWith('.json')).sort();}catch(_){return [];}};
+app.get('/api/results',(req,res)=>{
+  res.setHeader('Cache-Control','no-store');
+  if(!접속됨(req)){res.status(401).json({ok:false,error:접속만료});return;}
+  const 목록=[];
+  for(const 파일 of 검증파일들()){
+    try{
+      const j=JSON.parse(fs.readFileSync(path.join(검증폴더,파일),'utf8'));
+      if(!j||!j.루브릭||!Array.isArray(j.채점))continue;
+      const 합=k=>j.채점.reduce((a,g)=>a+Number((g.out&&g.out[k])||0),0);
+      목록.push({파일,문항번호:(파일.match(/^q\d+/)||[''])[0],학생:j.학생||null,부분점수:Math.round(합('부분점수')*100)/100,만점:Math.round(합('만점')*100)/100,엔진:(j.채점[0]&&j.채점[0].out&&j.채점[0].out.엔진&&j.채점[0].out.엔진.commit)||null});
+    }catch(_){}
+  }
+  res.json({ok:true,목록});
+});
+app.get('/api/results/:file',(req,res)=>{
+  res.setHeader('Cache-Control','no-store');
+  if(!접속됨(req)){res.status(401).json({ok:false,error:접속만료});return;}
+  const 파일=String(req.params.file||'');
+  // 목록에 있는 이름만 — 경로 문자로 폴더 밖을 열지 못하게
+  if(!검증파일들().includes(파일)){res.status(404).json({ok:false,error:'채점 결과 파일이 없습니다'});return;}
+  res.type('application/json').send(fs.readFileSync(path.join(검증폴더,파일),'utf8'));
+});
 
 // API도 접속 쿠키가 있어야 — 엔진(/analyze)·Claude 호출(/api/*) (2026-10-14).
 // API는 모두 POST라 GET·HEAD(홈·정적 파일) 말고는 전부 막고 /api/access만 연다 — 경로 대소문자·인코딩으로 비켜 가지 못하게 경로 모양으로 고르지 않는다.
