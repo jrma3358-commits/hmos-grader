@@ -36,6 +36,7 @@ const 정리 = (s: string) =>
     .replace(/[−–]/g, '-')
     .replace(/[×·]/g, '*')
     .replace(/÷/g, '/')
+    .replace(/[₀-₉]/g, (c) => String(c.charCodeAt(0) - 0x2080)) // 아래 첨자 「3P₂」 (q3 학생 9)
     .replace(/\^2/g, '²');
 
 // ── 다항식 (x에 대해 2차까지) ──
@@ -1001,6 +1002,8 @@ const 경우의수오류 = (모범줄: string, 갈래: string) => {
   return `${라벨 ? 라벨 + ' ' : ''}경우의 수 오류 — ${갈래}`;
 };
 export const 중복미처리오류 = (모범줄: string) => 경우의수오류(모범줄, '중복 미처리');
+/** 「양 끝 모음 경우의 수 오류 — ÷2! 누락」 (q3 학생 9) — 같은 것 a 2개면 ÷2! */
+export const 나눔누락오류 = (모범줄: string, 문항: 경우의수문항) => 경우의수오류(모범줄, `${문항.중복.map((d) => `÷${d.개수}!`).join('')} 누락`);
 export const 개수오류 = (모범줄: string) => 경우의수오류(모범줄, '개수 오류');
 
 /** 계승의 개수 — 「4!」 → 4 · 「3×2×1」 → 3 (1까지 풀어 쓴 곱). 계승이 아니면 null */
@@ -1040,7 +1043,11 @@ export function verify_counting_factor(모범줄: string, 학생답: string, 다
   const 출처 = 마디.find((d) => d !== 결론 && 같다(evaluate(d.split('=').at(-1)!) ?? NaN, 학생값));
   const 모범n = 계산마디들(모범줄).map((d) => 계승개수(d.split('=')[0])).find((n) => n !== null) ?? null;
   const 학생n = 출처 ? 계승개수(출처.split('=')[0]) : null;
-  const 오류 = wrote_same_permutation(모범줄, 문항) && !wrote_same_permutation(학생답, 문항) ? 중복미처리오류(모범줄)
+  // ÷n! 누락 (q3 학생 9) — 학생 식이 순열 · 조합 · 계승 식(「3P₂=6」)이고 값이 모범 값 × n!(3×2!=6)이면 모범 식에서 ÷n!만 빠뜨렸다
+  const 나눔 = 문항.중복.reduce((p, d) => p * (evaluate(`${d.개수}!`) ?? 1), 1);
+  const 같은것빠짐 = wrote_same_permutation(모범줄, 문항) && !wrote_same_permutation(학생답, 문항);
+  const 오류 = 같은것빠짐 && 출처 && /[!PC]/.test(출처.split('=')[0]) && 같다(학생값, 줄값 * 나눔) ? 나눔누락오류(모범줄, 문항)
+    : 같은것빠짐 ? 중복미처리오류(모범줄)
     : 모범n !== null && 학생n !== null && 모범n !== 학생n ? 개수오류(모범줄)
     : undefined;
   const 어디 = 차례로 ? `${자리!.i + 1}번째 인수` : `다른 줄 값 ${다른줄값.join(', ')}을 뺀 인수`;
