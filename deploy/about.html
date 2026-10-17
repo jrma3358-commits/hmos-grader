@@ -66,6 +66,9 @@
     transition: background 0.15s, color 0.15s;
   }
   .header-btn:hover { background: var(--brown); color: var(--cream); }
+  /* 채점 대시보드 — 홈 헤더와 같이 보조 색 올리브 (2026-10-17) */
+  .header-btn.alt { border-color: var(--olive); color: var(--olive); }
+  .header-btn.alt:hover { background: var(--olive); color: #fff; }
   /* 홈 헤더와 같은 링크 — 지금 이 페이지라 테라코타로 표시 */
   .header-nav { display: flex; align-items: center; gap: 20px; }
   .header-link { color: var(--brown); font-size: 14px; font-weight: 500; text-decoration: none; white-space: nowrap; }
@@ -279,7 +282,9 @@
   @media (max-width: 560px) {
     .wrap { padding: 0 16px; }
     .logo-sub { display: none; }
-    .header-nav { gap: 14px; }
+    .header-nav { gap: 8px; }
+    .header-btn { padding: 6px 10px; font-size: 13px; }
+    .header-link { font-size: 13px; }
     .intro { padding: 72px 0 64px; }
     .layer { padding: 64px 0 72px; }
     .charter { padding: 28px 22px; line-height: 1.9; }
@@ -291,6 +296,11 @@
     .tl-body { padding-left: 20px; }
     .tl-sub { padding-left: 4px; }
     .footer-side { align-items: flex-start; }
+  }
+  /* 아주 좁은 화면 — 헤더 메뉴 셋이 로고 옆에 안 들어가면 로고 아래 줄로 (홈과 같다, 2026-10-17) */
+  @media (max-width: 370px) {
+    header .wrap { height: auto; flex-wrap: wrap; padding-top: 10px; padding-bottom: 10px; row-gap: 8px; }
+    .header-nav { width: 100%; justify-content: flex-end; }
   }
   @media (prefers-reduced-motion: reduce) {
     html { scroll-behavior: auto; }
@@ -309,6 +319,8 @@
     <nav class="header-nav">
       <a class="header-link" href="/about" aria-current="page">HMOS 이야기</a>
       <a class="header-btn" href="/?login=1">문항 분석</a>
+      <!-- 쿠키가 있으면 바로, 없으면 서버가 홈 비밀번호 팝업으로 보내고 들어가면 /dashboard2로 돌아온다 -->
+      <a class="header-btn alt" href="/dashboard2">채점 대시보드</a>
     </nav>
   </div>
 </header>
