@@ -99,10 +99,10 @@ tr.pick{cursor:pointer}
 .part{font-size:12px;color:var(--muted)}
 .pts{margin-left:auto;font-variant-numeric:tabular-nums;font-size:13px;color:var(--muted)}
 .pts b{color:var(--ink)}
-.errline{margin-top:8px;font-size:13px;line-height:1.6;display:flex;gap:6px;align-items:baseline;cursor:pointer}
-.errline .ename{color:var(--no);font-weight:600;white-space:nowrap}
-.errline .why{color:#444;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1}
-.errline.open .why{white-space:normal}
+/* 오류 이름 + 판단근거 — 접지 않고 늘 다 보인다 (오종래 2026-10-17) */
+.errline{margin-top:8px;font-size:13px;line-height:1.65}
+.errline .ename{display:block;color:var(--no);font-weight:700;margin-bottom:2px}
+.errline .why{display:block;color:#444;white-space:normal;word-break:keep-all;overflow-wrap:anywhere}
 .vals{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
 .val{border-radius:6px;padding:7px 10px;font-size:13px;background:var(--ivory)}
 .val .k{font-size:11px;color:var(--muted);display:block;margin-bottom:2px}
@@ -622,14 +622,14 @@ function 조각카드(x) {
   const 다 = x.다경로 ? `<div class="multi"><div class="h">🔆 다경로 — ${esc(x.다경로)}</div>${x.다경로식 ? `<div>식 <code>${esc(x.다경로식)}</code></div>` : ''}${x.다경로까닭 ? `<div class="muted" style="color:#5A4A1A">${esc(x.다경로까닭)}</div>` : ''}</div>` : '';
   return `<div class="piece">
     <div class="piece-head">${표지(x.결과)}<span class="pid">${esc(x.조각id)}</span><span class="part">${esc(x.파트)}${x.요소 ? ' · ' + esc(x.요소) : ''}</span><span class="pts"><b>${점(x.득점)}</b> / ${점(x.배점)}</span></div>
-    <div class="errline" title="눌러서 펼치기">${오류 ? `<span class="ename">${esc(오류)}</span>` : ''}<span class="why">${esc(오류 && 설명.startsWith(오류) ? 설명.slice(오류.length).replace(/^\s*[(—-]\s*/, '').replace(/\)\s*$/, '') : 설명)}</span></div>
+    <div class="errline">${오류 ? `<span class="ename">${esc(오류)}</span>` : ''}<span class="why">${esc(오류 && 설명.startsWith(오류) ? 설명.slice(오류.length).replace(/^\s*[(—-]\s*/, '').replace(/\)\s*$/, '') : 설명)}</span></div>
     ${값}${다}
   </div>`;
 }
 
 function 그리기3() {
   if (!기록) { $('#p3').innerHTML = '<div class="sec-title">채점 결과</div>' + 비었음('검증/ 폴더의 채점 결과를 고르거나 탭1에서 새로 채점하세요.'); return; }
-  $('#p3').innerHTML = '<div class="sec-title">채점 결과</div><div class="sec-sub">판정 · 값 · 다경로 · 오류 이름은 모두 엔진 출력입니다. 설명 줄을 누르면 판단근거 전체가 펼쳐집니다.</div>' + 소문항들().map((s, i) => {
+  $('#p3').innerHTML = '<div class="sec-title">채점 결과</div><div class="sec-sub">판정 · 값 · 다경로 · 오류 이름은 모두 엔진 출력입니다. 조각마다 판단근거 전체를 보입니다.</div>' + 소문항들().map((s, i) => {
     const g = 채점of(s, i);
     if (!g || !g.out || !g.out.조각별) return `<div class="card">${s.번호 ? `<h3>소문항 (${esc(s.번호)})</h3>` : ''}<div class="muted">${esc(g?.건너뜀 || g?.out?.error || '채점 없음')}</div></div>`;
     const o = g.out;
@@ -645,7 +645,6 @@ function 그리기3() {
       ${(o.경고 || []).filter((w) => !o.조각별.some((x) => x.오류 && w.endsWith(x.오류))).map((w) => `<div class="warn">⚠ ${esc(w)}</div>`).join('')}
     </div>`;
   }).join('');
-  document.querySelectorAll('#p3 .errline').forEach((el) => el.addEventListener('click', () => el.classList.toggle('open')));
 }
 
 // ── 탭4 루브릭 ── 조각 · 배점 · 충족조건 (엔진 루브릭)
