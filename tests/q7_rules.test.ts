@@ -8,8 +8,8 @@ import { describe, it } from 'node:test';
 import { recognizeV2Analysis } from '../src/fq/pipeline.ts';
 import { derive_pieces, f2_input_from_v2 } from '../src/rubric/f2.ts';
 import { grade } from '../src/rubric/g1.ts';
-import { named_remainder_values, parse_polynomial_conditions, remainder_points, substitution_sign_error, verify_definition, verify_division, verify_remainder_chain, wrote_remainder } from '../src/rubric/multipath.ts';
-import { classify_math_lines, line_answer_values, solve_segments } from '../src/rubric/solve_lines.ts';
+import { named_remainder_values, parse_polynomial_conditions, remainder_points, substitution_sign_error, verify_definition, verify_division, verify_factor_remainder, verify_substitution, verify_remainder_chain, wrote_remainder } from '../src/rubric/multipath.ts';
+import { answer_values, classify_math_lines, line_answer_values, solve_segments } from '../src/rubric/solve_lines.ts';
 import { verify_calculation } from '../src/rubric/multipath.ts';
 import { verify_answer_values } from '../src/rubric/teacher_input.ts';
 
@@ -156,5 +156,35 @@ describe('직접 나눗셈 경로', () => {
     assert.ok(결과.every((x) => x === 'O'), 결과.join(','));
     assert.equal(r.파트별.세우기.조각별[0].다경로, '직접 나눗셈');
     assert.equal(r.파트별.풀기.조각별[0].다경로, '직접 나눗셈');
+  });
+});
+
+// 2026-10-17 q7 학생 4 — 인수분해 역산 경로 (규칙 1~4 확정) · f 없이 대입 · 「R=식=-8」 답 값
+describe('인수분해 역산 경로', () => {
+  const 학생4 = 'x²+2x+a를 x-2로 나눈 나머지가 1이므로\nx²+2x+a-1은 x-2로 나눠 떨어진다. 즉,\nx²+2x+a-1=(x-2)(x+4)=x²+2x-8\na-1=-8, a=-7\n\n이때, x²+2x-7을 x+1로 나누면\n나머지정리로부터\nR=(-1)²+2×(-1)-7=-8';
+  it('L = 다항식 - 나머지 · x-c 인수 · 참값에서 양변 일치 — 맞음, 하나라도 어긋나면 X', () => {
+    assert.equal(verify_factor_remainder(학생4, 원).결과, 'O');
+    assert.equal(verify_factor_remainder('x²+2x+a-1=(x-2)(x+3)=x²+x-6', 원).결과, 'X'); // 참값에서 양변 다름
+    assert.equal(verify_factor_remainder('x²+2x+a-3=(x-2)(x+4)', 원).결과, 'X'); // 나머지 1이 아니다
+    assert.equal(verify_factor_remainder('x²+2x+a-1=(x-3)(x+5)', 원).결과, 'X'); // x-2 인수 아님
+    assert.equal(verify_factor_remainder('f(2)=4+4+a=1', 원).결과, '판정불가');
+  });
+  it('f 없이 대입 — 「x+1로 나누면 … (-1)²+2×(-1)-7=-8」 맞음, 부호 틀리면 대입 부호 오류', () => {
+    assert.equal(verify_substitution(학생4, 원, [-1]).결과, 'O');
+    const v = verify_substitution('x+1로 나누면\nR=(-1)²-2×(-1)-7=-4', 원, [-1]);
+    assert.equal(v.결과, 'X');
+    assert.match(v.오류 ?? '', /^f\(-1\) 대입 부호 오류/);
+  });
+  it('「R=(-1)²+2×(-1)-7=-8」 답 값은 R=-8', () => {
+    assert.deepEqual(answer_values('R=(-1)²+2×(-1)-7=-8'), ['R=-8']);
+  });
+  it('G1 — 모든 조각 O (5점), ② 🔆 다경로 인수분해 역산', () => {
+    const 입력 = f2_input_from_v2(recognizeV2Analysis(문항));
+    assert.ok(입력.ok);
+    const cs = derive_pieces(입력.물음, 입력.k, { ...입력.인식, 교사줄: classify_math_lines(모범, 문항), 다항식: 원 }, '수리');
+    const r = grade(학생4, cs.map((c) => ({ ...c, 충족조건: '', 모범조각: '', 배점: 1 })) as any, '', 입력.k, '수리');
+    const 결과 = Object.values(r.파트별).flatMap((p) => p.조각별.map((x) => x.결과));
+    assert.ok(결과.every((x) => x === 'O'), 결과.join(','));
+    assert.equal(r.파트별.세우기.조각별[0].다경로, '인수분해 역산');
   });
 });

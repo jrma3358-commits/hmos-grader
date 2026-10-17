@@ -14,7 +14,7 @@ export interface 이차식 {
   c: number;
 }
 
-export type 경로이름 = '인수분해' | '완전제곱식' | '근의 공식' | '근의 공식 2' | '판별식 D' | '판별식 D/4' | '방정식 세우기' | '근과 계수의 관계' | '식 변형' | '인수분해 공식' | '근의 성질(차수 낮추기)' | '근 직접 대입' | '나머지 정리' | '직접 나눗셈';
+export type 경로이름 = '인수분해' | '완전제곱식' | '근의 공식' | '근의 공식 2' | '판별식 D' | '판별식 D/4' | '방정식 세우기' | '근과 계수의 관계' | '식 변형' | '인수분해 공식' | '근의 성질(차수 낮추기)' | '근 직접 대입' | '나머지 정리' | '직접 나눗셈' | '인수분해 역산';
 
 export interface 다경로검증 {
   결과: 'O' | 'X' | '판정불가';
@@ -584,8 +584,24 @@ export const remainder_points = (줄: string) => [...정리(줄).matchAll(/f\((-
  * 대입 부호 오류 (2026-10-17 q7 학생 1) — f(c)를 항마다 펼친 학생 식(「1+2-7」)과 다항식 항의 값(1, -2, -7)이
  * 항 하나의 부호만 다르면 그 항을 낸다: 「f(-1) 대입 부호 오류 — 2×(-1)=+2로 계산」. 아니면 null
  */
+/** 괄호 밖 +, - 로 나눈 항 — 「(-1)²+2×(-1)-7」 → 「(-1)²」 「+2*(-1)」 「-7」 */
+export function 겉항들(식: string): string[] {
+  const 항: string[] = [];
+  let 깊이 = 0, 지금 = '';
+  for (const ch of 정리(식)) {
+    if (ch === '(') 깊이++;
+    if (ch === ')') 깊이--;
+    if ((ch === '+' || ch === '-') && 깊이 === 0 && 지금 && !/[*/]$/.test(지금)) {
+      항.push(지금);
+      지금 = ch;
+    } else 지금 += ch;
+  }
+  if (지금) 항.push(지금);
+  return 항;
+}
+
 export function substitution_sign_error(원: 다항식조건, c: number, 학생식: string): string | null {
-  const 항들 = (식: string) => 정리(식).match(/[+-]?[^+-]+/g) ?? [];
+  const 항들 = 겉항들; // 괄호 밖 +, - 로 — 「(-1)²+2×(-1)-7」 (2026-10-17 q7 학생 4)
   const 다항항 = 항들(원.식);
   const 학생항 = 항들(학생식);
   if (원.참값 === null || 다항항.length !== 학생항.length) return null;
@@ -731,4 +747,93 @@ export function verify_division(학생답: string, 원: 다항식조건, 볼근?
   const 틀린 = 시도.find((t) => !t.맞음);
   if (시도.length && !틀린) return { 결과: 'O', 경로: '직접 나눗셈', 시도 };
   return { 결과: 시도.length ? 'X' : '판정불가', 시도 };
+}
+
+// ── 인수분해 역산 (오종래 2026-10-17 q7 학생 4) — 나머지가 r이면 P-r은 x-c로 나누어떨어진다 ──
+//   「x²+2x+a-1=(x-2)(x+4)=x²+2x-8」 — 엔진이 검증한다 (규칙 확정 2026-10-17):
+//   1. (x-c)(x+d)=[전개식] 꼴을 찾는다  2. L = 문항 다항식 - 나머지 (모든 상수 값에서)
+//   3. x-c 인수의 c가 그 수 나머지 조건의 c  4. 상수 참값을 넣으면 L과 곱 · 전개식이 x에 대해 같다
+
+const 곱꼴 = /^\(x([+\-])(\d+(?:\.\d+)?)\)\(x([+\-])(\d+(?:\.\d+)?)\)$/;
+
+export function verify_factor_remainder(학생답: string, 원: 다항식조건, 볼근?: number[]): 다경로검증 {
+  const 시도: 다경로검증['시도'] = [];
+  const 상수들 = [-2, 0.7, 3], 점들 = [-1.5, 0.5, 2.3, 4];
+  for (const d of 식마디들(학생답)) {
+    const 변 = 정리(d).split('=');
+    const pi = 변.findIndex((e) => 곱꼴.test(e));
+    const L = 변[0];
+    if (pi < 1 || !/x/.test(L) || !new RegExp(원.문자).test(L)) continue;
+    const m = 변[pi].match(곱꼴)!;
+    const 인수근 = [(m[1] === '-' ? 1 : -1) * Number(m[2]), (m[3] === '-' ? 1 : -1) * Number(m[4])];
+    if (볼근 && 볼근.length && !인수근.some((c) => 볼근.some((b) => 같다(b, c)))) continue;
+    // 2. L - P 가 상수 -r 인가 — 아니면 이 경로 꼴이 아니다
+    const 차들 = 점들.flatMap((x) => 상수들.map((t) => {
+      const l = 넣어계산(L, { [원.문자]: t, x }), q = 다항식값(원, x, t);
+      return l === null || q === null ? NaN : l - q;
+    }));
+    if (!차들.every((v) => Number.isFinite(v) && 같다(v, 차들[0]))) continue;
+    const 빼기 = -차들[0];
+    // 3. 그 수 나머지 조건의 x-c가 곱의 인수
+    const 조건 = 원.조건.find((k) => k.나머지 !== null && 같다(k.나머지, 빼기) && 인수근.some((c) => 같다(c, k.근)));
+    // 4. 상수 참값에서 L ≡ 곱 ≡ 전개식
+    const 참값 = 원.참값;
+    const 일치 = 참값 !== null && 점들.every((x) => {
+      const l = 넣어계산(L, { [원.문자]: 참값, x });
+      return l !== null && 변.slice(1).every((e) => { const r = 넣어계산(e, { [원.문자]: 참값, x }); return r !== null && 같다(l, r); });
+    });
+    const 맞음 = !!조건 && 일치;
+    const 까닭 = !조건 ? `L = 다항식 ${원.식} - ${빼기}이지만 그 나머지 조건의 x-c가 곱의 인수가 아니다`
+      : !일치 ? `${원.문자}=${참값}을 넣으면 양변이 다르다`
+      : `L = 다항식 ${원.식} - ${빼기} · x${조건.근 < 0 ? '+' : '-'}${Math.abs(조건.근)} 인수 · ${원.문자}=${참값}에서 양변이 같다`;
+    시도.push({ 경로: '인수분해 역산', 식: d, 맞음, 까닭 });
+  }
+  const 틀린 = 시도.find((t) => !t.맞음);
+  if (시도.length && !틀린) return { 결과: 'O', 경로: '인수분해 역산', 시도 };
+  return { 결과: 시도.length ? 'X' : '판정불가', 시도 };
+}
+
+/**
+ * f 없이 쓴 나머지 정리 (2026-10-17 q7 학생 4) — 「x²+2x-7을 x+1로 나누면 … R=(-1)²+2×(-1)-7=-8」.
+ * 답에 「x-c로 나누」가 있고 c를 넣은 변(「(-1)」 · 양수면 「2²」도)이 있으면 f(c)로 본다 — 값이 상수 참값의 P(c)(또는 수 나머지)와 같아야 맞다.
+ * 대입 부호 오류는 이름을 붙인다
+ */
+export function verify_substitution(학생답: string, 원: 다항식조건, 볼근?: number[]): 다경로검증 {
+  const 시도: 다경로검증['시도'] = [];
+  const 글 = 정리(학생답);
+  for (const k of 원.조건) {
+    const c = k.근;
+    if (볼근 && 볼근.length && !볼근.some((b) => 같다(b, c))) continue;
+    const 나눔 = `x${c < 0 ? '+' : '-'}${Math.abs(c)}`;
+    if (!글.includes(`${나눔}로나누`) && !글.includes(`${나눔}으로나누`)) continue;
+    const 표 = [`(${c})`, ...(c > 0 ? [`${c}²`] : [])];
+    for (const d of 식마디들(학생답)) {
+      const 변 = 정리(d).split('=');
+      const at = 변.findIndex((e) => !/f\(/.test(e) && 표.some((x) => e.includes(x)));
+      if (at < 0) continue;
+      const 뒤 = 변.slice(at).filter(Boolean);
+      const 맞음 = 뒤.every((e) => {
+        if (new RegExp(원.문자).test(e)) {
+          return [-2, 0.7, 3].every((t) => { const l = 넣어계산(e, { [원.문자]: t }), r = 다항식값(원, c, t); return l !== null && r !== null && 같다(l, r); });
+        }
+        const v = evaluate(e);
+        if (v === null) return true;
+        if (k.나머지 !== null && 같다(v, k.나머지)) return true;
+        const p = 원.참값 !== null ? 다항식값(원, c, 원.참값) : null;
+        return p !== null && 같다(v, p);
+      });
+      const 오류 = 맞음 ? null : 뒤.filter((e) => !new RegExp(원.문자).test(e) && evaluate(e) !== null).map((e) => substitution_sign_error(원, c, e)).find(Boolean) ?? null;
+      시도.push({ 경로: '나머지 정리', 식: d, 맞음, 까닭: `x=${c}을 넣은 값이 다항식 ${원.식}에서 나온 값과 ${맞음 ? '같다' : '다르다'} (f 없이 대입)`, ...(오류 ? { 오류 } : {}) });
+    }
+  }
+  const 틀린 = 시도.find((t) => !t.맞음);
+  if (시도.length && !틀린) return { 결과: 'O', 경로: '나머지 정리', 시도 };
+  const 오류 = 시도.find((t) => t.오류)?.오류;
+  return { 결과: 시도.length ? 'X' : '판정불가', 시도, ...(오류 ? { 오류 } : {}) };
+}
+
+/** f 표기 경로가 판정불가일 때 볼 다른 경로 — 직접 나눗셈 · 인수분해 역산 · f 없이 대입. 맞은 경로가 먼저, 없으면 틀린 것, 없으면 판정불가 */
+export function verify_remainder_alternatives(학생답: string, 원: 다항식조건, 볼근?: number[]): 다경로검증 {
+  const 결과들 = [verify_division, verify_factor_remainder, verify_substitution].map((f) => f(학생답, 원, 볼근));
+  return 결과들.find((v) => v.결과 === 'O') ?? 결과들.find((v) => v.결과 === 'X') ?? { 결과: '판정불가', 시도: [] };
 }

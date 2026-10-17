@@ -93,7 +93,8 @@ const 값꼴 = new RegExp(`([A-Za-z](?:_?\\w)?)(${비교})(.+?)(?=또는|이다|
  */
 export function answer_values(줄: string): string[] {
   const s = String(줄 ?? '').replace(/∴/g, '').replace(/\s+/g, '').replace(/[−–]/g, '-');
-  const 값 = [...s.matchAll(값꼴)].flatMap((m) => 복부호(m[3]).map((v) => `${m[1]}${기호맞춤(m[2])}${수맞춤(v)}`));
+  // 「R=(-1)²+2×(-1)-7=-8」 — 등호가 이어지면 마지막 변이 값 (2026-10-17 q7 학생 4)
+  const 값 = [...s.matchAll(값꼴)].flatMap((m) => 복부호(m[3].split('=').at(-1)!).map((v) => `${m[1]}${기호맞춤(m[2])}${수맞춤(v)}`));
   return [...new Set(값)].sort();
 }
 
