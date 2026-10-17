@@ -7,7 +7,7 @@ import { describe, it } from 'node:test';
 import { recognizeV2Analysis } from '../src/fq/pipeline.ts';
 import { derive_pieces, f2_input_from_v2 } from '../src/rubric/f2.ts';
 import { grade } from '../src/rubric/g1.ts';
-import { evaluate, is_math_item, parse_counting_item, resolve_subject, verify_case_split, verify_case_split_line, verify_counting_line, wrote_same_permutation } from '../src/rubric/multipath.ts';
+import { evaluate, is_math_item, parse_counting_item, resolve_subject, verify_case_split, verify_case_split_line, verify_counting_factor, verify_counting_line, 중복미처리오류, wrote_same_permutation } from '../src/rubric/multipath.ts';
 import { classify_math_lines, final_value } from '../src/rubric/solve_lines.ts';
 
 const 문항 = 'a,a,b,c,d,e가 쓰인 6장 카드를 일렬로 나열할 때\n양 끝이 모음이 오는 경우의 수를 구하고 풀이 과정을 서술하시오.';
@@ -109,5 +109,31 @@ describe('경우 나누기 경로 (q3 학생 1)', () => {
     assert.match(r.파트별.근거대기.조각별[0].판단근거, /🔆.*경우로 나누어 처리/);
     assert.match(r.파트별.세우기.조각별[0].판단근거, /🔆 다경로 — 경우 나누기/);
     assert.match(r.파트별.세우기.조각별[1].판단근거, /모범답안과 같은 경로/);
+  });
+});
+
+// q3 학생 2 (오종래 2026-10-17) — 양 끝 2×2=4 (같은 것 a,a 미처리, 맞는 값 3) · 가운데 4×3×2×1=24 맞음 · 끝 값 96
+const 학생2 = '양끝이 모음을 나열하는 경우의 수는\n2×2=4(가지)\n이 때, 1 사이사이에 4개의 원자를 나열하면\n4×3×2×1=24(가지)\n\n∴ 4×24=96(가지)';
+
+describe('양 끝 모음 경우의 수 오류 — 중복 미처리 (q3 학생 2)', () => {
+  it('「4×3×2×1=24」 — 계승을 풀어 쓴 곱도 경우의 수 식 · 「2×2」는 아니다', () => {
+    assert.equal(verify_counting_line('나머지 4개 나열: 4!=24', 학생2).결과, 'O');
+    assert.equal(verify_counting_line('나머지 4개 나열: 4!=24', '2×2=4').결과, '판정불가');
+  });
+  it('결론 「4×24=96」에서 24를 뺀 4가 양 끝 학생 값 — 모범 값 3과 다르고 ÷2! 없음 → 오류 이름', () => {
+    const v = verify_counting_factor('양 끝 모음 나열: 1/2! × 3P2 = 3', 학생2, [24], 문항정보);
+    assert.equal(v.결과, 'X');
+    assert.equal(v.오류, '양 끝 모음 경우의 수 오류 — 중복 미처리');
+    assert.equal(v.시도[0].식, '2*2=4');
+    assert.equal(중복미처리오류('나머지 4개 나열: 4!=24'), '나머지 4개 경우의 수 오류 — 중복 미처리');
+  });
+  it('채점 — ① X · ② 양 끝 X (오류 이름) · ② 가운데 O · ③ O · ④ X', () => {
+    const 입력 = f2_input_from_v2(recognizeV2Analysis(문항));
+    assert.ok(입력.ok);
+    const cs = derive_pieces(입력.물음, 입력.k, { ...입력.인식, 교사줄: classify_math_lines(모범, 문항), 경우의수: 문항정보 }, '수리');
+    const r = grade(학생2, cs.map((c) => ({ ...c, 충족조건: '', 모범조각: '', 배점: 1 })) as any, '', 입력.k, '수리');
+    const 결과 = Object.values(r.파트별).flatMap((p) => p.조각별.map((x) => x.결과));
+    assert.deepEqual(결과, ['X', 'X', 'O', 'O', 'X']);
+    assert.match(r.파트별.세우기.조각별[0].판단근거, /^양 끝 모음 경우의 수 오류 — 중복 미처리/);
   });
 });

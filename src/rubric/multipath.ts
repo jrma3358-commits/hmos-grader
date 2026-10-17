@@ -962,13 +962,14 @@ const 계산마디들 = (답: string) =>
  * ② 세우기 줄 (경우의 수) — 모범 줄 「1/2!×3P2=3」의 값(3)을 학생이 순열 · 조합 · 계승 식(!, P, C)으로 맞게 세웠는가.
  * 학생 마디의 변이 모두 같고(「4!=24」) 그 값이 모범 값과 같으면 O. 순열 · 조합 · 계승 식은 있는데 그런 마디가 없으면 X
  * (「3P2=6」 — ÷2!을 빠뜨림 · 「4!=12」 — 계산 틀림), 그런 식이 하나도 없으면 판정불가
+ * 「4×3×2×1」 「3×2」처럼 계승 · 순열을 풀어 쓴 곱도 그런 식으로 본다 (q3 학생 2)
  */
 export function verify_counting_line(모범줄: string, 학생답: string): 다경로검증 {
-  const 모범 = 계산마디들(모범줄).map((d) => evaluate(d.split('=').at(-1)!)).find((v) => v !== null) ?? null;
+  const 모범 = counting_line_value(모범줄);
   const 시도: 다경로검증['시도'] = [];
   for (const d of 계산마디들(학생답)) {
     const 변 = d.split('=').filter(Boolean);
-    if (!변.some((e) => /[!PC]/.test(e))) continue;
+    if (!변.some((e) => /[!PC]/.test(e) || 풀어쓴순열(e))) continue;
     const 값 = 변.map(evaluate);
     if (값.some((v) => v === null)) continue;
     const 같음 = 값.every((v) => 같다(v!, 값[0]!));
@@ -977,6 +978,47 @@ export function verify_counting_line(모범줄: string, 학생답: string): 다�
   const 맞은 = 시도.find((t) => t.맞음);
   if (맞은) return { 결과: 'O', 경로: '경우의 수 식', 시도: [맞은] };
   return { 결과: 시도.length ? 'X' : '판정불가', 시도 };
+}
+
+/** 「4×3×2×1」 「3×2」 — 1씩 줄어드는 자연수의 곱 (계승 · 순열을 풀어 쓴 꼴, q3 학생 2). 「2×2」는 아니다 */
+const 풀어쓴순열 = (e: string) => {
+  const f = 정리(e).split('*');
+  return f.length >= 2 && f.every((x) => /^\d+$/.test(x)) && f.every((x, i) => i === 0 || Number(x) === Number(f[i - 1]) - 1);
+};
+
+/** 경우의 수 줄의 값 — 「양 끝 모음 나열: 1/2! × 3P2 = 3」 → 3 */
+export function counting_line_value(줄: string): number | null {
+  return 계산마디들(줄).map((d) => evaluate(d.split('=').at(-1)!)).find((v) => v !== null) ?? null;
+}
+
+/** 오류 이름 (오종래 2026-10-17 q3 학생 2) — 모범 줄 라벨에서 「나열」을 뗀다: 「양 끝 모음 경우의 수 오류 — 중복 미처리」 */
+export const 중복미처리오류 = (모범줄: string) => {
+  const 라벨 = (String(모범줄 ?? '').match(/^([^:：]*)[:：]/)?.[1] ?? '').replace(/\s*나열\s*$/, '').trim();
+  return `${라벨 ? 라벨 + ' ' : ''}경우의 수 오류 — 중복 미처리`;
+};
+
+/**
+ * ② 세우기 줄 — 학생 결론 곱(「∴ 4×24=96」)에서 다른 줄의 모범 값(24)을 뺀 인수(4)가 이 줄의 학생 값 (q3 학생 2)
+ * 모범 줄 값(3)과 다르면 X — 모범 줄이 ÷n!(같은 것)인데 학생이 ÷n!을 쓰지 않았으면 오류 「… 경우의 수 오류 — 중복 미처리」.
+ * 결론 곱이 없거나 · 인수를 하나로 좁힐 수 없거나 · 모범 값과 같으면 판정불가 (여기서 O를 주지 않는다)
+ */
+export function verify_counting_factor(모범줄: string, 학생답: string, 다른줄값: number[], 문항: 경우의수문항): 다경로검증 {
+  const 줄값 = counting_line_value(모범줄);
+  const 마디 = 계산마디들(학생답);
+  const 결론 = 마디.filter((d) => /^\d+(?:\*\d+)+$/.test(d.split('=')[0]) && !풀어쓴순열(d.split('=')[0])).at(-1);
+  if (줄값 === null || !결론) return { 결과: '판정불가', 시도: [] };
+  const 인수 = 결론.split('=')[0].split('*').map(Number);
+  for (const w of 다른줄값) {
+    const i = 인수.findIndex((x) => 같다(x, w));
+    if (i < 0) return { 결과: '판정불가', 시도: [] };
+    인수.splice(i, 1);
+  }
+  if (인수.length !== 1 || 같다(인수[0], 줄값)) return { 결과: '판정불가', 시도: [] };
+  const 학생값 = 인수[0];
+  const 출처 = 마디.find((d) => d !== 결론 && 같다(evaluate(d.split('=').at(-1)!) ?? NaN, 학생값));
+  const 오류 = wrote_same_permutation(모범줄, 문항) && !wrote_same_permutation(학생답, 문항) ? 중복미처리오류(모범줄) : undefined;
+  const 까닭 = `결론 「${결론}」에서 다른 줄 값 ${다른줄값.join(', ')}을 뺀 인수 ${학생값}${출처 ? ` (「${출처}」)` : ''} — 모범 값 ${줄값}과 다르다`;
+  return { 결과: 'X', 시도: [{ 경로: '경우의 수 식', 식: 출처 ?? 결론, 맞음: false, 까닭, 오류 }], 오류 };
 }
 
 // ── 경우 나누기 (오종래 2026-10-17 q3 학생 1, (가) 확정) — ÷2! 대신 같은 것(a,a)을 경우로 나누어 센다 ──
@@ -1029,7 +1071,7 @@ export function verify_case_split(학생답: string, 모범끝값: number | null
  */
 export function verify_case_split_line(모범줄: string, 학생답: string, 모범끝값: number | null): 다경로검증 {
   const v = verify_case_split(학생답, 모범끝값);
-  const 줄값 = 계산마디들(모범줄).map((d) => evaluate(d.split('=').at(-1)!)).find((x) => x !== null) ?? null;
+  const 줄값 = counting_line_value(모범줄);
   if (v.결과 !== 'O' || 줄값 === null || 모범끝값 === null || 같다(줄값, 0)) return v;
   const 인수 = 모범끝값 / 줄값;
   const 몫 = v.경우값.map((x) => x / 인수);
