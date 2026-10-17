@@ -2,7 +2,7 @@
 // 채점 규칙은 검증/q8_문항3_채점기준.json, 제시문은 검증/q8_원문.md를 따른다.
 // 모델은 사실(자료 사용·인정·출처, 근거논리, 반론·반박, 서론·결론)만 뽑고,
 // 내용·조직·표현 점수는 채점기준의 「점수 계산」 표대로 코드가 정한다.
-// 사용: node --env-file=.env scripts/grade-q8-item3.mjs <이미지폴더>
+// 사용: node --env-file=.env scripts/grade-q8-item3.mjs <이미지폴더> [출력폴더]
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -10,7 +10,7 @@ import { execFileSync } from "node:child_process";
 import Anthropic from "@anthropic-ai/sdk";
 
 const MODEL = "claude-sonnet-4-6";
-const OUT_DIR = "검증/q8_문항3";
+const OUT_DIR = process.argv[3] ?? "검증/q8_문항3";
 const SOURCES = ["(가)", "(다)", "(라)", "(마)", "(바)"];
 
 const dir = process.argv[2];
@@ -44,7 +44,11 @@ ${passages}
 - 알아볼 수 없는 글자는 [?]로 표시합니다.
 - 답안 텍스트만 출력하십시오.`;
 
-const GRADE_SYSTEM = `당신은 국어 논술 채점자입니다. 점수는 매기지 마십시오. 아래 항목의 사실만 판정합니다(점수는 코드가 계산).
+const GRADE_SYSTEM = `당신은 HMOS 급소 대조기입니다. 판단하거나 점수를 매기지 않습니다(점수는 코드가 계산).
+학생 답안을 5색으로 분해한 뒤, 문항 급소 K에 닿았는지 아래 항목을 대조만 합니다.
+
+[문항 5색 분해 — 확정 급소]
+${JSON.stringify(rubric["급소 (확정 2026-10-18)"], null, 1)}
 
 [제시문]
 ${passages}
@@ -60,8 +64,8 @@ ${JSON.stringify(rubric, null, 1)}
      「관련 자료를 보면」「설문조사에서」「홍성수 교수는」처럼 기호 없이 쓴 것은 false.
 2. 근거논리: 강 = 자료로 주장을 논리적·구체적으로 뒷받침 / 약 = 뒷받침하나 논리성·구체성 다소 부족 / 없음.
 3. 반론: 예상되는 반대 측 주장을 제시했는가 (「물론 ~라는 주장도 있다」「일부에서는 ~」 등).
-4. 반박: 강 = 1개 이상 자료로 반론을 타당하게 반박 / 약 = 자료 근거 없는 반박(논리가 그럴듯해도), 단순 주장 등 불충분 / 없음.
-   반박에 (가)~(바) 자료 내용이 쓰이지 않았으면 반드시 약입니다.
+4. 반박근거: "자료" = (가)~(바) 자료 내용으로 반론을 반박 / "일반논리" = 자료 없이 일반 논리·단순 주장으로 반박
+   (논리가 그럴듯해도) / "없음" = 반박 없음.
    평가원 사례: "혐오 표현은 타인에게 상처를 주는 명백히 나쁜 행동이므로 반드시 규제해야 한다" → 약.
 5. 서론·결론:
    - 서론: 글머리에서 화제를 꺼내거나 입장을 밝히는 도입부. 첫 문장에 입장만 밝히고 곧바로 근거가 이어지면
@@ -93,7 +97,7 @@ const GRADE_SCHEMA = {
     자료: { type: "array", items: SOURCE_ITEM },
     근거논리: { type: "string", enum: ["강", "약", "없음"] },
     반론있음: { type: "boolean" },
-    반박: { type: "string", enum: ["강", "약", "없음"] },
+    반박근거: { type: "string", enum: ["자료", "일반논리", "없음"] },
     내용근거: { type: "string" },
     서론있음: { type: "boolean" },
     결론있음: { type: "boolean" },
@@ -106,21 +110,21 @@ const GRADE_SCHEMA = {
     주제이탈: { type: "boolean" },
     오류목록: { type: "array", items: { type: "string" } },
   },
-  required: ["입장", "자료", "근거논리", "반론있음", "반박", "내용근거", "서론있음", "결론있음", "서론문장수", "결론문장수", "서론결론과다", "구조완성", "조직근거", "표현근거", "주제이탈", "오류목록"],
+  required: ["입장", "자료", "근거논리", "반론있음", "반박근거", "내용근거", "서론있음", "결론있음", "서론문장수", "결론문장수", "서론결론과다", "구조완성", "조직근거", "표현근거", "주제이탈", "오류목록"],
   additionalProperties: false,
 };
 
 // 채점기준 「점수 계산」 표
 function contentScore(g, n) {
-  if (g.주제이탈) return 0;
-  const 반박있음 = g.반박 !== "없음";
+  const 반박있음 = g.반박근거 !== "없음";
+  // 0점: 자료를 활용하지 않았거나 반론과 반박을 모두 제시하지 못한 경우 (원 기준표, 2026-10-18 재확정)
+  if (g.주제이탈 || n === 0 || (!g.반론있음 && !반박있음)) return 0;
   if (n >= 2) {
-    if (g.반론있음 && g.반박 === "강" && g.근거논리 === "강") return 4;
+    if (g.반론있음 && g.반박근거 === "자료" && g.근거논리 === "강") return 4;
     if (g.반론있음 && 반박있음) return 3;
     return 2;
   }
-  if (n === 1) return g.반론있음 && 반박있음 ? 2 : 1;
-  return 1;
+  return g.반론있음 && 반박있음 ? 2 : 1;
 }
 
 // 기준표: 2 = 서론·결론 모두(두 문장 이내), 1 = 하나만, 0 = 둘 다 없음
@@ -157,6 +161,7 @@ async function ocr(imagePath) {
   const res = await client.messages.create({
     model: MODEL,
     max_tokens: 4000,
+    temperature: 0,
     system: OCR_SYSTEM,
     messages: [{
       role: "user",
@@ -174,6 +179,7 @@ async function grade(answer) {
   const res = await client.messages.create({
     model: MODEL,
     max_tokens: 6000,
+    temperature: 0,
     system: GRADE_SYSTEM,
     output_config: { format: { type: "json_schema", schema: GRADE_SCHEMA } },
     messages: [{ role: "user", content: `[학생 답안]\n${answer}\n\n판정하십시오.` }],
@@ -200,8 +206,8 @@ for (const file of files) {
     자료활용: accepted.map((s) => s.자료),
     자료수: accepted.length,
     반론있음: g.반론있음,
-    반박있음: g.반박 !== "없음",
-    반박: g.반박,
+    반박있음: g.반박근거 !== "없음",
+    반박근거: g.반박근거,
     논리연결: g.근거논리,
     판단근거: g.내용근거,
   };
