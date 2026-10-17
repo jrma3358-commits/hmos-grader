@@ -14,7 +14,7 @@ export interface 이차식 {
   c: number;
 }
 
-export type 경로이름 = '인수분해' | '완전제곱식' | '근의 공식' | '근의 공식 2' | '판별식 D' | '판별식 D/4' | '방정식 세우기' | '근과 계수의 관계' | '식 변형' | '인수분해 공식' | '근의 성질(차수 낮추기)' | '근 직접 대입' | '나머지 정리' | '직접 나눗셈' | '인수분해 역산' | '몫·나머지꼴' | '경우의 수 식' | '경우 나누기' | '여사건';
+export type 경로이름 = '인수분해' | '완전제곱식' | '근의 공식' | '근의 공식 2' | '판별식 D' | '판별식 D/4' | '방정식 세우기' | '근과 계수의 관계' | '식 변형' | '인수분해 공식' | '근의 성질(차수 낮추기)' | '근 직접 대입' | '나머지 정리' | '직접 나눗셈' | '인수분해 역산' | '몫·나머지꼴' | '경우의 수 식' | '경우 나누기' | '여사건' | '조합 열거';
 
 export interface 다경로검증 {
   결과: 'O' | 'X' | '판정불가';
@@ -968,11 +968,17 @@ const 계산마디들 = (답: string) =>
  * 학생 마디의 변이 모두 같고(「4!=24」) 그 값이 모범 값과 같으면 O. 순열 · 조합 · 계승 식은 있는데 그런 마디가 없으면 X
  * (「3P2=6」 — ÷2!을 빠뜨림 · 「4!=12」 — 계산 틀림), 그런 식이 하나도 없으면 판정불가
  * 「4×3×2×1」 「3×2」처럼 계승 · 순열을 풀어 쓴 곱도 그런 식으로 본다 (q3 학생 2)
+ * 맨식 — 「=」 없이 줄 끝에 식만 쓴 줄(「나머지를 나열하는 경우의 수는 4!」)도 본다. 다른 경로가 없을 때만 쓴다 (q3 학생 10)
  */
-export function verify_counting_line(모범줄: string, 학생답: string): 다경로검증 {
+export function verify_counting_line(모범줄: string, 학생답: string, 맨식 = false): 다경로검증 {
   const 모범 = counting_line_value(모범줄);
   const 시도: 다경로검증['시도'] = [];
-  for (const d of 계산마디들(학생답)) {
+  const 맨식들 = !맨식 ? [] : String(학생답 ?? '').split(/\r?\n/)
+    .filter((l) => !l.includes('='))
+    .map((l) => 정리(l.replace(/\([가-힣]+\)|가지/g, '')).match(/([0-9][0-9!PC*/()]*)$/)?.[1])
+    .filter((e): e is string => !!e && /[!PC]/.test(e) && evaluate(e) !== null)
+    .map((e) => `${e}=${evaluate(e)}`);
+  for (const d of [...계산마디들(학생답), ...맨식들]) {
     const 변 = d.split('=').filter(Boolean);
     if (!변.some((e) => /[!PC]/.test(e) || 풀어쓴순열(e))) continue;
     const 값 = 변.map(evaluate);
@@ -1128,6 +1134,46 @@ const 나열꼴 = /^\s*([A-Za-z0-9])\s*[,，]\s*\(([^()]*)\)\s*[,，]\s*([A-Za-z
 /** 양 끝만 적은 경우 줄 — 「[a] v v v v [e] → 4!=24」 (q3 학생 8). 이런 줄이 둘 이상이면 줄마다 경우 하나 */
 const 끝나열꼴 = /^\s*\[([A-Za-z0-9])\]\s*(?:[vVxX_□○·*\s]|\.)+\s*\[([A-Za-z0-9])\]/;
 
+/** 원소로 만들 수 있는 양 끝 모음 순서쌍 — a,a,b,c,d,e → (a,a) · (a,e) · (e,a) */
+function 끝모음쌍(원소: string[]): string[][] {
+  const 수 = new Map<string, number>();
+  for (const x of 원소) 수.set(x, (수.get(x) ?? 0) + 1);
+  const 모음들 = [...수.keys()].filter((x) => 모음.has(x));
+  return 모음들.flatMap((x) => 모음들.filter((y) => x !== y || 수.get(x)! >= 2).map((y) => [x, y]));
+}
+
+/**
+ * 양 끝 조합 열거 (오종래 2026-10-17 q3 학생 10) — 「(a,e), (e,a), (a,a) → 3가지」
+ * 한 줄에 순서쌍이 둘 이상이면 열거로 본다. 쌍이 겹치지 않고 모두 양 끝 모음 순서쌍이며 빠짐이 없으면 O (수 = 쌍 수).
+ * 적은 수(「3가지」)가 쌍 수와 다르면 X · 빠진 쌍이 있으면 X(오류 「양 끝 모음 조합 누락 — …」) · 열거 줄이 없으면 판정불가
+ */
+export function verify_end_pairs(학생답: string, 문항: 경우의수문항): 다경로검증 & { 수?: number } {
+  const 줄 = String(학생답 ?? '').split(/\r?\n/).find((l) => (l.match(/\(\s*[A-Za-z0-9]\s*[,，]\s*[A-Za-z0-9]\s*\)/g) ?? []).length >= 2);
+  if (!줄 || !문항.원소.length) return { 결과: '판정불가', 시도: [] };
+  const 쌍 = [...줄.matchAll(/\(\s*([A-Za-z0-9])\s*[,，]\s*([A-Za-z0-9])\s*\)/g)].map((m) => [m[1], m[2]]);
+  const 식 = 줄.trim();
+  const 적은수 = 줄.slice(줄.lastIndexOf(')') + 1).match(/(\d+)\s*가지/)?.[1];
+  const 전체 = 끝모음쌍(문항.원소);
+  const 빠진 = 빠진끝조합(문항.원소, 쌍);
+  const 맞는쌍 = 쌍.every((p) => 전체.some((q) => q.join() === p.join())) && new Set(쌍.map((p) => p.join())).size === 쌍.length;
+  if (!맞는쌍) return { 결과: 'X', 시도: [{ 경로: '조합 열거', 식, 맞음: false, 까닭: `양 끝 모음 순서쌍이 아니거나 겹친 쌍이 있다 (양 끝 모음 순서쌍 ${전체.map((p) => `(${p})`).join(' ')})` }] };
+  if (빠진) {
+    const 오류 = 조합누락오류(빠진);
+    return { 결과: 'X', 시도: [{ 경로: '조합 열거', 식, 맞음: false, 까닭: `${빠진.map((p) => `(${p})`).join(' ')} 빠짐`, 오류 }], 오류 };
+  }
+  if (적은수 !== undefined && Number(적은수) !== 쌍.length) return { 결과: 'X', 시도: [{ 경로: '조합 열거', 식, 맞음: false, 까닭: `쌍 ${쌍.length}개인데 ${적은수}가지로 적었다` }] };
+  return { 결과: 'O', 경로: '조합 열거', 수: 쌍.length, 시도: [{ 경로: '조합 열거', 식, 맞음: true, 까닭: `양 끝 모음 순서쌍 ${쌍.length}개 — 빠짐 · 겹침 없음` }] };
+}
+
+/** ② 세우기 줄 — 조합 열거로: 열거가 맞고 수가 줄 값(3)과 같으면 O. 빠진 쌍은 ÷n! 줄(같은 것 줄)에서만 X — 아니면 판정불가 */
+export function verify_end_pairs_line(모범줄: string, 학생답: string, 문항: 경우의수문항): 다경로검증 {
+  const v = verify_end_pairs(학생답, 문항);
+  const 줄값 = counting_line_value(모범줄);
+  if (v.결과 === 'O') return v.수 !== undefined && 줄값 !== null && 같다(v.수, 줄값) ? { ...v, 시도: [...v.시도.slice(0, -1), { ...v.시도.at(-1)!, 까닭: `${v.시도.at(-1)!.까닭} — 줄 값 ${줄값}과 같다` }] } : { 결과: '판정불가', 시도: [] };
+  if (v.결과 === 'X' && wrote_same_permutation(모범줄, 문항)) return v;
+  return { 결과: '판정불가', 시도: [] };
+}
+
 /** 오류 이름 (오종래 2026-10-17 q3 학생 8) — 「양 끝 모음 조합 누락 — a,a 경우 빠짐」 */
 export const 조합누락오류 = (빠진: string[][]) => `양 끝 모음 조합 누락 — ${빠진.map((p) => p.join(',')).join(' · ')} 경우 빠짐`;
 
@@ -1136,10 +1182,7 @@ export const 조합누락오류 = (빠진: string[][]) => `양 끝 모음 조합
  * 학생 경우가 모두 양 끝 모음 순서쌍이고(겹침 없이) 빠진 것이 있을 때만 — 아니면 null (q3 학생 8)
  */
 function 빠진끝조합(원소: string[], 학생끝: string[][]): string[][] | null {
-  const 수 = new Map<string, number>();
-  for (const x of 원소) 수.set(x, (수.get(x) ?? 0) + 1);
-  const 모음들 = [...수.keys()].filter((x) => 모음.has(x));
-  const 전체 = 모음들.flatMap((x) => 모음들.filter((y) => x !== y || 수.get(x)! >= 2).map((y) => [x, y]));
+  const 전체 = 끝모음쌍(원소);
   const 키 = (p: string[]) => p.join(',');
   const 학생 = new Set(학생끝.map(키));
   if (학생.size !== 학생끝.length || ![...학생].every((k) => 전체.some((p) => 키(p) === k))) return null;

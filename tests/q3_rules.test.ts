@@ -7,7 +7,7 @@ import { describe, it } from 'node:test';
 import { recognizeV2Analysis } from '../src/fq/pipeline.ts';
 import { derive_pieces, f2_input_from_v2 } from '../src/rubric/f2.ts';
 import { grade } from '../src/rubric/g1.ts';
-import { count_arrangements, evaluate, is_math_item, verify_complement, parse_counting_item, resolve_subject, verify_case_split, verify_case_split_line, verify_counting_factor, verify_counting_line, 중복미처리오류, wrote_same_permutation } from '../src/rubric/multipath.ts';
+import { count_arrangements, evaluate, is_math_item, verify_complement, parse_counting_item, resolve_subject, verify_case_split, verify_case_split_line, verify_counting_factor, verify_counting_line, verify_end_pairs, 중복미처리오류, wrote_same_permutation } from '../src/rubric/multipath.ts';
 import { classify_math_lines, final_value } from '../src/rubric/solve_lines.ts';
 
 const 문항 = 'a,a,b,c,d,e가 쓰인 6장 카드를 일렬로 나열할 때\n양 끝이 모음이 오는 경우의 수를 구하고 풀이 과정을 서술하시오.';
@@ -216,6 +216,36 @@ describe('양 끝 모음 경우의 수 오류 — ÷2! 누락 (q3 학생 9)', ()
     const 결과 = Object.values(r.파트별).flatMap((p) => p.조각별.map((x) => x.결과));
     assert.deepEqual(결과, ['X', 'X', 'O', 'O', 'X']);
     assert.match(r.파트별.세우기.조각별[0].판단근거, /^양 끝 모음 경우의 수 오류 — ÷2! 누락/);
+  });
+});
+
+// q3 학생 10 (오종래 2026-10-17) — 양 끝 조합 (a,e) (e,a) (a,a) 직접 열거 → 3가지 · 나머지 4! · ∴ 3×4!=72 (학생 4와 같은 결)
+const 학생10 = '양 끝에 모음 a,a,e를 나열하는 경우의 수는\n(a,e), (e,a), (a,a) → 3가지\n나머지를 나열하는 경우의 수는 4!\n\n∴ 3×4! = 72(가지)';
+
+describe('양 끝 조합 열거 (q3 학생 10)', () => {
+  it('(a,e) (e,a) (a,a) — 빠짐 · 겹침 없이 3가지 → O', () => {
+    const v = verify_end_pairs(학생10, 문항정보);
+    assert.equal(v.결과, 'O');
+    assert.equal(v.수, 3);
+  });
+  it('(a,a) 빠지면 조합 누락 · 겹치면 X · 적은 수가 다르면 X', () => {
+    assert.equal(verify_end_pairs('(a,e), (e,a) → 2가지', 문항정보).오류, '양 끝 모음 조합 누락 — a,a 경우 빠짐');
+    assert.equal(verify_end_pairs('(a,e), (e,a), (a,a), (a,a) → 4가지', 문항정보).결과, 'X');
+    assert.equal(verify_end_pairs('(a,e), (e,a), (a,a) → 4가지', 문항정보).결과, 'X');
+  });
+  it('「=」 없이 식만 쓴 줄 「… 경우의 수는 4!」 — 맨식으로만 읽는다', () => {
+    assert.equal(verify_counting_line('나머지 4개 나열: 4!=24', 학생10).결과, 'X');
+    assert.equal(verify_counting_line('나머지 4개 나열: 4!=24', 학생10, true).결과, 'O');
+  });
+  it('채점 — 모든 조각 O (① 🔆 조합 열거 · ② 양 끝 🔆 조합 열거 · ② 가운데 4!)', () => {
+    const 입력 = f2_input_from_v2(recognizeV2Analysis(문항));
+    assert.ok(입력.ok);
+    const cs = derive_pieces(입력.물음, 입력.k, { ...입력.인식, 교사줄: classify_math_lines(모범, 문항), 경우의수: 문항정보 }, '수리');
+    const r = grade(학생10, cs.map((c) => ({ ...c, 충족조건: '', 모범조각: '', 배점: 1 })) as any, '', 입력.k, '수리');
+    const 조각 = Object.values(r.파트별).flatMap((p) => p.조각별);
+    assert.ok(조각.every((x) => x.결과 === 'O'), 조각.map((x) => `${x.결과} ${x.판단근거}`).join('\n'));
+    assert.match(r.파트별.근거대기.조각별[0].판단근거, /🔆.*양 끝 조합을 직접 열거/);
+    assert.match(r.파트별.세우기.조각별[0].판단근거, /🔆 다경로 — 조합 열거/);
   });
 });
 

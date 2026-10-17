@@ -16,7 +16,7 @@ import type { PathNode } from '../../fq/v2/graph.ts';
 import type { 조각결과 } from '../g1.ts';
 import { K핵심어 } from './f2.ts';
 import { answer_values, final_value, line_answer_values, solve_segments, student_answer_line } from '../solve_lines.ts';
-import { D혼동오류, named_remainder_values, remainder_points, verify_calculation, verify_definition, verify_discriminant, verify_equation, verify_remainder_chain, counting_line_value, verify_case_split, verify_case_split_line, verify_complement, verify_counting_factor, verify_counting_line, verify_division, verify_remainder_alternatives, wrote_same_permutation, verify_setup, verify_substitution, wrote_remainder, type 경로이름, type 다항식조건 } from '../multipath.ts';
+import { D혼동오류, named_remainder_values, remainder_points, verify_calculation, verify_definition, verify_discriminant, verify_equation, verify_remainder_chain, counting_line_value, verify_case_split, verify_case_split_line, verify_complement, verify_counting_factor, verify_end_pairs, verify_end_pairs_line, verify_counting_line, verify_division, verify_remainder_alternatives, wrote_same_permutation, verify_setup, verify_substitution, wrote_remainder, type 경로이름, type 다항식조건 } from '../multipath.ts';
 import type { 계열, 급소K, 조각, 파트 } from '../types.ts';
 
 export interface 조각대조 {
@@ -185,6 +185,11 @@ export function 봉인6_조각대조(학생답: string, 조각: 조각, 맥락: 
         // 여사건 「전체-뺀 값=결과」 (2026-10-17 q3 학생 3, 오류 「양 끝 모두 자음만 뺌 — 여사건 계산 오류」)
         const c = verify_complement(답, 조각.경우의수!, 모범끝값(맥락));
         if (c.결과 !== '판정불가') return c;
+        // 양 끝 조합 열거 「(a,e), (e,a), (a,a) → 3가지」 · 「=」 없이 식만 쓴 줄 「… 경우의 수는 4!」 (2026-10-17 q3 학생 10)
+        const p = verify_end_pairs_line(조각.줄글!, 답, 조각.경우의수!);
+        if (p.결과 !== '판정불가') return p;
+        const m = verify_counting_line(조각.줄글!, 답, true);
+        if (m.결과 === 'O') return m;
         // 결론 곱에서 이 줄의 학생 값을 읽는다 — 「∴ 4×24=96」 → 양 끝 4 (2026-10-17 q3 학생 2, 오류 「… 중복 미처리」)
         //   두 줄 모두 틀렸으면(「∴ 2×6=12」) 세우기 줄 차례대로 짝짓는다 (q3 학생 7, 오류 이름은 조각마다 — B안)
         const 줄들 = 맥락.루브릭.filter((c) => c.파트 === '세우기' && c.경우의수 && c.줄글);
@@ -242,6 +247,12 @@ export function 봉인6_조각대조(학생답: string, 조각: 조각, 맥락: 
       const 식 = 나눔.시도.map((t) => t.식).join(' · ');
       const 까닭 = 나눔.시도.map((t) => t.까닭).join(' · ');
       return { 결과: 'O', 근거: `🔆 다경로 — 같은 것이 있는 순열 ${같은것} 대신 경우로 나누어 처리 (${나눔.시도.map((t) => `「${t.식}」 ${t.까닭}`).join(' · ')})`, 다경로: '경우 나누기', 다경로식: 식, 다경로까닭: 까닭 };
+    }
+    // [오종래 2026-10-17 q3 학생 10] 양 끝 조합을 직접 열거해 같은 것(a,a)을 한 번만 셌으면 O (🔆)
+    const 열거 = hit ? null : verify_end_pairs(학생답, 조각.경우의수);
+    if (열거?.결과 === 'O') {
+      const t = 열거.시도[0];
+      return { 결과: 'O', 근거: `🔆 다경로 — 같은 것이 있는 순열 ${같은것} 대신 양 끝 조합을 직접 열거 (「${t.식}」 ${t.까닭})`, 다경로: '조합 열거', 다경로식: t.식, 다경로까닭: t.까닭 };
     }
     return { 결과: hit ? 'O' : 'X', 근거: `같은 것이 있는 순열 — ${같은것} ${hit ? '있음' : '없음'}` };
   }
