@@ -167,6 +167,34 @@ describe('두 줄 모두 틀림 — 중복 미처리 · 개수 오류 (q3 학생
   });
 });
 
+// q3 학생 8 (오종래 2026-10-17) — 양 끝 (a,e) · (e,a)만 나열, (a,a) 빠짐 · 24+24=48 (정답 72)
+const 학생8 = '양 끝에 모음을 나열하면\n[a] v v v v [e] → 4!=24\n[e] v v v v [a] → 4!=24\n\n∴ 24+24=48(가지)';
+
+describe('양 끝 모음 조합 누락 (q3 학생 8)', () => {
+  it('「[a] v v v v [e] → 4!=24」 줄마다 경우 — 합 48 ≠ 72 → X · (a,a) 빠짐', () => {
+    const v = verify_case_split(학생8, 72, 문항정보);
+    assert.equal(v.결과, 'X');
+    assert.deepEqual(v.경우값, [24, 24]);
+    assert.equal(v.오류, '양 끝 모음 조합 누락 — a,a 경우 빠짐');
+  });
+  it('세 조합을 모두 나열하면 O · 문항이 없으면 오류 이름 없이 X', () => {
+    assert.equal(verify_case_split('[a] v v v v [a] → 4!=24\n[a] v v v v [e] → 4!=24\n[e] v v v v [a] → 4!=24\n∴ 3×24=72', 72, 문항정보).결과, 'O');
+    assert.equal(verify_case_split(학생8, 72).오류, undefined);
+  });
+  it('「→ 4!=24」 — 화살표 앞의 양 끝 표시를 떼고 읽는다', () => {
+    assert.equal(verify_counting_line('나머지 4개 나열: 4!=24', 학생8).결과, 'O');
+  });
+  it('채점 — ① X · ② 양 끝 X (조합 누락) · ② 가운데 O · ③ O · ④ X', () => {
+    const 입력 = f2_input_from_v2(recognizeV2Analysis(문항));
+    assert.ok(입력.ok);
+    const cs = derive_pieces(입력.물음, 입력.k, { ...입력.인식, 교사줄: classify_math_lines(모범, 문항), 경우의수: 문항정보 }, '수리');
+    const r = grade(학생8, cs.map((c) => ({ ...c, 충족조건: '', 모범조각: '', 배점: 1 })) as any, '', 입력.k, '수리');
+    const 결과 = Object.values(r.파트별).flatMap((p) => p.조각별.map((x) => x.결과));
+    assert.deepEqual(결과, ['X', 'X', 'O', 'O', 'X']);
+    assert.match(r.파트별.세우기.조각별[0].판단근거, /^양 끝 모음 조합 누락 — a,a 경우 빠짐/);
+  });
+});
+
 // q3 학생 3 (오종래 2026-10-17, 진단 확정) — 여사건을 「양 끝 모두 자음」으로 잡음: 360-72=288 (정답 72)
 //   4!/2!=12는 맞다 — 양 끝이 자음이면 a 두 장이 모두 가운데에 있다
 const 학생3 = '전체 경우의 수: 6!/2!=6×5×4×3=360(가지)\n\n양끝에 모두 자음이 오는 경우:\n3×2=6(가지)이고, 사이사이 나머지를 나열하는 경우의 수:\n4!/2!=4×3=12\n\n즉, 6×12=72\n\n따라서, 양 끝에 모음이 오는 경우의 수:\n360-72=288(가지)';
