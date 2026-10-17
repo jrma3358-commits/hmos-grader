@@ -8,7 +8,7 @@ import { describe, it } from 'node:test';
 import { recognizeV2Analysis } from '../src/fq/pipeline.ts';
 import { derive_pieces, f2_input_from_v2 } from '../src/rubric/f2.ts';
 import { grade } from '../src/rubric/g1.ts';
-import { named_remainder_values, parse_polynomial_conditions, remainder_points, substitution_sign_error, verify_definition, verify_division, verify_factor_remainder, verify_substitution, verify_remainder_chain, wrote_remainder } from '../src/rubric/multipath.ts';
+import { named_remainder_values, parse_polynomial_conditions, remainder_points, substitution_sign_error, verify_definition, verify_division, verify_factor_remainder, verify_quotient_form, verify_substitution, join_continued_lines, verify_remainder_chain, wrote_remainder } from '../src/rubric/multipath.ts';
 import { answer_values, classify_math_lines, line_answer_values, solve_segments } from '../src/rubric/solve_lines.ts';
 import { verify_calculation } from '../src/rubric/multipath.ts';
 import { verify_answer_values } from '../src/rubric/teacher_input.ts';
@@ -186,5 +186,34 @@ describe('인수분해 역산 경로', () => {
     const 결과 = Object.values(r.파트별).flatMap((p) => p.조각별.map((x) => x.결과));
     assert.ok(결과.every((x) => x === 'O'), 결과.join(','));
     assert.equal(r.파트별.세우기.조각별[0].다경로, '인수분해 역산');
+  });
+});
+
+// 2026-10-17 q7 학생 5 — 몫·나머지꼴 (규칙 확정) · 「=」 줄 잇기 · 「나머지 R=-8」은 -8
+describe('몫·나머지꼴 경로', () => {
+  const 학생5 = 'x²+2x+a = (x-2)Q(x)+1 이며\nx²+2x+a = (x-2)(x+4)+1\n         = x²+2x-7\n∴ a=-7\n\n이며 x²+2x-7을 x+1로 나누면\nx²+2x-7 = (x+1)(x+1)-8\n즉, 몫은 x+1, 나머지 R=-8';
+  it('「=」로 시작하는 줄은 앞 줄에 잇는다', () => {
+    assert.equal(join_continued_lines('A=B\n  = C\nD'), 'A=B= C\nD');
+  });
+  it('(x-c)(몫)+r=전개식 — 맞음, 몫 · 나머지 · 다항식이 틀리면 X, 「(x-2)Q(x)+1」은 보지 않는다', () => {
+    assert.equal(verify_quotient_form(학생5, 원).결과, 'O');
+    assert.equal(verify_quotient_form(학생5, 원, [2]).시도.length, 1);
+    assert.equal(verify_quotient_form('x²+2x+a=(x-2)(x+3)+1', 원).결과, 'X');
+    assert.equal(verify_quotient_form('x²+2x+a=(x-2)(x+4)+3', 원).결과, 'X'); // 나머지 1이 아니다
+    assert.equal(verify_quotient_form('x²+2x-7=(x+1)(x+1)-6', 원).결과, 'X');
+    assert.equal(verify_quotient_form('x²+2x+a=(x-2)Q(x)+1', 원).결과, '판정불가');
+  });
+  it('직접 나눗셈 「나머지 R=-8」 — 마지막 값 -8을 나머지로', () => {
+    assert.equal(verify_division('x²+2x-7을 x+1로 나누면\n몫은 x+1, 나머지 R=-8', 원).결과, 'O');
+  });
+  it('G1 — 모든 조각 O (5점), ② ③ 🔆 다경로 몫·나머지꼴', () => {
+    const 입력 = f2_input_from_v2(recognizeV2Analysis(문항));
+    assert.ok(입력.ok);
+    const cs = derive_pieces(입력.물음, 입력.k, { ...입력.인식, 교사줄: classify_math_lines(모범, 문항), 다항식: 원 }, '수리');
+    const r = grade(학생5, cs.map((c) => ({ ...c, 충족조건: '', 모범조각: '', 배점: 1 })) as any, '', 입력.k, '수리');
+    const 결과 = Object.values(r.파트별).flatMap((p) => p.조각별.map((x) => x.결과));
+    assert.ok(결과.every((x) => x === 'O'), 결과.join(','));
+    assert.equal(r.파트별.세우기.조각별[0].다경로, '몫·나머지꼴');
+    assert.equal(r.파트별.풀기.조각별[0].다경로, '몫·나머지꼴');
   });
 });

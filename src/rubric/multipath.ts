@@ -14,7 +14,7 @@ export interface 이차식 {
   c: number;
 }
 
-export type 경로이름 = '인수분해' | '완전제곱식' | '근의 공식' | '근의 공식 2' | '판별식 D' | '판별식 D/4' | '방정식 세우기' | '근과 계수의 관계' | '식 변형' | '인수분해 공식' | '근의 성질(차수 낮추기)' | '근 직접 대입' | '나머지 정리' | '직접 나눗셈' | '인수분해 역산';
+export type 경로이름 = '인수분해' | '완전제곱식' | '근의 공식' | '근의 공식 2' | '판별식 D' | '판별식 D/4' | '방정식 세우기' | '근과 계수의 관계' | '식 변형' | '인수분해 공식' | '근의 성질(차수 낮추기)' | '근 직접 대입' | '나머지 정리' | '직접 나눗셈' | '인수분해 역산' | '몫·나머지꼴';
 
 export interface 다경로검증 {
   결과: 'O' | 'X' | '판정불가';
@@ -701,6 +701,9 @@ export function division_checks(학생답: string, 원: 다항식조건): 나눗
       나머지 ||= 뒤.match(/나머지(?::|：|는|가|은)?([^,，가-힣:]+)/)?.[1] ?? '';
     }
     if (!몫 || !나머지) continue;
+    // 「나머지 R=-8」 「몫은 Q=x+1」 — 등호가 있으면 마지막 값 (2026-10-17 q7 학생 5)
+    몫 = 몫.split('=').at(-1)!;
+    나머지 = 나머지.split('=').at(-1)!;
     const 피제식 = h[1];
     const 상수있음 = new RegExp(원.문자).test(피제식);
     const 상수값들 = 상수있음 ? [-2, 0.7, 3] : 원.참값 !== null ? [원.참값] : [];
@@ -832,8 +835,67 @@ export function verify_substitution(학생답: string, 원: 다항식조건, 볼
   return { 결과: 시도.length ? 'X' : '판정불가', 시도, ...(오류 ? { 오류 } : {}) };
 }
 
-/** f 표기 경로가 판정불가일 때 볼 다른 경로 — 직접 나눗셈 · 인수분해 역산 · f 없이 대입. 맞은 경로가 먼저, 없으면 틀린 것, 없으면 판정불가 */
+/** f 표기 경로가 판정불가일 때 볼 다른 경로 — 몫·나머지꼴(q7 학생 5) · 직접 나눗셈 · 인수분해 역산 · f 없이 대입. 맞은 경로가 먼저, 없으면 틀린 것, 없으면 판정불가 */
 export function verify_remainder_alternatives(학생답: string, 원: 다항식조건, 볼근?: number[]): 다경로검증 {
-  const 결과들 = [verify_division, verify_factor_remainder, verify_substitution].map((f) => f(학생답, 원, 볼근));
+  const 결과들 = [verify_quotient_form, verify_division, verify_factor_remainder, verify_substitution].map((f) => f(학생답, 원, 볼근));
   return 결과들.find((v) => v.결과 === 'O') ?? 결과들.find((v) => v.결과 === 'X') ?? { 결과: '판정불가', 시도: [] };
+}
+
+// ── 몫·나머지꼴 (오종래 2026-10-17 q7 학생 5) — 「x²+2x+a=(x-2)(x+4)+1=x²+2x-7」 「x²+2x-7=(x+1)(x+1)-8」 ──
+//   (x-c)(몫)+r=[전개식] 꼴을 엔진이 검증한다 (규칙 확정 2026-10-17). 「=」로 시작하는 줄은 앞 줄에 이어 붙인다:
+//   1. L = 문항 다항식 (상수째면 모든 상수 값에서, 상수를 넣은 꼴이면 참값에서)  2. x-c의 c가 문항 나머지 조건의 c
+//   3. r = 수 나머지(나머지가 1) 또는 참값의 P(c)(「나머지 R」)  4. 상수 참값에서 L ≡ (x-c)(몫)+r ≡ 전개식
+//   「(x-2)Q(x)+1」처럼 몫이 문자뿐인 줄은 검증하지 않는다
+
+const 몫나머지꼴 = /^\(x([+\-])(\d+(?:\.\d+)?)\)\((.+)\)([+\-]\d+(?:\.\d+)?)$/;
+
+/** 「=」로 시작하는 줄을 앞 줄에 이어 붙인 답 */
+export const join_continued_lines = (답: string) =>
+  String(답 ?? '').split(/\r?\n/).reduce<string[]>((줄, l) => {
+    if (/^\s*=/.test(l) && 줄.length) 줄[줄.length - 1] += l.trim();
+    else 줄.push(l);
+    return 줄;
+  }, []).join('\n');
+
+export function verify_quotient_form(학생답: string, 원: 다항식조건, 볼근?: number[]): 다경로검증 {
+  const 시도: 다경로검증['시도'] = [];
+  const 점들 = [-1.5, 0.5, 2.3, 4];
+  for (const d of 식마디들(join_continued_lines(학생답))) {
+    const 변 = 정리(d).split('=');
+    const qi = 변.findIndex((e) => 몫나머지꼴.test(e));
+    const L = 변[0];
+    if (qi < 1 || !/x/.test(L)) continue;
+    const m = 변[qi].match(몫나머지꼴)!;
+    const c = (m[1] === '-' ? 1 : -1) * Number(m[2]);
+    if (볼근 && 볼근.length && !볼근.some((b) => 같다(b, c))) continue;
+    const r = Number(m[4]);
+    const 조건 = 원.조건.find((k) => 같다(k.근, c));
+    const 참값 = 원.참값;
+    // 1. L = 문항 다항식
+    const 상수있음 = new RegExp(원.문자).test(L);
+    const 상수값들 = 상수있음 ? [-2, 0.7, 3] : 참값 !== null ? [참값] : [];
+    const 같은다항식 = 상수값들.length > 0 && 점들.every((x) => 상수값들.every((t) => {
+      const l = 넣어계산(L, { [원.문자]: t, x }), p = 다항식값(원, x, t);
+      return l !== null && p !== null && 같다(l, p);
+    }));
+    // 3. r = 수 나머지 또는 참값의 P(c)
+    const 기대 = 조건 ? (조건.나머지 ?? (참값 !== null ? 다항식값(원, c, 참값) : null)) : null;
+    const 나머지맞음 = 기대 !== null && 같다(r, 기대);
+    // 4. 참값에서 모든 변이 x에 대해 같다
+    const 일치 = 참값 !== null && 점들.every((x) => {
+      const l = 넣어계산(L, { [원.문자]: 참값, x });
+      return l !== null && 변.slice(1).every((e) => { const v = 넣어계산(e, { [원.문자]: 참값, x }); return v !== null && 같다(l, v); });
+    });
+    const 맞음 = !!조건 && 같은다항식 && 나머지맞음 && 일치;
+    const 나눔 = `x${c < 0 ? '+' : '-'}${Math.abs(c)}`;
+    const 까닭 = !조건 ? `${나눔}의 c(${c})가 문항 나머지 조건에 없다`
+      : !같은다항식 ? `${L}이 다항식 ${원.식}과 다르다`
+      : !나머지맞음 ? `나머지 ${r} — ${기대}이어야 한다`
+      : !일치 ? `${원.문자}=${참값}을 넣으면 양변이 다르다`
+      : `(${나눔})(${m[3]})${m[4]}가 ${원.식}과 같다 (${원.문자}=${참값}) · 나머지 ${r}`;
+    시도.push({ 경로: '몫·나머지꼴', 식: d, 맞음, 까닭 });
+  }
+  const 틀린 = 시도.find((t) => !t.맞음);
+  if (시도.length && !틀린) return { 결과: 'O', 경로: '몫·나머지꼴', 시도 };
+  return { 결과: 시도.length ? 'X' : '판정불가', 시도 };
 }
