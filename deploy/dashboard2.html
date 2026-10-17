@@ -48,6 +48,16 @@ button{font-family:inherit}
 .field textarea{resize:vertical;min-height:90px}
 .row{display:flex;gap:12px;flex-wrap:wrap}
 .row>.field{flex:1;min-width:140px}
+.field-pick{display:inline-flex;border:1.5px solid var(--teal);border-radius:8px;overflow:hidden;margin-bottom:14px}
+.field-pick button{border:none;background:var(--white);color:var(--teal);padding:9px 22px;font-size:14px;cursor:pointer}
+.field-pick button+button{border-left:1.5px solid var(--teal)}
+.field-pick button.on{background:var(--teal);color:#fff;font-weight:600}
+.wait{background:var(--gold-lt);border:1px dashed var(--gold);border-radius:8px;padding:18px 20px;color:#6A5212;font-size:14px;line-height:1.7}
+.field-lane{display:flex;align-items:center;gap:10px;margin:4px 0 16px;padding-bottom:8px;border-bottom:2px solid var(--teal)}
+.field-lane .fname{font-family:'Noto Serif KR',serif;font-size:18px;font-weight:600;color:var(--teal)}
+.field-lane .fsub{font-size:12px;color:var(--muted)}
+.field-lane.later{border-bottom-color:var(--gold)}
+.field-lane.later .fname{color:#8A6A10}
 .run-btn{display:inline-flex;align-items:center;gap:8px;padding:10px 22px;background:var(--teal);color:#fff;border:none;border-radius:var(--radius);font-size:13.5px;font-weight:500;cursor:pointer}
 .run-btn:hover{background:var(--teal-mid)}
 .run-btn:disabled{background:var(--muted);cursor:not-allowed}
@@ -253,6 +263,16 @@ function 그리기() {
 const 비었음 = (글) => `<div class="empty">${글}</div>`;
 
 // ── 탭1 문항 입력 ── 지금 기록의 문항 · 학생 답 + 새로 채점 (엔진 /api/rubric → /api/grade)
+// 계열 (오종래 2026-10-17): 수리·과학 = 지금 엔진 그대로(계열 「수리」로 보낸다) · 인문·사회 = 준비 중 안내만
+let 입력계열 = '수리·과학';
+try { if (localStorage.getItem('hmos-d2-field') === '인문·사회') 입력계열 = '인문·사회'; } catch (_) {}
+function 계열고르기(v) {
+  입력계열 = v;
+  try { localStorage.setItem('hmos-d2-field', v); } catch (_) {}
+  document.querySelectorAll('#in-field button').forEach((b) => b.classList.toggle('on', b.dataset.v === v));
+  $('#in-form').style.display = v === '수리·과학' ? '' : 'none';
+  $('#in-wait').style.display = v === '인문·사회' ? '' : 'none';
+}
 function 그리기1() {
   const 지금 = 기록 ? `
     <div class="card"><h3>지금 보는 문항</h3><div class="pre">${esc(기록.문항)}</div>
@@ -265,9 +285,12 @@ function 그리기1() {
     <div class="sec-sub">위에서 저장된 채점 결과를 고르거나, 새 문항과 학생 답안을 넣어 엔진으로 채점하세요.</div>
     ${지금}
     <div class="card"><h3>새로 채점</h3>
+      <div class="label">계열</div>
+      <div class="field-pick" id="in-field"><button data-v="수리·과학">수리·과학</button><button data-v="인문·사회">인문·사회</button></div>
+      <div class="wait" id="in-wait" style="display:none"><b>인문·사회 계열 채점은 준비 중입니다.</b><br>지금은 수리·과학 계열 문항만 엔진으로 채점할 수 있습니다.</div>
+      <div id="in-form">
       <div class="field"><div class="label">문항 (논제)</div><textarea id="in-q" placeholder="예) a,a,b,c,d,e가 쓰인 6장 카드를 일렬로 나열할 때 양 끝이 모음이 오는 경우의 수를 구하고 풀이 과정을 서술하시오."></textarea></div>
       <div class="row">
-        <div class="field"><div class="label">계열</div><select id="in-s"><option value="자동">자동</option><option value="수리">수리</option><option value="인문사회국어">인문사회국어</option></select></div>
         <div class="field"><div class="label">총배점</div><input id="in-p" type="number" min="0.1" step="0.1" value="5"></div>
         <div class="field"><div class="label">학생 이름</div><input id="in-n" placeholder="학생 1"></div>
       </div>
@@ -275,8 +298,11 @@ function 그리기1() {
       <div class="field"><div class="label">모범답안</div><textarea id="in-m"></textarea></div>
       <div class="field"><div class="label">학생 답안</div><textarea id="in-st"></textarea></div>
       <button class="run-btn" id="in-run">루브릭 만들고 채점 →</button><span class="status" id="in-status"></span>
+      </div>
     </div>`;
   $('#in-run').addEventListener('click', 새채점);
+  document.querySelectorAll('#in-field button').forEach((b) => b.addEventListener('click', () => 계열고르기(b.dataset.v)));
+  계열고르기(입력계열);
 }
 
 async function 새채점() {
@@ -286,7 +312,8 @@ async function 새채점() {
   btn.disabled = true;
   try {
     st.textContent = '루브릭 만드는 중… (엔진 · 조각 문장)';
-    const 계열 = $('#in-s').value;
+    if (입력계열 !== '수리·과학') { st.textContent = '인문·사회 계열은 준비 중입니다'; return; }
+    const 계열 = '수리'; // 수리·과학 = 지금 엔진 그대로
     const 루브릭 = await 받기('/api/rubric', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ 논제: 문항, 계열, 총배점: Number($('#in-p').value) || 5, 이어받기: true, 공통자료: true, 모범답안: 모범답안 || undefined, 정답: $('#in-a').value.trim() || undefined }) });
     const 채점 = [];
     for (const s of 루브릭.소문항 || []) {
@@ -497,11 +524,23 @@ function 샘플카드(x, 갈래, 같은) {
   </div>`;
 }
 
+// 계열 묶음 (오종래 2026-10-17): 수리 계열 = 채점 결과의 계열이 「수리」인 문항 · 인문·사회 계열 = 준비 중 자리
 function 그리기7() {
-  const 고른 = 샘플고르기();
-  if (!고른.length) { $('#p7').innerHTML = '<div class="sec-title">채점 샘플</div>' + 비었음('검증/ 폴더에 q3~q7 채점 결과가 없습니다.'); return; }
+  const 고른 = 샘플고르기().filter((x) => x.계열 === '수리');
   const 문항들 = [...new Set(고른.map((x) => x.문항번호))].sort((a, b) => a.localeCompare(b, 'ko', { numeric: true }));
-  $('#p7').innerHTML = '<div class="sec-title">채점 샘플</div><div class="sec-sub">q3~q7 대표 답안입니다. 검증/ 폴더 채점 결과 JSON에서 바로 읽습니다. 카드를 누르면 탭3에서 조각별로 볼 수 있습니다.</div>' + 문항들.map((q) => {
+  const 수리 = 문항들.length ? 문항들.map((q) => 문항묶음(q, 고른)).join('') : 비었음('검증/ 폴더에 수리 계열 q3~q7 채점 결과가 없습니다.');
+  $('#p7').innerHTML = '<div class="sec-title">채점 샘플</div><div class="sec-sub">대표 답안입니다. 검증/ 폴더 채점 결과 JSON에서 바로 읽습니다. 카드를 누르면 탭3에서 조각별로 볼 수 있습니다.</div>'
+    + `<div class="field-lane"><span class="fname">수리 계열</span><span class="fsub">${문항들.map(esc).join(' · ')}</span></div>${수리}`
+    + `<div class="field-lane later" style="margin-top:36px"><span class="fname">인문·사회 계열</span><span class="fsub">준비 중</span></div>
+       <div class="wait">인문·사회 계열 채점 샘플은 준비 중입니다. 인문·사회 채점이 열리면 이 자리에 대표 답안이 들어옵니다.</div>`;
+  document.querySelectorAll('#p7 .sample').forEach((el) => el.addEventListener('click', () => {
+    $('#rec-select').value = el.dataset.file;
+    열기(el.dataset.file).then(() => 탭(3));
+  }));
+}
+
+/** 문항 하나의 정답 경로 · 오류 경로 카드 */
+function 문항묶음(q, 고른) {
     const xs = 고른.filter((x) => x.문항번호 === q).sort((a, b) => 학생번호(a) - 학생번호(b));
     const 모범 = xs.filter((x) => x.파일.includes('_모범'));
     const 다경로 = xs.filter((x) => !x.파일.includes('_모범') && 만점임(x) && (x.조각 || []).some((c) => c.다경로));
@@ -523,11 +562,6 @@ function 그리기7() {
       <div class="lane no">오류 경로${묶음.size ? ' — ' + 묶음.size + '가지' : ''}</div>
       <div class="samples">${[...묶음.values()].map((g) => 샘플카드(g[0], 'no', g.slice(1))).join('') || '<span class="muted">감점된 답안 없음</span>'}</div>
     </div>`;
-  }).join('');
-  document.querySelectorAll('#p7 .sample').forEach((el) => el.addEventListener('click', () => {
-    $('#rec-select').value = el.dataset.file;
-    열기(el.dataset.file).then(() => 탭(3));
-  }));
 }
 
 // ── 시작 ──
