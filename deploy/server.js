@@ -84,7 +84,7 @@ app.get('/grader',(req,res)=>{
 app.get('/grader.html',(req,res)=>res.redirect(302,'/grader'));
 // /dashboard2 = 6탭 채점 대시보드 (오종래 2026-10-17) — 문항 입력 · 인식 결과 · 채점 결과 · 루브릭 · 모범답안 · 교사 확정. /dashboard처럼 접속 쿠키가 있어야
 app.get('/dashboard2',(req,res)=>{
-  if(!접속됨(req)){res.redirect(302,'/?login=1');return;}
+  if(!접속됨(req)){res.redirect(302,'/?login=1&next=dashboard2');return;} // 홈에서 비밀번호를 넣으면 이 화면으로 돌아온다
   res.setHeader('Cache-Control','no-store');
   res.sendFile(path.join(__dirname,'dashboard2.html'));
 });

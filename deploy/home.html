@@ -129,6 +129,9 @@
     transition: background 0.15s, transform 0.15s;
   }
   .cta:hover { background: var(--terracotta-dark); transform: translateY(-1px); }
+  /* 채점 대시보드 (2026-10-17) — 같은 크기 · 둥글기, 테두리형 */
+  .cta.alt { background: transparent; color: var(--terracotta); box-shadow: inset 0 0 0 2px var(--terracotta); }
+  .cta.alt:hover { background: var(--terracotta); color: #fff; }
   .cta:focus-visible, .header-btn:focus-visible, .modal button:focus-visible { outline: 3px solid var(--olive); outline-offset: 3px; }
   .cta-note { font-size: 13px; color: var(--brown-sub); }
 
@@ -353,8 +356,12 @@
       <h1>질문을 읽는 순간,<br><span class="accent">디지털의 사유</span>가 시작됩니다</h1>
       <p class="hero-sub">상상하는 순간 모든 것은 이루어진다</p>
       <div class="hero-cta">
-        <button class="cta" type="button" onclick="열기()">
+        <button class="cta" type="button" onclick="열기('/dashboard')">
           문항 분석 시작하기
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </button>
+        <button class="cta alt" type="button" onclick="열기('/dashboard2')">
+          채점 대시보드
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
         </button>
         <span class="cta-note">접속 비밀번호가 필요합니다</span>
@@ -448,11 +455,11 @@ AI는 질문에 답을 내놓는다.
   </div>
 </footer>
 
-<!-- 접속 비밀번호 — 서버(POST /api/access)가 .env ACCESS_PASSWORD와 대조하고, 맞으면 쿠키를 주어 /dashboard로 -->
+<!-- 접속 비밀번호 — 서버(POST /api/access)가 .env ACCESS_PASSWORD와 대조하고, 맞으면 쿠키를 주어 누른 버튼의 화면(/dashboard · /dashboard2)으로 -->
 <dialog class="modal" id="access">
   <form id="access-form">
     <h2>접속 비밀번호</h2>
-    <p>문항 분석 화면에 들어가려면 비밀번호를 입력하세요.</p>
+    <p id="access-what">문항 분석 화면에 들어가려면 비밀번호를 입력하세요.</p>
     <input type="password" id="access-pw" autocomplete="current-password" aria-label="접속 비밀번호" aria-describedby="access-error" required>
     <div class="modal-error" id="access-error" role="alert"></div>
     <div class="modal-actions">
@@ -468,7 +475,12 @@ AI는 질문에 답을 내놓는다.
   const 오류 = document.getElementById('access-error');
   const 버튼 = document.getElementById('access-btn');
 
-  function 열기() {
+  // 들어갈 화면 — 문항 분석 /dashboard · 채점 대시보드 /dashboard2 (2026-10-17)
+  const 화면 = { '/dashboard': '문항 분석', '/dashboard2': '채점 대시보드' };
+  let 갈곳 = '/dashboard';
+  function 열기(곳 = '/dashboard') {
+    갈곳 = 화면[곳] ? 곳 : '/dashboard';
+    document.getElementById('access-what').textContent = `${화면[갈곳]} 화면에 들어가려면 비밀번호를 입력하세요.`;
     오류.textContent = '';
     칸.classList.remove('bad');
     칸.value = '';
@@ -489,7 +501,7 @@ AI는 질문에 답을 내놓는다.
         body: JSON.stringify({ 비밀번호: 칸.value }),
       });
       const out = await res.json().catch(() => ({}));
-      if (res.ok && out.ok) { location.href = '/dashboard'; return; }
+      if (res.ok && out.ok) { location.href = 갈곳; return; }
       오류.textContent = out.error || '비밀번호가 맞지 않습니다';
       칸.classList.add('bad');
       칸.select();
@@ -623,10 +635,11 @@ AI는 질문에 답을 내놓는다.
     만들기('text', { class: 'core-label', x: cx, y: cy }, 층.node).textContent = '급소';
   })();
 
-  // /dashboard에 바로 들어오려다 돌아온 경우 (/?login=1) — 팝업을 바로 연다
-  if (new URLSearchParams(location.search).get('login') === '1') {
+  // /dashboard · /dashboard2에 바로 들어오려다 돌아온 경우 (/?login=1[&next=dashboard2]) — 팝업을 바로 열고, 들어가면 그 화면으로
+  const 물음 = new URLSearchParams(location.search);
+  if (물음.get('login') === '1') {
     history.replaceState(null, '', '/');
-    열기();
+    열기(물음.get('next') === 'dashboard2' ? '/dashboard2' : '/dashboard');
   }
 </script>
 </body>
