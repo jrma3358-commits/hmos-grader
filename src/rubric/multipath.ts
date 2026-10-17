@@ -973,12 +973,7 @@ const 계산마디들 = (답: string) =>
 export function verify_counting_line(모범줄: string, 학생답: string, 맨식 = false): 다경로검증 {
   const 모범 = counting_line_value(모범줄);
   const 시도: 다경로검증['시도'] = [];
-  const 맨식들 = !맨식 ? [] : String(학생답 ?? '').split(/\r?\n/)
-    .filter((l) => !l.includes('='))
-    .map((l) => 정리(l.replace(/\([가-힣]+\)|가지/g, '')).match(/([0-9][0-9!PC*/()]*)$/)?.[1])
-    .filter((e): e is string => !!e && /[!PC]/.test(e) && evaluate(e) !== null)
-    .map((e) => `${e}=${evaluate(e)}`);
-  for (const d of [...계산마디들(학생답), ...맨식들]) {
+  for (const d of [...계산마디들(학생답), ...(맨식 ? 맨식마디들(학생답) : [])]) {
     const 변 = d.split('=').filter(Boolean);
     if (!변.some((e) => /[!PC]/.test(e) || 풀어쓴순열(e))) continue;
     const 값 = 변.map(evaluate);
@@ -990,6 +985,14 @@ export function verify_counting_line(모범줄: string, 학생답: string, 맨�
   if (맞은) return { 결과: 'O', 경로: '경우의 수 식', 시도: [맞은] };
   return { 결과: 시도.length ? 'X' : '판정불가', 시도 };
 }
+
+/** 「=」 없이 줄 끝에 식만 쓴 줄 — 「나머지를 나열하는 경우의 수는 4!」 → 「4!=24」 (q3 학생 10) */
+const 맨식마디들 = (답: string) =>
+  String(답 ?? '').split(/\r?\n/)
+    .filter((l) => !l.includes('='))
+    .map((l) => 정리(l.replace(/\([가-힣]+\)|가지/g, '')).match(/([0-9][0-9!PC*/()]*)$/)?.[1])
+    .filter((e): e is string => !!e && /[!PC]/.test(e) && evaluate(e) !== null)
+    .map((e) => `${e}=${evaluate(e)}`);
 
 /** 「4×3×2×1」 「3×2」 — 1씩 줄어드는 자연수의 곱 (계승 · 순열을 풀어 쓴 꼴, q3 학생 2). 「2×2」는 아니다 */
 const 풀어쓴순열 = (e: string) => {
@@ -1032,9 +1035,11 @@ const 계승개수 = (식: string): number | null => {
 export function verify_counting_factor(모범줄: string, 학생답: string, 다른줄값: number[], 문항: 경우의수문항, 자리?: { 줄값들: number[]; i: number }): 다경로검증 {
   const 줄값 = counting_line_value(모범줄);
   const 마디 = 계산마디들(학생답);
-  const 결론 = 마디.filter((d) => /^\d+(?:\*\d+)+$/.test(d.split('=')[0]) && !풀어쓴순열(d.split('=')[0])).at(-1);
+  // 결론 곱 — 수만의 곱인 변(「4×24」 · 「2!×4! = 2×24」의 둘째 변, q3 학생 11)이 있는 마지막 마디
+  const 곱변 = (d: string) => d.split('=').find((e) => /^\d+(?:\*\d+)+$/.test(e) && !풀어쓴순열(e));
+  const 결론 = 마디.filter((d) => 곱변(d)).at(-1);
   if (줄값 === null || !결론) return { 결과: '판정불가', 시도: [] };
-  const 결론인수 = 결론.split('=')[0].split('*').map(Number);
+  const 결론인수 = 곱변(결론)!.split('*').map(Number);
   const 인수 = [...결론인수];
   let 차례로 = false;
   for (const w of 다른줄값) {
@@ -1046,7 +1051,8 @@ export function verify_counting_factor(모범줄: string, 학생답: string, 다
   }
   const 학생값 = 차례로 ? 결론인수[자리!.i] : 인수.length === 1 ? 인수[0] : null;
   if (학생값 === null || 같다(학생값, 줄값)) return { 결과: '판정불가', 시도: [] };
-  const 출처 = 마디.find((d) => d !== 결론 && 같다(evaluate(d.split('=').at(-1)!) ?? NaN, 학생값));
+  // 출처 — 그 값으로 끝나는 마디 · 「=」 없이 쓴 식(「…이므로 2!」, q3 학생 11)
+  const 출처 = [...마디, ...맨식마디들(학생답)].find((d) => d !== 결론 && 같다(evaluate(d.split('=').at(-1)!) ?? NaN, 학생값));
   const 모범n = 계산마디들(모범줄).map((d) => 계승개수(d.split('=')[0])).find((n) => n !== null) ?? null;
   const 학생n = 출처 ? 계승개수(출처.split('=')[0]) : null;
   // ÷n! 누락 (q3 학생 9) — 학생 식이 순열 · 조합 · 계승 식(「3P₂=6」)이고 값이 모범 값 × n!(3×2!=6)이면 모범 식에서 ÷n!만 빠뜨렸다
