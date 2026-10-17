@@ -188,7 +188,8 @@ $('#rec-select').addEventListener('change', (e) => e.target.value && 열기(e.ta
 
 async function 열기(파일) {
   try {
-    const j = await 받기('/api/results/' + encodeURIComponent(파일));
+    // .json을 떼고 부른다 — nginx가 .json으로 끝나는 주소를 막는다 (서버가 붙인다)
+    const j = await 받기('/api/results/' + encodeURIComponent(파일.replace(/\.json$/, '')));
     보이기(j, '파일:' + 파일);
     try { localStorage.setItem('hmos-d2-file', 파일); } catch (_) {}
   } catch (e) {

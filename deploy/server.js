@@ -108,10 +108,12 @@ app.get('/api/results',(req,res)=>{
   }
   res.json({ok:true,목록});
 });
-app.get('/api/results/:file',(req,res)=>{
+app.get('/api/results/:file',(req,res)=>{ // :file = 검증 파일 이름 (.json 없이)
   res.setHeader('Cache-Control','no-store');
   if(!접속됨(req)){res.status(401).json({ok:false,error:접속만료});return;}
-  const 파일=String(req.params.file||'');
+  // 주소에는 .json을 붙이지 않는다 — nginx가 .json으로 끝나는 주소를 막는다 (이름만 받아 여기서 붙인다)
+  const 이름=String(req.params.file||'');
+  const 파일=이름.endsWith('.json')?이름:이름+'.json';
   // 목록에 있는 이름만 — 경로 문자로 폴더 밖을 열지 못하게
   if(!검증파일들().includes(파일)){res.status(404).json({ok:false,error:'채점 결과 파일이 없습니다'});return;}
   res.type('application/json').send(fs.readFileSync(path.join(검증폴더,파일),'utf8'));
