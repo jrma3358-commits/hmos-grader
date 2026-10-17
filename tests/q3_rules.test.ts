@@ -200,3 +200,27 @@ describe('경우 나누기 변형 — 나열 · 「→ 4!」 · 「3×4!」 (q3 
     for (const x of r.파트별.세우기.조각별) assert.match(x.판단근거, /🔆 다경로 — 경우 나누기/);
   });
 });
+
+// q3 학생 6 (오종래 2026-10-17) — 양 끝 2!=2 (같은 것 a,a 미처리, 맞는 값 3) · 나머지 4!=24 맞음 · 끝 값 48
+const 학생6 = '모음은 a,e 2가지로 2!=2(가지)\n나머지 4개를 나열하면 4!=24(가지)\n\n∴ 2×24=48(가지)';
+
+describe('양 끝 모음 경우의 수 오류 — 중복 미처리 (q3 학생 6)', () => {
+  it('「:」 없이 글 뒤에 온 식 — 「나머지 4개를 나열하면 4!=24」를 읽는다', () => {
+    assert.equal(verify_counting_line('나머지 4개 나열: 4!=24', 학생6).결과, 'O');
+  });
+  it('결론 「2×24=48」에서 24를 뺀 2 (「2!=2」) — 오류 이름', () => {
+    const v = verify_counting_factor('양 끝 모음 나열: 1/2! × 3P2 = 3', 학생6, [24], 문항정보);
+    assert.equal(v.결과, 'X');
+    assert.equal(v.오류, '양 끝 모음 경우의 수 오류 — 중복 미처리');
+    assert.equal(v.시도[0].식, '2!=2');
+  });
+  it('채점 — ① X · ② 양 끝 X (오류 이름) · ② 가운데 O · ③ O · ④ X', () => {
+    const 입력 = f2_input_from_v2(recognizeV2Analysis(문항));
+    assert.ok(입력.ok);
+    const cs = derive_pieces(입력.물음, 입력.k, { ...입력.인식, 교사줄: classify_math_lines(모범, 문항), 경우의수: 문항정보 }, '수리');
+    const r = grade(학생6, cs.map((c) => ({ ...c, 충족조건: '', 모범조각: '', 배점: 1 })) as any, '', 입력.k, '수리');
+    const 결과 = Object.values(r.파트별).flatMap((p) => p.조각별.map((x) => x.결과));
+    assert.deepEqual(결과, ['X', 'X', 'O', 'O', 'X']);
+    assert.match(r.파트별.세우기.조각별[0].판단근거, /^양 끝 모음 경우의 수 오류 — 중복 미처리/);
+  });
+});
