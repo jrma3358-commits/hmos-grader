@@ -16,7 +16,7 @@ import type { PathNode } from '../../fq/v2/graph.ts';
 import type { 조각결과 } from '../g1.ts';
 import { K핵심어 } from './f2.ts';
 import { answer_values, final_value, line_answer_values, solve_segments, student_answer_line } from '../solve_lines.ts';
-import { D혼동오류, named_remainder_values, remainder_points, verify_calculation, verify_definition, verify_discriminant, verify_equation, verify_remainder_chain, verify_counting_line, verify_division, verify_remainder_alternatives, wrote_same_permutation, verify_setup, verify_substitution, wrote_remainder, type 경로이름, type 다항식조건 } from '../multipath.ts';
+import { D혼동오류, named_remainder_values, remainder_points, verify_calculation, verify_definition, verify_discriminant, verify_equation, verify_remainder_chain, verify_case_split, verify_case_split_line, verify_counting_line, verify_division, verify_remainder_alternatives, wrote_same_permutation, verify_setup, verify_substitution, wrote_remainder, type 경로이름, type 다항식조건 } from '../multipath.ts';
 import type { 계열, 급소K, 조각, 파트 } from '../types.ts';
 
 export interface 조각대조 {
@@ -117,6 +117,12 @@ export function 판별식썼나(학생답: string, 조건: '>' | '=' | '<'): boo
   return [...t.matchAll(/D(?:\/4)?(?:=[^<>=≤≥\n,，∴가-힣]*)*([<>=])0(?![0-9.])/g)].some((m) => m[1] === 조건);
 }
 
+/** 경우의 수 문항의 모범 끝 값 — ④ 답구하기 조각의 모범 값(「72」). 수가 아니면 null (q3 학생 1 경우 나누기) */
+const 모범끝값 = (맥락: 대조맥락): number | null => {
+  const v = Number(맥락.루브릭.find((c) => c.파트 === '답구하기' && c.모범답?.값.length)?.모범답!.값[0]);
+  return Number.isFinite(v) ? v : null;
+};
+
 export function 봉인6_조각대조(학생답: string, 조각: 조각, 맥락: 대조맥락): 조각대조 {
   if (맥락.계열 === '인문사회국어') {
     switch (조각.파트) {
@@ -170,7 +176,13 @@ export function 봉인6_조각대조(학생답: string, 조각: 조각, 맥락: 
       // q7 ③ 「f(2)=4+4+a=1」 — 모범 줄의 c(f(2))만 본다. 다른 f(c) 줄(f(-1))은 그 줄의 조각이 본다 (2026-10-17 q7 학생 1)
       //   f(c) 꼴이 없으면 직접 나눗셈 경로 (2026-10-17 q7 학생 2 — 🔆)
       // q3 경우의 수 줄 — 「1/2!×3P2=3」 「4!=24」 식을 엔진이 계산해 모범 값과 대조 (2026-10-17)
-      : 조각.경우의수 ? (답: string) => verify_counting_line(조각.줄글!, 답)
+      //   식이 모범 값과 맞지 않으면 경우 나누기 경로 (2026-10-17 q3 학생 1 — 🔆)
+      : 조각.경우의수 ? (답: string) => {
+        const v = verify_counting_line(조각.줄글!, 답);
+        if (v.결과 === 'O') return v;
+        const w = verify_case_split_line(조각.줄글!, 답, 모범끝값(맥락));
+        return w.결과 === '판정불가' ? v : w;
+      }
       : 조각.나머지다항식 ? (답: string) => {
         const v = verify_remainder_chain(답, 조각.나머지다항식!, remainder_points(조각.줄글 ?? ''));
         // f(c) 꼴이 없으면 직접 나눗셈 · 인수분해 역산(q7 학생 4) · f 없이 대입
@@ -213,6 +225,13 @@ export function 봉인6_조각대조(학생답: string, 조각: 조각, 맥락: 
   if (조각.파트 === '근거대기' && 조각.경우의수) {
     const hit = wrote_same_permutation(학생답, 조각.경우의수);
     const 같은것 = 조각.경우의수.중복.map((d) => `${d.원소} ${d.개수}개 → ÷${d.개수}!`).join(' · ');
+    // [오종래 2026-10-17 q3 학생 1] ÷n!이 없어도 같은 것을 경우로 나누어 센 경로가 검증되면 O (🔆)
+    const 나눔 = hit ? null : verify_case_split(학생답, 모범끝값(맥락));
+    if (나눔?.결과 === 'O') {
+      const 식 = 나눔.시도.map((t) => t.식).join(' · ');
+      const 까닭 = 나눔.시도.map((t) => t.까닭).join(' · ');
+      return { 결과: 'O', 근거: `🔆 다경로 — 같은 것이 있는 순열 ${같은것} 대신 경우로 나누어 처리 (${나눔.시도.map((t) => `「${t.식}」 ${t.까닭}`).join(' · ')})`, 다경로: '경우 나누기', 다경로식: 식, 다경로까닭: 까닭 };
+    }
     return { 결과: hit ? 'O' : 'X', 근거: `같은 것이 있는 순열 — ${같은것} ${hit ? '있음' : '없음'}` };
   }
   if (조각.파트 === '근거대기' && 조각.나머지조건) {

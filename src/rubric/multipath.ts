@@ -14,7 +14,7 @@ export interface 이차식 {
   c: number;
 }
 
-export type 경로이름 = '인수분해' | '완전제곱식' | '근의 공식' | '근의 공식 2' | '판별식 D' | '판별식 D/4' | '방정식 세우기' | '근과 계수의 관계' | '식 변형' | '인수분해 공식' | '근의 성질(차수 낮추기)' | '근 직접 대입' | '나머지 정리' | '직접 나눗셈' | '인수분해 역산' | '몫·나머지꼴' | '경우의 수 식';
+export type 경로이름 = '인수분해' | '완전제곱식' | '근의 공식' | '근의 공식 2' | '판별식 D' | '판별식 D/4' | '방정식 세우기' | '근과 계수의 관계' | '식 변형' | '인수분해 공식' | '근의 성질(차수 낮추기)' | '근 직접 대입' | '나머지 정리' | '직접 나눗셈' | '인수분해 역산' | '몫·나머지꼴' | '경우의 수 식' | '경우 나누기';
 
 export interface 다경로검증 {
   결과: 'O' | 'X' | '판정불가';
@@ -949,11 +949,11 @@ export function wrote_same_permutation(학생답: string, 문항: 경우의수�
   return 문항.중복.every((d) => new RegExp(`/\\(?${d.개수}!`).test(s));
 }
 
-/** 줄의 계산 마디 — 「라벨: 식=값(단위)」에서 라벨(「:」 앞)과 단위(「(가지)」)를 뗀다 */
+/** 줄의 계산 마디 — 「라벨: 식=값(단위)」에서 라벨(「:」 앞)과 단위(「(가지)」)를 뗀다 · 「→ 4!=24」의 화살표도 (q3 학생 1) */
 const 계산마디들 = (답: string) =>
   String(답 ?? '')
     .split(/\r?\n/)
-    .map((l) => l.replace(/^[^:：]*[:：]/, '').replace(/∴/g, '').replace(/\([가-힣]+\)/g, ''))
+    .map((l) => l.replace(/^[^:：]*[:：]/, '').replace(/[∴→⇒]/g, '').replace(/\([가-힣]+\)/g, ''))
     .flatMap((l) => l.split(/[,，](?![^(]*\))/))
     .map((x) => 정리(x).replace(/[가-힣.。]+$/, ''))
     .filter((x) => x.includes('='));
@@ -977,4 +977,64 @@ export function verify_counting_line(모범줄: string, 학생답: string): 다�
   const 맞은 = 시도.find((t) => t.맞음);
   if (맞은) return { 결과: 'O', 경로: '경우의 수 식', 시도: [맞은] };
   return { 결과: 시도.length ? 'X' : '판정불가', 시도 };
+}
+
+// ── 경우 나누기 (오종래 2026-10-17 q3 학생 1, (가) 확정) — ÷2! 대신 같은 것(a,a)을 경우로 나누어 센다 ──
+//   「i) … → 4!=24(가지)」 「ii) … → 2!×4!=48(가지)」 「따라서, 24+48=72(가지)」
+//   1. 경우 표지(i) ii) · (1)(2) · ①②) 둘 이상 · 2. 경우마다 끝 식(!, P, C, ×)의 변이 모두 같다
+//   3. 합 줄의 항이 경우 값이고 합이 모범 끝 값. 경우가 겹치지 않고 빠짐없는지는 보지 않는다 ((가))
+const 경우표지 = /^\s*(?:\(?(?:i{1,3}|iv|vi{0,3}|ix|x)\)|\(\d+\)|[①-⑳])/i;
+
+export interface 경우나누기검증 extends 다경로검증 {
+  /** 경우마다 끝 식의 값 — [24, 48] */
+  경우값: number[];
+}
+
+/** 경우 나누기 경로 — 경우 끝 값들과 합 줄을 검증한다. 경우 표지가 둘 미만이거나 경우 식 · 합 줄이 없으면 판정불가 */
+export function verify_case_split(학생답: string, 모범끝값: number | null): 경우나누기검증 {
+  const 블록: string[][] = [];
+  for (const l of String(학생답 ?? '').split(/\r?\n/)) {
+    if (경우표지.test(l)) 블록.push([l.replace(경우표지, '')]);
+    else 블록.at(-1)?.push(l);
+  }
+  const 시도: 다경로검증['시도'] = [];
+  const 경우값: number[] = [];
+  if (블록.length < 2 || 모범끝값 === null) return { 결과: '판정불가', 시도, 경우값 };
+  for (const b of 블록) {
+    const 끝 = 계산마디들(b.join('\n')).filter((d) => /[!PC*]/.test(d)).at(-1);
+    const 값 = 끝 ? 끝.split('=').filter(Boolean).map(evaluate) : [];
+    if (!끝 || 값.some((v) => v === null)) return { 결과: '판정불가', 시도, 경우값 };
+    const 같음 = 값.every((v) => 같다(v!, 값[0]!));
+    시도.push({ 경로: '경우 나누기', 식: 끝, 맞음: 같음, 까닭: 같음 ? `경우 값 ${값[0]}` : `변의 값이 다르다 (${값.join(' ≠ ')})` });
+    if (!같음) return { 결과: 'X', 시도, 경우값 };
+    경우값.push(값[0]!);
+  }
+  // 합 줄 — 첫 변이 경우 값들의 합(「24+48」, 순서 무관)인 마디
+  const 차례 = [...경우값].sort((x, y) => x - y);
+  const 합식 = 계산마디들(학생답).find((d) => {
+    const 항 = d.split('=')[0].split('+').map(evaluate);
+    return 항.length === 경우값.length && 항.every((v) => v !== null) && (항 as number[]).sort((x, y) => x - y).every((v, i) => 같다(v, 차례[i]));
+  });
+  if (!합식) return { 결과: '판정불가', 시도, 경우값 };
+  const 합 = 경우값.reduce((x, y) => x + y, 0);
+  const 변 = 합식.split('=').filter(Boolean).map(evaluate);
+  const 맞음 = 변.every((v) => v !== null && 같다(v, 합)) && 같다(합, 모범끝값);
+  시도.push({ 경로: '경우 나누기', 식: 합식, 맞음, 까닭: `경우 값의 합 ${합} — 모범 끝 값 ${모범끝값}과 ${맞음 ? '같다' : '다르다'}` });
+  return 맞음 ? { 결과: 'O', 경로: '경우 나누기', 시도, 경우값 } : { 결과: 'X', 시도, 경우값 };
+}
+
+/**
+ * ② 세우기 줄 — 경우 나누기로 (q3 학생 1 「양 끝 1/2!×3P2=3」). 모범 끝 값 72 = 줄 값 3 × 나머지 인수 24이므로
+ * 경우 값마다 나머지 인수로 나눈 몫의 합(24÷24 + 48÷24 = 1+2)이 줄 값 3이면 O
+ */
+export function verify_case_split_line(모범줄: string, 학생답: string, 모범끝값: number | null): 다경로검증 {
+  const v = verify_case_split(학생답, 모범끝값);
+  const 줄값 = 계산마디들(모범줄).map((d) => evaluate(d.split('=').at(-1)!)).find((x) => x !== null) ?? null;
+  if (v.결과 !== 'O' || 줄값 === null || 모범끝값 === null || 같다(줄값, 0)) return v;
+  const 인수 = 모범끝값 / 줄값;
+  const 몫 = v.경우값.map((x) => x / 인수);
+  const 맞음 = 같다(몫.reduce((x, y) => x + y, 0), 줄값);
+  const 까닭 = `경우 값 ${v.경우값.join(', ')} ÷ ${인수} = ${몫.join(' + ')} — 줄 값 ${줄값}과 ${맞음 ? '같다' : '다르다'}`;
+  const 시도 = [...v.시도, { 경로: '경우 나누기' as const, 식: v.시도.map((t) => t.식).join(' · '), 맞음, 까닭 }];
+  return 맞음 ? { 결과: 'O', 경로: '경우 나누기', 시도 } : { 결과: 'X', 시도 };
 }
