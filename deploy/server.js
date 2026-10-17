@@ -77,9 +77,9 @@ app.get('/hmos_dashboard.html',(req,res)=>res.redirect(302,'/dashboard'));
 // /grader = 채점 솔루션 (2026-10-15) — 비밀번호 칸이 페이지 안에 있어 쿠키 없이도 연다. 채점·OCR API는 아래 쿠키 검사로 막힌다.
 // GET /api/access = 쿠키가 살아 있는가만 알려 준다 (페이지가 비밀번호 칸을 띄울지 정한다)
 app.get('/api/access',(req,res)=>{res.setHeader('Cache-Control','no-store');res.json({ok:접속됨(req)});});
+// [오종래 2026-10-17] /grader는 6탭 채점 대시보드로 옮긴다 — grader.html은 서버에 남지만 이 주소로는 열지 않는다
 app.get('/grader',(req,res)=>{
-  res.setHeader('Cache-Control','no-store');
-  res.sendFile(path.join(__dirname,'grader.html'));
+  res.redirect('/dashboard2');
 });
 app.get('/grader.html',(req,res)=>res.redirect(302,'/grader'));
 // /dashboard2 = 6탭 채점 대시보드 (오종래 2026-10-17) — 문항 입력 · 인식 결과 · 채점 결과 · 루브릭 · 모범답안 · 교사 확정. /dashboard처럼 접속 쿠키가 있어야
