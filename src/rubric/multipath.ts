@@ -994,33 +994,56 @@ export function counting_line_value(줄: string): number | null {
   return 계산마디들(줄).map((d) => evaluate(d.split('=').at(-1)!)).find((v) => v !== null) ?? null;
 }
 
-/** 오류 이름 (오종래 2026-10-17 q3 학생 2) — 모범 줄 라벨에서 「나열」을 뗀다: 「양 끝 모음 경우의 수 오류 — 중복 미처리」 */
-export const 중복미처리오류 = (모범줄: string) => {
+/** 오류 이름 — 모범 줄 라벨에서 「나열」을 뗀다: 「양 끝 모음 경우의 수 오류 — 중복 미처리」 (q3 학생 2) · 「나머지 4개 경우의 수 오류 — 개수 오류」 (q3 학생 7, B안) */
+const 경우의수오류 = (모범줄: string, 갈래: string) => {
   const 라벨 = (String(모범줄 ?? '').match(/^([^:：]*)[:：]/)?.[1] ?? '').replace(/\s*나열\s*$/, '').trim();
-  return `${라벨 ? 라벨 + ' ' : ''}경우의 수 오류 — 중복 미처리`;
+  return `${라벨 ? 라벨 + ' ' : ''}경우의 수 오류 — ${갈래}`;
+};
+export const 중복미처리오류 = (모범줄: string) => 경우의수오류(모범줄, '중복 미처리');
+export const 개수오류 = (모범줄: string) => 경우의수오류(모범줄, '개수 오류');
+
+/** 계승의 개수 — 「4!」 → 4 · 「3×2×1」 → 3 (1까지 풀어 쓴 곱). 계승이 아니면 null */
+const 계승개수 = (식: string): number | null => {
+  const e = 정리(식);
+  const m = e.match(/^(\d+)!$/);
+  if (m) return Number(m[1]);
+  const f = e.split('*');
+  return 풀어쓴순열(e) && f.at(-1) === '1' ? Number(f[0]) : null;
 };
 
 /**
  * ② 세우기 줄 — 학생 결론 곱(「∴ 4×24=96」)에서 다른 줄의 모범 값(24)을 뺀 인수(4)가 이 줄의 학생 값 (q3 학생 2)
  * 모범 줄 값(3)과 다르면 X — 모범 줄이 ÷n!(같은 것)인데 학생이 ÷n!을 쓰지 않았으면 오류 「… 경우의 수 오류 — 중복 미처리」.
  * 결론 곱이 없거나 · 인수를 하나로 좁힐 수 없거나 · 모범 값과 같으면 판정불가 (여기서 O를 주지 않는다)
+ * 다른 줄 값이 결론 곱에 없으면(「∴ 2×6=12」 — 두 줄 모두 틀림) 인수 수가 줄 수와 같을 때 줄 차례대로 짝짓는다
+ * (자리 — 루브릭 세우기 줄 차례의 모든 줄 값 · 이 줄의 차례, q3 학생 7). 모범 줄이 계승(「4!」)이고 학생 식이
+ * 다른 개수의 계승(「3×2×1」)이면 오류 「나머지 4개 경우의 수 오류 — 개수 오류」 (B안 — 조각마다 따로)
  */
-export function verify_counting_factor(모범줄: string, 학생답: string, 다른줄값: number[], 문항: 경우의수문항): 다경로검증 {
+export function verify_counting_factor(모범줄: string, 학생답: string, 다른줄값: number[], 문항: 경우의수문항, 자리?: { 줄값들: number[]; i: number }): 다경로검증 {
   const 줄값 = counting_line_value(모범줄);
   const 마디 = 계산마디들(학생답);
   const 결론 = 마디.filter((d) => /^\d+(?:\*\d+)+$/.test(d.split('=')[0]) && !풀어쓴순열(d.split('=')[0])).at(-1);
   if (줄값 === null || !결론) return { 결과: '판정불가', 시도: [] };
-  const 인수 = 결론.split('=')[0].split('*').map(Number);
+  const 결론인수 = 결론.split('=')[0].split('*').map(Number);
+  const 인수 = [...결론인수];
+  let 차례로 = false;
   for (const w of 다른줄값) {
     const i = 인수.findIndex((x) => 같다(x, w));
-    if (i < 0) return { 결과: '판정불가', 시도: [] };
-    인수.splice(i, 1);
+    if (i >= 0) { 인수.splice(i, 1); continue; }
+    if (!자리 || 결론인수.length !== 자리.줄값들.length) return { 결과: '판정불가', 시도: [] };
+    차례로 = true;
+    break;
   }
-  if (인수.length !== 1 || 같다(인수[0], 줄값)) return { 결과: '판정불가', 시도: [] };
-  const 학생값 = 인수[0];
+  const 학생값 = 차례로 ? 결론인수[자리!.i] : 인수.length === 1 ? 인수[0] : null;
+  if (학생값 === null || 같다(학생값, 줄값)) return { 결과: '판정불가', 시도: [] };
   const 출처 = 마디.find((d) => d !== 결론 && 같다(evaluate(d.split('=').at(-1)!) ?? NaN, 학생값));
-  const 오류 = wrote_same_permutation(모범줄, 문항) && !wrote_same_permutation(학생답, 문항) ? 중복미처리오류(모범줄) : undefined;
-  const 까닭 = `결론 「${결론}」에서 다른 줄 값 ${다른줄값.join(', ')}을 뺀 인수 ${학생값}${출처 ? ` (「${출처}」)` : ''} — 모범 값 ${줄값}과 다르다`;
+  const 모범n = 계산마디들(모범줄).map((d) => 계승개수(d.split('=')[0])).find((n) => n !== null) ?? null;
+  const 학생n = 출처 ? 계승개수(출처.split('=')[0]) : null;
+  const 오류 = wrote_same_permutation(모범줄, 문항) && !wrote_same_permutation(학생답, 문항) ? 중복미처리오류(모범줄)
+    : 모범n !== null && 학생n !== null && 모범n !== 학생n ? 개수오류(모범줄)
+    : undefined;
+  const 어디 = 차례로 ? `${자리!.i + 1}번째 인수` : `다른 줄 값 ${다른줄값.join(', ')}을 뺀 인수`;
+  const 까닭 = `결론 「${결론}」에서 ${어디} ${학생값}${출처 ? ` (「${출처}」)` : ''} — 모범 값 ${줄값}과 다르다${오류 === 개수오류(모범줄) ? ` · ${학생n}개 나열 (모범 ${모범n}개)` : ''}`;
   return { 결과: 'X', 시도: [{ 경로: '경우의 수 식', 식: 출처 ?? 결론, 맞음: false, 까닭, 오류 }], 오류 };
 }
 

@@ -186,11 +186,12 @@ export function 봉인6_조각대조(학생답: string, 조각: 조각, 맥락: 
         const c = verify_complement(답, 조각.경우의수!, 모범끝값(맥락));
         if (c.결과 !== '판정불가') return c;
         // 결론 곱에서 이 줄의 학생 값을 읽는다 — 「∴ 4×24=96」 → 양 끝 4 (2026-10-17 q3 학생 2, 오류 「… 중복 미처리」)
-        const 다른줄값 = 맥락.루브릭
-          .filter((c) => c.파트 === '세우기' && c.경우의수 && c.줄글 && c.줄글 !== 조각.줄글)
-          .map((c) => counting_line_value(c.줄글!))
-          .filter((x): x is number => x !== null);
-        const f = verify_counting_factor(조각.줄글!, 답, 다른줄값, 조각.경우의수!);
+        //   두 줄 모두 틀렸으면(「∴ 2×6=12」) 세우기 줄 차례대로 짝짓는다 (q3 학생 7, 오류 이름은 조각마다 — B안)
+        const 줄들 = 맥락.루브릭.filter((c) => c.파트 === '세우기' && c.경우의수 && c.줄글);
+        const 줄값들 = 줄들.map((c) => counting_line_value(c.줄글!));
+        const 다른줄값 = 줄값들.filter((x, i): x is number => x !== null && 줄들[i].줄글 !== 조각.줄글);
+        const 자리 = 줄값들.every((x) => x !== null) ? { 줄값들: 줄값들 as number[], i: 줄들.findIndex((c) => c.줄글 === 조각.줄글) } : undefined;
+        const f = verify_counting_factor(조각.줄글!, 답, 다른줄값, 조각.경우의수!, 자리);
         return f.결과 === '판정불가' ? v : f;
       }
       : 조각.나머지다항식 ? (답: string) => {
