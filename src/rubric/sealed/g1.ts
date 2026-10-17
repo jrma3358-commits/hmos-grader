@@ -16,7 +16,7 @@ import type { PathNode } from '../../fq/v2/graph.ts';
 import type { 조각결과 } from '../g1.ts';
 import { K핵심어 } from './f2.ts';
 import { answer_values, final_value, line_answer_values, solve_segments, student_answer_line } from '../solve_lines.ts';
-import { D혼동오류, named_remainder_values, remainder_points, verify_calculation, verify_definition, verify_discriminant, verify_equation, verify_remainder_chain, counting_line_value, verify_case_split, verify_case_split_line, verify_counting_factor, verify_counting_line, verify_division, verify_remainder_alternatives, wrote_same_permutation, verify_setup, verify_substitution, wrote_remainder, type 경로이름, type 다항식조건 } from '../multipath.ts';
+import { D혼동오류, named_remainder_values, remainder_points, verify_calculation, verify_definition, verify_discriminant, verify_equation, verify_remainder_chain, counting_line_value, verify_case_split, verify_case_split_line, verify_complement, verify_counting_factor, verify_counting_line, verify_division, verify_remainder_alternatives, wrote_same_permutation, verify_setup, verify_substitution, wrote_remainder, type 경로이름, type 다항식조건 } from '../multipath.ts';
 import type { 계열, 급소K, 조각, 파트 } from '../types.ts';
 
 export interface 조각대조 {
@@ -182,6 +182,9 @@ export function 봉인6_조각대조(학생답: string, 조각: 조각, 맥락: 
         if (v.결과 === 'O') return v;
         const w = verify_case_split_line(조각.줄글!, 답, 모범끝값(맥락));
         if (w.결과 !== '판정불가') return w;
+        // 여사건 「전체-뺀 값=결과」 (2026-10-17 q3 학생 3, 오류 「양 끝 모두 자음만 뺌 — 여사건 계산 오류」)
+        const c = verify_complement(답, 조각.경우의수!, 모범끝값(맥락));
+        if (c.결과 !== '판정불가') return c;
         // 결론 곱에서 이 줄의 학생 값을 읽는다 — 「∴ 4×24=96」 → 양 끝 4 (2026-10-17 q3 학생 2, 오류 「… 중복 미처리」)
         const 다른줄값 = 맥락.루브릭
           .filter((c) => c.파트 === '세우기' && c.경우의수 && c.줄글 && c.줄글 !== 조각.줄글)
