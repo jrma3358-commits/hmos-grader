@@ -1,23 +1,27 @@
-// q8 국어 문항2 답안 이미지 폴더를 OCR → 채점해 학생별 JSON으로 저장한다.
-// 채점 규칙은 검증/q8_문항2_채점기준.json을 따른다. 모델은 항목 판정(O/X·논리연결)만 내고,
-// 점수는 채점기준의 「점수 계산」 표대로 코드가 정한다.
-// 사용: node --env-file=.env scripts/grade-q8-item2.mjs <이미지폴더>
+// q8 국어 문항2 답안 이미지 폴더를 OCR → HMOS 5색 2단계로 채점해 학생별 JSON으로 저장한다.
+//  1단계 — 문항 5색 분해: 확정 급소(채점기준 「급소 (확정)」)의 B·D·K를 쓴다. 모델이 매번 분해하지 않는다.
+//  2단계 — 학생 답안 5색 분해 후 급소 대조: 학생이 B를 소환했는지, D를 바른 짝으로 썼는지,
+//          B×D→Q 경로를 펴냈는지 대조만 한다. 모델은 점수를 매기지 않는다.
+// 판정(O/X·논리연결)과 점수는 대조 결과로 코드가 정한다 (검증/q8_문항2_채점기준.json 「점수 계산」 표).
+// 사용: node --env-file=.env scripts/grade-q8-item2.mjs <이미지폴더> [출력폴더]
 import fs from "node:fs";
 import path from "node:path";
 import Anthropic from "@anthropic-ai/sdk";
 
 const MODEL = "claude-sonnet-4-6";
-const OUT_DIR = "검증/q8_문항2";
 const SYMBOLS = ["ⓐ", "ⓑ"];
 const LINK = { "ⓐ": "(라) 능력주의", "ⓑ": "(마) 타자배척" };
 
 const dir = process.argv[2];
+const OUT_DIR = process.argv[3] ?? "검증/q8_문항2";
 if (!dir) {
-  console.error("사용: node --env-file=.env scripts/grade-q8-item2.mjs <이미지폴더>");
+  console.error("사용: node --env-file=.env scripts/grade-q8-item2.mjs <이미지폴더> [출력폴더]");
   process.exit(1);
 }
 
 const rubric = JSON.parse(fs.readFileSync("검증/q8_문항2_채점기준.json", "utf8"));
+const original = fs.readFileSync("검증/q8_원문.md", "utf8");
+const passages = original.slice(original.indexOf("## (가)"), original.indexOf("## 문항"));
 const client = new Anthropic({
   defaultHeaders: { "anthropic-workspace-id": process.env.ANTHROPIC_WORKSPACE_ID },
 });
@@ -36,71 +40,106 @@ const OCR_SYSTEM = `당신은 한국어 손글씨 답안을 옮겨 적는 OCR �
 - 알아볼 수 없는 글자는 [?]로 표시합니다.
 - 답안 텍스트만 출력하십시오.`;
 
-const GRADE_SYSTEM = `당신은 국어 서술형 채점자입니다. 아래 채점 기준을 그대로 적용하십시오.
-점수는 매기지 마십시오. 항목별 판정만 냅니다(점수는 코드가 계산).
+// ── 1단계: 문항 5색 분해 (확정 급소) ──
 
-[채점 기준]
-${JSON.stringify(rubric, null, 1)}
+const item = { 문항: rubric.문항, Q: "차별·혐오 표현 발생 원인 분석·서술", 급소: rubric["급소 (확정 2026-10-18)"] };
 
-[항목 판정 방법]
-- ⓐ는 (라) 능력주의, ⓑ는 (마) 타자 배척과의 연결만 봅니다. 반대로 연결(ⓐ↔(마), ⓑ↔(라))했으면 그 항목은 X.
-- 판정 O: 핵심개념(ⓑ는 타자 거부·배척 내용이면 낱말 없어도 인정)을 해당 표현이 생기는 원인으로 연결.
-- 판정 X: 핵심개념 없음, (라)·(마) 내용 단순 요약에 그침, 반대 연결, 미작성. 이때 논리연결은 "없음".
-- X와 약의 경계: 해당 항목에 핵심개념(능력주의 / 타자 거부·배척)을 원인으로 썼으면, 작동 과정이 없거나
-  문장이 엉성해도 X가 아니라 O·약입니다. 예: "ⓐ는 (라)에 따르면 능력주의에 의해 발생한다" → O·약.
-  X는 핵심개념 자체가 그 항목에 없을 때만 씁니다.
-- 논리연결 강: 핵심개념이 어떻게 차별·혐오로 이어지는지(원인의 작동 과정)가 서술됨.
-  대상 집단(노인/일본인)을 직접 쓰지 않아도, 원인 → 차별·멸시·거부로 이어지는 과정이 있으면 강.
-  확정 사례(강):
-   ⓐ "능력주의 … 개인의 능력에 따라 지위와 보상을 분배하는 게 정당하다는 이념 … 과도한 경쟁과 차별을 정당화" (학생1, 3점)
-   ⓐ "극단한 경쟁으로 인한 능력주의의 대두 … 경쟁에서 뒤처진 사람을 멸시하고 차별하는 태도를 정당화" (학생3, 4점)
-   ⓑ "현실 속 타자가 다가오는 것을 불안해하거나 부담스러워하며 타자를 거부하려는 움직임에서 혐오 표현이 강해진다" (학생3, 4점)
-- 논리연결 약: 핵심개념·내용은 있으나 원인의 작동 과정 없이 '관련/연관이 있다', 감정 낱말 하나로 끝남.
-  확정 사례(약):
-   ⓑ "쪽발이로 타자를 부담스러워하는 원인과 연관이 있다" (학생1, 3점)
-   ⓑ "다른 나라의 문화에 거부감을 느끼고 만들어 낸 것" (학생4, 3점)
-- 단순요약: ⓐ·ⓑ 판정과 별개로, 답안이 (라)·(마)의 내용을 요약이라도 활용했으면 true, 전혀 활용하지 않았으면 false.
-- 판단근거: 한 줄.`;
+// ── 2단계: 학생 답안 5색 분해 후 급소 대조 ──
 
-const GRADE_SCHEMA = {
+const contrastSystem = (item) => `당신은 HMOS 급소 대조기입니다. 판단하거나 점수를 매기지 않습니다.
+학생 답안을 5색으로 분해한 뒤, 아래 문항 급소 K에 닿았는지 항목별로 대조만 합니다.
+
+[문항 5색 분해 — 1단계, 확정 급소]
+${JSON.stringify(item, null, 1)}
+
+[제시문]
+${passages}
+
+[항목별 대조 — ⓐ·ⓑ 각각]
+1. B소환: 학생이 그 항목의 대상(ⓐ 노인 집단 / ⓑ 일본인 집단)을 불러냈는가.
+   표현(틀딱·쪽발이)이나 기호(ⓐ·ⓑ)로 그 항목을 가리키고 원인을 쓰면 소환입니다.
+   「(나)의 ⓑ의 원인은 …」처럼 기호로 항목을 지목했으면 대상 집단 낱말이 없어도 반드시 B소환 true. 「뒤처진 사람」「다른 민족·나라」처럼 대상을 일반화해 써도 소환.
+2. D짝: 학생이 그 항목에 쓴 원인 개념이
+   - "정확": 짝이 맞는 제시문의 D (ⓐ↔(라) 능력주의·과열 경쟁 / ⓑ↔(마) 타자 거부·배척 — 낱말 없이 내용만 있어도 정확)
+   - "반대": 다른 항목의 D를 끌어옴 (ⓐ에 타자 배척, ⓑ에 능력주의) 또는 기호를 바꿔 붙임
+   - "없음": D가 없음 (표현 뜻풀이·일반론만)
+3. 경로: B×D→Q, 즉 D가 어떻게 차별·혐오 표현 발생으로 이어지는지
+   - "폄": D → 멸시·차별·거부로 이어지는 작동 과정을 서술 (대상 집단을 직접 쓰지 않아도 과정이 있으면 폄)
+   - "막연": D는 있으나 '관련/연관 있다', 감정 낱말 하나로 끝남
+   - "없음": D 없음
+   확정 사례 — 폄:
+    ⓐ "능력주의 … 개인의 능력에 따라 지위와 보상을 분배하는 게 정당하다는 이념 … 과도한 경쟁과 차별을 정당화" (학생1)
+    ⓐ "극단한 경쟁으로 인한 능력주의의 대두 … 경쟁에서 뒤처진 사람을 멸시하고 차별하는 태도를 정당화" (학생3)
+    ⓑ "현실 속 타자가 다가오는 것을 불안해하거나 부담스러워하며 타자를 거부하려는 움직임에서 혐오 표현이 강해진다" (학생3)
+   확정 사례 — 막연:
+    ⓑ "쪽발이로 타자를 부담스러워하는 원인과 연관이 있다" (학생1)
+    ⓑ "다른 나라의 문화에 거부감을 느끼고 만들어 낸 것" (학생4)
+4. 급소근거: 답안의 해당 구절을 인용하고 K의 어느 고리(B·D·→Q)에 닿았고 어디서 끊겼는지 한 줄.
+
+[답안 전체]
+- 일반나열: 답안이 (라)·(마) 내용을 요약·나열이라도 끌어왔으면 true, 전혀 없으면 false.
+- 판단근거: 급소 기반 한 줄.`;
+
+const CONTRAST_SCHEMA = {
   type: "object",
   properties: {
-    채점: {
+    대조: {
       type: "array",
       items: {
         type: "object",
         properties: {
           기호: { type: "string", enum: SYMBOLS },
-          판정: { type: "string", enum: ["O", "X"] },
-          논리연결: { type: "string", enum: ["강", "약", "없음"] },
-          판단근거: { type: "string" },
+          B소환: { type: "boolean" },
+          D짝: { type: "string", enum: ["정확", "반대", "없음"] },
+          경로: { type: "string", enum: ["폄", "막연", "없음"] },
+          급소근거: { type: "string" },
         },
-        required: ["기호", "판정", "논리연결", "판단근거"],
+        required: ["기호", "B소환", "D짝", "경로", "급소근거"],
         additionalProperties: false,
       },
     },
-    단순요약: { type: "boolean" },
+    일반나열: { type: "boolean" },
+    판단근거: { type: "string" },
     오류목록: { type: "array", items: { type: "string" } },
   },
-  required: ["채점", "단순요약", "오류목록"],
+  required: ["대조", "일반나열", "판단근거", "오류목록"],
   additionalProperties: false,
 };
 
+// 대조 → 판정 (확정): B 소환 + D 정확 → O, K 경로를 폈으면 강·아니면 약 / B만·D 없음·일반 나열·반대 → X
+function judge(c) {
+  if (!c.B소환 || c.D짝 !== "정확") return { 판정: "X", 논리연결: "없음" };
+  return { 판정: "O", 논리연결: c.경로 === "폄" ? "강" : "약" };
+}
+
 // 채점기준 「점수 계산」 표
-function score([a, b], 단순요약) {
+function score([a, b], 일반나열) {
   const tag = (c) => (c.판정 === "O" ? `O${c.논리연결}` : "X");
   const pair = [tag(a), tag(b)].sort().join("+");
   const table = { "O강+O강": 4, "O강+O약": 3, "O강+X": 2, "O약+O약": 2, "O약+X": 1 };
   if (pair in table) return table[pair];
-  return 단순요약 ? 1 : 0;
+  return 일반나열 ? 1 : 0;
 }
 
 const textOf = (res) => res.content.filter((b) => b.type === "text").map((b) => b.text).join("").trim();
+
+async function structured(system, content, schema, maxTokens) {
+  const res = await client.messages.create({
+    model: MODEL,
+    max_tokens: maxTokens,
+    temperature: 0,
+    system,
+    output_config: { format: { type: "json_schema", schema } },
+    messages: [{ role: "user", content }],
+  });
+  return JSON.parse(textOf(res));
+}
 
 async function ocr(imagePath) {
   const res = await client.messages.create({
     model: MODEL,
     max_tokens: 2000,
+    temperature: 0,
     system: OCR_SYSTEM,
     messages: [{
       role: "user",
@@ -113,34 +152,26 @@ async function ocr(imagePath) {
   return textOf(res);
 }
 
-async function grade(answer) {
-  const res = await client.messages.create({
-    model: MODEL,
-    max_tokens: 4000,
-    system: GRADE_SYSTEM,
-    output_config: { format: { type: "json_schema", schema: GRADE_SCHEMA } },
-    messages: [{ role: "user", content: `[학생 답안]\n${answer}\n\nⓐ·ⓑ 두 항목을 채점하십시오.` }],
-  });
-  return JSON.parse(textOf(res));
-}
+fs.mkdirSync(OUT_DIR, { recursive: true });
+
 
 const files = fs.readdirSync(dir).filter((f) => /\.png$/i.test(f)).sort();
-fs.mkdirSync(OUT_DIR, { recursive: true });
 const summary = {};
 
 for (const file of files) {
   const name = path.parse(file).name;
   const answer = await ocr(path.join(dir, file));
-  const graded = await grade(answer);
-  const byKey = Object.fromEntries(graded.채점.map((g) => [g.기호, g]));
+  const contrast = await structured(contrastSystem(item), `[학생 답안]\n${answer}\n\nⓐ·ⓑ를 급소 K와 대조하십시오.`, CONTRAST_SCHEMA, 4000);
+  const byKey = Object.fromEntries(contrast.대조.map((c) => [c.기호, c]));
   const 채점 = SYMBOLS.map((s) => {
-    const g = byKey[s] ?? { 판정: "X", 논리연결: "없음", 판단근거: "채점 결과 누락" };
-    // O인데 논리연결 없음, X인데 강/약 같은 어긋남은 판정 쪽으로 맞춘다
-    const 논리연결 = g.판정 === "X" ? "없음" : g.논리연결 === "없음" ? "약" : g.논리연결;
-    return { 기호: s, 연결: LINK[s], 판정: g.판정, 논리연결, 판단근거: g.판단근거 };
+    const c = byKey[s] ?? { B소환: false, D짝: "없음", 경로: "없음", 급소근거: "대조 결과 누락" };
+    return { 기호: s, 연결: LINK[s], ...judge(c), B소환: c.B소환, D짝: c.D짝, 경로: c.경로, 판단근거: c.급소근거 };
   });
-  const 점수 = score(채점, graded.단순요약);
-  const result = { 문항: "q8_문항2", 학생: name, OCR: answer, 채점, 단순요약: graded.단순요약, 점수, 총배점: rubric.총배점, 오류목록: graded.오류목록, 엔진: MODEL };
+  const 점수 = score(채점, contrast.일반나열);
+  const result = {
+    문항: "q8_문항2", 학생: name, OCR: answer, 채점, 일반나열: contrast.일반나열, 점수, 총배점: rubric.총배점,
+    판단근거: contrast.판단근거, 오류목록: contrast.오류목록, 엔진: MODEL, 방식: "HMOS 5색 2단계 (문항 분해 → 급소 대조)",
+  };
   fs.writeFileSync(path.join(OUT_DIR, `q8_문항2_${name}.json`), JSON.stringify(result, null, 2) + "\n");
   summary[name] = 점수;
   console.log(`${name}\t${점수}\t${채점.map((c) => c.판정 + (c.판정 === "O" ? c.논리연결 : "")).join(" ")}`);
