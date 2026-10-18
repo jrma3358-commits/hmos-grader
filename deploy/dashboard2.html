@@ -696,9 +696,69 @@ function 조각카드(x) {
   </div>`;
 }
 
+// ── 탭3 인문·사회 4축 채점 ── 검증/<문항>/<문항>_vv_NN.json (scripts/grade-axis-rubric.mjs). 판정 · 근거 · 점수는 JSON 그대로, 화면은 보이기만 한다
+const 축채점 = { 목록: [], 문항: '', 파일: '', 상세: null };
+async function 축채점받기() {
+  try { 축채점.목록 = (await 받기('/api/axis-results')).목록 || []; } catch (_) { return; }
+  const 문항들 = [...new Set(축채점.목록.map((x) => x.문항))].sort();
+  if (!문항들.includes(축채점.문항)) 축채점.문항 = 문항들[0] || '';
+  그리기3축();
+}
+/** 칸 이름 — 항목이 있으면 「논점소환·ⓐ」 */
+const 칸이름 = (c) => c.축 + (c.항목 ? '·' + c.항목 : '');
+function 그리기3축() {
+  const el = $('#p3-axis');
+  if (!el) return;
+  const 문항들 = [...new Set(축채점.목록.map((x) => x.문항))].sort();
+  if (!문항들.length) { el.innerHTML = ''; return; }
+  const xs = 축채점.목록.filter((x) => x.문항 === 축채점.문항).sort((a, b) => a.학생.localeCompare(b.학생, 'ko', { numeric: true }));
+  const 머리 = xs[0]?.칸 || [];
+  const 평균 = xs.length ? xs.reduce((a, x) => a + Number(x.점수 || 0), 0) / xs.length : 0;
+  el.innerHTML = `<div class="card"><h3>인문·사회 — 4축 채점</h3>
+    <div class="sec-sub" style="margin-bottom:10px">4축 루브릭으로 채점한 학생 답안입니다 (검증/${esc(축채점.문항)}/). 칸마다 O/X, 점수 = O 개수 × (총배점 ÷ 칸 수). 줄을 누르면 판단근거가 나옵니다.</div>
+    <div class="field-pick small" id="ax3-q">${문항들.map((q) => `<button data-v="${esc(q)}" class="${q === 축채점.문항 ? 'on' : ''}">${esc(q)}</button>`).join('')}</div>
+    <div class="muted" style="font-size:12px;margin:8px 0">학생 ${xs.length}명 · 평균 ${점(평균)} / ${점(xs[0]?.총배점)}</div>
+    <div class="tbl-wrap" style="max-height:420px;overflow-y:auto"><table>
+      <tr><th>학생</th><th>총점</th>${머리.map((c) => `<th style="font-size:11.5px;white-space:nowrap">${esc(칸이름(c))}</th>`).join('')}</tr>
+      ${xs.map((x) => `<tr class="ax3-row" data-f="${esc(x.파일)}" style="cursor:pointer${x.파일 === 축채점.파일 ? ';background:var(--gold-lt)' : ''}"><td style="white-space:nowrap"><b>${esc(x.학생)}</b></td><td style="white-space:nowrap"><b>${점(x.점수)}</b> / ${점(x.총배점)}</td>${x.칸.map((c) => `<td><span class="dot ${c.판정 === 'O' ? 'O' : 'X'}">${esc(c.판정)}</span></td>`).join('')}</tr>`).join('')}
+    </table></div>
+    <div id="ax3-detail"></div>
+  </div>`;
+  el.querySelectorAll('#ax3-q button').forEach((b) => b.addEventListener('click', () => { 축채점.문항 = b.dataset.v; 축채점.파일 = ''; 축채점.상세 = null; 그리기3축(); }));
+  el.querySelectorAll('.ax3-row').forEach((r) => r.addEventListener('click', () => 축학생열기(r.dataset.f)));
+  그리기3축상세();
+}
+async function 축학생열기(파일) {
+  축채점.파일 = 파일;
+  try { 축채점.상세 = await 받기('/api/axis-results/' + 파일.replace(/\.json$/, '').split('/').map(encodeURIComponent).join('/')); }
+  catch (e) { 축채점.상세 = { 오류: e.message }; }
+  그리기3축();
+}
+function 그리기3축상세() {
+  const j = 축채점.상세, el = $('#ax3-detail');
+  if (!el || !j) return;
+  if (j.오류) { el.innerHTML = `<div class="err" style="margin-top:12px">${esc(j.오류)}</div>`; return; }
+  // 노드 대조 방식(칸에 근거가 없음) — 축의 도달노드마다 노드 대조 근거를 보인다
+  const 노드 = Object.fromEntries((j.노드대조 || []).map((n) => [n.노드, n]));
+  const 근거칸 = (c) => c.근거 != null
+    ? `${c.인용 ? `<div class="muted" style="font-size:12px">「${esc(c.인용)}」</div>` : ''}<div>${esc(c.근거)}</div>`
+    : (c.도달노드 || []).map((id) => { const n = 노드[id] || {}; return `<div style="margin-bottom:4px"><span class="dot ${n.도달 ? 'O' : 'X'}" style="display:inline-flex;margin-right:6px">${n.도달 ? 'O' : 'X'}</span><b>${esc(n.색 || '')} ${esc(n.실체 || id)}</b> — ${esc(n.근거 || '')}${n.인용 ? `<div class="muted" style="font-size:12px">「${esc(n.인용)}」</div>` : ''}</div>`; }).join('');
+  el.innerHTML = `<div style="margin-top:18px;border-top:1px solid var(--line);padding-top:14px">
+    <div class="scorebox"><span class="big">${점(j.점수)}</span><span class="of">/ ${점(j.총배점)}점 · ${esc(j.학생)} · O ${j.도달수 ?? j.채점.filter((c) => c.판정 === 'O').length}/${j.칸수 || j.채점.length}</span></div>
+    <div class="label">학생 답안 (OCR)</div><div class="pre" style="background:var(--ivory);padding:10px 12px;border-radius:6px;margin-bottom:12px">${esc(j.OCR || '')}</div>
+    <div class="tbl-wrap"><table>
+      <tr><th>칸</th><th>판정</th><th>기준</th><th>판단근거</th></tr>
+      ${j.채점.map((c) => `<tr><td style="white-space:nowrap"><b>${esc(칸이름(c))}</b></td><td>${표지(c.판정 === 'O' ? 'O' : 'X')}</td><td style="font-size:12.5px">${esc(c.기준 || '')}</td><td style="font-size:12.5px">${근거칸(c)}</td></tr>`).join('')}
+    </table></div>
+    ${(j.오류목록 || []).length ? `<div class="muted" style="margin-top:10px;font-size:12px">${j.오류목록.map((w) => '· ' + esc(w)).join('<br>')}</div>` : ''}
+    <div class="muted" style="margin-top:8px;font-size:12px">${esc(j.방식 || '')} · ${esc(j.모델 || '')} · 이미지 ${esc(j.이미지 || '')}</div>
+  </div>`;
+}
+
 function 그리기3() {
-  if (!기록) { $('#p3').innerHTML = '<div class="sec-title">채점 결과</div>' + 비었음('검증/ 폴더의 채점 결과를 고르거나 탭1에서 새로 채점하세요.'); return; }
-  $('#p3').innerHTML = '<div class="sec-title">채점 결과</div><div class="sec-sub">판정 · 값 · 다경로 · 오류 이름은 모두 엔진 출력입니다. 조각마다 판단근거 전체를 보입니다.</div>' + 소문항들().map((s, i) => {
+  if (!$('#p3-axis')) { $('#p3').innerHTML = '<div class="sec-title">채점 결과</div><div id="p3-rec"></div><div id="p3-axis"></div>'; 그리기3축(); }
+  if (!기록) { $('#p3-rec').innerHTML = 비었음('검증/ 폴더의 채점 결과를 고르거나 탭1에서 새로 채점하세요. 인문·사회 4축 채점은 아래에 있습니다.'); return; }
+  $('#p3-rec').innerHTML = '<div class="sec-sub">판정 · 값 · 다경로 · 오류 이름은 모두 엔진 출력입니다. 조각마다 판단근거 전체를 보입니다.</div>' + 소문항들().map((s, i) => {
     const g = 채점of(s, i);
     if (!g || !g.out || !g.out.조각별) return `<div class="card">${s.번호 ? `<h3>소문항 (${esc(s.번호)})</h3>` : ''}<div class="muted">${esc(g?.건너뜀 || g?.out?.error || '채점 없음')}</div></div>`;
     const o = g.out;
@@ -917,7 +977,7 @@ function 문항묶음(q, 고른) {
 // ── 시작 ──
 그리기();
 try { const t = localStorage.getItem('hmos-d2-tab'); if (t) 탭(t); } catch (_) {}
-목록받기().then(축목록받기);
+목록받기().then(축목록받기).then(축채점받기);
 </script>
 </body>
 </html>

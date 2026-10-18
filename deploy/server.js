@@ -857,6 +857,38 @@ app.get('/api/axis-rubrics',(req,res)=>{
   res.json({ok:true,목록});
 });
 
+// GET /api/axis-results · /api/axis-results/:dir/:file — 4축 루브릭 학생 채점 (scripts/grade-axis-rubric.mjs, 검증/<문항>/<문항>_vv_NN.json)
+// dashboard2 탭3 (오종래 2026-10-18). 읽기만 — 판정 · 근거 · 점수는 JSON 그대로
+const 축결과파일들=()=>{
+  const out=[];
+  let 폴더들=[];
+  try{폴더들=fs.readdirSync(검증폴더,{withFileTypes:true}).filter(d=>d.isDirectory()).map(d=>d.name);}catch(_){}
+  for(const d of 폴더들){
+    try{for(const f of fs.readdirSync(path.join(검증폴더,d)))if(/_vv_\d+\.json$/.test(f))out.push(d+'/'+f);}catch(_){}
+  }
+  return out.sort();
+};
+app.get('/api/axis-results',(req,res)=>{
+  res.setHeader('Cache-Control','no-store');
+  if(!접속됨(req)){res.status(401).json({ok:false,error:접속만료});return;}
+  const 목록=[];
+  for(const 파일 of 축결과파일들()){
+    try{
+      const j=JSON.parse(fs.readFileSync(path.join(검증폴더,파일),'utf8'));
+      if(!Array.isArray(j.채점))continue;
+      목록.push({파일,문항:j.문항,학생:j.학생,점수:j.점수,총배점:j.총배점,도달수:j.도달수,칸:j.채점.map(c=>({축:c.축,항목:c.항목||null,판정:c.판정}))});
+    }catch(_){}
+  }
+  res.json({ok:true,목록});
+});
+app.get('/api/axis-results/:dir/:file',(req,res)=>{ // :file = 결과 파일 이름 (.json 없이 — nginx가 .json 주소를 막는다)
+  res.setHeader('Cache-Control','no-store');
+  if(!접속됨(req)){res.status(401).json({ok:false,error:접속만료});return;}
+  const 파일=String(req.params.dir||'')+'/'+String(req.params.file||'').replace(/\.json$/,'')+'.json';
+  if(!축결과파일들().includes(파일)){res.status(404).json({ok:false,error:'채점 결과 파일이 없습니다'});return;}
+  res.type('application/json').send(fs.readFileSync(path.join(검증폴더,파일),'utf8'));
+});
+
 // ── POST /api/refine — C 5단계 논제 정교화 (조립설명서 C·논술 9단계) ──────────
 // 진단은 엔진([봉인⑬], /analyze 응답의 단계.정교화.진단)이 한다. Claude는 진단된 ①②③ 갈래마다 정교화안만 쓴다.
 // ④사족은 표시만 — 생성하지 않는다. 정교화안은 다시 엔진에 태워 급소·진단을 돌려준다 (명세서-2 §3 자가검증 순환).
