@@ -166,7 +166,7 @@ th{font-size:11.5px;color:var(--muted);font-weight:600;background:var(--ivory)}
 <nav class="topbar">
   <a class="brand" href="/">HMOS <em>채점 대시보드</em></a>
   <button class="tab active" data-tab="1"><span class="tab-num">1</span>문항 입력</button>
-  <button class="tab" data-tab="2"><span class="tab-num">2</span>인식 결과</button>
+  <button class="tab" data-tab="2"><span class="tab-num">2</span>문항분석</button>
   <button class="tab" data-tab="3"><span class="tab-num">3</span>채점 결과</button>
   <button class="tab" data-tab="4"><span class="tab-num">4</span>루브릭</button>
   <button class="tab" data-tab="5"><span class="tab-num">5</span>모범답안</button>
@@ -313,7 +313,15 @@ function 입력칸그리기() {
     <div class="card"><h3>새로 채점</h3>
       <div class="label">계열</div>
       <div class="field-pick" id="in-field"><button data-v="수리·과학">수리·과학</button><button data-v="인문·사회">인문·사회</button></div>
-      <div class="wait" id="in-wait" style="display:none"><b>인문·사회 계열 채점은 준비 중입니다.</b><br>지금은 수리·과학 계열 문항만 엔진으로 채점할 수 있습니다.</div>
+      <div id="in-wait" style="display:none">
+        <div class="sec-sub" style="margin:4px 0 12px">제시문과 문항을 넣은 뒤 <b>탭2 「문항분석 →」</b>을 누르세요. 엔진이 5색 · 급소 K를 읽고, 4축 루브릭을 만들어 검증/ 폴더에 저장합니다. (학생 답안 채점은 준비 중)</div>
+        <div class="field"><div class="label">제시문 — 「(가)」 「(나)」 머리 줄로 나눕니다 ${파일칸('hu-p')}</div><textarea id="hu-p" style="min-height:220px" placeholder="(가)&#10;개인의 정체성은 …&#10;&#10;(나)&#10;다음은 고등학교 1학년 학생들의 …"></textarea></div>
+        <div class="field"><div class="label">문항 (소문항 하나) ${파일칸('hu-q')}</div><textarea id="hu-q" placeholder="(1) (나)의 ⓐ~ⓓ에 담긴 차별적 인식이 (가)의 언어 공동체 구성 요인 중 무엇에 의한 것인지 각각 서술하시오. (20점)"></textarea></div>
+        <div class="row">
+          <div class="field"><div class="label">총배점 (비우면 문항의 「(20점)」)</div><input id="hu-pt" type="number" min="0.1" step="0.1" placeholder="20"></div>
+          <div class="field"><div class="label">저장 이름 → 검증/이름_루브릭.json</div><input id="hu-name" value="q8_문항1"></div>
+        </div>
+      </div>
       <div id="in-form">
         <div class="label">문항</div>
         <div class="field-pick small" id="in-src"><button data-v="분석">문항 분석에서 불러오기</button><button data-v="새로">새로 입력</button></div>
@@ -344,7 +352,12 @@ function 입력칸그리기() {
   $('#in-run').addEventListener('click', 새채점);
   document.querySelectorAll('#in-field button').forEach((b) => b.addEventListener('click', () => 계열고르기(b.dataset.v)));
   document.querySelectorAll('#in-src button').forEach((b) => b.addEventListener('click', () => 방식고르기(b.dataset.v)));
-  document.querySelectorAll('#in-form input[data-for]').forEach((inp) => inp.addEventListener('change', () => 파일넣기(inp)));
+  document.querySelectorAll('#in-form input[data-for], #in-wait input[data-for]').forEach((inp) => inp.addEventListener('change', () => 파일넣기(inp)));
+  for (const id of ['hu-p', 'hu-q', 'hu-pt', 'hu-name']) { // 쓰던 글은 이 브라우저에 남긴다
+    const el = $('#' + id);
+    try { const v = localStorage.getItem('hmos-d2-' + id); if (v != null) el.value = v; } catch (_) {}
+    el.addEventListener('input', () => { try { localStorage.setItem('hmos-d2-' + id, el.value); } catch (_) {} });
+  }
   document.querySelectorAll('#in-form input[data-photo]').forEach((inp) => inp.addEventListener('change', () => 사진넣기(inp)));
   $('#an-pull').addEventListener('click', () => 대시보드요청());
   $('#an-file').addEventListener('change', 목록파일열기);
@@ -417,7 +430,7 @@ async function 파일넣기(inp) {
     else if (/\.docx$/i.test(f.name)) 글 = await docx글(f);
     else if (/\.pdf$/i.test(f.name) || f.type === 'application/pdf') {
       칸알림(id, `${f.name} — 글자를 옮겨 적는 중… (수십 초 걸릴 수 있습니다)`);
-      글 = await OCR([{ 종류: 'application/pdf', 데이터: base64(await f.arrayBuffer()) }], id === 'in-q' ? 'B' : '답안');
+      글 = await OCR([{ 종류: 'application/pdf', 데이터: base64(await f.arrayBuffer()) }], id === 'in-q' || id === 'hu-q' || id === 'hu-p' ? 'B' : '답안');
     } else { 칸알림(id, `${f.name} — .txt · .docx · .pdf만 올릴 수 있습니다`, true); return; }
     if (!글.trim()) { 칸알림(id, `${f.name} — 글자를 찾지 못했습니다`, true); return; }
     칸채우기(id, 글);
@@ -592,10 +605,66 @@ async function 새채점() {
   } catch (e) { st.textContent = '채점 실패: ' + e.message; } finally { btn.disabled = false; }
 }
 
+// ── 탭2 문항분석 ── 탭1 인문·사회 칸의 제시문 · 문항 → /api/axis-rubric (1 엔진 5색 · K → 2 Claude 4축 기준 → 3 검증/ 저장)
+//   5색 · K · 도달 노드는 엔진 출력 그대로, 배점 · 부분점수는 서버 코드가 나눈다 (총배점 ÷ 4, 0 · 1). 화면은 보이기만 한다
+let 축결과 = null;
+const 축들 = ['논점소환', '세우기', '논증펴기', '답표현하기'];
+
+/** 제시문 칸 → [{id, 텍스트}] — 「(가)」 「[가]」 「제시문 (가)」 「### 제시문 (가)」 머리 줄로 나눈다. 머리가 없으면 한 덩어리 */
+function 제시문나누기(글) {
+  const 머리 = /^\s*(?:#+\s*)?(?:제시문\s*)?[(\[]([가-하])[)\]]\s*$/;
+  const 목록 = [];
+  let 지금 = null;
+  for (const 줄 of String(글).split(/\r?\n/)) {
+    const m = 머리.exec(줄);
+    if (m) { 지금 = { id: m[1], 텍스트: '' }; 목록.push(지금); continue; }
+    if (!지금) { if (!줄.trim()) continue; 지금 = { id: '제시문', 텍스트: '' }; 목록.push(지금); }
+    지금.텍스트 += 줄 + '\n';
+  }
+  return 목록.map((p) => ({ id: p.id, 텍스트: p.텍스트.trim() })).filter((p) => p.텍스트);
+}
+
+function 그리기2축() {
+  const r = 축결과?.루브릭;
+  $('#p2-axis').innerHTML = `<div class="card"><h3>문항분석 — 4축 루브릭</h3>
+    <div class="sec-sub" style="margin-bottom:10px">탭1 「인문·사회」 칸의 제시문 · 문항을 읽습니다. ① 엔진이 기능표지로 5색 · 급소 K를 읽고 ② Claude가 4축 기준 문장만 쓰고 ③ 검증/ 폴더에 저장합니다.</div>
+    <button class="run-btn" id="ax-run">문항분석 →</button><span class="status" id="ax-st"></span>
+    ${r ? `
+      <div class="pivot" style="margin-top:16px"><div class="t">급소 (K) — ${esc(r.급소K)}</div><div class="e">${esc(r.급소실체)}</div></div>
+      <div class="label">5색 (엔진)</div>
+      <div class="tbl-wrap"><table>${['B', 'C', 'P', 'D', 'Q'].map((c) => `<tr><td style="white-space:nowrap"><span class="chip" style="background:${색[c]}">${c} ${색이름[c]}</span></td><td>${r['5색'][c] ? esc(r['5색'][c]) : '<span class="muted">엔진이 읽지 않음</span>'}</td></tr>`).join('')}</table></div>
+      <div class="label" style="margin-top:14px">4축 루브릭 · 총배점 ${점(r.총배점)}</div>
+      <div class="tbl-wrap"><table>
+        <tr><th>축</th><th>기준</th><th>도달 (엔진 노드)</th><th>배점</th><th>부분점수</th></tr>
+        ${축들.map((k) => { const x = r['4축루브릭'][k] || {}; return `<tr><td style="white-space:nowrap"><b>${k}</b></td><td>${esc(x.기준)}<div class="muted" style="font-size:12px;margin-top:4px">${esc(x.근거 || '')}</div></td><td style="font-size:12.5px">${(x.도달 || []).map(esc).join('<br>')}</td><td>${점(x.배점)}</td><td style="white-space:nowrap">1 → ${점(x.배점)} · 0 → 0</td></tr>`; }).join('')}
+      </table></div>
+      <div class="muted" style="margin-top:10px;font-size:12px">저장 — 검증/${esc(축결과.파일)} · 엔진 ${esc(r.엔진?.commit || '')} · ${esc(r.모델 || '')}${r.엔진?.연결단락?.length ? ' · 연결 단락 ' + r.엔진.연결단락.map(esc).join(', ') : ''}</div>` : ''}
+  </div>`;
+  $('#ax-run').addEventListener('click', 문항분석);
+}
+
+async function 문항분석() {
+  const st = $('#ax-st'), btn = $('#ax-run');
+  const 문항 = ($('#hu-q')?.value || '').trim();
+  if (!문항) { st.textContent = '탭1에서 계열 「인문·사회」를 고르고 문항을 넣으세요'; return; }
+  const 총배점 = Number($('#hu-pt').value) || Number((/\((\d+(?:\.\d+)?)\s*점\)/.exec(문항) || [])[1]) || 0;
+  if (!총배점) { st.textContent = '탭1에 총배점을 넣거나 문항 끝에 「(20점)」을 쓰세요'; return; }
+  btn.disabled = true;
+  st.textContent = '분석 중… (① 엔진 5색 · K → ② 4축 기준 → ③ 저장)';
+  try {
+    축결과 = await 받기('/api/axis-rubric', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 문항, 제시문: 제시문나누기($('#hu-p').value), 총배점, 이름: $('#hu-name').value.trim() }) });
+    그리기2축();
+    $('#ax-st').textContent = `저장 끝 — 검증/${축결과.파일} · 탭7에서도 보입니다`;
+    축목록받기();
+  } catch (e) { st.textContent = '분석 실패: ' + e.message; btn.disabled = false; }
+}
+
 // ── 탭2 인식 결과 ── 5색 노드 · 조합 · 급소 (엔진 인식 그대로)
 function 그리기2() {
-  if (!기록) { $('#p2').innerHTML = '<div class="sec-title">인식 결과</div>' + 비었음('채점 결과를 고르면 엔진 인식(5색 · 급소)이 여기 나옵니다.'); return; }
-  $('#p2').innerHTML = '<div class="sec-title">인식 결과</div><div class="sec-sub">엔진이 문항에서 읽은 5색 노드와 급소입니다.</div>' + 소문항들().map((s) => {
+  if (!$('#p2-axis')) { $('#p2').innerHTML = '<div class="sec-title">문항분석 · 인식 결과</div><div id="p2-axis"></div><div id="p2-rec"></div>'; 그리기2축(); }
+  if (!기록) { $('#p2-rec').innerHTML = 비었음('채점 결과를 고르면 엔진 인식(5색 · 급소)이 여기 나옵니다.'); return; }
+  $('#p2-rec').innerHTML = '<div class="sec-sub" style="margin-top:20px">지금 보는 채점 결과 — 엔진이 문항에서 읽은 5색 노드와 급소입니다.</div>' + 소문항들().map((s) => {
     const 노드 = s.인식?.노드 || [];
     const 급소 = s.급소 || {};
     const 쓴색 = [...new Set(노드.map((n) => n.색))];
@@ -790,12 +859,34 @@ function 그리기7() {
   const 수리 = 문항들.length ? 문항들.map((q) => 문항묶음(q, 고른)).join('') : 비었음('검증/ 폴더에 수리 계열 q3~q7 채점 결과가 없습니다.');
   $('#p7').innerHTML = '<div class="sec-title">채점 샘플</div><div class="sec-sub">대표 답안입니다. 검증/ 폴더 채점 결과 JSON에서 바로 읽습니다. 카드를 누르면 탭3에서 조각별로 볼 수 있습니다.</div>'
     + `<div class="field-lane"><span class="fname">수리 계열</span><span class="fsub">${문항들.map(esc).join(' · ')}</span></div>${수리}`
-    + `<div class="field-lane later" style="margin-top:36px"><span class="fname">인문·사회 계열</span><span class="fsub">준비 중</span></div>
-       <div class="wait">인문·사회 계열 채점 샘플은 준비 중입니다. 인문·사회 채점이 열리면 이 자리에 대표 답안이 들어옵니다.</div>`;
-  document.querySelectorAll('#p7 .sample').forEach((el) => el.addEventListener('click', () => {
+    + `<div class="field-lane" style="margin-top:36px"><span class="fname">인문·사회 계열</span><span class="fsub">4축 루브릭 ${축목록.length}개 · 학생 답안 채점 준비 중</span></div>
+       ${축목록.length ? `<div class="samples">${축목록.map(축카드).join('')}</div>` : '<div class="wait">탭2 「문항분석 →」으로 만든 4축 루브릭이 이 자리에 들어옵니다.</div>'}`;
+  document.querySelectorAll('#p7 .sample[data-file]').forEach((el) => el.addEventListener('click', () => {
     $('#rec-select').value = el.dataset.file;
     열기(el.dataset.file).then(() => 탭(3));
   }));
+  document.querySelectorAll('#p7 .sample[data-axis]').forEach((el) => el.addEventListener('click', () => {
+    const j = 축목록.find((x) => x.파일 === el.dataset.axis);
+    if (!j) return;
+    축결과 = { 파일: j.파일, 루브릭: j };
+    그리기2축();
+    탭(2);
+  }));
+}
+
+// 인문·사회 — 저장한 4축 루브릭 (검증/*_루브릭.json, /api/axis-rubrics)
+let 축목록 = [];
+async function 축목록받기() {
+  try { 축목록 = (await 받기('/api/axis-rubrics')).목록 || []; } catch (_) { return; } // 목록받기가 오류를 이미 보였다
+  그리기7();
+}
+function 축카드(j) {
+  return `<div class="sample ok" data-axis="${esc(j.파일)}" title="눌러서 탭2에서 보기">
+    <div class="sample-head"><span class="who">${esc(j.파일.replace(/_루브릭\.json$/, ''))} ${esc(j.문항 || '')}</span><span class="sc">${점(j.총배점)} <small>점</small></span></div>
+    <div class="path-name">급소 K <span class="m">${esc(j.급소K)}</span> — ${esc(j.급소실체 || '')}</div>
+    <div class="where">${축들.map((k) => `<b>${k}</b> ${점(j['4축루브릭']?.[k]?.배점)} — ${esc(j['4축루브릭']?.[k]?.기준 || '')}`).join('<br>')}</div>
+    ${j.문항글 ? `<div class="ans">${esc(j.문항글)}</div>` : ''}
+  </div>`;
 }
 
 /** 문항 하나의 정답 경로 · 오류 경로 카드 */
@@ -826,7 +917,7 @@ function 문항묶음(q, 고른) {
 // ── 시작 ──
 그리기();
 try { const t = localStorage.getItem('hmos-d2-tab'); if (t) 탭(t); } catch (_) {}
-목록받기();
+목록받기().then(축목록받기);
 </script>
 </body>
 </html>

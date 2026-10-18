@@ -768,6 +768,95 @@ app.post('/api/grade',async(req,res)=>{
   res.json({엔진:r.엔진,...r.단계.채점});
 });
 
+// ── POST /api/axis-rubric — dashboard2 탭2 문항분석 · 4축 루브릭 (오종래 2026-10-18) ──────────
+// 1단계 엔진: 문항을 기능표지로 읽어 5색 · 급소 K (러너 C 2단계 인식, 제시문이 오면 3·4단계 연결까지) — 값은 엔진 출력 그대로
+// 2단계 Claude: 엔진 5색 · K만 받아 4축(논점소환 · 세우기 · 논증펴기 · 답표현하기) 기준 문장과 축마다 닿는 엔진 노드만 쓴다.
+//   점수는 코드가 정한다 — 축 배점 = 총배점 ÷ 4, 부분점수 0 · 1 (그 축의 5색 노드에 닿으면 1). 엔진에 없는 색은 Claude가 채우지 않는다
+// 3단계: 검증/<이름>_루브릭.json 저장 — 탭7 채점 샘플이 /api/axis-rubrics로 읽는다
+const 축들=['논점소환','세우기','논증펴기','답표현하기'];
+const 오색=['B','C','P','D','Q'];
+const 축루브릭파일=이름=>/^[0-9A-Za-z가-힣_-]{1,60}$/.test(이름)?이름+'_루브릭.json':null;
+const 축SYSTEM=()=>`당신은 HMOS 채점 엔진입니다.
+5색 분해 결과를 받아
+4축(논점소환·세우기·논증펴기·답표현하기)을 도출하고
+각 축별 부분점수(0·1)를 산정하는
+루브릭을 생성합니다.
+임의로 점수표를 만들지 않습니다.
+5색 도달 여부만으로 점수를 산정합니다.
+
+[지킬 것]
+${공통지킬것}
+- 축마다 「기준」 한 문장과, 학생 답이 그 축에서 닿아야 할 엔진 노드 id(도달노드)를 고른다. 도달노드는 받은 노드 id 중에서만, 한 축에 하나 이상.
+- 배점·점수 숫자는 쓰지 않는다 — 배점은 총배점을 4축에 똑같이 나누고, 부분점수는 도달노드에 닿으면 1 · 아니면 0으로 코드가 센다.
+- 엔진 5색에 없는 색(빈 칸)은 기준에 끌어오지 않는다. 문항 글에 있는 말로만 쓴다. 제시문 내용이나 정답을 기준에 넣지 않는다.`;
+const 축Format=ids=>({type:'json_schema',schema:{type:'object',additionalProperties:false,required:축들,properties:Object.fromEntries(축들.map(a=>[a,{type:'object',additionalProperties:false,required:['기준','도달노드','근거'],properties:{
+  기준:{type:'string',description:'교사가 읽는 채점 기준 한 문장'},
+  도달노드:{type:'array',items:{type:'string',enum:ids},description:'이 축에서 학생 답이 닿아야 할 엔진 노드 id'},
+  근거:{type:'string',description:'왜 이 노드인지 — 엔진 노드 · 급소 K로 한 줄'},
+}}]))}});
+
+app.post('/api/axis-rubric',async(req,res)=>{
+  const {문항,제시문,이름}=req.body||{};
+  const 총배점=Number(req.body&&req.body.총배점);
+  const 파일=축루브릭파일(String(이름||'').trim());
+  if(!String(문항||'').trim()){res.status(400).json({error:'문항을 넣으세요'});return;}
+  if(!(총배점>0)){res.status(400).json({error:'총배점을 넣으세요'});return;}
+  if(!파일){res.status(400).json({error:'저장 이름은 글자 · 숫자 · _ · - 로만 (예: q8_문항1)'});return;}
+  const 목록=Array.isArray(제시문)?제시문.filter(p=>p&&String(p.텍스트||'').trim()).map(p=>({id:String(p.id||'제시문'),텍스트:String(p.텍스트)})):[];
+
+  // 1단계 — 엔진
+  const r=await runAnalyze({파이프라인:'C',논제:String(문항),...(목록.length?{제시문:목록}:{})});
+  const 소=r.ok&&r.단계&&r.단계.인식&&r.단계.인식.소문항;
+  if(!소||!소.length){res.status(r.러너실패?500:400).json({error:엔진실패글('엔진 인식 실패: ',r)});return;}
+  if(소.length>1){res.status(400).json({error:`소문항이 ${소.length}개로 읽혔습니다 — 소문항 하나씩 넣으세요`});return;}
+  const s=소[0];
+  if(!s.급소||!s.급소.length){res.status(400).json({error:'엔진이 급소 K를 잡지 못했습니다'+(s.급소실패?` (${s.급소실패.flag})`:'')});return;}
+  const 노드=s.노드||[];
+  const 다섯=Object.fromEntries(오색.map(c=>[c,노드.filter(n=>n.색===c).map(n=>n.실체).join(' · ')]));
+  const 덩=(s.급소덩어리||[])[0];
+  const 색of=id=>(노드.find(n=>n.id===id)||{}).색;
+  const 급소K=덩?[[색of(덩.B),...덩.C.map(색of)].filter(Boolean).join('×'),...[...new Set(덩.Q.map(색of))]].join('→'):s.급소.map(k=>k.색).join('·');
+  const 엔진={commit:r.엔진&&r.엔진.commit,노드,급소:s.급소,급소덩어리:s.급소덩어리||[],연결단락:((r.단계.정합&&r.단계.정합.소문항)||[]).find(x=>x.번호===s.번호)?.연결단락||[]};
+
+  // 2단계 — Claude: 기준 문장 · 도달노드만
+  const user=`[문항]\n${s.텍스트}\n\n[엔진 5색 노드 — id · 색 · 실체 · 기능표지]\n${노드.map(n=>`${n.id} · ${n.색} · ${n.실체} · ${n.표지}`).join('\n')}\n\n[엔진 급소 K]\n${급소K} — ${s.급소.map(k=>`${k.노드} ${k.실체}`).join(' / ')}${덩?`\n급소덩어리: B ${덩.B} · C ${덩.C.join(',')||'없음'} · Q ${덩.Q.join(',')}`:''}\n\n[빈 색]\n${오색.filter(c=>!다섯[c]).join(' · ')||'없음'}\n\n4축 루브릭을 쓰십시오.`;
+  const a=await askClaude(res,축SYSTEM(),user,축Format(노드.map(n=>n.id)),o=>축들.every(k=>o[k]&&String(o[k].기준||'').trim()&&Array.isArray(o[k].도달노드)&&o[k].도달노드.length)); // temperature는 이 모델에서 받지 않는다 (400) — 점수는 코드가 세니 문장만 달라진다
+  if(!a)return;
+
+  // 배점 · 부분점수 — 코드가 센다 (총배점 ÷ 4, 0.1 단위. 끝수는 마지막 축에)
+  const 몫=Math.floor(총배점/축들.length*10)/10;
+  const 축배점=축들.map((_,i)=>i<축들.length-1?몫:Math.round((총배점-몫*(축들.length-1))*10)/10);
+  const 실체of=id=>{const n=노드.find(x=>x.id===id);return n?`${n.색} ${n.실체}`:id;};
+  const 루브릭={
+    문항:s.번호?`(${s.번호})`:'',
+    총배점,
+    '5색':다섯,
+    급소K,
+    급소실체:s.급소.map(k=>k.실체).join(' · '),
+    '4축루브릭':Object.fromEntries(축들.map((k,i)=>[k,{기준:a.out[k].기준,배점:축배점[i],부분점수:{1:축배점[i],0:0},도달:a.out[k].도달노드.map(실체of),도달노드:a.out[k].도달노드,근거:a.out[k].근거}])),
+    문항글:s.텍스트,
+    엔진,
+    모델:a.msg.model,
+    작성:new Date().toISOString(),
+  };
+
+  // 3단계 — 저장
+  try{fs.writeFileSync(path.join(검증폴더,파일),JSON.stringify(루브릭,null,1)+'\n','utf8');}
+  catch(e){res.status(500).json({error:'저장 실패: '+e.message,루브릭});return;}
+  res.json({파일,루브릭});
+});
+
+// GET /api/axis-rubrics — 저장한 4축 루브릭 (탭7 채점 샘플). 읽기만, 쿠키는 /api/results와 같게 여기서 본다
+app.get('/api/axis-rubrics',(req,res)=>{
+  res.setHeader('Cache-Control','no-store');
+  if(!접속됨(req)){res.status(401).json({ok:false,error:접속만료});return;}
+  const 목록=[];
+  for(const 파일 of 검증파일들().filter(f=>f.endsWith('_루브릭.json'))){
+    try{const j=JSON.parse(fs.readFileSync(path.join(검증폴더,파일),'utf8'));if(j&&j['4축루브릭'])목록.push({파일,...j});}catch(_){}
+  }
+  res.json({ok:true,목록});
+});
+
 // ── POST /api/refine — C 5단계 논제 정교화 (조립설명서 C·논술 9단계) ──────────
 // 진단은 엔진([봉인⑬], /analyze 응답의 단계.정교화.진단)이 한다. Claude는 진단된 ①②③ 갈래마다 정교화안만 쓴다.
 // ④사족은 표시만 — 생성하지 않는다. 정교화안은 다시 엔진에 태워 급소·진단을 돌려준다 (명세서-2 §3 자가검증 순환).
