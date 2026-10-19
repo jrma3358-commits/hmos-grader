@@ -806,7 +806,7 @@
       <button class="nav-item" data-step="i1" onclick="showStep('i1')"><div class="nav-num">1</div>급소 추출</button>
       <button class="nav-item" data-step="i2" onclick="showStep('i2')"><div class="nav-num">2</div>면접관 유형 선택</button>
       <button class="nav-item" data-step="i3" onclick="showStep('i3')"><div class="nav-num">3</div>면접 질문 생성</button>
-      <button class="nav-item" data-step="i4" onclick="showStep('i4')"><div class="nav-num">4</div>면접관 확정</button>
+      <button class="nav-item" data-step="i4" onclick="showStep('i4')"><div class="nav-num">4</div>면접 질문 확정</button>
     </div>
 
     <!-- 수행평가 -->
@@ -945,10 +945,10 @@
       <div id="i3-body"></div>
     </div>
 
-    <!-- 면접 4 · 면접관 확정 -->
+    <!-- 면접 4 · 면접 질문 확정 -->
     <div class="tab-pane" id="pane-i4">
       <div class="section-header">
-        <div class="section-title"><span class="tool-tag grade">채점도구</span>4 · 면접관 확정</div>
+        <div class="section-title"><span class="tool-tag grade">채점도구</span>4 · 면접 질문 확정</div>
         <div class="section-sub">질문 카드마다 수정 · 삭제 · 확정 — 확정한 질문을 저장하거나 인쇄합니다</div>
       </div>
       <div id="i4-body"></div>
@@ -1590,7 +1590,7 @@ function 문항분석으로넘기기() {
 }
 
 // ── 면접 출제 (오종래 2026-10-19) ──
-// 0 자료 등록 → 1 급소 추출(엔진 /analyze) → 2 면접 질문 생성(/api/interview — Claude는 급소에서만 문장) → 3 면접관 확정(저장·인쇄)
+// 0 자료 등록 → 1 급소 추출(엔진 /analyze) → 2 면접관 유형 선택 → 3 면접 질문 생성(/api/interview — Claude는 급소에서만 문장) → 4 면접 질문 확정(저장·인쇄)
 // HMOS 원칙: 급소는 엔진이 잡는다. 엔진이 못 세운 항목은 「확인 필요」 — 교사는 엔진이 잡은 노드에서만 고른다. 급소가 없으면 질문을 만들지 않는다.
 const 면접 = { 자소서: ['', '', '', ''], 세특: [{ 과목: '', 내용: '' }], 지원: { 대학: '', 학과: '', 전형: '', 인재상: '' }, 성적분위: '', 면접관: {}, 항목: [], 질문: [], 생성: null };
 
@@ -1879,7 +1879,7 @@ function renderI3() {
       ${막힘 ? `<span class="c-meta" style="margin-left:8px;">${막힘}</span>` : ''}
     </div>
     ${카드}
-    ${g ? '<div class="c-nav"><span></span><button class="type-btn" onclick="showStep(\'i4\')">4 · 면접관 확정 →</button></div>' : ''}`;
+    ${g ? '<div class="c-nav"><span></span><button class="type-btn" onclick="showStep(\'i4\')">4 · 면접 질문 확정 →</button></div>' : ''}`;
 }
 
 async function 질문생성() {
@@ -1897,7 +1897,7 @@ async function 질문생성() {
   });
 }
 
-// ── 4 · 면접관 확정 ──
+// ── 4 · 면접 질문 확정 ──
 function renderI4() {
   const body = document.getElementById('i4-body');
   if (!면접.질문.length) { body.innerHTML = '<div class="card c-empty">3단계에서 질문을 생성하면 표시됩니다</div>'; return; }

@@ -327,10 +327,10 @@
     .pivot-net { margin-top: 24px; }
     .needs { padding: 88px 0 96px; }
   }
-  /* 아주 좁은 화면 — 헤더 메뉴 셋이 로고 옆에 안 들어가면 로고 아래 줄로 (2026-10-17) */
-  @media (max-width: 370px) {
+  /* 좁은 화면 — 헤더 메뉴 넷(문제 출제 도구 더함, 2026-10-19)이 로고 옆에 안 들어가면 로고 아래 줄로, 그래도 넘치면 메뉴끼리 줄을 바꾼다 */
+  @media (max-width: 720px) {
     header .wrap { height: auto; flex-wrap: wrap; padding-top: 10px; padding-bottom: 10px; row-gap: 8px; }
-    .header-nav { width: 100%; justify-content: flex-end; }
+    .header-nav { width: 100%; justify-content: flex-end; flex-wrap: wrap; row-gap: 8px; }
   }
   @media (prefers-reduced-motion: reduce) {
     html { scroll-behavior: auto; }
@@ -351,6 +351,7 @@
     <nav class="header-nav">
       <a class="header-link" href="/about">HMOS 이야기</a>
       <button class="header-btn" type="button" onclick="열기('/dashboard')">문항 분석</button>
+      <button class="header-btn" type="button" onclick="열기('/tools')">문제 출제 도구</button>
       <button class="header-btn alt" type="button" onclick="열기('/dashboard2')">채점 대시보드</button>
     </nav>
   </div>
