@@ -1444,7 +1444,16 @@ const 면접유형목록={
   입사:{기대:'직무 역량·조직 적응력',분위:false,분위없음:'직무 역량 중심'},
   이직:{기대:'경력 성과·문제해결·성장',분위:false,분위없음:'경력 수준 중심'},
 };
-const 면접시스템=(면접관,분위,유형)=>`이것은 ${유형} 면접입니다.
+// 대입 세부 유형 (오종래 2026-10-19) — 2단계에서 고른다. 질문 방식은 사용자 메시지에 넣는다. MMI는 꼬리질문 없이 본질문만
+const 대입세부목록={
+  '학생부 기반':'활동 경험·배움·성장 중심 질문',
+  '제시문 기반':'급소를 제시문 논리와 연결해 분석·비교 질문',
+  '교과 심층':'급소 개념의 원리·적용·추론 질문',
+  '인성·상황':'급소 관련 가치관·판단·갈등 해결 질문',
+  'MMI':'급소마다 짧고 독립적인 판단 질문 (꼬리질문 없이 본질문만)',
+};
+const 꼬리수of=세부=>세부==='MMI'?0:2;
+const 면접시스템=(면접관,분위,유형,꼬리수=2)=>`이것은 ${유형} 면접입니다.
 기대 수준과 질문 방향: ${면접유형목록[유형].기대}
 
 당신은 ${면접관.직위} ${면접관.연령대} ${면접관.성별} ${면접관.성향} ${면접관.전문성} 면접관입니다.
@@ -1471,14 +1480,14 @@ ${면접유형목록[유형].분위?`지원자는 상위 ${분위}% 학생입니
 - 급소 없는 내용은 묻지 말 것
 - 각 질문마다 근거 명시
   (자소서 N번·학생부 ○○과목 세특)
-- 본질문 1개·꼬리질문 2개 세트로
+${꼬리수?'- 본질문 1개·꼬리질문 2개 세트로':'- 본질문 1개만 (꼬리질문 없이 — followups는 빈 배열)'}
 
 지킬 것:
 - 급소 블록 하나당 카드 하나. id는 블록의 id 그대로. 블록에 없는 급소를 만들지 않는다.
 - 급소는 HMOS 엔진이 잡고 교사가 확인한 것이다. 다시 고르거나 바꾸지 않는다. 본질문은 그 급소를 직접 묻는다.
 - 「근거 대목」은 근거를 인용하는 데만 쓴다. 대목에 있어도 급소와 닿지 않는 내용은 묻지 않는다.
 - basis는 「자료 근거」(예: 자소서 2번 문항)를 그대로 쓰고, 근거 대목에서 급소가 나온 말을 작은따옴표로 짧게 인용한다.
-- 꼬리질문 둘은 본질문의 답을 더 깊이 확인하는 질문이다. 같은 급소 안에서만 묻는다.
+${꼬리수?'- 꼬리질문 둘은 본질문의 답을 더 깊이 확인하는 질문이다. 같은 급소 안에서만 묻는다.\n':''}- 사용자 메시지의 「질문 방식」에 맞는 톤·방향으로 묻는다.
 - 지원처(학교·학과·기업·직무·전형)는 질문 말투를 맞추는 데만 쓴다. 지원처 정보로 새 주제를 묻지 않는다.
 - 지원자가 읽고 답할 질문이다. 엔진·급소·노드·5색 같은 분석 용어를 질문과 근거에 쓰지 않는다.
 - 모든 출력은 한국어.`;
@@ -1487,7 +1496,7 @@ const 면접형식=ids=>({type:'json_schema',schema:{type:'object',additionalPro
   cards:{type:'array',description:'급소 블록 하나당 하나 — 블록의 id를 그대로',items:{type:'object',additionalProperties:false,required:['id','question','followups','basis'],properties:{
     id:{type:'string',enum:ids},
     question:{type:'string',description:'본질문 — 급소를 직접 묻는다'},
-    followups:{type:'array',items:{type:'string'},description:'꼬리질문 두 개 — 같은 급소에서'},
+    followups:{type:'array',items:{type:'string'},description:'꼬리질문 두 개 — 같은 급소에서 (MMI는 빈 배열)'},
     basis:{type:'string',description:"근거 — 자료 근거 + 원문 대목 인용 (예: 자소서 2번 문항 '○○ 경험'에서)"},
   }}},
 }}});
@@ -1501,9 +1510,12 @@ function 근거대목(원문,급소){
   return (딱.length?딱:문장.filter(t=>낱.some(w=>t.includes(w)))).join(' ').slice(0,600);
 }
 app.post('/api/interview',async(req,res)=>{
-  const {급소,지원,성적분위,면접관,면접유형}=req.body||{};
+  const {급소,지원,성적분위,면접관,면접유형,대입세부}=req.body||{};
   const 유형=String(면접유형||'');
   if(!면접유형목록[유형]){res.status(400).json({error:'면접 유형(고입·대입·편입·입사·이직)을 골라야 합니다 — 0단계'});return;}
+  const 세부=유형==='대입'?String(대입세부||''):null;
+  if(세부!==null&&!대입세부목록[세부]){res.status(400).json({error:`대입 세부 유형(${Object.keys(대입세부목록).join('·')})을 골라야 합니다 — 2단계`});return;}
+  const 꼬리수=꼬리수of(세부);
   const 분위=면접유형목록[유형].분위?String(성적분위||''):null;
   if(분위!==null&&!면접성적분위.includes(분위)){res.status(400).json({error:'지원자 성적 분위(상위 3·10·25·50%)를 골라야 합니다 — 0단계'});return;}
   const 관=면접관&&typeof 면접관==='object'?면접관:{};
@@ -1516,6 +1528,7 @@ app.post('/api/interview',async(req,res)=>{
   const 지원글=지원&&typeof 지원==='object'?['대학','학과','전형'].map(k=>String(지원[k]||'').trim()).filter(Boolean).join(' · '):'';
   const user=[
     지원글?`지원: ${지원글}`:'',
+    세부?`질문 방식: 대입 면접 — ${세부}: ${대입세부목록[세부]}`:`질문 방식: ${유형} 면접 — ${면접유형목록[유형].기대} 중심 질문`,
     `급소 (HMOS 엔진 · 교사 확인 — 그대로 받을 것):\n\n${목록.map(u=>[
       `[급소 ${u.id}]`,
       `급소: 「${String(u.급소).trim()}」`,
@@ -1523,24 +1536,24 @@ app.post('/api/interview',async(req,res)=>{
       `근거 대목 (급소가 나온 문장 — 인용용): ${근거대목(u.원문,String(u.급소).trim())||'(급소가 나온 문장을 찾지 못함 — 자료 근거만 밝힐 것)'}`,
     ].join('\n')).join('\n\n')}`,
   ].filter(Boolean).join('\n\n');
-  const r=await askClaude(res,면접시스템(관,분위,유형),user,면접형식(ids),o=>Array.isArray(o.cards));
+  const r=await askClaude(res,면접시스템(관,분위,유형,꼬리수),user,면접형식(ids),o=>Array.isArray(o.cards));
   if(!r)return;
   // 점검 — 판정하지 않고 면접관 확인으로 표시만: 카드 빠짐 · 꼬리질문 수 · 근거에 자료 근거 없음 · 급소 말이 질문·근거에 없음 · 분석 용어
   const 질문=목록.map(u=>{
     const c=r.out.cards.find(x=>x.id===u.id);
     const 기본={id:u.id,급소:String(u.급소).trim(),자료:u.자료||'',자료근거:String(u.근거).trim(),급소출처:u.출처||'엔진'};
-    if(!c)return {...기본,본질문:'',꼬리질문:['',''],근거:'',점검:['Claude가 이 급소의 질문을 내지 않음']};
-    const 꼬리=(c.followups||[]).slice(0,2);
-    while(꼬리.length<2)꼬리.push('');
+    if(!c)return {...기본,본질문:'',꼬리질문:Array(꼬리수).fill(''),근거:'',점검:['Claude가 이 급소의 질문을 내지 않음']};
+    const 꼬리=(c.followups||[]).slice(0,꼬리수);
+    while(꼬리.length<꼬리수)꼬리.push('');
     const 점검=[];
-    if((c.followups||[]).length!==2)점검.push(`꼬리질문이 ${(c.followups||[]).length}개`);
+    if((c.followups||[]).length!==꼬리수)점검.push(`꼬리질문이 ${(c.followups||[]).length}개${꼬리수?'':' (MMI는 본질문만)'}`);
     if(!String(c.basis).includes(기본.자료근거))점검.push(`근거에 「${기본.자료근거}」가 없음`);
     if(![c.question,c.basis].some(t=>String(t).includes(기본.급소)))점검.push(`급소 「${기본.급소}」가 본질문·근거에 그대로 나오지 않음`);
     const 용어=[...new Set([c.question,...꼬리,c.basis].flatMap(t=>면접용어.flatMap(re=>{const m=String(t).match(re);return m?[m[0]]:[];})))];
     if(용어.length)점검.push(`분석 용어 ${용어.map(x=>`「${x}」`).join(' ')}`);
     return {...기본,본질문:c.question,꼬리질문:꼬리,근거:c.basis,점검};
   });
-  res.json({model:r.msg.model,usage:r.msg.usage,면접유형:유형,성적분위:분위,면접관:Object.fromEntries(Object.keys(면접관목록).map(k=>[k,관[k]])),질문});
+  res.json({model:r.msg.model,usage:r.msg.usage,면접유형:유형,대입세부:세부,성적분위:분위,면접관:Object.fromEntries(Object.keys(면접관목록).map(k=>[k,관[k]])),질문});
 });
 
 // ── POST /api/ocr — 0단계 문항 등록: 이미지(1~2장)·PDF → 원문 텍스트 + 그림 영역 (오종래 2026-10-14) ──
