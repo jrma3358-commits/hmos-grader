@@ -743,7 +743,7 @@
     <div class="sidebar-label" style="margin-top: 12px;">분석 단계</div>
 
     <!-- 파이프라인 선택 전 (오종래 2026-10-19) -->
-    <div id="nav-guide" class="c-meta" style="padding: 8px 12px;">파이프라인 선택 후 단계가 표시됩니다</div>
+    <div id="nav-guide" class="c-meta" style="padding: 8px 12px;">문제 형식 선택 후 단계가 표시됩니다</div>
 
     <!-- 논술형 (C-1a·1b·2a·2b) — 번호·이름은 표면형식에 맞춰 사이드바단계()가 붙인다. 단계 「p」 = 제시문 없는 논술의 문제 평가 -->
     <div id="nav-c" style="display:none;">
@@ -796,7 +796,7 @@
     </div>
 
     <div class="pipeline-badge">
-      <strong id="pipeline-display">— 파이프라인 미선택</strong>
+      <strong id="pipeline-display">— 문제 형식 미선택</strong>
       <span id="type-display">문항 유형 선택 필요</span>
     </div>
 
@@ -814,7 +814,7 @@
     <div class="tab-pane active" id="tab-0">
       <div class="section-header">
         <div class="section-title">문항 입력</div>
-        <div class="section-sub">분석할 문항을 입력하고 파이프라인을 선택하세요</div>
+        <div class="section-sub">분석할 문항을 입력하고 문제 형식을 선택하세요</div>
       </div>
 
       <div class="card">
@@ -824,7 +824,7 @@
         </div>
 
         <div style="margin-top: 16px;">
-          <div class="card-title">파이프라인 선택</div>
+          <div class="card-title">문제 형식 선택</div>
           <!-- 표면형식 3단계 (오종래 2026-10-19) — 선택형 / 서술형 → 단문·단계 / 논술형 → 인문·수리 → 제시문 있음·없음 -->
           <div class="type-selector" data-level="0">
             <button class="type-btn form-btn" data-choice="선택형" onclick="형식고르기(0, '선택형')">선택형</button>
@@ -886,7 +886,7 @@
         <div class="c-table-wrap">
           <!-- rubric-table을 쓰지 않는다 — renderTab4가 첫 .rubric-table 머리를 바꾼다 -->
           <table class="item-table">
-            <thead><tr><th>이름</th><th>파이프라인</th><th>상태</th><th></th></tr></thead>
+            <thead><tr><th>이름</th><th>문제 형식</th><th>상태</th><th></th></tr></thead>
             <tbody id="item-tbody"></tbody>
           </table>
         </div>
@@ -1710,8 +1710,10 @@ function 형식고르기(단, 고른) {
   const 코드 = Object.keys(형식들).find(k => 형식들[k].길.join('|') === 형식길.join('|'));
   형식버튼그리기();
   if (코드) return pickForm(코드);
-  // 고르는 중 — 사이드바는 기본 안내 (파이프라인은 끝까지 골라야 바뀐다)
+  // 고르는 중 — 사이드바는 기본 안내, 형식 표시 칸은 비운다 (파이프라인은 끝까지 골라야 바뀐다, 오종래 2026-10-19)
   사이드바단계(null);
+  document.getElementById('pipeline-display').textContent = '';
+  document.getElementById('type-display').textContent = '';
 }
 
 function 형식버튼그리기() {
@@ -1749,6 +1751,8 @@ function pickForm(코드) {
 function 형식칸맞춤() {
   const f = 형식들[selectedForm];
   document.getElementById('passage-block').style.display = 제시문없는논술() ? 'none' : '';
+  // 제시문 없는 논술은 예시도 제시문 없이 (오종래 2026-10-19)
+  document.getElementById('thesis-input').placeholder = 제시문없는논술() ? 논제예시.없음 : 논제예시.있음;
   document.getElementById('c-sample-btn').style.display = f && f.파이프라인 === 'C-논술' && f.제시문 ? '' : 'none';
   if (f && f.파이프라인 === 'C-논술') {
     document.getElementById('reg-title').textContent = f.제시문 ? '논제 + 제시문' : '논제';
@@ -1756,9 +1760,11 @@ function 형식칸맞춤() {
       ? '논제와 제시문을 한 번에 넣으세요 — 등록하면 1단계에서 논제·제시문으로 나눈 결과를 확인합니다'
       : '논제를 넣으세요 — 등록하면 1단계 논제 입력으로 넘어갑니다';
   }
-  document.getElementById('pipeline-display').textContent = f ? f.이름 : '— 파이프라인 미선택';
+  document.getElementById('pipeline-display').textContent = f ? f.이름 : '— 문제 형식 미선택';
   document.getElementById('type-display').textContent = f ? `${코드표시(selectedForm)} · 엔진 ${f.파이프라인}` : '문항 유형 선택 필요';
 }
+
+const 논제예시 = { 있음: document.getElementById('thesis-input').placeholder, 없음: '논제를 붙여넣으세요.\n예) 다음 글을 읽고 논하시오.' };
 
 const 코드표시 = 코드 => (코드 === '선택형' ? 'A' : 코드);
 
@@ -1853,7 +1859,7 @@ async function runAnalysis() {
   const B입력 = isB ? { 논제: document.getElementById('thesis-input').value.trim(), 제시문: document.getElementById('passage-input').value.trim() } : null;
   const q = isB ? B입력.논제 : document.getElementById('question-input').value.trim();
   if (!q) { alert(isB ? '논제를 입력하세요.' : '문항 원문을 입력하세요.'); return; }
-  if (!selectedType) { alert('파이프라인을 선택하세요.'); return; }
+  if (!selectedType) { alert('문제 형식을 선택하세요.'); return; }
 
   const body = { 문항원문: q, 파이프라인: selectedType.charAt(0) };
   if (selectedType === 'C-논술') {
