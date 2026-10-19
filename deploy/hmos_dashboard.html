@@ -243,6 +243,8 @@
     transition: all 0.15s;
   }
   .type-btn:hover { border-color: var(--accent); color: var(--accent); }
+  /* 고른 버튼 안의 보조 글 — 짙은 바탕에서도 읽히게 (소문항 창 탭 · 문제 형식, 2026-10-19) */
+  .type-btn.selected .c-meta { color: inherit; opacity: 0.85; }
   .type-btn.selected {
     background: var(--accent);
     border-color: var(--accent);
@@ -2795,6 +2797,9 @@ const 합친C = () => ({ ...(창.전체 || C결과()), 확정: 창.목록.flatMa
 
 /** 저장 파일 이름 앞부분 — 0단계 문항 목록의 문항 이름 (예: 부산대2025_인문2). 공백은 서버가 뗀다 */
 const 문항명of = () => ((지금문항() || {}).이름 || '문항');
+/** 소문항 창 — 저장 내용의 형식 · 수리논술(C-2a·C-2b) 단계형 이어받기 표시 (tools와 같다, 2026-10-19) */
+const 형식of = () => selectedForm;
+const 단계형of = () => /^C-2/.test(selectedForm || '');
 
 /** 자동 진행이 창 하나를 끝낼 때마다 목록 결과에 담는다 */
 function 창저장() {
@@ -3075,7 +3080,7 @@ function renderC3() {
 // 진행 중에는 창을 옮기지 않는다 — 화면은 돌고 있는 창을 보인다. 다 끝나면 탭이나 ◀ ▶로 옮긴다.
 // 창 하나가 끝나면 검증/<문항명>_<번호>.json 으로 자동 저장 (/api/subq-save) — 창 막대에 저장 완료 표시.
 // 페이지마다 따로 둘 것: C전체그림() (C 단계 화면을 다시 그린다) · 창후처리() (창 하나의 마지막 자동 단계, 없으면 그만)
-//   · 문항명of() (저장 파일 이름 앞부분)
+//   · 문항명of() (저장 파일 이름 앞부분). 있으면 쓰는 것: 형식of() (C-1a…, 저장 내용) · 단계형of() (수리논술 이어받기 표시)
 const C열쇠 = ['논제', '제시문', '분석', '제시문급소', '극성', '관계도', '정교화', '추가', '후보', '확정'];
 const 빈C = () => ({ 논제: '', 제시문: [], 분석: null, 제시문급소: [], 극성: null, 관계도: null, 정교화: null, 추가: null, 후보: [], 확정: [] });
 const 창 = { 목록: [], 지금: 0, 진행: false, 차례: 0 };
@@ -3091,14 +3096,17 @@ const 창논제 = s => [s.공통발문, `(${s.번호}) ${s.텍스트}`].filter(B
 
 /** 창 막대 — 단계 화면마다 위에. 진행 중이면 상태만 */
 function 창바그림() {
+  // 단계형 (수리논술 C-2a·C-2b, 오종래 2026-10-19) — 뒤 소문항이 앞 소문항 결과를 이어받는다는 표시. 분석은 창마다 그대로
+  const 단계형 = typeof 단계형of === 'function' && 단계형of();
   const html = 창.목록.length < 2 ? '' : `<div class="card" style="padding:10px 14px; margin-bottom:12px;">
     <div class="type-selector" style="align-items:center; gap:6px; margin:0;">
       <button class="type-btn" ${창.진행 || 창.지금 === 0 ? 'disabled' : ''} onclick="창열기(${창.지금 - 1})">◀ 이전</button>
-      ${창.목록.map((w, i) => `<button class="type-btn${i === 창.지금 ? ' active' : ''}" ${창.진행 && i !== 창.지금 ? 'disabled' : ''} onclick="창열기(${i})" title="${esc(w.사유 || w.저장오류 || w.저장 || w.상태)}">(${esc(w.번호)}) <span class="c-meta" style="margin-left:4px;">${esc(w.상태)}${w.저장 ? ' · 저장 ✓' : w.저장오류 ? ' · 저장 ✗' : ''}</span></button>`).join('')}
+      ${창.목록.map((w, i) => `<button class="type-btn${i === 창.지금 ? ' selected' : ''}" ${창.진행 && i !== 창.지금 ? 'disabled' : ''} onclick="창열기(${i})" title="${esc(w.사유 || w.저장오류 || w.저장 || w.상태)}">(${esc(w.번호)}) <span class="c-meta" style="margin-left:4px;">${esc(w.상태)}${w.저장 ? ' · 저장 ✓' : w.저장오류 ? ' · 저장 ✗' : ''}</span></button>`).join(단계형 ? '<span class="rel-link" title="뒤 소문항이 앞 소문항의 결과를 이어받습니다">→ 이어받기 →</span>' : '')}
       <button class="type-btn" ${창.진행 || 창.지금 === 창.목록.length - 1 ? 'disabled' : ''} onclick="창열기(${창.지금 + 1})">다음 ▶</button>
       ${!창.진행 && 창.목록.some(w => w.상태 !== '완료') ? '<button class="type-btn" onclick="자동진행()">남은 소문항 자동 진행</button>' : ''}
     </div>
     <div class="c-meta" style="margin-top:6px;">소문항마다 독립 분석창입니다 — 논제 B · 참조 제시문 · 3단계 극성 기준이 소문항마다 따로 섭니다.
+      ${단계형 ? `<strong>단계형</strong> — ${창.목록.map(w => `(${esc(w.번호)})`).join(' → ')}: 뒤 소문항이 앞 소문항의 결과를 이어받습니다.` : ''}
       ${창.진행 ? `자동 진행 중 — (${esc(창.목록[창.지금].번호)}) ${esc(창.목록[창.지금].단계 || '')}. 끝나면 다음 소문항으로 넘어갑니다.` : ''}
       ${창.목록[창.지금] && 창.목록[창.지금].사유 ? `<span style="color:var(--warn);">${esc(창.목록[창.지금].사유)}</span>` : ''}</div>
     ${창.목록[창.지금] && (창.목록[창.지금].저장 || 창.목록[창.지금].저장오류) ? `<div class="c-meta" style="margin-top:4px;">${창.목록[창.지금].저장
@@ -3155,7 +3163,7 @@ function 창저장내용(w) {
   const 소 = (c.분석 && c.분석.단계.인식 && c.분석.단계.인식.소문항) || [];
   const 모범글 = s => (s.답안 ? (s.답안.확정 ? s.답안.확정.글 : (s.답안.교사 ?? s.답안.글)) : '');
   return {
-    종류: 'HMOS 소문항 분석', 문항명: 문항명of(), 소문항: w.번호, 논제: w.논제,
+    종류: 'HMOS 소문항 분석', 문항명: 문항명of(), 형식: typeof 형식of === 'function' ? 형식of() : null, 소문항: w.번호, 논제: w.논제,
     논제인식: 소.map(s => ({ 번호: s.번호, 텍스트: s.텍스트, 공통발문: s.공통발문, 참조: s.참조, 급소: s.급소, 급소덩어리: s.급소덩어리, 급소실패: s.급소실패, 노드: s.노드 })),
     제시문극성: {
       기준극: (c.극성 && c.극성.논제B) || [],

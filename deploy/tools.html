@@ -243,6 +243,8 @@
     transition: all 0.15s;
   }
   .type-btn:hover { border-color: var(--accent); color: var(--accent); }
+  /* 고른 버튼 안의 보조 글 — 짙은 바탕에서도 읽히게 (소문항 창 탭 · 문제 형식, 2026-10-19) */
+  .type-btn.selected .c-meta { color: inherit; opacity: 0.85; }
   .type-btn.selected {
     background: var(--accent);
     border-color: var(--accent);
@@ -852,7 +854,16 @@
         <div class="section-sub">논제와 제시문을 한 번에 넣으세요 — 등록하면 1단계에서 논제·제시문으로 나눈 결과를 확인합니다</div>
       </div>
       <div class="card">
-        <div class="card-title">논제 + 제시문</div>
+        <!-- 문제 형식 (오종래 2026-10-19 — 문항분석 대시보드와 같은 분류) -->
+        <div class="card-title">문제 형식</div>
+        <div class="type-selector" id="c-form-btns" style="margin-bottom: 6px;">
+          <button class="type-btn" data-form="C-1a" onclick="C형식고르기('C-1a')">인문논술 · 제시문 있음 <span class="c-meta">C-1a</span></button>
+          <button class="type-btn" data-form="C-1b" onclick="C형식고르기('C-1b')">인문논술 · 제시문 없음 <span class="c-meta">C-1b</span></button>
+          <button class="type-btn" data-form="C-2a" onclick="C형식고르기('C-2a')">수리논술 · 제시문 있음 · 단계형 <span class="c-meta">C-2a</span></button>
+          <button class="type-btn" data-form="C-2b" onclick="C형식고르기('C-2b')">수리논술 · 제시문 없음 · 단계형 <span class="c-meta">C-2b</span></button>
+        </div>
+        <div class="c-meta" id="c-form-note" style="margin-bottom: 14px;">형식을 먼저 고르세요 — 형식에 따라 입력 칸이 달라집니다.</div>
+        <div class="card-title" id="reg-title">논제 + 제시문</div>
         <textarea class="input-area" id="reg-input" style="min-height: 260px;" placeholder="논제와 제시문을 한꺼번에 붙여넣으세요. 순서는 상관없습니다.&#10;[가] …&#10;[나] …&#10;&#10;[문항 1] 제시문 [가], [나]를 참고하여 …&#10;(1-1) …설명하시오."></textarea>
         <div class="type-selector" style="margin-top: 12px;">
           <label class="type-btn" style="cursor:pointer;">.txt 불러오기<input type="file" accept=".txt,text/plain" style="display:none;" onchange="txt불러오기(this)"></label>
@@ -871,8 +882,11 @@
         <div id="reg-notice"></div>
         <div class="card-title">논제</div>
         <textarea class="input-area" id="thesis-input" style="min-height: 90px;" placeholder="논제만 붙여넣으세요.&#10;예) [문항 1] 제시문 [가], [나], [다]를 참고하여 …&#10;(1-1) …설명하시오."></textarea>
-        <div class="card-title" style="margin-top: 12px;">제시문</div>
-        <textarea class="input-area" id="passage-input" placeholder="제시문을 [가] [나] … 라벨과 함께 붙여넣으세요.&#10;[가] …&#10;[나] …"></textarea>
+        <div class="c-meta" id="c-step-note" style="display:none; margin-top: 6px;"></div>
+        <div id="passage-block">
+          <div class="card-title" style="margin-top: 12px;">제시문</div>
+          <textarea class="input-area" id="passage-input" placeholder="제시문을 [가] [나] … 라벨과 함께 붙여넣으세요.&#10;[가] …&#10;[나] …"></textarea>
+        </div>
         <div class="card-title" style="margin-top: 12px;">문항명 <span class="c-meta" style="font-weight:400;">— 소문항마다 검증/문항명_소문항번호.json 으로 자동 저장 (비우면 출제_날짜)</span></div>
         <input class="input-area" id="item-name" style="min-height:0; height:38px;" placeholder="예) 부산대2025_인문2">
         <button class="run-btn" id="run-btn" onclick="runC()">분석 시작</button>
@@ -1296,7 +1310,7 @@ function renderC3() {
 // 진행 중에는 창을 옮기지 않는다 — 화면은 돌고 있는 창을 보인다. 다 끝나면 탭이나 ◀ ▶로 옮긴다.
 // 창 하나가 끝나면 검증/<문항명>_<번호>.json 으로 자동 저장 (/api/subq-save) — 창 막대에 저장 완료 표시.
 // 페이지마다 따로 둘 것: C전체그림() (C 단계 화면을 다시 그린다) · 창후처리() (창 하나의 마지막 자동 단계, 없으면 그만)
-//   · 문항명of() (저장 파일 이름 앞부분)
+//   · 문항명of() (저장 파일 이름 앞부분). 있으면 쓰는 것: 형식of() (C-1a…, 저장 내용) · 단계형of() (수리논술 이어받기 표시)
 const C열쇠 = ['논제', '제시문', '분석', '제시문급소', '극성', '관계도', '정교화', '추가', '후보', '확정'];
 const 빈C = () => ({ 논제: '', 제시문: [], 분석: null, 제시문급소: [], 극성: null, 관계도: null, 정교화: null, 추가: null, 후보: [], 확정: [] });
 const 창 = { 목록: [], 지금: 0, 진행: false, 차례: 0 };
@@ -1312,14 +1326,17 @@ const 창논제 = s => [s.공통발문, `(${s.번호}) ${s.텍스트}`].filter(B
 
 /** 창 막대 — 단계 화면마다 위에. 진행 중이면 상태만 */
 function 창바그림() {
+  // 단계형 (수리논술 C-2a·C-2b, 오종래 2026-10-19) — 뒤 소문항이 앞 소문항 결과를 이어받는다는 표시. 분석은 창마다 그대로
+  const 단계형 = typeof 단계형of === 'function' && 단계형of();
   const html = 창.목록.length < 2 ? '' : `<div class="card" style="padding:10px 14px; margin-bottom:12px;">
     <div class="type-selector" style="align-items:center; gap:6px; margin:0;">
       <button class="type-btn" ${창.진행 || 창.지금 === 0 ? 'disabled' : ''} onclick="창열기(${창.지금 - 1})">◀ 이전</button>
-      ${창.목록.map((w, i) => `<button class="type-btn${i === 창.지금 ? ' active' : ''}" ${창.진행 && i !== 창.지금 ? 'disabled' : ''} onclick="창열기(${i})" title="${esc(w.사유 || w.저장오류 || w.저장 || w.상태)}">(${esc(w.번호)}) <span class="c-meta" style="margin-left:4px;">${esc(w.상태)}${w.저장 ? ' · 저장 ✓' : w.저장오류 ? ' · 저장 ✗' : ''}</span></button>`).join('')}
+      ${창.목록.map((w, i) => `<button class="type-btn${i === 창.지금 ? ' selected' : ''}" ${창.진행 && i !== 창.지금 ? 'disabled' : ''} onclick="창열기(${i})" title="${esc(w.사유 || w.저장오류 || w.저장 || w.상태)}">(${esc(w.번호)}) <span class="c-meta" style="margin-left:4px;">${esc(w.상태)}${w.저장 ? ' · 저장 ✓' : w.저장오류 ? ' · 저장 ✗' : ''}</span></button>`).join(단계형 ? '<span class="rel-link" title="뒤 소문항이 앞 소문항의 결과를 이어받습니다">→ 이어받기 →</span>' : '')}
       <button class="type-btn" ${창.진행 || 창.지금 === 창.목록.length - 1 ? 'disabled' : ''} onclick="창열기(${창.지금 + 1})">다음 ▶</button>
       ${!창.진행 && 창.목록.some(w => w.상태 !== '완료') ? '<button class="type-btn" onclick="자동진행()">남은 소문항 자동 진행</button>' : ''}
     </div>
     <div class="c-meta" style="margin-top:6px;">소문항마다 독립 분석창입니다 — 논제 B · 참조 제시문 · 3단계 극성 기준이 소문항마다 따로 섭니다.
+      ${단계형 ? `<strong>단계형</strong> — ${창.목록.map(w => `(${esc(w.번호)})`).join(' → ')}: 뒤 소문항이 앞 소문항의 결과를 이어받습니다.` : ''}
       ${창.진행 ? `자동 진행 중 — (${esc(창.목록[창.지금].번호)}) ${esc(창.목록[창.지금].단계 || '')}. 끝나면 다음 소문항으로 넘어갑니다.` : ''}
       ${창.목록[창.지금] && 창.목록[창.지금].사유 ? `<span style="color:var(--warn);">${esc(창.목록[창.지금].사유)}</span>` : ''}</div>
     ${창.목록[창.지금] && (창.목록[창.지금].저장 || 창.목록[창.지금].저장오류) ? `<div class="c-meta" style="margin-top:4px;">${창.목록[창.지금].저장
@@ -1376,7 +1393,7 @@ function 창저장내용(w) {
   const 소 = (c.분석 && c.분석.단계.인식 && c.분석.단계.인식.소문항) || [];
   const 모범글 = s => (s.답안 ? (s.답안.확정 ? s.답안.확정.글 : (s.답안.교사 ?? s.답안.글)) : '');
   return {
-    종류: 'HMOS 소문항 분석', 문항명: 문항명of(), 소문항: w.번호, 논제: w.논제,
+    종류: 'HMOS 소문항 분석', 문항명: 문항명of(), 형식: typeof 형식of === 'function' ? 형식of() : null, 소문항: w.번호, 논제: w.논제,
     논제인식: 소.map(s => ({ 번호: s.번호, 텍스트: s.텍스트, 공통발문: s.공통발문, 참조: s.참조, 급소: s.급소, 급소덩어리: s.급소덩어리, 급소실패: s.급소실패, 노드: s.노드 })),
     제시문극성: {
       기준극: (c.극성 && c.극성.논제B) || [],
@@ -1788,11 +1805,51 @@ async function txt불러오기(input) {
   document.getElementById('reg-input').value = await f.text();
 }
 
+// ── 문제 형식 (오종래 2026-10-19 — 문항분석 대시보드와 같은 분류 C-1a·C-1b·C-2a·C-2b) ──
+// 제시문 없음(b)은 논제 칸만 — 3·4단계(제시문 분석·연결 평가)는 사이드바에서 감춘다.
+// 수리논술(C-2)은 단계형 — 소문항 자동 분리(엔진 split_thesis) + 소문항 창 막대에 이어받기 표시
+const C형식들 = {
+  'C-1a': { 이름: '인문논술 · 제시문 있음', 제시문: true, 단계형: false },
+  'C-1b': { 이름: '인문논술 · 제시문 없음', 제시문: false, 단계형: false },
+  'C-2a': { 이름: '수리논술 · 제시문 있음 · 단계형', 제시문: true, 단계형: true },
+  'C-2b': { 이름: '수리논술 · 제시문 없음 · 단계형', 제시문: false, 단계형: true },
+};
+let C형식 = null;
+const 형식of = () => C형식;
+const 단계형of = () => !!(C형식들[C형식] && C형식들[C형식].단계형);
+const 제시문쓰는형식 = () => !C형식들[C형식] || C형식들[C형식].제시문;
+
+function C형식고르기(코드) {
+  C형식 = 코드;
+  const f = C형식들[코드];
+  document.querySelectorAll('#c-form-btns .type-btn').forEach(b => b.classList.toggle('selected', b.dataset.form === 코드));
+  document.getElementById('c-form-note').textContent = `${코드} ${f.이름} — ${f.제시문 ? '논제와 제시문을 한 번에 넣으세요. 등록하면 1단계에서 논제·제시문으로 나눕니다.' : '논제만 넣으세요. 제시문 칸은 없습니다.'}${f.단계형 ? ' 소문항 (1)(2)…은 자동으로 나눠 차례로 분석하고, 뒤 소문항이 앞 소문항 결과를 이어받습니다.' : ''}`;
+  document.getElementById('reg-title').textContent = f.제시문 ? '논제 + 제시문' : '논제';
+  document.getElementById('passage-block').style.display = f.제시문 ? '' : 'none';
+  const 단계 = document.getElementById('c-step-note');
+  단계.style.display = f.단계형 ? '' : 'none';
+  단계.textContent = f.단계형 ? '단계형 — 소문항 (1)(2) · 1-1 · ① · [1]로 자동 분리, 뒤 소문항이 앞 소문항 결과를 이어받습니다.' : '';
+  document.querySelector('#nav-essay .nav-item[data-step="1"]').lastChild.textContent = f.제시문 ? '논제 + 제시문 입력' : '논제 입력';
+  document.querySelector('#pane-1 .section-title').lastChild.textContent = f.제시문 ? '1 · 논제 + 제시문 입력' : '1 · 논제 입력';
+  for (const n of ['3', '4']) document.querySelector(`#nav-essay .nav-item[data-step="${n}"]`).style.display = f.제시문 ? '' : 'none';
+  창바그림();
+}
+
 function 등록() {
   const 글 = document.getElementById('reg-input').value;
-  if (!글.trim()) { alert('논제와 제시문을 넣으세요.'); return; }
-  const 나눔 = splitRegistration(글);
+  if (!C형식) { alert('문제 형식을 먼저 고르세요.'); return; }
+  if (!글.trim()) { alert(제시문쓰는형식() ? '논제와 제시문을 넣으세요.' : '논제를 넣으세요.'); return; }
   const 알림 = document.getElementById('reg-notice');
+  // 제시문 없는 형식(C-1b·C-2b)은 나누지 않고 모두 논제 칸에 (대시보드와 같다)
+  if (!제시문쓰는형식()) {
+    document.getElementById('thesis-input').value = 글.trim();
+    document.getElementById('passage-input').value = '';
+    알림.innerHTML = '';
+    markCDone(0);
+    showStep(1);
+    return;
+  }
+  const 나눔 = splitRegistration(글);
   if (나눔) {
     document.getElementById('thesis-input').value = 나눔.논제;
     document.getElementById('passage-input').value = 나눔.제시문;
@@ -1812,7 +1869,8 @@ function 등록() {
 async function runC() {
   const 논제 = document.getElementById('thesis-input').value.trim();
   if (!논제) { alert('논제를 입력하세요.'); return; }
-  const 제시문 = splitPassages(document.getElementById('passage-input').value);
+  if (!C형식) { alert('0단계에서 문제 형식을 먼저 고르세요.'); showStep(0); return; }
+  const 제시문 = 제시문쓰는형식() ? splitPassages(document.getElementById('passage-input').value) : [];
   await withBusy(document.getElementById('run-btn'), '엔진 분석 중…', async () => {
     const { out } = await postJSON('/analyze', { 파이프라인: 'C', 논제, ...(제시문.length ? { 제시문 } : {}) });
     if (!out.ok) { alert('분석 실패: ' + ((out.error && (out.error.사유 || out.error)) || '알 수 없음')); return; }
@@ -1887,7 +1945,8 @@ function 넘기기맞춤() {
 function 문항분석으로넘기기() {
   if (!C.분석) return;
   const 제시문글 = C.제시문.map(p => (/^[가-하]$/.test(p.id) ? `[${p.id}] ${p.텍스트}` : p.텍스트)).join('\n\n');
-  const 하나 = (이름, 논제) => ({ 이름, 원문: 제시문글 ? `${논제}\n\n${제시문글}` : 논제, 형식: 제시문글 ? 'C-1a' : 'C-1b' });
+  // 형식 — 0단계에서 고른 형식 그대로 (2026-10-19). 고르지 않았으면 제시문 유무로 인문논술
+  const 하나 = (이름, 논제) => ({ 이름, 원문: 제시문글 ? `${논제}\n\n${제시문글}` : 논제, 형식: C형식 || (제시문글 ? 'C-1a' : 'C-1b') });
   const 문항 = C.확정.length ? C.확정.map((x, i) => 하나(`출제 ${i + 1} · ${x.출처}`, x.텍스트)) : [하나('출제 논제', C.논제)];
   try { localStorage.setItem(넘김키, JSON.stringify({ 문항, 시각: Date.now() })); }
   catch (e) { alert('넘기지 못했습니다 — 브라우저 저장소를 쓸 수 없습니다 (' + e.message + ')'); return; }
