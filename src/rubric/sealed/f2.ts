@@ -37,7 +37,9 @@ import { parse_parametric_quadratic } from '../multipath.ts';
 
 /** Q의 대상 — Q 노드 바로 앞 노드. 질문이 «무엇을» 요구하는가. 작성 지시 「풀이 과정」은 빼고 (2026-10-16 q5) */
 function qTargets(인식: 인식결과): PathNode[] {
-  return 인식.nodes.filter((n, i) => 인식.nodes[i + 1]?.color === 'Q' && !풀이과정B(인식.nodes, n));
+  // 케이스 분류 C(봉인 LS-52 「~에 따라」, 오종래 2026-10-20)는 Q 대상이 아니다 — 「교점의 개수를 실수 k의 값에 따라 조사하시오」의 대상은 「교점의 개수」
+  const 대상줄 = 인식.nodes.filter((n) => n.switchId !== 'LS-52');
+  return 대상줄.filter((n, i) => 대상줄[i + 1]?.color === 'Q' && !풀이과정B(대상줄, n));
 }
 
 /** 수리 모범답안 줄 조각 (①②) — 노드 없음, 판정은 교사 */

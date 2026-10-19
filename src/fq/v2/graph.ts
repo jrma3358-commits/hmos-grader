@@ -831,8 +831,10 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
     //   다음 노드가 B가 아니면(예: 「k의 값은?」의 Q) 잇지 않는다 — 「의」 B가 그대로 그 Q의 대상이다.
     //   자리 규칙(아래 apply.contextRules)이 바꿀 색까지 본다 (예: 「x^6의 계수는?」의 「는」 → Q)
     const next = hits[n + 1];
+    //   봉인 apply.nounChainTargets 스위치(「~에 따라」 C, 2026-10-20)로도 잇는다 — 「실수 k의 값에 따라」 → C「실수 k의 값」
     const nextIsB = next !== undefined && next.c.sw.kind === NODE_KIND && !isLexical(next.c.sw, next.c.surface)
-      && next.passage === undefined && !next.caseHead && !next.quote && colorAfterRules(n + 1) === 'B';
+      && next.passage === undefined && !next.caseHead && !next.quote
+      && (colorAfterRules(n + 1) === 'B' || (table.apply.nounChainTargets ?? []).includes(next.c.sw.id));
     if (chainsNoun(hit) && nextIsB) {
       if (entity !== '') continue;
       const prev = nodes.at(-1);

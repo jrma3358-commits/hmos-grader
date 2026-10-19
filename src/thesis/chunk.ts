@@ -26,6 +26,8 @@ export interface 급소덩어리 {
 }
 
 const clean = (s: string) => s.trim().replace(/^[\s,，]+/, '');
+/** 케이스 분류 C 스위치 — 봉인 LS-52 「~에 따라」 */
+const 케이스분류 = 'LS-52';
 
 /** 논제 그래프 → 급소 덩어리들 (Q 앞 B+C). 덩어리가 하나도 서지 않으면 빈 배열 */
 export function essay_pivot_chunks(graph: Pick<PathGraph, 'nodes'>): 급소덩어리[] {
@@ -49,9 +51,11 @@ export function essay_pivot_chunks(graph: Pick<PathGraph, 'nodes'>): 급소덩�
       덩어리.at(-1)?.Q.push(q);
       return;
     }
+    // 케이스 분류 C(봉인 LS-52 「~에 따라」, 오종래 2026-10-20)는 덩어리에 넣지 않는다 — 급소는 「조사하시오」 앞 실체 명사, 「실수 k의 값에 따라」는 제약
+    const 덩어리C = (n: PathNode) => n.color === 'C' && n.switchId !== 케이스분류;
     const 앞C: PathNode[] = [];
-    for (let k = bi - 1; k >= 0 && 구간[k].color === 'C'; k--) 앞C.unshift(구간[k]);
-    const 뒤C = 구간.slice(bi + 1).filter((n) => n.color === 'C');
+    for (let k = bi - 1; k >= 0 && 덩어리C(구간[k]); k--) 앞C.unshift(구간[k]);
+    const 뒤C = 구간.slice(bi + 1).filter(덩어리C);
     const 길 = [...앞C, 구간[bi], ...뒤C];
     덩어리.push({ B: 구간[bi], C: [...앞C, ...뒤C], Q: [q], 실체: 길.map((n) => clean(n.entity)).join(' · ') });
   });

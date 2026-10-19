@@ -5,6 +5,9 @@ import { describe, it } from 'node:test';
 
 import { block_constraints, condition_blocks, constraint_links, math_constraints, piece_structure, relay_constraint, relay_marker } from '../src/thesis/math_essay.ts';
 import { split_thesis } from '../src/thesis/split.ts';
+import { recognizeV2Analysis } from '../src/fq/index.ts';
+import { essay_pivot_chunks } from '../src/thesis/chunk.ts';
+import { derive_pieces, f2_input_from_v2 } from '../src/rubric/f2.ts';
 
 const 공통발문 = '[문항 2] 다음 제시문을 이용하여 아래 논제의 풀이 과정과 답을 논리적으로 서술하시오.\n구간 [0, 2π]에서 정의된 연속함수 f(x)가 구간 (0, 2π)에서 미분가능하고 다음 조건을 만족시킨다.';
 const 제시문 = [
@@ -136,5 +139,37 @@ describe('이어달리기 참조 표지 (2026-10-20 규칙 2)', () => {
     assert.equal(u4.이어받기?.번호, '1-3');
     const c = relay_constraint('1-3', ['상수 m의 값'], u4.이어받기?.대상);
     assert.deepEqual(constraint_links(['함수 f(x)', '곡선 y=f(x)'], c), [{ 출처: '1-3', 종류: '이어받기', 말: 'f(x)' }]);
+  });
+});
+
+// 「조사하시오」 Q · 「~에 따라」 케이스 분류 C [오종래 2026-10-20 확정] — 봉인 스위치 2 · LS-52 · apply.nounChainTargets
+describe('「조사하시오」 Q · 「~에 따라」 C (봉인 2026-10-20)', () => {
+  const 인식 = (t: string) => {
+    const a = recognizeV2Analysis(t);
+    return { 노드: a.graph.nodes.map((n: any) => `${n.color}:${n.entity}`), 급소: a.pivot.ok ? a.pivot.pivot.node.entity : a.pivot.flag };
+  };
+
+  it('(1-4) 「교점의 개수를 실수 k의 값에 따라 조사하시오」 → 급소 교점의 개수 · C 실수 k의 값 · Q 조사하시오', () => {
+    const r = 인식('함수 f(x)에 대하여 곡선 y=f(x)와 직선 y=kx+f(0)의 교점의 개수를 실수 k의 값에 따라 조사하시오.');
+    assert.equal(r.급소, '교점의 개수');
+    assert.ok(r.노드.includes('C:실수 k의 값'));
+    assert.ok(r.노드.includes('Q:조사하시오'));
+  });
+
+  it('「~를 조사하시오」 — 앞 실체 명사가 급소', () => {
+    assert.equal(인식('함수 f(x)의 증감을 조사하시오.').급소, '함수 f(x)의 증감');
+  });
+});
+
+describe('「~에 따라」 C는 급소 덩어리·④ 대상이 아니다 (2026-10-20)', () => {
+  const t = '함수 f(x)에 대하여 곡선 y=f(x)와 직선 y=kx+f(0)의 교점의 개수를 실수 k의 값에 따라 조사하시오.';
+  it('급소 덩어리 = 교점의 개수 (실수 k의 값은 빠진다)', () => {
+    assert.deepEqual(essay_pivot_chunks(recognizeV2Analysis(t).graph).map((d) => d.실체), ['교점의 개수']);
+  });
+  it('수리 ④ 답구하기 대상 = 교점의 개수', () => {
+    const 입력 = f2_input_from_v2(recognizeV2Analysis(t));
+    assert.ok(입력.ok);
+    const 답 = derive_pieces(입력.물음, 입력.k, 입력.인식, '수리').filter((c: any) => c.파트 === '답구하기');
+    assert.deepEqual(답.map((c: any) => c.node?.entity), ['교점의 개수']);
   });
 });
