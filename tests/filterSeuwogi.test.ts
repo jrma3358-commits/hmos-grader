@@ -16,6 +16,11 @@ describe('filterSeuwogi', () => {
     assert.equal(r.방법, 'Claude');
   });
 
+  it('첫 블록이 thinking이어도 text 블록의 배열을 읽는다', async () => {
+    const 생각먼저 = { messages: { create: async () => ({ content: [{ type: 'thinking', thinking: '' }, { type: 'text', text: '```json\n[4]\n```' }] }) } } as any;
+    assert.deepEqual((await filterSeuwogi(목록, { keyword: '급소' }, 1, 'humanities', 생각먼저)).map((s) => s.source), ['마']);
+  });
+
   it('급소 수보다 많이 고르거나 범위 밖·겹친 번호는 버린다', async () => {
     assert.deepEqual((await filterSeuwogi(목록, { keyword: '급소' }, 2, 'humanities', 가짜('[9, 0, 0, 2, 4]'))).map((s) => s.source), ['가', '다']);
   });

@@ -23,7 +23,7 @@ export async function filterSeuwogiDetailed(
   try {
     const response = await client.messages.create({
       model: MODEL,
-      max_tokens: 100,
+      max_tokens: 1024, // thinking 블록도 이 안에서 쓴다 — 100이면 배열 전에 잘린다
       messages: [{
         role: 'user',
         content: `논술 문항 세우기 필터링.
@@ -41,8 +41,10 @@ ${seuwogi.map((s, i) => `${i}. [${s.source}] ${s.text}`).join('\n')}
 5. 설명 없이 JSON만`,
       }],
     });
-    const text = response.content[0]?.type === 'text' ? response.content[0].text.trim() : '[]';
-    const indices: unknown = JSON.parse(text);
+    // 응답 첫 블록이 thinking일 수 있다 — text 블록에서 배열을 읽는다
+    const 글 = response.content.find((b) => b.type === 'text');
+    const text = 글 && 글.type === 'text' ? 글.text.trim() : '[]';
+    const indices: unknown = JSON.parse(text.match(/\[[\s\S]*?\]/)?.[0] ?? text);
     if (!Array.isArray(indices)) return 안전(`배열이 아님: ${text}`);
     const 고른 = [...new Set(indices.filter((i): i is number => Number.isInteger(i) && i >= 0 && i < seuwogi.length))].slice(0, pivotCount);
     if (!고른.length) return 안전(`고른 번호 없음: ${text}`);
