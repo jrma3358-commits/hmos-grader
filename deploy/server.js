@@ -89,6 +89,13 @@ app.get('/dashboard2',(req,res)=>{
   res.sendFile(path.join(__dirname,'dashboard2.html'));
 });
 app.get('/dashboard2.html',(req,res)=>res.redirect(302,'/dashboard2'));
+// /tools = 문제 출제 도구 (오종래 2026-10-19) — 논술(0~4 /analyze · 5 /api/refine · 6 /api/propose · 7 교사 확정) · 면접 · 수행평가. 같은 접속 쿠키
+app.get('/tools',(req,res)=>{
+  if(!접속됨(req)){res.redirect(302,'/?login=1&next=tools');return;}
+  res.setHeader('Cache-Control','no-store');
+  res.sendFile(path.join(__dirname,'tools.html'));
+});
+app.get('/tools.html',(req,res)=>res.redirect(302,'/tools'));
 
 // ── GET /api/results · /api/results/:파일 — 검증/ 폴더 채점 결과 JSON (dashboard2 탭3, 오종래 2026-10-17) ──
 // nginx가 .json 주소와 /hmos-grader 경로를 막아 API로 읽는다. 읽기만 한다. GET은 아래 접속 검사를 지나므로 여기서 쿠키를 본다
