@@ -604,6 +604,11 @@ async function 소문항모범답안(s,{논제,제시문,계열}){
 /** 엔진 멈춤 → 화면 오류 글. 계열오류(수학 문항을 인문사회국어로)는 엔진 글 그대로 — 「이 문항은 수리 계열로 채점해야 합니다」 (2026-10-16) */
 const 엔진실패글=(머리,r)=>r.error&&r.error.종류==='계열오류'?r.error.사유:머리+((r.error&&r.error.사유)||'알 수 없음');
 
+// 채점 문제 형식 (dashboard2 탭1, 오종래 2026-10-19) — B1 단문서술 · B2 단계서술 · C1 인문논술 · C2 수리논술.
+// 지금은 받아서 결과에 그대로 돌려줄 뿐이다 — 형식별 채점 기준(프롬프트에 넣을 글)은 확정 대기
+const 채점형식들=['B1','B2','C1','C2'];
+const 채점형식=req=>채점형식들.includes(req.body&&req.body.gradeFormat)?req.body.gradeFormat:null;
+
 app.post('/api/rubric',async(req,res)=>{
   // 논제: 7단계에서 교사가 확정한 논제 글 · 계열: 교사가 8단계에서 고른 값 · 총배점: 소문항 하나의 배점 (교사 입력)
   // 모범답안: 서술형 B — 소문항 순서대로 교사 모범답안 글. 세우기 이후 ~ 답구하기 이전 줄이 풀기 조각이 된다 (오종래 2026-10-16)
@@ -653,7 +658,7 @@ app.post('/api/rubric',async(req,res)=>{
     res.status(502).json({error:e.message});
     return;
   }
-  res.json({엔진:r.엔진,계열,총배점:배점,소문항});
+  res.json({엔진:r.엔진,계열,총배점:배점,...(채점형식(req)?{형식:채점형식(req)}:{}),소문항});
 });
 
 // ── POST /api/answer — C 9단계 모범답안 잇기 (오종래 2026-10-14) ──────────
@@ -772,7 +777,7 @@ app.post('/api/grade',async(req,res)=>{
   const 논제글=[s.공통발문,s.텍스트].filter(Boolean).join('\n')||'채점';
   const r=await runAnalyze({파이프라인:'C',작업:'채점',논제:논제글,계열,학생답:String(학생답),앞학생답:String(앞학생답||''),조각:s.조각,급소:s.급소});
   if(!r.ok||!r.단계||!r.단계.채점){res.status(r.러너실패?500:400).json({error:엔진실패글('엔진 채점 실패: ',r)});return;}
-  res.json({엔진:r.엔진,...r.단계.채점});
+  res.json({엔진:r.엔진,...r.단계.채점,...(채점형식(req)?{형식:채점형식(req)}:{})});
 });
 
 // ── POST /api/axis-rubric — dashboard2 탭2 문항분석 · 4축 루브릭 (오종래 2026-10-18) ──────────

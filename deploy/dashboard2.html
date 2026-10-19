@@ -70,6 +70,10 @@ tr.pick{cursor:pointer}
 .run-btn{display:inline-flex;align-items:center;gap:8px;padding:10px 22px;background:var(--teal);color:#fff;border:none;border-radius:var(--radius);font-size:13.5px;font-weight:500;cursor:pointer}
 .run-btn:hover{background:var(--teal-mid)}
 .run-btn:disabled{background:var(--muted);cursor:not-allowed}
+.rec-pull{margin-left:auto;padding:7px 14px;background:var(--teal);color:#fff;border:none;border-radius:var(--radius);font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap}
+.fmt-hint{font-size:12px;color:var(--muted);margin:-8px 0 14px}
+.sub-q{border:1px solid var(--line);border-radius:var(--radius);padding:12px 14px;margin-bottom:12px}
+.sub-q h4{margin:0 0 8px;font-size:14px}
 .ghost-btn{padding:9px 18px;background:var(--ivory-dk);color:var(--ink);border:none;border-radius:var(--radius);font-size:13px;cursor:pointer}
 .status{font-size:13px;color:var(--muted);margin-left:12px}
 /* 인식 */
@@ -177,6 +181,7 @@ th{font-size:11.5px;color:var(--muted);font-weight:600;background:var(--ivory)}
   <label for="rec-select">채점 결과</label>
   <select id="rec-select"><option value="">불러오는 중…</option></select>
   <div class="recinfo" id="rec-info"></div>
+  <button class="rec-pull" id="rec-pull" title="문항 분석(/dashboard)에서 확정한 루브릭을 탭1에 연결합니다">문항분석에서 불러오기 →</button>
 </div>
 <div class="content">
   <section class="panel active" id="p1"></section>
@@ -237,6 +242,14 @@ async function 목록받기() {
   if (처음 && 목록.some((x) => x.파일 === 처음)) { sel.value = 처음; 열기(처음); }
 }
 $('#rec-select').addEventListener('change', (e) => e.target.value && 열기(e.target.value));
+$('#rec-pull').addEventListener('click', () => {
+  탭(1);
+  if (!$('#in-form')) 입력칸그리기();
+  if (입력계열 !== '수리·과학') 계열고르기('수리·과학');
+  방식고르기('분석');
+  대시보드요청();
+  $('#in-src').scrollIntoView({ behavior: 'smooth', block: 'center' });
+});
 
 async function 열기(파일) {
   try {
@@ -265,7 +278,7 @@ function 그리기() {
   const 총 = (기록?.채점 || []).reduce((a, g) => a + Number(g.out?.부분점수 || 0), 0);
   const 만 = (기록?.채점 || []).reduce((a, g) => a + Number(g.out?.만점 || 0), 0);
   const 엔진 = (기록?.채점 || [])[0]?.out?.엔진?.commit;
-  $('#rec-info').innerHTML = 기록 ? `<span>${esc(기록.학생 || '학생')}</span><span class="score">${점(총)} / ${점(만)}</span><span class="muted">계열 ${esc(기록.계열 || '')}${엔진 ? ` · 엔진 ${esc(엔진)}` : ''}</span>` : '';
+  $('#rec-info').innerHTML = 기록 ? `<span>${esc(기록.학생 || '학생')}</span><span class="score">${점(총)} / ${점(만)}</span><span class="muted">계열 ${esc(기록.계열 || '')}${기록.형식 && 형식들[기록.형식] ? ` · ${형식들[기록.형식]}` : ''}${엔진 ? ` · 엔진 ${esc(엔진)}` : ''}</span>` : '';
   그리기1(); 그리기2(); 그리기3(); 그리기4(); 그리기5(); 그리기6();
 }
 
@@ -279,8 +292,35 @@ function 계열고르기(v) {
   입력계열 = v;
   try { localStorage.setItem('hmos-d2-field', v); } catch (_) {}
   document.querySelectorAll('#in-field button').forEach((b) => b.classList.toggle('on', b.dataset.v === v));
-  $('#in-form').style.display = v === '수리·과학' ? '' : 'none';
-  $('#in-wait').style.display = v === '인문·사회' ? '' : 'none';
+  입력칸보이기();
+}
+
+// 문제 형식 (오종래 2026-10-19) — B1 단문서술 · B2 단계서술 · C1 인문논술 · C2 수리논술. 계열을 고른 뒤 형식을 고르면 입력 칸이 형식에 맞게 바뀐다.
+//   형식값은 채점 API(/api/rubric · /api/grade)에 gradeFormat으로 보낸다. 형식별 채점 기준(프롬프트 글)은 확정 대기 — 서버는 받아서 결과에 돌려주기만
+const 형식들 = { B1: '단문서술', B2: '단계서술', C1: '인문논술', C2: '수리논술' };
+const 형식안내 = {
+  B1: '문항 · 총배점 · 모범답안',
+  B2: '소문항 (1)(2)(3) · 소문항별 배점 · 소문항별 모범답안 — 앞 소문항 결과를 이어받아 채점합니다',
+  C1: '제시문(가·나·다…) · 논제 · 총배점 · 모범답안',
+  C2: '제시문·조건(선택) · 논제 · 총배점 · 모범답안',
+};
+let 입력형식 = '';
+try { const v = localStorage.getItem('hmos-d2-format'); if (형식들[v]) 입력형식 = v; } catch (_) {}
+function 형식고르기(v) {
+  입력형식 = 형식들[v] ? v : '';
+  try { localStorage.setItem('hmos-d2-format', 입력형식); } catch (_) {}
+  document.querySelectorAll('#in-fmt button').forEach((b) => b.classList.toggle('on', b.dataset.v === 입력형식));
+  document.querySelectorAll('#src-새로 [data-fmt]').forEach((el) => { el.style.display = el.dataset.fmt.split(' ').includes(입력형식) ? '' : 'none'; });
+  $('#in-ps-label').textContent = 입력형식 === 'C1' ? '제시문 — (가) (나) (다) …' : '제시문 · 조건 (선택)';
+  $('#in-q-label').textContent = 입력형식 === 'B1' ? '문항' : '논제';
+  $('#in-fmt-hint').textContent = 입력형식 ? `${형식들[입력형식]} — ${형식안내[입력형식]}` : '문제 형식을 고르면 입력 칸이 나옵니다.';
+  입력칸보이기();
+  if (분석.목록) 단위목록그리기();
+}
+/** 계열 · 형식을 다 골라야 입력 칸 — 수리·과학은 엔진 채점 칸, 인문·사회는 4축 문항분석 칸 */
+function 입력칸보이기() {
+  $('#in-form').style.display = 입력형식 && 입력계열 === '수리·과학' ? '' : 'none';
+  $('#in-wait').style.display = 입력형식 && 입력계열 === '인문·사회' ? '' : 'none';
 }
 // 문항 입력 방식 (오종래 2026-10-17): ① 문항 분석에서 불러오기 — 대시보드 문항 목록(열린 /dashboard 탭 또는 「목록 저장」 .json)의
 //   확정 루브릭을 그대로 쓴다 (루브릭을 다시 만들지 않는다, 옛 /grader와 같다) · ② 새로 입력 — 글 붙이기 또는 파일(.txt · .docx · .pdf)
@@ -313,6 +353,9 @@ function 입력칸그리기() {
     <div class="card"><h3>새로 채점</h3>
       <div class="label">계열</div>
       <div class="field-pick" id="in-field"><button data-v="수리·과학">수리·과학</button><button data-v="인문·사회">인문·사회</button></div>
+      <div class="label">문제 형식</div>
+      <div class="field-pick" id="in-fmt"><button data-v="B1">단문서술</button><button data-v="B2">단계서술</button><button data-v="C1">인문논술</button><button data-v="C2">수리논술</button></div>
+      <div class="fmt-hint" id="in-fmt-hint">문제 형식을 고르면 입력 칸이 나옵니다.</div>
       <div id="in-wait" style="display:none">
         <div class="sec-sub" style="margin:4px 0 12px">제시문과 문항을 넣은 뒤 <b>탭2 「문항분석 →」</b>을 누르세요. 엔진이 5색 · 급소 K를 읽고, 4축 루브릭을 만들어 검증/ 폴더에 저장합니다. (학생 답안 채점은 준비 중)</div>
         <div class="field"><div class="label">제시문 — 「(가)」 「(나)」 머리 줄로 나눕니다 ${파일칸('hu-p')}</div><textarea id="hu-p" style="min-height:220px" placeholder="(가)&#10;개인의 정체성은 …&#10;&#10;(나)&#10;다음은 고등학교 1학년 학생들의 …"></textarea></div>
@@ -336,12 +379,20 @@ function 입력칸그리기() {
         </div>
 
         <div id="src-새로" class="src-box">
-          <div class="field"><div class="label">문항 (논제) ${파일칸('in-q')}</div><textarea id="in-q" placeholder="글을 붙이거나 파일(.txt · .docx · .pdf)을 올리세요. 예) a,a,b,c,d,e가 쓰인 6장 카드를 일렬로 나열할 때 양 끝이 모음이 오는 경우의 수를 구하고 풀이 과정을 서술하시오."></textarea></div>
-          <div class="row">
+          <div class="field" data-fmt="C1 C2"><div class="label"><span id="in-ps-label">제시문</span> ${파일칸('in-ps')}</div><textarea id="in-ps" style="min-height:180px" placeholder="(가)&#10;…&#10;&#10;(나)&#10;… — 「(가)」 「[가]」 머리 줄로 나눕니다"></textarea></div>
+          <div data-fmt="B1 C1 C2">
+            <div class="field"><div class="label"><span id="in-q-label">문항</span> ${파일칸('in-q')}</div><textarea id="in-q" placeholder="글을 붙이거나 파일(.txt · .docx · .pdf)을 올리세요. 예) a,a,b,c,d,e가 쓰인 6장 카드를 일렬로 나열할 때 양 끝이 모음이 오는 경우의 수를 구하고 풀이 과정을 서술하시오."></textarea></div>
             <div class="field"><div class="label">총배점</div><input id="in-p" type="number" min="0.1" step="0.1" value="5"></div>
-            <div class="field"><div class="label">정답 (검증용)</div><input id="in-a" placeholder="72가지"></div>
+            <div class="field"><div class="label">모범답안 ${파일칸('in-m')}</div><textarea id="in-m" placeholder="글을 붙이거나 파일(.txt · .docx · .pdf)을 올리세요"></textarea></div>
           </div>
-          <div class="field"><div class="label">모범답안 ${파일칸('in-m')}</div><textarea id="in-m" placeholder="글을 붙이거나 파일(.txt · .docx · .pdf)을 올리세요"></textarea></div>
+          <div data-fmt="B2">
+            ${[1, 2, 3].map((n) => `<div class="sub-q"><h4>소문항 (${n})</h4>
+              <div class="field"><div class="label">문항 ${파일칸('in-q' + n)}</div><textarea id="in-q${n}" placeholder="(${n})번 소문항 — 앞 소문항의 결과를 이어받으면 그대로 쓰세요"></textarea></div>
+              <div class="field"><div class="label">배점</div><input id="in-p${n}" type="number" min="0.1" step="0.1" placeholder="5"></div>
+              <div class="field"><div class="label">모범답안 ${파일칸('in-m' + n)}</div><textarea id="in-m${n}" placeholder="(${n})번 소문항의 모범답안 (선택) — 풀이 단계마다 줄을 바꾸면 풀기 조각이 됩니다"></textarea></div>
+            </div>`).join('')}
+          </div>
+          <div class="field"><div class="label">정답 (검증용, 선택)</div><input id="in-a" placeholder="72가지"></div>
         </div>
 
         <div class="field"><div class="label">학생 이름</div><input id="in-n" placeholder="학생 1"></div>
@@ -351,6 +402,7 @@ function 입력칸그리기() {
     </div>`;
   $('#in-run').addEventListener('click', 새채점);
   document.querySelectorAll('#in-field button').forEach((b) => b.addEventListener('click', () => 계열고르기(b.dataset.v)));
+  document.querySelectorAll('#in-fmt button').forEach((b) => b.addEventListener('click', () => 형식고르기(b.dataset.v)));
   document.querySelectorAll('#in-src button').forEach((b) => b.addEventListener('click', () => 방식고르기(b.dataset.v)));
   document.querySelectorAll('#in-form input[data-for], #in-wait input[data-for]').forEach((inp) => inp.addEventListener('change', () => 파일넣기(inp)));
   for (const id of ['hu-p', 'hu-q', 'hu-pt', 'hu-name']) { // 쓰던 글은 이 브라우저에 남긴다
@@ -362,6 +414,7 @@ function 입력칸그리기() {
   $('#an-pull').addEventListener('click', () => 대시보드요청());
   $('#an-file').addEventListener('change', 목록파일열기);
   계열고르기(입력계열);
+  형식고르기(입력형식);
   방식고르기(문항방식);
 }
 
@@ -430,7 +483,7 @@ async function 파일넣기(inp) {
     else if (/\.docx$/i.test(f.name)) 글 = await docx글(f);
     else if (/\.pdf$/i.test(f.name) || f.type === 'application/pdf') {
       칸알림(id, `${f.name} — 글자를 옮겨 적는 중… (수십 초 걸릴 수 있습니다)`);
-      글 = await OCR([{ 종류: 'application/pdf', 데이터: base64(await f.arrayBuffer()) }], id === 'in-q' || id === 'hu-q' || id === 'hu-p' ? 'B' : '답안');
+      글 = await OCR([{ 종류: 'application/pdf', 데이터: base64(await f.arrayBuffer()) }], /^(in-q\d?|in-ps|hu-q|hu-p)$/.test(id) ? 'B' : '답안');
     } else { 칸알림(id, `${f.name} — .txt · .docx · .pdf만 올릴 수 있습니다`, true); return; }
     if (!글.trim()) { 칸알림(id, `${f.name} — 글자를 찾지 못했습니다`, true); return; }
     칸채우기(id, 글);
@@ -534,8 +587,10 @@ function 분석단위() {
   });
   return out;
 }
+/** 고른 형식과 맞는 단위 — B1·B2는 B 서술형, C1·C2는 C 논술. 형식을 안 골랐거나 안내 줄(종류 없음)은 다 */
+const 형식맞음 = (u) => !u.종류 || !입력형식 || (입력형식[0] === 'B' ? u.종류 === 'B 서술형' : u.종류 === 'C 논술');
 function 단위목록그리기() {
-  const us = 분석단위();
+  const us = 분석단위().filter(형식맞음);
   $('#an-list').innerHTML = us.length ? `<div class="tbl-wrap"><table>
     <tr><th></th><th>문항</th><th>급소</th><th>조각</th><th>만점</th><th>상태</th></tr>
     ${us.map((u) => `<tr class="${u.상태 === '준비' ? 'pick' : 'off'}">
@@ -565,6 +620,7 @@ async function 새채점() {
   const 학생답 = $('#in-st').value.trim();
   const st = $('#in-status'), btn = $('#in-run');
   if (입력계열 !== '수리·과학') { st.textContent = '인문·사회 계열은 준비 중입니다'; return; }
+  if (!입력형식) { st.textContent = '문제 형식을 고르세요'; return; }
   const 학생 = $('#in-n').value.trim() || '새 학생';
   const 보내기 = (url, body) => 받기(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   if (문항방식 === '분석') {
@@ -574,33 +630,52 @@ async function 새채점() {
     btn.disabled = true;
     try {
       st.textContent = '채점 중… (확정 루브릭)';
-      const out = await 보내기('/api/grade', { 소문항: u.s, 학생답, 계열: u.계열 });
+      const out = await 보내기('/api/grade', { 소문항: u.s, 학생답, 계열: u.계열, gradeFormat: 입력형식 });
       const 만점 = u.s.조각.reduce((a, c) => a + (Number(c.배점) || 0), 0);
       st.textContent = '채점 끝 — 탭3에서 보세요';
       $('#rec-select').value = '';
-      보이기({ 학생, 문항: u.논제, 계열: u.계열, 정답: String(u.m.정답 || ''), 모범답안: 모범글(u.s) || String(u.m.모범답안 || ''), 학생답,
+      보이기({ 학생, 문항: u.논제, 계열: u.계열, 형식: 입력형식, 정답: String(u.m.정답 || ''), 모범답안: 모범글(u.s) || String(u.m.모범답안 || ''), 학생답,
         루브릭: { status: 200, out: { 계열: u.계열, 총배점: 만점, 소문항: [u.s] } }, 채점: [{ 번호: u.s.번호 ?? null, status: 200, out }] }, '분석:' + u.key + ':' + Date.now());
       탭(3);
     } catch (e) { st.textContent = '채점 실패: ' + e.message; } finally { btn.disabled = false; }
     return;
   }
-  const 문항 = $('#in-q').value.trim(), 모범답안 = $('#in-m').value.trim();
+  // 형식마다 엔진 요청 — B2: 소문항을 「(1) … [N점]」 줄로 이어 붙이고 모범답안은 소문항 순서 배열(엔진이 소문항 「[N점]」을 배점으로 읽는다) ·
+  //   C1·C2: 제시문을 (가)(나) 머리로 나눠 함께 보낸다 (C1은 필수) · B1: 문항 하나
+  let 문항, 모범답안, 모범, 총배점, 제시문 = [];
+  if (입력형식 === 'B2') {
+    const 칸 = [1, 2, 3].map((n) => ({ q: $('#in-q' + n).value.trim(), p: Number($('#in-p' + n).value), m: $('#in-m' + n).value.trim() })).filter((x) => x.q);
+    if (!칸.length) { st.textContent = '소문항을 넣으세요'; return; }
+    if (칸.some((x) => !(x.p > 0))) { st.textContent = '소문항마다 배점을 넣으세요'; return; }
+    문항 = 칸.map((x, i) => `(${i + 1}) ${x.q.replace(/\s*[\[(]\s*\d+(?:\.\d+)?\s*점\s*[\])]\s*$/, '')} [${x.p}점]`).join('\n');
+    모범 = 칸.some((x) => x.m) ? 칸.map((x) => x.m || null) : undefined;
+    모범답안 = 칸.map((x, i) => x.m ? `(${i + 1}) ${x.m}` : '').filter(Boolean).join('\n\n');
+    총배점 = 칸.reduce((a, x) => a + x.p, 0);
+  } else {
+    문항 = $('#in-q').value.trim();
+    모범답안 = $('#in-m').value.trim();
+    모범 = 모범답안 || undefined;
+    총배점 = Number($('#in-p').value) || 5;
+    if (입력형식 === 'C1' || 입력형식 === 'C2') 제시문 = 제시문나누기($('#in-ps').value);
+    if (입력형식 === 'C1' && !제시문.length) { st.textContent = '인문논술은 제시문을 넣으세요'; return; }
+  }
   if (!문항 || !학생답) { st.textContent = '문항과 학생 답안을 넣으세요'; return; }
   btn.disabled = true;
   try {
     st.textContent = '루브릭 만드는 중… (엔진 · 조각 문장)';
     const 계열 = '수리'; // 수리·과학 = 지금 엔진 그대로
-    const 루브릭 = await 보내기('/api/rubric', { 논제: 문항, 계열, 총배점: Number($('#in-p').value) || 5, 이어받기: true, 공통자료: true, 모범답안: 모범답안 || undefined, 정답: $('#in-a').value.trim() || undefined });
+    const 루브릭 = await 보내기('/api/rubric', { 논제: 문항, 계열, 총배점, 이어받기: true, ...(제시문.length ? { 제시문 } : { 공통자료: true }),
+      모범답안: 모범, 정답: $('#in-a').value.trim() || undefined, gradeFormat: 입력형식 });
     const 채점 = [];
     for (const s of 루브릭.소문항 || []) {
       if (!s.조각 || !s.조각.length) { 채점.push({ 번호: s.번호 ?? null, 건너뜀: s.멈춤 || '조각 없음' }); continue; }
       st.textContent = `채점 중… ${s.번호 ? '(' + s.번호 + ')' : ''}`;
-      const out = await 보내기('/api/grade', { 소문항: s, 학생답, 계열: 루브릭.계열 });
+      const out = await 보내기('/api/grade', { 소문항: s, 학생답, 계열: 루브릭.계열, gradeFormat: 입력형식 });
       채점.push({ 번호: s.번호 ?? null, status: 200, out });
     }
     st.textContent = '채점 끝 — 탭3에서 보세요';
     $('#rec-select').value = '';
-    보이기({ 학생, 문항, 계열: 루브릭.계열, 정답: $('#in-a').value.trim(), 모범답안, 학생답, 루브릭: { status: 200, out: 루브릭 }, 채점 }, '새:' + Date.now());
+    보이기({ 학생, 문항, 계열: 루브릭.계열, 형식: 입력형식, 정답: $('#in-a').value.trim(), 모범답안, 학생답, 루브릭: { status: 200, out: 루브릭 }, 채점 }, '새:' + Date.now());
     탭(3);
   } catch (e) { st.textContent = '채점 실패: ' + e.message; } finally { btn.disabled = false; }
 }
