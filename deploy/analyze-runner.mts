@@ -121,7 +121,7 @@ function 루브릭작업(논제글: string, 계열: string, 총배점: number, �
     연결of = () => [];
     if (제시문목록) {
       try {
-        const 본문 = 제시문목록.map((p) => (/^(?:[가-하]|I{1,3}|IV|VI{0,3}|IX|X)$/.test(p.id) ? `[${p.id}] ${p.텍스트}` : p.텍스트)).join('\n\n');
+        const 본문 = 제시문목록.map((p) => (/^(?:[가-하ㄱ-ㅎ]|I{1,3}|IV|VI{0,3}|IX|X)$/.test(p.id) ? `[${p.id}] ${p.텍스트}` : p.텍스트)).join('\n\n');
         const passage = recognizePassage(본문, fq.markerTable());
         const 정합 = align_passage(소문항들.map((s: any) => ({ 번호: s.번호, 참조: s.참조, 인식: s.a })), passage);
         const 라벨들 = passageLabels(passage.paragraphs);
@@ -357,7 +357,7 @@ try {
     if (제시문목록) {
       try {
         // 제시문 id가 한 글자 라벨(가·나…)이나 로마 숫자(I·II…, 수리논술 2026-10-19)면 [가]·[I] 머리를 붙여 단락 라벨로 읽히게 한다
-        const 본문 = 제시문목록.map((p) => (/^(?:[가-하]|I{1,3}|IV|VI{0,3}|IX|X)$/.test(p.id) ? `[${p.id}] ${p.텍스트}` : p.텍스트)).join('\n\n');
+        const 본문 = 제시문목록.map((p) => (/^(?:[가-하ㄱ-ㅎ]|I{1,3}|IV|VI{0,3}|IX|X)$/.test(p.id) ? `[${p.id}] ${p.텍스트}` : p.텍스트)).join('\n\n');
         const passage = recognizePassage(본문, fq.markerTable());
         const 라벨들 = passageLabels(passage.paragraphs);
         // 소논제마다 독립 (오종래 2026-10-15 (c)) — 3·4단계 정합은 소논제 하나씩 따로 돌려 잇는다 (5단계 진단·8단계 루브릭도 소논제마다).

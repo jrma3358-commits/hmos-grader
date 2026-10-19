@@ -79,11 +79,15 @@ const ROMAN_WIDE = 'ⅠⅡⅢⅣⅤⅥⅦⅧⅨⅩ';
 const ROMAN_SRC = `(?:${[...ROMAN_LABELS].sort((a, b) => b.length - a.length).join('|')}|[${ROMAN_WIDE}])`;
 /** 전각 로마 숫자 → 반각 기호 */
 export const romanLabel = (s: string): string => (ROMAN_WIDE.includes(s) ? ROMAN_LABELS[ROMAN_WIDE.indexOf(s)] : s);
-/** 제시문 기호 하나 — [가]·<가>·(가) 또는 [I] (묶음 없음) */
-const LABEL_SRC = `(?:[[<(][가-힣][\\]>)]|\\[${ROMAN_SRC}\\])`;
+/** 한글 자음 제시문 기호 (ㄱ)~(ㅎ) [오종래 2026-10-19 가톨릭대 수리논술] — 차례 ㄱㄴㄷㄹㅁㅂㅅㅇㅈㅊㅋㅌㅍㅎ */
+const JAMO_ORDER = 'ㄱㄴㄷㄹㅁㅂㅅㅇㅈㅊㅋㅌㅍㅎ';
+/** 기호 글자 하나 — 한글 음절(가…) 또는 자음(ㄱ…) */
+const LETTER = '[가-힣ㄱ-ㅎ]';
+/** 제시문 기호 하나 — [가]·<가>·(가)·(ㄱ) 또는 [I] (묶음 없음) */
+const LABEL_SRC = `(?:[[<(]${LETTER}[\\]>)]|\\[${ROMAN_SRC}\\])`;
 
-/** 단락 머리 기호 — [가] · <가> · (가) · [I] · 단락N: */
-const HEAD_LABEL = new RegExp(`^\\s*(?:\\[([가-힣])\\]|<([가-힣])>|\\(([가-힣])\\)|단락\\s*(\\d+)\\s*:|\\[(${ROMAN_SRC})\\])\\s*`);
+/** 단락 머리 기호 — [가] · <가> · (가) · (ㄱ) · [I] · 단락N: */
+const HEAD_LABEL = new RegExp(`^\\s*(?:\\[(${LETTER})\\]|<(${LETTER})>|\\((${LETTER})\\)|단락\\s*(\\d+)\\s*:|\\[(${ROMAN_SRC})\\])\\s*`);
 /** 문장 끝 — 마침표·물음표·느낌표 뒤 공백 */
 const SENTENCE_END = /[.?!](?=\s|$)/g;
 
@@ -232,13 +236,13 @@ export interface PassageConnection {
 const CIRCLED = /[㉠-㉻]/g;
 /** 괄호 기호 순서 — 범위 「(나)~(라)」를 펼 때 쓴다 */
 const LABEL_ORDER = '가나다라마바사아자차카타파하';
-/** 기호 차례 — 한글 「가~하」 또는 로마 숫자 「I~X」 (범위 「[I]~[III]」) */
-const LABEL_SEQUENCES = [[...LABEL_ORDER], ROMAN_LABELS];
-/** 제시문 기호인가 — 한글 차례 또는 로마 숫자 (숫자 머리 「단락N:」은 아니다) */
+/** 기호 차례 — 한글 「가~하」 · 자음 「ㄱ~ㅎ」 · 로마 숫자 「I~X」 (범위 「[I]~[III]」 · 「(ㄱ)~(ㄷ)」) */
+const LABEL_SEQUENCES = [[...LABEL_ORDER], [...JAMO_ORDER], ROMAN_LABELS];
+/** 제시문 기호인가 — 한글 · 자음 차례 또는 로마 숫자 (숫자 머리 「단락N:」은 아니다) */
 const isPassageLabel = (label: string) => LABEL_SEQUENCES.some((s) => s.includes(label));
 
-/** 기호 하나(묶음 둘: 한글 · 로마 숫자) → 기호 글자 */
-const LABEL_ONE = `(?:[[<(]([가-힣])[\\]>)]|\\[(${ROMAN_SRC})\\])`;
+/** 기호 하나(묶음 둘: 한글·자음 · 로마 숫자) → 기호 글자 */
+const LABEL_ONE = `(?:[[<(](${LETTER})[\\]>)]|\\[(${ROMAN_SRC})\\])`;
 
 /** 노드 실체 속 제시문 지정 기호의 글자들 — [가]·<가>·(가)·[I], 나열과 범위 포함 */
 export function designatedLabels(entity: string): string[] {

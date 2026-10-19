@@ -43,6 +43,13 @@ describe('제시문 인식 — 단락 분리 · 5색 · 서두·말미 (§2·§3
     assert.deepEqual(designatedLabels('[가], [II]'), ['가', 'II']);
   });
 
+  it('자음 머리 (ㄱ)(ㄴ)(ㄷ)도 제시문 기호 · 범위 「(ㄱ)~(ㄷ)」 [오종래 2026-10-19 가톨릭대]', () => {
+    const r = recognizePassage('(ㄱ) 다수결를 본다.\n\n(ㄴ) 만장일치를 본다.\n\n(ㄷ) 합의를 본다.', table);
+    assert.deepEqual(r.paragraphs.map((p) => p.label), ['ㄱ', 'ㄴ', 'ㄷ']);
+    assert.deepEqual(passageLabels(r.paragraphs), ['ㄱ', 'ㄴ', 'ㄷ']);
+    assert.deepEqual(designatedLabels('제시문 (ㄱ)~(ㄷ)'), ['ㄱ', 'ㄴ', 'ㄷ']);
+  });
+
   it('단락마다 색별 노드 실체를 낸다', () => {
     const p = recognizePassage('[가] 다수결를 본다.', table).paragraphs[0];
     assert.deepEqual(p.colors.B, ['다수결']);
