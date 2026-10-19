@@ -2260,6 +2260,7 @@ function buildCPanes() {
         <div class="section-title"><span class="tool-tag ${s.도구}">${s.도구 === 'make' ? '출제도구' : '채점도구'}</span><span id="c${n}-num">${n}</span> · ${s.제목}</div>
         <div class="section-sub">${s.설명}</div>
       </div>
+      <div class="c-win-bar"></div>
       <div id="c${n}-body"><div class="card c-empty">1단계에서 분석을 시작하면 표시됩니다</div></div>
       <div class="c-nav" id="c${n}-nav"></div>
     </div>`).join('');
@@ -2756,15 +2757,75 @@ async function runC() {
       return;
     }
     Object.assign(C, { 논제, 제시문, 분석: out, 제시문급소: [], 극성: null, 관계도: null, 정교화: null, 추가: null, 후보: [], 확정: [] });
-    목록완료({ C: C결과(), 입력: { 논제, 제시문: 제시문칸 } }, 글);
     resetCDone();
-    renderC2(); renderC3(); renderC4(); renderCP(); renderC7(); renderC8(); renderC9();
+    // 소문항이 둘 이상이면 소문항 창 — 차례로 자동 진행해 루브릭까지 (오종래 2026-10-19). 기다리지 않는다
+    창.전체 = C결과();
+    if (창세우기(논제, 제시문, out)) {
+      목록완료({ C: 합친C(), 창: 창.목록, 입력: { 논제, 제시문: 제시문칸 } }, 글);
+      C전체그림();
+      markCDone(1, 2, 'p');
+      if (제시문.length) markCDone(3, 4);
+      showCStep(2);
+      자동진행();
+      return;
+    }
+    목록완료({ C: C결과(), 입력: { 논제, 제시문: 제시문칸 } }, 글);
+    C전체그림();
     markCDone(1, 2, 'p');
     if (제시문.length) markCDone(3, 4);
     showCStep(2);
     // 3단계 — 제시문마다 엔진 수렴 경로 → 극성 → 관계. 2단계 화면을 먼저 보이고 뒤에서 차례로 돈다 (기다리지 않는다)
     if (제시문.length) 제시문급소추출();
   });
+}
+
+/** C 단계 화면 다시 그리기 — 소문항 창을 옮기거나 자동 진행이 한 단계 끝날 때. 아직 분석 전인 창은 빈 화면 */
+function C전체그림() {
+  if (!C.분석) {
+    for (const n of Object.keys(C화면)) document.getElementById(`c${n}-body`).innerHTML = '<div class="card c-empty">이 소문항은 아직 분석하지 않았습니다</div>';
+  } else {
+    renderC2(); renderC3(); renderC4(); renderCP(); renderC7(); renderC8(); renderC9();
+    markC9();
+  }
+  창바그림();
+}
+
+/** 소문항 창들을 문항 결과 하나로 — 전체 분석(1단계)에 창마다의 확정 논제·루브릭을 모은다. /grader는 결과.C.확정을 읽는다 */
+const 합친C = () => ({ ...(창.전체 || C결과()), 확정: 창.목록.flatMap(w => (w.C && w.C.확정) || []) });
+
+/** 저장 파일 이름 앞부분 — 0단계 문항 목록의 문항 이름 (예: 부산대2025_인문2). 공백은 서버가 뗀다 */
+const 문항명of = () => ((지금문항() || {}).이름 || '문항');
+
+/** 자동 진행이 창 하나를 끝낼 때마다 목록 결과에 담는다 */
+function 창저장() {
+  현재결과담기();
+  목록그리기();
+}
+
+/**
+ * 창 하나의 마지막 자동 단계 (오종래 2026-10-19 — 루브릭까지 자동): 원 논제 소문항 확정(엔진 재인식) → 루브릭(/api/rubric).
+ * 계열은 표면형식이 미리 고른 값, 배점은 논제의 「N점」(없으면 10). 계열이 없으면 확정까지만 하고 멈춘다 — 8단계에서 골라 만든다.
+ * 0단계 모범답안·정답은 문항 전체 것이라 창(소문항 하나)에는 넘기지 않는다 — 모범답안은 자동 생성 (genC)
+ */
+async function 창후처리(w, 단계) {
+  단계('8단계 원 논제 확정 (엔진 재인식)');
+  const 원 = C후보목록().filter(x => x.id.startsWith('o:'));
+  const 확정 = [];
+  for (const x of 원) {
+    const { out } = await postJSON('/analyze', { 파이프라인: 'C', 논제: x.텍스트.trim(), ...(C.제시문.length ? { 제시문: C.제시문 } : {}) });
+    if (!out.ok) throw new Error('원 논제 확정 실패 — ' + ((out.error && out.error.사유) || '알 수 없음'));
+    확정.push({ 출처: x.출처, 텍스트: x.텍스트.trim(), 분석: out, 루브릭: null });
+  }
+  C.확정 = 확정;
+  C.후보 = C후보목록().map(x => ({ ...x, 선택: x.id.startsWith('o:') }));
+  C전체그림();
+  const 계열 = 형식들[selectedForm] && 형식들[selectedForm].계열;
+  if (!계열) throw new Error('계열이 정해지지 않아 루브릭은 만들지 않았습니다 — 8단계에서 계열을 골라 생성하세요');
+  for (let i = 0; i < C.확정.length; i++) {
+    단계(`8단계 루브릭 생성 (${i + 1}/${C.확정.length}) — 1~3분`);
+    await genC(i);
+    if (!C.확정[i].루브릭) throw new Error('루브릭 생성 실패 — 8단계에서 다시 생성하세요');
+  }
 }
 
 /** 받침 있으면 앞 조사, 없으면 뒤 조사 — 끝 글자가 한글이 아니면 「을(를)」처럼 둘 다 */
@@ -2869,18 +2930,34 @@ function 최종입장(x) {
   return null;
 }
 
+/**
+ * 참조 제시문 (오종래 2026-10-19 소문항 분리) — 엔진 split_thesis가 소문항마다 읽은 참조 기호의 제시문만.
+ * 참조가 없는 소문항이 있거나 기호가 맞는 제시문이 없으면 모두
+ */
+function 참조제시문() {
+  const 소 = (C.분석 && C.분석.단계.인식 && C.분석.단계.인식.소문항) || [];
+  const 범위 = !소.length || 소.some(s => !(s.참조 || []).length) ? null : new Set(소.flatMap(s => s.참조));
+  const 고른 = 범위 ? C.제시문.filter(p => 범위.has(p.id)) : [];
+  return 고른.length ? 고른 : C.제시문;
+}
+
+/** 제시문 하나의 엔진 결과(수렴 경로·극성)는 논제와 무관하다 — 소문항 창마다 다시 보내지 않는다. 열쇠 = 기호 + 글 */
+const 제시문캐시 = new Map();
+
 async function 제시문급소추출() {
   const 차례 = ++C3차례;
-  C.제시문급소 = C.제시문.map(p => ({ id: p.id, 원문: p.텍스트, 상태: '대기', 경로: [], 수렴점: null, 극성: null, 급소: null, flag: '', 분석: null }));
+  C.제시문급소 = 참조제시문().map(p => ({ id: p.id, 원문: p.텍스트, 상태: '대기', 경로: [], 수렴점: null, 극성: null, 급소: null, flag: '', 분석: null }));
   C.극성 = null;
   C.관계도 = null;
   renderC3();
   for (const x of C.제시문급소) {
     x.상태 = '분석 중'; renderC3();
     try {
-      const { out } = await postJSON('/analyze', { 파이프라인: 'C', 논제: C.논제, 제시문: [{ id: x.id, 텍스트: x.원문 }] });
+      const 열쇠 = x.id + '\u0000' + x.원문;
+      const out = 제시문캐시.get(열쇠) || (await postJSON('/analyze', { 파이프라인: 'C', 논제: C.논제, 제시문: [{ id: x.id, 텍스트: x.원문 }] })).out;
       if (차례 !== C3차례) return;
       if (!out.ok) throw new Error((out.error && (out.error.사유 || out.error)) || '알 수 없음');
+      제시문캐시.set(열쇠, out);
       const 제 = out.단계.제시문;
       if (!제 || 제.사유) throw new Error((제 && 제.사유) || (out.멈춘곳 && out.멈춘곳.사유) || '제시문에서 멈춤');
       const 경로 = 제.수렴경로;
@@ -2956,7 +3033,7 @@ function renderC3() {
   const 끝남 = 목록.length && 목록.every(x => x.상태 === '완료' || x.상태 === '실패');
   const 극 = C.극성;
   const 극줄 = !끝남 || !극 ? ''
-    : `<div class="c-meta">기준 극(논제 B): ${(극.논제B || []).length ? 극.논제B.map(t => `「${esc(t)}」`).join(' · ') : '— (2단계 핵심이 서지 않음)'} — 경로 B가 든 문장의 기능표지로 당김·밀침이면 급소, 표지가 없으면 배경으로 뺍니다 (엔진).</div>`;
+    : `<div class="c-meta">기준 극(논제 B): ${(극.논제B || []).length ? 극.논제B.map(t => `「${esc(t)}」`).join(' · ') : '— (2단계 핵심이 서지 않음)'} — 경로 B가 든 문장의 기능표지로 당김·밀침이면 급소, 표지가 없으면 배경으로 뺍니다 (엔진). 참조 제시문 ${목록.map(x => `(${esc(x.id)})`).join('')}${목록.length < C.제시문.length ? ' — 이 소문항이 짚은 것만' : ''}.</div>`;
   const 급소카드 = 목록.map(x => {
     const 줄 = x.상태 === '완료'
       ? (!x.경로.length ? `엔진이 이 제시문의 수렴 경로를 세우지 못했습니다 (${esc(x.flag || '—')}).`
@@ -2989,6 +3066,165 @@ function renderC3() {
       ${관계내용}
       ${g && g.관계 ? 엔진원본Html(g.관계) : ''}
     </div>`;
+}
+
+// ── 소문항 창 (오종래 2026-10-19 — tools·dashboard 같은 코드) ──
+// 엔진 split_thesis가 논제를 소문항 둘 이상(2-1·(1)·①·[1])으로 나누면 소문항마다 독립 분석창을 만든다.
+// 창 = 공통 발문 + 그 소문항만 엔진에 다시 넣은 C 상태 하나 — 논제 B·참조 제시문·3단계 극성 기준이 소문항마다 따로 선다.
+// 차례로 자동 진행 (2-1 완료 → 2-2 시작): 엔진 인식 → 3단계(수렴 경로·극성·관계) → 창후처리(dashboard: 원 논제 확정 → 루브릭).
+// 진행 중에는 창을 옮기지 않는다 — 화면은 돌고 있는 창을 보인다. 다 끝나면 탭이나 ◀ ▶로 옮긴다.
+// 창 하나가 끝나면 검증/<문항명>_<번호>.json 으로 자동 저장 (/api/subq-save) — 창 막대에 저장 완료 표시.
+// 페이지마다 따로 둘 것: C전체그림() (C 단계 화면을 다시 그린다) · 창후처리() (창 하나의 마지막 자동 단계, 없으면 그만)
+//   · 문항명of() (저장 파일 이름 앞부분)
+const C열쇠 = ['논제', '제시문', '분석', '제시문급소', '극성', '관계도', '정교화', '추가', '후보', '확정'];
+const 빈C = () => ({ 논제: '', 제시문: [], 분석: null, 제시문급소: [], 극성: null, 관계도: null, 정교화: null, 추가: null, 후보: [], 확정: [] });
+const 창 = { 목록: [], 지금: 0, 진행: false, 차례: 0 };
+const C떼기 = () => Object.fromEntries(C열쇠.map(k => [k, C[k]]));
+
+/** 지금 C를 지금 창에 담는다 */
+function 창담기() {
+  if (창.목록.length && 창.목록[창.지금]) 창.목록[창.지금].C = C떼기();
+}
+
+/** 소문항 하나 → 창 논제 글. 공통 발문 + 「(번호) 본문」 — 엔진에 다시 넣으면 그 소문항 하나로 나뉜다 */
+const 창논제 = s => [s.공통발문, `(${s.번호}) ${s.텍스트}`].filter(Boolean).join('\n');
+
+/** 창 막대 — 단계 화면마다 위에. 진행 중이면 상태만 */
+function 창바그림() {
+  const html = 창.목록.length < 2 ? '' : `<div class="card" style="padding:10px 14px; margin-bottom:12px;">
+    <div class="type-selector" style="align-items:center; gap:6px; margin:0;">
+      <button class="type-btn" ${창.진행 || 창.지금 === 0 ? 'disabled' : ''} onclick="창열기(${창.지금 - 1})">◀ 이전</button>
+      ${창.목록.map((w, i) => `<button class="type-btn${i === 창.지금 ? ' active' : ''}" ${창.진행 && i !== 창.지금 ? 'disabled' : ''} onclick="창열기(${i})" title="${esc(w.사유 || w.저장오류 || w.저장 || w.상태)}">(${esc(w.번호)}) <span class="c-meta" style="margin-left:4px;">${esc(w.상태)}${w.저장 ? ' · 저장 ✓' : w.저장오류 ? ' · 저장 ✗' : ''}</span></button>`).join('')}
+      <button class="type-btn" ${창.진행 || 창.지금 === 창.목록.length - 1 ? 'disabled' : ''} onclick="창열기(${창.지금 + 1})">다음 ▶</button>
+      ${!창.진행 && 창.목록.some(w => w.상태 !== '완료') ? '<button class="type-btn" onclick="자동진행()">남은 소문항 자동 진행</button>' : ''}
+    </div>
+    <div class="c-meta" style="margin-top:6px;">소문항마다 독립 분석창입니다 — 논제 B · 참조 제시문 · 3단계 극성 기준이 소문항마다 따로 섭니다.
+      ${창.진행 ? `자동 진행 중 — (${esc(창.목록[창.지금].번호)}) ${esc(창.목록[창.지금].단계 || '')}. 끝나면 다음 소문항으로 넘어갑니다.` : ''}
+      ${창.목록[창.지금] && 창.목록[창.지금].사유 ? `<span style="color:var(--warn);">${esc(창.목록[창.지금].사유)}</span>` : ''}</div>
+    ${창.목록[창.지금] && (창.목록[창.지금].저장 || 창.목록[창.지금].저장오류) ? `<div class="c-meta" style="margin-top:4px;">${창.목록[창.지금].저장
+      ? `<span class="badge ok">저장 완료</span> ${esc(창.목록[창.지금].저장)} — 논제 인식 · 제시문 극성 · 루브릭 · 모범답안`
+      : `<span class="badge warn">저장 실패</span> ${esc(창.목록[창.지금].저장오류)}`}</div>` : ''}
+  </div>`;
+  document.querySelectorAll('.c-win-bar').forEach(el => { el.innerHTML = html; });
+}
+
+/** 저장했다 다시 연 C 상태 — 끝나지 않은 3단계 추출·판정은 지운다 (다시 추출 버튼이 뜬다) */
+function C정리(c) {
+  c = { ...빈C(), ...(c || {}) };
+  if ((c.제시문급소 || []).some(x => x.상태 === '대기' || x.상태 === '분석 중')) Object.assign(c, { 제시문급소: [], 극성: null, 관계도: null });
+  if (c.관계도 && c.관계도.상태 === '판정 중') c.관계도 = null;
+  return c;
+}
+
+/** 저장했던 창 목록 되살리기 — 진행 중·대기였던 창은 「대기」로 (남은 소문항 자동 진행으로 잇는다) */
+function 창되살리기(목록) {
+  창.차례++;
+  창.진행 = false;
+  창.지금 = 0;
+  창.목록 = (목록 || []).map(w => ({ ...w, 상태: w.상태 === '완료' || w.상태 === '실패' ? w.상태 : '대기', 단계: '', C: C정리(w.C) }));
+  if (창.목록.length) Object.assign(C, 창.목록[0].C);
+}
+
+/** 창 옮기기 — 진행 중에는 막는다 */
+function 창열기(i) {
+  if (창.진행 || i < 0 || i >= 창.목록.length || i === 창.지금) return;
+  창담기();
+  창.지금 = i;
+  Object.assign(C, 빈C(), 창.목록[i].C || {});
+  C3차례++;
+  C전체그림();
+  창바그림();
+}
+
+/** 1단계 전체 분석(out)의 소문항이 둘 이상이면 창을 세우고 차례로 자동 진행. 하나면 false — 예전 흐름 그대로 */
+function 창세우기(논제, 제시문, out) {
+  const 소 = (out.단계 && out.단계.인식 && out.단계.인식.소문항) || [];
+  창.차례++;
+  창.진행 = false;
+  if (소.length < 2) { 창.목록 = []; 창.지금 = 0; 창바그림(); return false; }
+  창.목록 = 소.map(s => ({ 번호: s.번호, 논제: 창논제(s), 상태: '대기', 단계: '', 사유: '', C: { ...빈C(), 논제: 창논제(s), 제시문 } }));
+  창.지금 = 0;
+  Object.assign(C, 창.목록[0].C);
+  창바그림();
+  return true;
+}
+
+/** 저장 내용 — 논제 인식 · 제시문 극성(수렴 경로) · 관계도 · 루브릭 · 모범답안. 엔진 원본 응답 전체는 넣지 않는다 */
+function 창저장내용(w) {
+  const c = w.C || {};
+  const 소 = (c.분석 && c.분석.단계.인식 && c.분석.단계.인식.소문항) || [];
+  const 모범글 = s => (s.답안 ? (s.답안.확정 ? s.답안.확정.글 : (s.답안.교사 ?? s.답안.글)) : '');
+  return {
+    종류: 'HMOS 소문항 분석', 문항명: 문항명of(), 소문항: w.번호, 논제: w.논제,
+    논제인식: 소.map(s => ({ 번호: s.번호, 텍스트: s.텍스트, 공통발문: s.공통발문, 참조: s.참조, 급소: s.급소, 급소덩어리: s.급소덩어리, 급소실패: s.급소실패, 노드: s.노드 })),
+    제시문극성: {
+      기준극: (c.극성 && c.극성.논제B) || [],
+      제시문: (c.제시문급소 || []).map(x => ({ id: x.id, 상태: x.상태, 수렴경로: x.경로, 수렴점: x.수렴점, 극성: x.극성, 최종입장: x.급소, flag: x.flag })),
+    },
+    관계도: (c.관계도 && c.관계도.관계) || null,
+    루브릭: (c.확정 || []).map(x => ({ 출처: x.출처, 텍스트: x.텍스트, 루브릭: x.루브릭 })),
+    모범답안: (c.확정 || []).flatMap(x => (x.루브릭 ? x.루브릭.소문항.map(s => ({ 번호: s.번호, 글: 모범글(s) })) : [])),
+  };
+}
+
+/** 검증/<문항명>_<번호>.json 으로 저장 — 실패해도 분석은 완료로 두고 사유만 보인다 */
+async function 창파일저장(w) {
+  try {
+    const { out } = await postJSON('/api/subq-save', { 문항명: 문항명of(), 번호: w.번호, 내용: 창저장내용(w) });
+    if (out.error) throw new Error(out.error);
+    Object.assign(w, { 저장: out.파일, 저장오류: '' });
+  } catch (e) {
+    Object.assign(w, { 저장: '', 저장오류: '저장 실패 — ' + e.message });
+  }
+}
+
+async function 자동진행() {
+  const 차례 = 창.차례;
+  창.진행 = true;
+  const 단계 = (w, t) => { w.단계 = t; 창바그림(); };
+  try {
+    for (let i = 0; i < 창.목록.length; i++) {
+      const w = 창.목록[i];
+      if (w.상태 === '완료') continue;
+      창담기();
+      창.지금 = i;
+      Object.assign(C, 빈C(), w.C || {});
+      C3차례++;
+      w.상태 = '진행 중'; w.사유 = '';
+      try {
+        단계(w, '2단계 논제 인식 (엔진)');
+        const { out } = await postJSON('/analyze', { 파이프라인: 'C', 논제: w.논제, ...(C.제시문.length ? { 제시문: C.제시문 } : {}) });
+        if (차례 !== 창.차례) return;
+        if (!out.ok) throw new Error('엔진 분석 실패 — ' + ((out.error && (out.error.사유 || out.error)) || '알 수 없음'));
+        Object.assign(C, { 분석: out, 제시문급소: [], 극성: null, 관계도: null, 정교화: null, 추가: null, 후보: [], 확정: [] });
+        C전체그림();
+        if (C.제시문.length) {
+          단계(w, '3단계 제시문 수렴 경로 · 극성 · 관계');
+          await 제시문급소추출();
+          if (차례 !== 창.차례) return;
+        }
+        if (typeof 창후처리 === 'function') {
+          await 창후처리(w, t => 단계(w, t));
+          if (차례 !== 창.차례) return;
+        }
+        w.상태 = '완료';
+        // 자동 저장 (오종래 2026-10-19) — 소문항 하나가 루브릭까지(tools는 3단계까지) 끝나면 검증/<문항명>_<번호>.json
+        단계(w, '검증/ 폴더에 저장');
+        창담기();
+        await 창파일저장(w);
+        if (차례 !== 창.차례) return;
+      } catch (e) {
+        if (차례 !== 창.차례) return;
+        Object.assign(w, { 상태: '실패', 사유: e.message });
+      }
+      w.단계 = '';
+      창담기();
+      C전체그림();
+      if (typeof 창저장 === 'function') 창저장();
+    }
+  } finally {
+    if (차례 === 창.차례) { 창.진행 = false; 창바그림(); }
+  }
 }
 
 /** 단락 라벨 — 엔진이 연결에 쓰는 이름(러너의 라벨). 옛 응답이면 기호, 없으면 「#순번」 */
@@ -3567,8 +3803,10 @@ async function genC(i, 맞추기 = false) {
   }
   const m = 지금문항() || {};
   const 원논제 = x.출처.startsWith('원 논제');
+  // 소문항 창 (2026-10-19) — 0단계 모범답안·정답은 문항 전체 것이라 소문항 하나인 창에는 넘기지 않는다
+  const 창모드 = 창.목록.length > 1;
   const 모범답안 = 맞추기 ? 옛.소문항.map(s => 지금답안(s).trim() || null)
-    : 원논제 && String(m.모범답안 || '').trim() ? m.모범답안 : null;
+    : 원논제 && !창모드 && String(m.모범답안 || '').trim() ? m.모범답안 : null;
   if (맞추기 && !모범답안.some(Boolean)) { alert('모범답안을 먼저 쓰세요 — 풀이 단계마다 줄을 바꿔서.'); return; }
   await withBusy(document.getElementById(맞추기 ? `c9-fit-${i}` : 'c8-btn-' + i), 모범답안 ? '엔진 조각 → 조각 문장 생성 중… (1~2분)' : '엔진 인식 → 모범답안 생성 → 조각 문장 생성 중… (2~3분)', async () => {
     const { out } = await postJSON('/api/rubric', {
@@ -3576,7 +3814,7 @@ async function genC(i, 맞추기 = false) {
       ...(C.제시문.length ? { 제시문: C.제시문 } : {}),
       ...(모범답안 ? { 모범답안 } : { 자동답안: true }),
       // 0단계 교사 입력 — 정답(검증)·출제의도 (2026-10-16)
-      ...(정답씀(m.파이프라인) && String(m.정답 || '').trim() ? { 정답: m.정답 } : {}),
+      ...(!창모드 && 정답씀(m.파이프라인) && String(m.정답 || '').trim() ? { 정답: m.정답 } : {}),
       ...(String(m.핵심 || '').trim() ? { 핵심: m.핵심 } : {}),
     });
     if (out.error) { alert('루브릭 생성 실패: ' + out.error); return; }
@@ -3891,7 +4129,10 @@ const C결과 = () => ({ 논제: C.논제, 제시문: C.제시문, 분석: C.분
 /** 화면에 열린 C 결과에 그동안의 5~9단계 작업(정교화·추가 논제·확정·루브릭)을 담는다 — A·B는 currentData가 결과 그 자체라 할 일 없음 */
 function 현재결과담기() {
   const r = 목록.보이는결과;
-  if (r && r.C && C.분석) Object.assign(r.C, C결과());
+  if (!r || !r.C) return;
+  // 소문항 창 (2026-10-19) — 지금 창을 담고, 결과.C는 전체 분석 + 창마다의 확정
+  if (r.창) { 창담기(); r.창 = 창.목록; Object.assign(r.C, 합친C()); return; }
+  if (C.분석) Object.assign(r.C, C결과());
 }
 
 /** 0단계 편집창이 바뀌면 편집 중 문항에 */
@@ -3956,6 +4197,8 @@ function 화면비우기() {
   for (const [i, html] of Object.entries(AB초기)) document.getElementById('tab-' + i).innerHTML = html;
   Object.assign(C, { 논제: '', 제시문: [], 분석: null, 제시문급소: [], 극성: null, 관계도: null, 정교화: null, 추가: null, 후보: [], 확정: [] });
   C3차례++; // 돌던 3단계 추출·판정은 버린다
+  창되살리기([]); // 돌던 소문항 자동 진행도 버린다
+  창.전체 = null;
   buildCPanes();
   document.querySelectorAll('#nav-c .nav-item, #nav-ab .nav-item').forEach(b => b.classList.remove('done'));
   ['question-input', 'thesis-input', 'passage-input'].forEach(id => { document.getElementById(id).value = ''; });
@@ -3989,16 +4232,15 @@ function 문항열기(id) {
     if (r && r.C) {
       목록.보이는결과 = r;
       // 옛 결과(3단계 수렴 경로 이전)는 제시문급소가 없다 — 3단계에 「다시 추출」 버튼이 뜬다. 끝나지 않은 추출도 같다
-      Object.assign(C, { 제시문급소: [], 극성: null, 관계도: null }, r.C);
-      if ((C.제시문급소 || []).some(x => x.상태 === '대기' || x.상태 === '분석 중')) Object.assign(C, { 제시문급소: [], 극성: null, 관계도: null });
-      if (C.극성 && C.극성.상태 === '판정 중') C.극성 = null;
-      if (C.관계도 && C.관계도.상태 === '판정 중') C.관계도 = null;
-      document.getElementById('thesis-input').value = (r.입력 && r.입력.논제) || C.논제;
+      Object.assign(C, C정리(r.C));
+      // 소문항 창 (2026-10-19) — 창 목록을 되살리고 첫 창을 보인다. 결과.C는 전체 분석
+      if (r.창) { 창.전체 = r.C; 창되살리기(r.창); }
+      document.getElementById('thesis-input').value = (r.입력 && r.입력.논제) || (창.전체 || C).논제;
       document.getElementById('passage-input').value = (r.입력 && r.입력.제시문) || '';
       뺀것알림(r.뺀것);
       renderRegFigs(m.원문);
       소논제미리보기();
-      renderC2(); renderC3(); renderC4(); renderCP(); renderC7(); renderC8(); renderC9();
+      C전체그림();
       markCDone(0, 1, 2, 'p');
       if (C.제시문.length) markCDone(3, 4);
       if (C.확정.length) markCDone(7);

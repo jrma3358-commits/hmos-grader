@@ -1058,6 +1058,24 @@ app.post('/api/axis-rubric',async(req,res)=>{
   res.json({파일,루브릭});
 });
 
+// ── POST /api/subq-save — 소문항 창 분석 결과 자동 저장 (오종래 2026-10-19) ──
+// 검증/<문항명>_<소문항번호>.json. 같은 이름이면 덮어쓴다 (다시 분석하면 새 결과). 내용은 화면이 모은 그대로 — 여기서 고치지 않는다.
+// 문항명은 공백을 떼고 글자·숫자·_·- 만 남긴다 — 경로 문자로 폴더 밖에 쓰지 못하게
+const 소문항파일=(문항명,번호)=>{
+  const 이름=String(문항명||'').replace(/\s+/g,'').replace(/[^0-9A-Za-z가-힣_-]/g,'').slice(0,60);
+  const 번=String(번호||'').replace(/[^0-9-]/g,'').slice(0,20);
+  return 이름&&번?`${이름}_${번}.json`:null;
+};
+app.post('/api/subq-save',(req,res)=>{
+  const {문항명,번호,내용}=req.body||{};
+  const 파일=소문항파일(문항명,번호);
+  if(!파일){res.status(400).json({error:'문항명(글자·숫자·_·-)과 소문항 번호가 있어야 저장합니다'});return;}
+  if(!내용||typeof 내용!=='object'){res.status(400).json({error:'저장할 내용이 없습니다'});return;}
+  try{fs.writeFileSync(path.join(검증폴더,파일),JSON.stringify({...내용,저장:new Date().toISOString()},null,1)+'\n','utf8');}
+  catch(e){res.status(500).json({error:'저장 실패: '+e.message});return;}
+  res.json({ok:true,파일:'검증/'+파일});
+});
+
 // GET /api/axis-rubrics — 저장한 4축 루브릭 (탭7 채점 샘플). 읽기만, 쿠키는 /api/results와 같게 여기서 본다
 app.get('/api/axis-rubrics',(req,res)=>{
   res.setHeader('Cache-Control','no-store');
