@@ -130,6 +130,30 @@ app.get('/api/results/:file',(req,res)=>{ // :file = 검증 파일 이름 (.json
   res.type('application/json').send(fs.readFileSync(path.join(검증폴더,파일),'utf8'));
 });
 
+// ── 샘플 (오종래 2026-10-19) — 검증/샘플/<이름>.json. tools·dashboard 0단계 「샘플 불러오기」 ──
+// 목록·읽기는 GET이라 아래 접속 검사를 지나므로 여기서 쿠키를 본다. 저장(POST, 같은 이름이면 덮어쓰기)은 접속 검사를 거친다.
+// 이름은 공백을 떼고 글자·숫자·_·- 만 — 경로 문자로 폴더 밖을 열거나 쓰지 못하게
+const 샘플폴더=path.join(검증폴더,'샘플');
+const 샘플이름=s=>{const n=String(s||'').replace(/\.json$/i,'').replace(/\s+/g,'').replace(/[^0-9A-Za-z가-힣_-]/g,'').slice(0,80);return n||null;};
+const 샘플파일들=()=>{try{return fs.readdirSync(샘플폴더).filter(f=>f.endsWith('.json')).sort();}catch(_){return [];}};
+app.get('/api/samples',(req,res)=>{
+  res.setHeader('Cache-Control','no-store');
+  if(!접속됨(req)){res.status(401).json({ok:false,error:접속만료});return;}
+  const 목록=샘플파일들().map(파일=>{
+    try{const j=JSON.parse(fs.readFileSync(path.join(샘플폴더,파일),'utf8'));
+      return {파일:파일.replace(/\.json$/,''),이름:j.이름||파일.replace(/\.json$/,''),형식:j.형식||null,문항명:(j.입력&&j.입력.문항명)||'',소문항:((j.결과&&j.결과.창)||[]).map(w=>w.번호),저장:j.저장||null};}
+    catch(_){return {파일:파일.replace(/\.json$/,''),이름:파일,오류:'JSON을 읽지 못함'};}
+  });
+  res.json({ok:true,목록});
+});
+app.get('/api/samples/:name',(req,res)=>{
+  res.setHeader('Cache-Control','no-store');
+  if(!접속됨(req)){res.status(401).json({ok:false,error:접속만료});return;}
+  const 이름=샘플이름(req.params.name);
+  if(!이름||!샘플파일들().includes(이름+'.json')){res.status(404).json({ok:false,error:'샘플이 없습니다'});return;}
+  res.type('application/json').send(fs.readFileSync(path.join(샘플폴더,이름+'.json'),'utf8'));
+});
+
 // API도 접속 쿠키가 있어야 — 엔진(/analyze)·Claude 호출(/api/*) (2026-10-14).
 // API는 모두 POST라 GET·HEAD(홈·정적 파일) 말고는 전부 막고 /api/access만 연다 — 경로 대소문자·인코딩으로 비켜 가지 못하게 경로 모양으로 고르지 않는다.
 // 오류 모양은 대시보드가 읽는 대로: /analyze는 error.사유, /api/*는 error 글
@@ -1074,6 +1098,18 @@ app.post('/api/subq-save',(req,res)=>{
   try{fs.writeFileSync(path.join(검증폴더,파일),JSON.stringify({...내용,저장:new Date().toISOString()},null,1)+'\n','utf8');}
   catch(e){res.status(500).json({error:'저장 실패: '+e.message});return;}
   res.json({ok:true,파일:'검증/'+파일});
+});
+
+// POST /api/samples — 샘플 저장 (덮어쓰기). 내용은 화면이 모은 그대로 (입력 · 형식 · 결과 C · 소문항 창)
+app.post('/api/samples',(req,res)=>{
+  const {이름,내용}=req.body||{};
+  const n=샘플이름(이름);
+  if(!n){res.status(400).json({error:'샘플 이름은 글자 · 숫자 · _ · - 로만'});return;}
+  const 결과=내용&&typeof 내용==='object'?내용.결과:null;
+  if(!결과||!((결과.C&&결과.C.분석)||(Array.isArray(결과.창)&&결과.창.some(w=>w&&w.C&&w.C.분석)))){res.status(400).json({error:'저장할 분석 결과가 없습니다 — 분석을 먼저 돌리세요'});return;}
+  try{fs.mkdirSync(샘플폴더,{recursive:true});fs.writeFileSync(path.join(샘플폴더,n+'.json'),JSON.stringify({...내용,종류:'HMOS 샘플',이름:n,저장:new Date().toISOString()})+'\n','utf8');}
+  catch(e){res.status(500).json({error:'샘플 저장 실패: '+e.message});return;}
+  res.json({ok:true,이름:n,파일:'검증/샘플/'+n+'.json'});
 });
 
 // GET /api/axis-rubrics — 저장한 4축 루브릭 (탭7 채점 샘플). 읽기만, 쿠키는 /api/results와 같게 여기서 본다

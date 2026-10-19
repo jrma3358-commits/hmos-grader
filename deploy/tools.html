@@ -867,7 +867,10 @@
         <textarea class="input-area" id="reg-input" style="min-height: 260px;" placeholder="논제와 제시문을 한꺼번에 붙여넣으세요. 순서는 상관없습니다.&#10;[가] …&#10;[나] …&#10;&#10;[문항 1] 제시문 [가], [나]를 참고하여 …&#10;(1-1) …설명하시오."></textarea>
         <div class="type-selector" style="margin-top: 12px;">
           <label class="type-btn" style="cursor:pointer;">.txt 불러오기<input type="file" accept=".txt,text/plain" style="display:none;" onchange="txt불러오기(this)"></label>
+          <button class="type-btn" onclick="샘플목록보기()">샘플 불러오기</button>
         </div>
+        <div id="sample-list"></div>
+        <div class="c-meta" id="sample-status" style="margin-top:6px;"></div>
         <button class="run-btn" onclick="등록()">등록 → 1단계</button>
       </div>
     </div>
@@ -1389,6 +1392,52 @@ function 앞소문항of(i) {
   return { 번호: 앞s.번호, 급소: (앞s.급소덩어리 && 앞s.급소덩어리.length ? 앞s.급소덩어리 : 앞s.급소 || []).map(d => displayEntity(d.실체)) };
 }
 
+// ── 샘플 (오종래 2026-10-19 — tools·dashboard 같은 형식) ──
+// 검증/샘플/<이름>.json = { 종류:'HMOS 샘플', 이름, 형식, 입력:{원문, 논제, 제시문, 문항명}, 결과:{ C(전체 분석), 창(소문항 창들) } }
+// 0단계 「샘플 불러오기」 → 목록 → 고르면 분석 결과를 되살린다. 불러온 샘플과 같은 논제로 다시 분석하면 끝날 때 새 결과로 덮어쓴다.
+// 페이지마다 따로 둘 것: 샘플입력() · 샘플결과() · 샘플되살리기(d)
+let 불러온샘플 = null;   // { 이름, 논제 }
+
+async function 샘플목록보기() {
+  const box = document.getElementById('sample-list');
+  box.innerHTML = '<div class="c-meta">샘플 목록을 읽는 중…</div>';
+  try {
+    const res = await fetch('/api/samples');
+    const d = await res.json();
+    if (!d.ok) throw new Error(d.error || res.status);
+    box.innerHTML = d.목록.length
+      ? `<div class="type-selector" style="margin-top:8px;">${d.목록.map(s => `<button class="type-btn" onclick="샘플불러오기('${esc(s.파일)}')" title="${esc(s.저장 ? '저장 ' + s.저장 : '')}">${esc(s.이름)} <span class="c-meta">${esc([s.형식, s.소문항 && s.소문항.length ? `소문항 ${s.소문항.join('·')}` : '', s.오류].filter(Boolean).join(' · '))}</span></button>`).join('')}</div>`
+      : '<div class="c-meta" style="margin-top:8px;">검증/샘플/ 폴더에 샘플이 없습니다</div>';
+  } catch (e) {
+    box.innerHTML = `<div class="flag-box" style="margin-top:8px;">샘플 목록을 읽지 못했습니다 — ${esc(e.message)}</div>`;
+  }
+}
+
+async function 샘플불러오기(파일) {
+  if (창.진행 && !confirm('소문항 자동 진행 중입니다. 멈추고 샘플을 불러올까요?')) return;
+  let d = null;
+  try { d = await (await fetch('/api/samples/' + encodeURIComponent(파일))).json(); } catch (_) {}
+  if (!d || d.종류 !== 'HMOS 샘플' || !d.결과) { alert(`샘플 「${파일}」을 읽지 못했습니다`); return; }
+  창.차례++; 창.진행 = false; C3차례++;
+  샘플되살리기(d);
+  불러온샘플 = { 이름: d.이름, 논제: (d.입력 && d.입력.논제) || '' };
+  샘플알림(`샘플 「${d.이름}」을 불러왔습니다${d.저장 ? ` (저장 ${d.저장.slice(0, 16).replace('T', ' ')})` : ''} — 같은 논제로 다시 분석하면 새 결과로 덮어씁니다`);
+}
+
+const 샘플알림 = 글 => { const el = document.getElementById('sample-status'); if (el) el.textContent = 글; };
+const 샘플내용 = () => ({ 형식: typeof 형식of === 'function' ? 형식of() : null, 입력: 샘플입력(), 결과: 샘플결과() });
+
+/** 불러온 샘플과 같은 논제로 다시 분석이 끝나면 같은 이름으로 덮어쓴다 */
+async function 샘플덮어쓰기() {
+  if (!불러온샘플) return;
+  const 내용 = 샘플내용();
+  if (String(내용.입력.논제 || '').trim() !== String(불러온샘플.논제 || '').trim()) return;
+  try {
+    const { out } = await postJSON('/api/samples', { 이름: 불러온샘플.이름, 내용 });
+    샘플알림(out.error ? `샘플 덮어쓰기 실패 — ${out.error}` : `샘플 「${out.이름}」을 새 결과로 덮어썼습니다 — ${out.파일}`);
+  } catch (e) { 샘플알림('샘플 덮어쓰기 실패 — ' + e.message); }
+}
+
 // ── 소문항 창 (오종래 2026-10-19 — tools·dashboard 같은 코드) ──
 // 엔진 split_thesis가 논제를 소문항 둘 이상(2-1·(1)·①·[1])으로 나누면 소문항마다 독립 분석창을 만든다.
 // 창 = 공통 발문 + 그 소문항만 엔진에 다시 넣은 C 상태 하나 — 논제 B·참조 제시문·3단계 극성 기준이 소문항마다 따로 선다.
@@ -1551,6 +1600,8 @@ async function 자동진행() {
   } finally {
     if (차례 === 창.차례) { 창.진행 = false; 창바그림(); }
   }
+  // 불러온 샘플을 다시 돌렸으면 새 결과로 덮어쓴다 (2026-10-19)
+  if (차례 === 창.차례) await 샘플덮어쓰기();
 }
 
 /** 단락 라벨 — 엔진이 연결에 쓰는 이름(러너의 라벨). 옛 응답이면 기호, 없으면 「#순번」 */
@@ -1967,6 +2018,7 @@ async function runC() {
     document.querySelectorAll('#nav-essay .nav-item:not([data-step="0"])').forEach(b => b.classList.remove('done'));
     // 소문항이 둘 이상이면 소문항 창 — 차례로 자동 진행 (오종래 2026-10-19). 기다리지 않는다
     출제기본이름 = '';
+    창.전체 = C떼기(); // 샘플 결과.C — 전체 분석
     if (창세우기(논제, 제시문, out)) {
       C전체그림();
       markCDone(1, 2);
@@ -1980,8 +2032,34 @@ async function runC() {
     if (제시문.length) markCDone(3, 4);
     showStep(2);
     // 3단계 — 제시문마다 엔진 급소 → 관계 판정. 2단계 화면을 먼저 보이고 뒤에서 차례로 돈다 (기다리지 않는다)
-    if (제시문.length && !수리of()) 제시문급소추출(); // 수리논술은 제시문이 제약 C — 3단계 추출 없음
+    if (제시문.length && !수리of()) 제시문급소추출().then(샘플덮어쓰기); // 수리논술은 제시문이 제약 C — 3단계 추출 없음
+    else 샘플덮어쓰기();
   });
+}
+
+// ── 샘플 — tools 쪽 (입력 칸 · 소문항 창 · C) ──
+const 샘플입력 = () => ({ 원문: document.getElementById('reg-input').value, 논제: document.getElementById('thesis-input').value.trim(), 제시문: document.getElementById('passage-input').value, 문항명: document.getElementById('item-name').value.trim() });
+function 샘플결과() {
+  창담기();
+  return { C: 창.목록.length ? (창.전체 || null) : C떼기(), 창: 창.목록 };
+}
+function 샘플되살리기(d) {
+  const 입력 = d.입력 || {};
+  타입고르기('essay');
+  if (C형식들[d.형식]) C형식고르기(d.형식);
+  document.getElementById('reg-input').value = 입력.원문 || '';
+  document.getElementById('thesis-input').value = 입력.논제 || '';
+  document.getElementById('passage-input').value = 입력.제시문 || '';
+  document.getElementById('item-name').value = 입력.문항명 || d.이름 || '';
+  document.getElementById('reg-notice').innerHTML = '';
+  창.전체 = d.결과.C || null;
+  if ((d.결과.창 || []).length) 창되살리기(d.결과.창);
+  else { 창되살리기([]); Object.assign(C, C정리(d.결과.C)); }
+  document.querySelectorAll('#nav-essay .nav-item').forEach(b => b.classList.remove('done'));
+  markCDone(0, 1, 2);
+  if (C.제시문.length) markCDone(3, 4);
+  C전체그림();
+  showStep(2);
 }
 
 /** 저장 파일 이름 앞부분 — 1단계 문항명 칸, 비우면 「출제_날짜」 (분석 시작 때 정해 창 저장 내내 같게) */
