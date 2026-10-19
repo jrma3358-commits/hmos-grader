@@ -755,7 +755,7 @@
     <!-- 파이프라인 선택 전 (오종래 2026-10-19) -->
     <div id="nav-guide" class="c-meta" style="padding: 8px 12px;">문제 형식 선택 후 단계가 표시됩니다</div>
 
-    <!-- 논술형 (C-1a·1b·2a·2b) — 번호·이름은 표면형식에 맞춰 사이드바단계()가 붙인다. 단계 「p」 = 제시문 없는 논술의 문제 평가 -->
+    <!-- 논술형 (C-1a·2a·2b) — 번호·이름은 표면형식에 맞춰 사이드바단계()가 붙인다. 단계 「p」 = 제시문 없는 논술의 문제 평가 -->
     <div id="nav-c" style="display:none;">
       <div class="tool-group tool-make">
         <div class="tool-label">출제도구</div>
@@ -840,24 +840,8 @@
 
         <div style="margin-top: 16px;">
           <div class="card-title">문제 형식 선택</div>
-          <!-- 표면형식 3단계 (오종래 2026-10-19) — 선택형 / 서술형 → 단문·단계 / 논술형 → 인문·수리 → 제시문 있음·없음 -->
-          <div class="type-selector" data-level="0">
-            <button class="type-btn form-btn" data-choice="선택형" onclick="형식고르기(0, '선택형')">선택형</button>
-            <button class="type-btn form-btn" data-choice="서술형" onclick="형식고르기(0, '서술형')">서술형</button>
-            <button class="type-btn form-btn" data-choice="논술형" onclick="형식고르기(0, '논술형')">논술형</button>
-          </div>
-          <div class="type-selector" data-level="1" data-parent="서술형" style="display:none;">
-            <button class="type-btn form-btn" data-choice="단문서술" onclick="형식고르기(1, '단문서술')">단문서술</button>
-            <button class="type-btn form-btn" data-choice="단계서술" onclick="형식고르기(1, '단계서술')">단계서술</button>
-          </div>
-          <div class="type-selector" data-level="1" data-parent="논술형" style="display:none;">
-            <button class="type-btn form-btn" data-choice="인문논술" onclick="형식고르기(1, '인문논술')">인문논술</button>
-            <button class="type-btn form-btn" data-choice="수리논술" onclick="형식고르기(1, '수리논술')">수리논술</button>
-          </div>
-          <div class="type-selector" data-level="2" style="display:none;">
-            <button class="type-btn form-btn" data-choice="제시문 있음" onclick="형식고르기(2, '제시문 있음')">제시문 있음</button>
-            <button class="type-btn form-btn" data-choice="제시문 없음" onclick="형식고르기(2, '제시문 없음')">제시문 없음</button>
-          </div>
+          <!-- 형식 분류 (오종래 2026-10-20 확정) — 질문 설계 도구(tools)와 같은 목록·순서. 선택지는 형식들에서 채운다 -->
+          <select id="form-select" class="input-area" style="min-height:0; padding:8px 10px;" onchange="pickForm(this.value || null)"></select>
         </div>
 
         <!-- C · 논술: 필터가 논제와 제시문을 따로 받는다 -->
@@ -1691,57 +1675,36 @@ function showTab(idx, btn) {
   (btn || document.querySelector(`#nav-ab .nav-item[data-tab="${idx}"]`)).classList.add('active');
 }
 
-// ── 표면형식 (오종래 2026-10-19) ──
-// 선택형 · 서술형(단문서술 B-1 · 단계서술 B-2) · 논술형(인문 C-1 · 수리 C-2 × 제시문 있음 a · 없음 b).
-// 엔진 파이프라인(A-객관식 · B-서술형 · C-논술)은 그대로 두고, 사이드바 단계와 이름만 형식마다 바꾼다.
+// ── 형식 분류 (오종래 2026-10-20 확정 — 질문 설계 도구와 같은 목록·순서) ──
+// A-1 선택형 · A-2 단답형 · B-1 단문서술 · B-2 단계서술 · C-1a 인문논술·제시문 있음 · C-2a 수리논술·제시문 있음(이어달리기) · C-2b 수리논술·제시문 없음.
+// 인문논술·제시문 없음(C-1b)은 논술에서 다루지 않는다 (2026-10-20 제거).
+// 엔진 파이프라인(A-객관식 · A-주관식 · B-서술형 · C-논술)은 그대로 두고, 사이드바 단계와 이름만 형식마다 바꾼다.
 // 단계 = [화면 키, 이름] — 사이드바 번호는 목록 순서. A·B 키는 탭(reg·0~5), C 키는 C 화면(0~4 · p · 7~9)
 const 형식들 = {
-  '선택형': { 이름: '선택형', 길: ['선택형'], 파이프라인: 'A-객관식',
+  'A-1': { 이름: '선택형 (객관식)', 파이프라인: 'A-객관식',
     단계: [['reg', '문항 등록'], [0, '문항 입력'], [1, '인식 결과'], [2, '문제 평가']] },
-  'B-1': { 이름: '단문서술', 길: ['서술형', '단문서술'], 파이프라인: 'B-서술형',
+  'A-2': { 이름: '단답형 (주관식)', 파이프라인: 'A-주관식',
+    단계: [['reg', '문항 등록'], [0, '문항 입력'], [1, '인식 결과'], [2, '문제 평가']] },
+  'B-1': { 이름: '단문서술 (서술형, 소문항 없음)', 파이프라인: 'B-서술형',
     단계: [['reg', '문항 등록'], [0, '문항 입력'], [1, '인식 결과'], [2, '문제 평가'], [3, '루브릭'], [4, '모범답안'], [5, '교사 확정']] },
-  'B-2': { 이름: '단계서술', 길: ['서술형', '단계서술'], 파이프라인: 'B-서술형',
+  'B-2': { 이름: '단계서술 (서술형, 소문항 있음)', 파이프라인: 'B-서술형',
     단계: [['reg', '문항 등록'], [0, '문항 입력'], [1, '소문항별 인식 결과'], [2, '문제 평가'], [3, '소문항별 루브릭'], [4, '소문항별 모범답안'], [5, '교사 확정']] },
 };
-// 논술형 넷 — 제시문 있음은 제시문 분석·연결 평가, 없음은 문제 평가. 3단계 논제 정교화·추가 논제는 출제도구 솔루션으로 옮긴다
+// 논술형 셋 — 제시문 있음은 제시문 분석·연결 평가, 없음은 문제 평가. 3단계 논제 정교화·추가 논제는 출제도구 솔루션으로 옮긴다
 const 논술단계 = 제시문 => 제시문
   ? [[0, '문항 등록'], [1, '논제 + 제시문 입력'], [2, '논제 인식'], [3, '제시문 분석'], [4, '연결 평가'], [8, '루브릭'], [9, '모범답안'], [7, '교사 확정']]
   : [[0, '문항 등록'], [1, '논제 입력'], [2, '논제 인식'], ['p', '문제 평가'], [8, '루브릭'], [9, '모범답안'], [7, '교사 확정']];
-for (const [갈래, 계열] of [['인문논술', '인문사회국어'], ['수리논술', '수리']]) {
-  for (const 제시문 of [true, false]) {
-    const 코드 = `C-${갈래 === '인문논술' ? 1 : 2}${제시문 ? 'a' : 'b'}`;
-    형식들[코드] = { 이름: `${갈래} · 제시문 ${제시문 ? '있음' : '없음'}`, 길: ['논술형', 갈래, 제시문 ? '제시문 있음' : '제시문 없음'],
-      파이프라인: 'C-논술', 계열, 제시문, 단계: 논술단계(제시문) };
-  }
-}
+형식들['C-1a'] = { 이름: '인문논술 · 제시문 있음', 파이프라인: 'C-논술', 계열: '인문사회국어', 제시문: true, 단계: 논술단계(true) };
+형식들['C-2a'] = { 이름: '수리논술 · 제시문 있음 (이어달리기)', 파이프라인: 'C-논술', 계열: '수리', 제시문: true, 단계: 논술단계(true) };
+형식들['C-2b'] = { 이름: '수리논술 · 제시문 없음', 파이프라인: 'C-논술', 계열: '수리', 제시문: false, 단계: 논술단계(false) };
+document.getElementById('form-select').innerHTML = '<option value="">— 문제 형식 선택 —</option>'
+  + Object.entries(형식들).map(([k, f]) => `<option value="${k}">${k} · ${f.이름}</option>`).join('');
 
 /** 형식 없이 파이프라인만 있는 문항(옛 저장 파일) → 기본 형식 */
-const 기본형식 = p => (!p ? null : p.startsWith('A') ? '선택형' : p.startsWith('B') ? 'B-1' : 'C-1a');
+//   옛 형식 「선택형」은 A-1로, 지운 C-1b는 C-1a로 간다 (불러온문항이 형식표에 없는 형식을 기본 형식으로 바꾼다)
+const 기본형식 = p => (!p ? null : p === 'A-주관식' ? 'A-2' : p.startsWith('A') ? 'A-1' : p.startsWith('B') ? 'B-1' : 'C-1a');
 
 let selectedForm = null;
-/** 고르는 중인 길 — 끝까지 고르면 형식이 정해진다 */
-let 형식길 = [];
-
-/** 형식 버튼 — 선택 단계마다 누른 버튼 · 다음 줄 보이기. 길이 끝나면 그 형식으로 */
-function 형식고르기(단, 고른) {
-  형식길 = [...형식길.slice(0, 단), 고른];
-  const 코드 = Object.keys(형식들).find(k => 형식들[k].길.join('|') === 형식길.join('|'));
-  형식버튼그리기();
-  if (코드) return pickForm(코드);
-  // 고르는 중 — 사이드바는 기본 안내, 형식 표시 칸은 비운다 (파이프라인은 끝까지 골라야 바뀐다, 오종래 2026-10-19)
-  사이드바단계(null);
-  document.getElementById('pipeline-display').textContent = '';
-  document.getElementById('type-display').textContent = '';
-}
-
-function 형식버튼그리기() {
-  document.querySelectorAll('.type-selector[data-level]').forEach(row => {
-    const 단 = +row.dataset.level;
-    const 보임 = 단 === 0 || (단 === 1 ? 형식길[0] === row.dataset.parent : 형식길[0] === '논술형' && !!형식길[1]);
-    row.style.display = 보임 ? '' : 'none';
-    row.querySelectorAll('.form-btn').forEach(b => b.classList.toggle('selected', 보임 && 형식길[단] === b.dataset.choice));
-  });
-}
 
 /** 형식 하나로 — 엔진 파이프라인이 바뀌면 selectType, 같은 파이프라인 안(B-1↔B-2 · C-1a↔C-2b)이면 사이드바·칸만 */
 function pickForm(코드) {
@@ -1753,14 +1716,12 @@ function pickForm(코드) {
   if ((selectedType !== type || !f) && !selectType(type)) {
     // 결과가 지워진다고 해서 그만둠 — 전 형식으로 되돌린다
     selectedForm = 전;
-    형식길 = 전 ? [...형식들[전].길] : [];
-    형식버튼그리기();
+    document.getElementById('form-select').value = 전 || '';
     사이드바단계(전);
     return;
   }
   if (m && !목록.전환중 && m.형식 !== selectedForm) { m.형식 = selectedForm; 목록그리기(); }
-  형식길 = f ? [...f.길] : [];
-  형식버튼그리기();
+  document.getElementById('form-select').value = selectedForm || '';
   형식칸맞춤();
   사이드바단계(selectedForm);
 }
@@ -1779,14 +1740,12 @@ function 형식칸맞춤() {
       : '논제를 넣으세요 — 등록하면 1단계 논제 입력으로 넘어갑니다';
   }
   document.getElementById('pipeline-display').textContent = f ? f.이름 : '— 문제 형식 미선택';
-  document.getElementById('type-display').textContent = f ? `${코드표시(selectedForm)} · 엔진 ${f.파이프라인}` : '문항 유형 선택 필요';
+  document.getElementById('type-display').textContent = f ? `${selectedForm} · 엔진 ${f.파이프라인}` : '문항 유형 선택 필요';
 }
 
 const 논제예시 = { 있음: document.getElementById('thesis-input').placeholder, 없음: '논제를 붙여넣으세요.\n예) 다음 글을 읽고 논하시오.' };
 
-const 코드표시 = 코드 => (코드 === '선택형' ? 'A' : 코드);
-
-/** 지금 형식이 제시문 없는 논술(C-1b·C-2b)인가 */
+/** 지금 형식이 제시문 없는 논술(C-2b)인가 */
 function 제시문없는논술(코드 = selectedForm) {
   const f = 형식들[코드];
   return !!f && f.파이프라인 === 'C-논술' && !f.제시문;
@@ -2712,7 +2671,7 @@ function registerC() {
   if (!글.trim()) { alert('논제와 제시문을 넣으세요.'); return; }
   if (!필수칸있나()) return;
   renderRegFigs(글);
-  // 제시문 없는 논술(C-1b·2b)은 나누지 않고 모두 논제 칸에
+  // 제시문 없는 논술(C-2b)은 나누지 않고 모두 논제 칸에
   const 나눔 = 제시문없는논술() ? null : splitRegistration(글, /^C-2/.test(selectedForm || '')); // 수리논술은 제시문·조건·논제를 줄마다 (2026-10-19)
   const 알림 = document.getElementById('reg-notice');
   if (제시문없는논술()) {
@@ -4570,7 +4529,7 @@ const 분석실패글 = out => '분석 실패: ' + ((out.error && out.error.사�
 /** 문항 하나 분석 — C는 논제·제시문을 자동으로 나눠 엔진에. 실패하면 사유를 담아 throw */
 async function 문항분석(원문, 파이프라인, m = null) {
   if (파이프라인 === 'C-논술') {
-    // 제시문 없는 논술(C-1b·2b)은 원문 전체가 논제
+    // 제시문 없는 논술(C-2b)은 원문 전체가 논제
     const 나눔 = m && 제시문없는논술(m.형식) ? { 논제: 원문.trim(), 제시문: '', 뺀것: [] } : splitRegistration(원문, /^C-2/.test((m && m.형식) || ''));
     if (!나눔 || !나눔.논제) throw new Error('논제를 찾지 못했습니다 — 0단계 원문을 확인하세요');
     const 제시문 = splitPassages(나눔.제시문);
@@ -4712,7 +4671,8 @@ async function 목록불러오기(input) {
 목록그리기();
 
 // 질문 설계 도구(/tools)에서 넘긴 논제 (오종래 2026-10-19) — 같은 브라우저 localStorage로 받아 읽고 지운다.
-// 넘긴 논제마다 문항 하나(논술형, 제시문 있으면 인문·있음 / 없으면 인문·없음)로 넣고 첫 문항의 0단계 등록을 연다. 출제의도는 교사가 채운다
+// 넘긴 논제마다 문항 하나(넘긴 형식 그대로, 없으면 C-1a)로 넣고 첫 문항의 0단계 등록을 연다. 출제의도는 교사가 채운다
+// tools 0단계에서 A·B 형식을 고르면 문항 원문을 그 형식으로 넘긴다 (2026-10-20)
 (function 출제도구받기() {
   const 키 = 'hmos-출제도구-넘김';
   let d = null;
@@ -4721,15 +4681,15 @@ async function 목록불러오기(input) {
   if (!받은.length) return;
   목록.문항 = 목록.문항.filter(m => m.원문.trim() || m.결과);  // 처음 빈 문항은 덜어 낸다
   const 새것 = 받은.map(x => {
-    const 형식 = 형식들[x.형식] && 형식들[x.형식].파이프라인 === 'C-논술' ? x.형식 : 'C-1a';
-    const m = 새문항({ 파이프라인: 'C-논술', 형식, 원문: x.원문 });
+    const 형식 = 형식들[x.형식] ? x.형식 : 'C-1a';
+    const m = 새문항({ 파이프라인: 형식들[형식].파이프라인, 형식, 원문: x.원문 });
     if (typeof x.이름 === 'string' && x.이름.trim()) m.이름 = x.이름.trim();
     상태맞춤(m);
     return m;
   });
   목록.문항.push(...새것);
   문항열기(새것[0].id);
-  document.getElementById('batch-status').textContent = `질문 설계 도구에서 논제 ${새것.length}개를 받았습니다 — 출제의도를 채우고 등록하세요`;
+  document.getElementById('batch-status').textContent = `질문 설계 도구에서 문항 ${새것.length}개를 받았습니다 — 교사 입력(A는 정답, B·C는 출제의도)을 채우고 등록하세요`;
 })();
 </script>
 
