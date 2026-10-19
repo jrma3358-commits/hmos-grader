@@ -94,7 +94,7 @@ const 파트순서 = ['근거대기', '세우기', '풀기', '답구하기'];
  * 대시보드는 7단계에서 확정한 논제만 보낸다. 소문항 하나가 멈춰도 나머지는 낸다
  * 인문논술(계열 인문사회국어) ② 세우기 = 소문항 급소와 엔진이 연결한 제시문 단락(정합 연결)의 문장 수 — 3·4단계와 같은 정합을 다시 돌려 연결을 얻는다 (봉인②, 오종래 2026-10-14)
  */
-function 루브릭작업(논제글: string, 계열: string, 총배점: number, 제시문목록: { id: string; 텍스트: string }[] | null, 공통자료 = false, 이어받기 = false, 모범답안: unknown = [], 정답: unknown = '', 핵심: unknown = '') {
+function 루브릭작업(논제글: string, 계열: string, 총배점: number, 제시문목록: { id: string; 텍스트: string }[] | null, 공통자료 = false, 이어받기 = false, 모범답안: unknown = [], 정답: unknown = '', 핵심: unknown = '', 세우기남길: unknown = null) {
   // 출제의도는 급소를 고르거나 바꾸지 않는다 — 소문항 몫을 루브릭 화면 참고 정보로만 낸다 (오종래 2026-10-16, 급소 대체 제거)
   const 소문항들 = split_thesis(논제글).map((s: any) => ({ ...s, a: fq.recognizeV2Analysis(s.텍스트) }));
   // 서술형 B (오종래 2026-10-14) — 제시문을 따로 받지 않는다. 소문항 공통발문의 첫 빈 줄 뒤 글(대화·자료)을 제시문으로 본다
@@ -171,6 +171,9 @@ function 루브릭작업(논제글: string, 계열: string, 총배점: number, �
         연결문장 = [...(연결문장 ?? []), ...link_sentences(화자.map((l: any) => ({ 라벨: l.라벨, 텍스트: l.텍스트 })), 화자.map((l: any) => ({ 단락: l.라벨, 단락급소: l.단락급소 })), thesis_polarity(s.텍스트))];
         단락연결 = [...단락연결, ...화자.flatMap((l: any) => K노드.map((id: string) => ({ 노드: id, 단락: l.라벨, 단락급소: l.단락급소 })))];
       }
+      // 세우기 필터 (오종래 2026-10-19) — 서버가 filterSeuwogi로 고른 문장만 ② 세우기로 남긴다. F5 배점 전에 걸러 배점이 남은 조각에 나뉜다
+      const 남길 = Array.isArray(세우기남길) ? 세우기남길[n] : null;
+      if (연결문장 && Array.isArray(남길)) 연결문장 = 연결문장.filter((x: any) => 남길.includes(x.문장));
       const 앞급소 = 이어받기 && n > 0 ? 급소들of(소문항들[n - 1]) : [];
       // 원식 — 소문항 글(없으면 공통 발문)의 수 계수 이차방정식. 수리만 (2026-10-16 다경로)
       const 원식 = 계열 === '수리' ? (parse_quadratic(s.텍스트) ?? parse_quadratic(String(s.공통발문 ?? ''))) : null;
@@ -206,6 +209,7 @@ function 루브릭작업(논제글: string, 계열: string, 총배점: number, �
       return {
         ...소,
         급소: { 실체: k.실체, 노드: k.node.id, ...(물려받을물음 ? { 물려받음: '공통 발문' } : {}) },
+        급소수: 입력.인식.급소들.length,
         // 5색 인식 — 모범답안이 없을 때 Claude가 이 인식·조각으로 모범답안을 쓴다 (오종래 2026-10-16)
         인식: { 조합: s.a.graph.combination, 노드: s.a.graph.nodes.map((x: any) => ({ 색: x.color, 실체: x.entity })) },
         ...(답안글.trim() ? { 모범답안글: 답안글 } : {}),
@@ -302,7 +306,7 @@ try {
     // 수학 문항은 수리로만 (오종래 2026-10-16) — 「자동」이면 엔진이 고르고, 인문사회국어로 수학 문항이 오면 계열오류
     const 계열 = resolve_subject(req.계열, String(req.논제 ?? 문항원문));
     const 총배점 = Number(req.총배점) > 0 ? Number(req.총배점) : 10;
-    out.단계.루브릭 = { 계열, 총배점, 소문항: 루브릭작업(String(req.논제 ?? 문항원문), 계열, 총배점, 제시문목록, !!req.공통자료, !!req.이어받기, req.모범답안 ?? [], req.정답 ?? '', req.핵심 ?? '') };
+    out.단계.루브릭 = { 계열, 총배점, 소문항: 루브릭작업(String(req.논제 ?? 문항원문), 계열, 총배점, 제시문목록, !!req.공통자료, !!req.이어받기, req.모범답안 ?? [], req.정답 ?? '', req.핵심 ?? '', req.세우기남길 ?? null) };
   } else if (파이프라인 === 'C') {
     // ── C·논술 (조립설명서 C·논술 9단계) — 논제를 먼저 읽는다. 1차 필터는 타지 않는다 (2026-10-13 확정 4) ──
     const 논제글 = String(req.논제 ?? 문항원문);
