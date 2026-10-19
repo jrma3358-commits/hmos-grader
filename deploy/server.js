@@ -1556,6 +1556,74 @@ app.post('/api/interview',async(req,res)=>{
   res.json({model:r.msg.model,usage:r.msg.usage,면접유형:유형,대입세부:세부,성적분위:분위,면접관:Object.fromEntries(Object.keys(면접관목록).map(k=>[k,관[k]])),질문});
 });
 
+// ── POST /api/passage-relation — 출제도구 논술 3단계: 제시문 급소 사이 관계 6유형 (오종래 2026-10-19) ──
+// 급소는 엔진이 제시문마다 따로 잡은 것 그대로 받는다 (제시문 하나씩 /analyze). Claude는 급소 사이 관계 유형만 판정한다.
+// 방향 있는 관계(흡수·근거·주장·수렴)는 from → to: 포함되는 쪽 → 포함하는 쪽 · 근거 → 주장 · 모이는 제시문들 → 결론
+const 관계유형={
+  병렬:'같은 방향, 서로 보완',
+  대비:'방향 반대, 긴장 관계',
+  대조:'완전히 상충',
+  흡수:'한쪽이 다른 쪽을 포함',
+  '근거·주장':'한쪽이 다른 쪽의 근거',
+  수렴:'여럿이 하나의 결론으로 모임',
+};
+const 관계시스템=`너는 논술 제시문 급소 사이의 관계를 판정한다.
+각 제시문의 급소는 HMOS 엔진이 제시문마다 따로 잡은 것이다. 다시 고르거나 바꾸지 말고 그대로 받는다.
+
+관계 유형 (이 여섯 가지만):
+${Object.entries(관계유형).map(([k,v])=>`- ${k}: ${v}`).join('\n')}
+
+지킬 것:
+- 제시문 id는 블록의 id 그대로. 블록에 없는 제시문을 만들지 않는다.
+- 병렬·대비·대조는 from 하나, to 하나 (방향 없음).
+- 흡수는 from = 포함되는 쪽, to = 포함하는 쪽 (각 하나).
+- 근거·주장은 from = 근거가 되는 쪽, to = 주장 쪽 (각 하나).
+- 수렴은 from = 모이는 제시문 둘 이상, to = 빈 배열, conclusion = 모이는 결론 한 문장.
+- 수렴이 아니면 conclusion은 빈 문자열.
+- 관계가 분명한 짝만 낸다. 모든 짝을 억지로 채우지 않는다. 같은 짝에 관계를 둘 내지 않는다.
+- reason은 두 급소가 왜 그 관계인지 원문에 기대어 한두 문장으로.
+- 모든 출력은 한국어.`;
+const 관계형식=ids=>({type:'json_schema',schema:{type:'object',additionalProperties:false,required:['relations'],properties:{
+  relations:{type:'array',items:{type:'object',additionalProperties:false,required:['type','from','to','conclusion','reason'],properties:{
+    type:{type:'string',enum:Object.keys(관계유형)},
+    from:{type:'array',items:{type:'string',enum:ids}},
+    to:{type:'array',items:{type:'string',enum:ids}},
+    conclusion:{type:'string',description:'수렴일 때만 — 모이는 결론 한 문장'},
+    reason:{type:'string'},
+  }}},
+}}});
+app.post('/api/passage-relation',async(req,res)=>{
+  const {논제,급소}=req.body||{};
+  const 목록=Array.isArray(급소)?급소.filter(u=>u&&typeof u.id==='string'&&String(u.급소||'').trim()):[];
+  if(목록.length<2){res.status(400).json({error:'급소가 선 제시문이 둘 이상이어야 관계를 판정합니다'});return;}
+  const ids=[...new Set(목록.map(u=>u.id))];
+  if(ids.length!==목록.length){res.status(400).json({error:'제시문 id가 겹칩니다'});return;}
+  const user=[
+    String(논제||'').trim()?`논제 (참고 — 관계 판정은 급소 사이로만):\n${String(논제).trim()}`:'',
+    `제시문 급소 (HMOS 엔진 — 그대로 받을 것):\n\n${목록.map(u=>[
+      `[제시문 ${u.id}]`,
+      `급소: 「${String(u.급소).trim()}」`,
+      `원문: ${String(u.원문||'').trim().slice(0,1500)}`,
+    ].join('\n')).join('\n\n')}`,
+  ].filter(Boolean).join('\n\n');
+  const r=await askClaude(res,관계시스템,user,관계형식(ids),o=>Array.isArray(o.relations));
+  if(!r)return;
+  // 형식이 어긋난 관계는 버리지 않고 점검으로 표시만
+  const 짝=new Set();
+  const 관계=r.out.relations.map(x=>{
+    const from=[...new Set(x.from||[])],to=[...new Set(x.to||[])];
+    const 점검=[];
+    if(from.some(i=>to.includes(i)))점검.push('같은 제시문이 양쪽에 있음');
+    if(x.type==='수렴'){if(from.length<2||to.length)점검.push('수렴은 둘 이상이 결론 하나로 모여야 함');if(!String(x.conclusion||'').trim())점검.push('수렴 결론이 비어 있음');}
+    else if(from.length!==1||to.length!==1)점검.push(`${x.type}는 제시문 하나 ↔ 하나`);
+    const 열쇠=[...from,...to].sort().join('|');
+    if(x.type!=='수렴'&&짝.has(열쇠))점검.push('같은 짝에 관계가 둘');
+    짝.add(열쇠);
+    return {유형:x.type,from,to,결론:x.type==='수렴'?String(x.conclusion||'').trim():'',이유:String(x.reason||'').trim(),점검};
+  });
+  res.json({model:r.msg.model,usage:r.msg.usage,관계});
+});
+
 // ── POST /api/ocr — 0단계 문항 등록: 이미지(1~2장)·PDF → 원문 텍스트 + 그림 영역 (오종래 2026-10-14) ──
 // 글자를 옮겨 적기만 한다. 인식·분석은 엔진이 하므로 Claude는 고치거나 요약하지 않는다.
 // 이미지는 대시보드가 Claude가 보는 크기(긴 변 1568px 이하)로 줄여 크기와 함께 보낸다 — 그림 영역은 그 사진의 픽셀 좌표로 받아
