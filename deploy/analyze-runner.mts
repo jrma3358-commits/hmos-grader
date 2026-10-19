@@ -23,6 +23,8 @@ const { recognizePassage, passageLabels, PASSAGE_REFERENCE, referenceGroup, desi
 const { make_screen } = await load('src/filter/confirm.ts');
 const { 봉인13_정교화진단 } = await load('src/filter/sealed/items.ts');
 const { split_thesis } = await load('src/thesis/split.ts');
+// 논리 펼치기 표지 — 인문 채점 3축 도달 조건 ② (오종래 2026-10-19)
+const { find_logic_markers } = await load('src/fq/lexicon.ts');
 const { align_passage } = await load('src/thesis/align.ts');
 const { essay_pivot_chunks } = await load('src/thesis/chunk.ts');
 const { 봉인14_6단계 } = await load('src/thesis/relate.ts');
@@ -274,6 +276,9 @@ try {
       node: c.노드 ? 노드of(c.실체 ?? null) : null, ...(c.근거 ? { 근거: c.근거 } : {}), ...(c.경로 ? { 경로: c.경로 } : {}),
     }));
     out.단계.정답검증 = verify_answer(item_portion(req.정답 ?? '', req.번호 ?? null, 0), String(req.모범답안 ?? ''), 조각들, req.단위 === '줄' ? '줄' : '문장');
+  } else if (req.작업 === '논리표지') {
+    // ── 인문 채점 3축 논리 펼치기 도달 조건 ② (오종래 2026-10-19, hmos-spec/논리펼치기_명세서.md) ── 학생 답의 표지를 엔진 lexicon으로 찾기만 한다
+    out.단계.논리표지 = find_logic_markers(String(req.학생답 ?? ''));
   } else if (req.작업 === '소논제') {
     // ── 1단계 소논제 미리보기 (오종래 2026-10-15 안 a) ── 엔진 split_thesis로 나누기만 한다. 인식은 2단계에서
     out.단계.소논제 = split_thesis(String(req.논제 ?? 문항원문)).map((s: any) => ({ 번호: s.번호, 텍스트: s.텍스트, 공통발문: s.공통발문, 참조: s.참조 }));

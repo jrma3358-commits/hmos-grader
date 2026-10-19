@@ -735,7 +735,7 @@ function 축카드Html(g, s) {
       <td class="ax-n">${x.축}축 ${esc(x.이름)}</td>
       <td><span class="dot ${x.판정 === 'O' ? 'O' : x.판정 === 'X' ? 'X' : 'U'}">${x.판정 === '조각 없음' ? '—' : x.판정}</span></td>
       <td class="ax-sc">${x.조각수 ? `${점(x.점수)}/${점(x.배점)}` : ''}</td>
-      <td class="ax-why">${esc(x.근거)}</td></tr>`).join('')}</table>
+      <td class="ax-why">${esc(x.근거)}${x.조건 ? `<div class="muted" style="font-size:12px">① 근거 추출 ${x.조건.근거추출 ? 'O' : 'X'} · ② 기능표지 ${x.조건.기능표지 ? `O (${esc(x.표지.join(' · '))})` : 'X (엔진이 찾은 표지 없음)'} · ③ 매듭 ${x.조건.매듭 ? 'O' : 'X'}${x.배점 ? '' : ' · 배점 없음 (판정만)'}</div>` : ''}</td></tr>`).join('')}</table>
     <details class="ax-more"><summary>조각별 대조 (${a.조각.length})</summary>${a.조각.map((c) => `<div class="ax-c"><span class="dot ${c.도달 ? 'O' : 'X'}">${c.도달 ? 'O' : 'X'}</span>
       <b>${esc(c.id)}</b> 「${esc(c.실체)}」 ${점(c.배점)}점 — ${esc(c.근거)}${c.인용 ? `<div class="muted">인용: ${esc(c.인용)}</div>` : ''}</div>`).join('')}</details>
   </div>`;

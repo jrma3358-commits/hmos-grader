@@ -808,16 +808,33 @@ const 축채점SYS=(형식,계열)=>{
 - 다경로 인정: 모범답안과 다른 논증 경로라도 그 조각의 실체·충족조건에 같은 자리로 닿았으면 도달.`:''}${형식==='C2'?`
 - 수리논술: 조건(C)·정의(D) 조각은 학생이 그 조건·정의를 실제로 써서 풀이에 이었을 때만 도달.
 - 다경로 인정: 모범답안과 다른 풀이 경로라도 그 조각의 실체·충족조건에 같은 자리로 닿았으면 도달.`:''}${형식==='B2'?`
-- 단계서술: 이 소문항 학생 답만 대조한다. 앞 소문항 결과를 이어받아 쓴 것은 그대로 인정한다.`:''}
+- 단계서술: 이 소문항 학생 답만 대조한다. 앞 소문항 결과를 이어받아 쓴 것은 그대로 인정한다.`:''}${계열==='인문사회국어'?`
+
+논리 펼치기 도달 조건:
+① 논제 요구 근거를 제시문에서 실제 추출했는가
+② 결론연결·근거제시·대비·수렴 기능표지가 있는가
+③ 근거에서 결론으로 매듭이 이어지는가
+셋 모두 충족해야 O. 하나라도 없으면 X.
+다경로 인정: 다른 경로로 같은 결론 → O
+결론만 있고 경로 없음 → X
+
+- 논리펼치기 칸: ①은 근거추출, ③은 매듭으로 답한다. ②는 엔진이 찾은 표지(블록 「엔진이 찾은 논리 펼치기 표지」)로 코드가 정한다 — 너는 ②를 판정하지 않는다.
+- 근거 없이 결론만(「따라서 ○○이다」) · 제시문 인용만 하고 매듭 없음 · 논제 요구와 무관한 근거는 미도달.`:''}
 - 미작성·무관한 글은 미도달. 맞춤법·띄어쓰기는 보지 않는다.
 - 인용: 도달을 보인 학생 답 구절 그대로 (미도달이면 "").
 - 근거: 왜 도달·미도달인지 한 줄 — 교사가 읽는 말로. 엔진·노드·5색 기호를 쓰지 않는다.
 - 모든 출력은 한국어.`;
 };
-const 축채점형식=ids=>({type:'json_schema',schema:{type:'object',additionalProperties:false,required:['대조'],properties:{
+const 축채점형식=(ids,논리)=>({type:'json_schema',schema:{type:'object',additionalProperties:false,required:논리?['대조','논리펼치기']:['대조'],properties:{
   대조:{type:'array',description:'조각 블록 하나당 하나 — 블록의 id를 그대로',items:{type:'object',additionalProperties:false,required:['id','도달','인용','근거'],properties:{
     id:{type:'string',enum:ids},도달:{type:'boolean'},인용:{type:'string'},근거:{type:'string'},
   }}},
+  ...(논리?{논리펼치기:{type:'object',additionalProperties:false,required:['근거추출','매듭','인용','근거'],description:'인문 3축 논리 펼치기 — ① 근거추출 · ③ 매듭 (②는 코드)',properties:{
+    근거추출:{type:'boolean',description:'① 논제 요구 근거를 제시문에서 실제 추출했는가'},
+    매듭:{type:'boolean',description:'③ 근거에서 결론으로 매듭이 이어지는가'},
+    인용:{type:'string',description:'근거에서 결론으로 잇는 학생 답 구절 그대로 (없으면 "")'},
+    근거:{type:'string',description:'①·③ 판단 한 줄'},
+  }}}:{}),
 }}});
 
 app.post('/api/axis-grade',async(req,res)=>{
@@ -831,6 +848,15 @@ app.post('/api/axis-grade',async(req,res)=>{
   if(!답){res.status(400).json({error:'학생 답안이 없습니다'});return;}
   const 조각=s.조각.filter(c=>파트축[c.파트]!=null);
   if(!조각.length){res.status(400).json({error:'4축에 놓을 엔진 조각이 없습니다'});return;}
+  // 인문 3축 논리 펼치기 (오종래 2026-10-19, hmos-spec/논리펼치기_명세서.md) — ② 기능표지는 엔진 lexicon(LOGIC_MARKERS)이 학생 답에서 찾는다
+  const 논리=계열==='인문사회국어';
+  let 표지=null;
+  if(논리){
+    const t=await runAnalyze({파이프라인:'C',작업:'논리표지',논제:'논리표지',학생답:답});
+    if(!t.ok||!t.단계||!t.단계.논리표지){res.status(502).json({error:'엔진 논리 표지 찾기 실패: '+((t.error&&t.error.사유)||'알 수 없음')});return;}
+    표지=t.단계.논리표지;
+  }
+  const 찾은표지=표지?Object.entries(표지).filter(([,xs])=>xs.length).map(([k,xs])=>`${k} ${xs.map(x=>`「${x}」`).join(' ')}`):[];
   const 축=축이름[계열];
   const ids=조각.map(c=>String(c.id));
   const user=[
@@ -838,9 +864,10 @@ app.post('/api/axis-grade',async(req,res)=>{
     `이 소문항:\n${s.공통발문?s.공통발문+'\n':''}${s.번호?`(${s.번호}) `:''}${s.텍스트||''}`,
     Array.isArray(제시문)&&제시문.length?`제시문:\n${제시문글(제시문)}`:'',
     `엔진 루브릭 조각 (축마다 — 그대로 받을 것):\n\n${조각.map(c=>`[조각 ${c.id}] ${파트축[c.파트]+1}축 ${축[파트축[c.파트]]}\n${JSON.stringify({...조각표of(c,s.급소||{}),...(c.표현?{모범조각문장:c.표현}:{}),...(c.풀기글?{모범풀이줄:c.풀기글}:{})})}`).join('\n\n')}`,
+    논리?`엔진이 찾은 논리 펼치기 표지 (② — 코드가 판정): ${찾은표지.length?찾은표지.join(' · '):'없음'}`:'',
     `[학생 답안]\n${답}`,
   ].filter(Boolean).join('\n\n');
-  const r=await askClaude(res,축채점SYS(형식,계열),user,축채점형식(ids),o=>Array.isArray(o.대조));
+  const r=await askClaude(res,축채점SYS(형식,계열),user,축채점형식(ids,논리),o=>Array.isArray(o.대조)&&(!논리||!!o.논리펼치기));
   if(!r)return;
   const 대조=Object.fromEntries(r.out.대조.map(x=>[String(x.id),x]));
   const 조각결과=조각.map(c=>{
@@ -848,14 +875,26 @@ app.post('/api/axis-grade',async(req,res)=>{
     return {id:c.id,파트:c.파트,축:파트축[c.파트]+1,실체:조각실체(c,s.급소||{}),배점:Number(c.배점)||0,도달:!!m.도달,인용:String(m.인용||''),근거:String(m.근거||'')};
   });
   const 합=xs=>Math.round(xs.reduce((a,x)=>a+x.배점,0)*100)/100;
+  const 논리펼치기=논리?(()=>{
+    const m=r.out.논리펼치기;
+    const 조건={근거추출:!!m.근거추출,기능표지:찾은표지.length>0,매듭:!!m.매듭};
+    return {조건,표지,인용:String(m.인용||''),근거:String(m.근거||''),도달:조건.근거추출&&조건.기능표지&&조건.매듭};
+  })():null;
   const 축결과=축.map((이름,i)=>{
     const xs=조각결과.filter(x=>x.축===i+1);
+    if(논리펼치기&&i===2){
+      const 조각O=xs.every(x=>x.도달);
+      const O=논리펼치기.도달&&조각O;
+      const 빠진=[!논리펼치기.조건.근거추출&&'① 근거 추출',!논리펼치기.조건.기능표지&&'② 기능표지',!논리펼치기.조건.매듭&&'③ 매듭',!조각O&&'엔진 풀기 조각'].filter(Boolean);
+      return {축:3,이름,판정:O?'O':'X',근거:(O?'①②③ 충족':`${빠진.join(' · ')} 없음`)+(논리펼치기.근거?` — ${논리펼치기.근거}`:''),
+        점수:O?합(xs):0,배점:합(xs),조각수:xs.length,조건:논리펼치기.조건,표지:찾은표지};
+    }
     if(!xs.length)return {축:i+1,이름,판정:'조각 없음',근거:'엔진이 이 축의 조각을 내지 않았습니다',점수:0,배점:0,조각수:0};
     const O=xs.every(x=>x.도달);
     const 대표=O?xs[0]:xs.find(x=>!x.도달);
     return {축:i+1,이름,판정:O?'O':'X',근거:`「${대표.실체}」 — ${대표.근거}`,점수:합(xs.filter(x=>x.도달)),배점:합(xs),조각수:xs.length};
   });
-  res.json({model:r.msg.model,usage:r.msg.usage,형식,계열,축:축결과,조각:조각결과,부분점수:합(조각결과.filter(x=>x.도달)),만점:합(조각결과)});
+  res.json({model:r.msg.model,usage:r.msg.usage,형식,계열,축:축결과,조각:조각결과,...(논리펼치기?{논리펼치기}:{}),부분점수:합(조각결과.filter(x=>x.도달)),만점:합(조각결과)});
 });
 
 // ── POST /api/axis-rubric — dashboard2 탭2 문항분석 · 4축 루브릭 (오종래 2026-10-18) ──────────
