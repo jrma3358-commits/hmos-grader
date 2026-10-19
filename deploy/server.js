@@ -848,7 +848,7 @@ app.post('/api/axis-grade',async(req,res)=>{
   if(!답){res.status(400).json({error:'학생 답안이 없습니다'});return;}
   const 조각=s.조각.filter(c=>파트축[c.파트]!=null);
   if(!조각.length){res.status(400).json({error:'4축에 놓을 엔진 조각이 없습니다'});return;}
-  // 인문 3축 논리 펼치기 (오종래 2026-10-19, hmos-spec/논리펼치기_명세서.md) — ② 기능표지는 엔진 lexicon(LOGIC_MARKERS)이 학생 답에서 찾는다
+  // 인문 3축 논리 펼치기 (오종래 2026-10-19, hmos-spec/논리펼치기_명세서.md) — ② 기능표지는 엔진이 봉인 표지사전 「논리펼치기」로 학생 답에서 찾는다
   const 논리=계열==='인문사회국어';
   let 표지=null;
   if(논리){

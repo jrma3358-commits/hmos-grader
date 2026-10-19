@@ -131,30 +131,3 @@ export function markerTable(): SealedTable {
 
 export { isSealedAvailable, sealedPath, undecided, SealedError } from './sealed/index.ts';
 export type { SealedTable } from './sealed/schema.ts';
-
-// ─────────────────────────────────────────────────────────────
-// 논리 펼치기 표지 (오종래 2026-10-19 — deploy/hmos-spec/논리펼치기_명세서.md §2)
-// 인문 채점 3축 「논리 펼치기」 도달 조건 ② — 학생 답에 결론연결·근거제시·대비반론·수렴 표지가 있는가.
-// 5색을 켜는 표지가 아니다 — 논증 매듭의 흔적만 찾는다. ① 근거 추출 · ③ 매듭 이어짐은 이 표지로 판정하지 않는다.
-// ⚠ 위 머리말(불변원칙 4: 표지는 봉인 파일)과 갈린다 — 오종래 지시로 이 파일에 둔다. 봉인 파일로 옮길지는 확정 대기
-export const LOGIC_MARKERS = {
-  결론연결: ['따라서', '그러므로', '이를 통해', '이로써', '결국', '종합하면', '이처럼'],
-  근거제시: ['왜냐하면', '이는', '즉', '다시 말해', '구체적으로'],
-  대비반론: ['반면', '그러나', '하지만', '이에 반해', '반대로'],
-  수렴: ['이처럼', '결국', '종합하면', '이상에서'],
-} as const;
-
-export type LogicMarkerKind = keyof typeof LOGIC_MARKERS;
-
-/** 표지가 낱말로 서 있는 자리 — 앞은 글머리·공백·문장부호, 뒤는 공백·쉼표·글끝 (「보이는」의 「이는」, 「즉시」의 「즉」은 표지가 아니다) */
-const logicMarkerAt = (m: string) =>
-  new RegExp(`(?:^|[\\s.,!?·「『(\\["'“‘])${m.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?=[\\s,]|$)`, 'u');
-
-/** 글에서 찾은 논리 펼치기 표지 — 갈래마다 찾은 표지 (표지 목록 차례). 판정하지 않는다 */
-export function find_logic_markers(text: string): Record<LogicMarkerKind, string[]> {
-  const out = {} as Record<LogicMarkerKind, string[]>;
-  for (const kind of Object.keys(LOGIC_MARKERS) as LogicMarkerKind[]) {
-    out[kind] = LOGIC_MARKERS[kind].filter((m) => logicMarkerAt(m).test(text));
-  }
-  return out;
-}
