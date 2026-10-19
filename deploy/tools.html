@@ -1129,7 +1129,8 @@ function renderC2() {
 
 // ── 3단계 제시문 분석 (오종래 2026-10-19 — 전체 무게중심 폐기 · tools·dashboard 같은 코드) ──
 // ① 제시문(가·나·다…)을 하나씩 엔진(/analyze)에 넣어 수렴 경로(B₁ → B₂ → … → 수렴점)를 받는다. 차례로 보낸다 (서버 과부하로 병렬 금지)
-// ② 극성 — 2단계 논제 B(엔진 핵심)를 기준 극으로, 경로 B마다 당김·밀침(급소)·약함(배경, 제외)을 Claude가 판정 (/api/passage-polarity)
+// ② 극성 (엔진, 같은 /analyze 응답) — 2단계 논제 B(엔진 핵심)가 기준 극. 경로 B마다 그 B가 든 문장의 기능표지(봉인 「극성」)로
+//    당김·밀침이면 급소, 표지가 없으면 배경으로 뺀다. Claude는 극성에 쓰지 않는다 (오종래 2026-10-19)
 //    경로는 그대로 두고 극성 강한 B만 남긴다. 최종 입장 = 남은 B 가운데 수렴점에 가장 가까운 것 (수렴점이 남으면 수렴점)
 // ③ 최종 입장 사이 관계(병렬·대비·대조·흡수·근거·주장·수렴)는 Claude가 판정 (/api/passage-relation)
 let C3차례 = 0;
@@ -1163,41 +1164,21 @@ async function 제시문급소추출() {
       const 제 = out.단계.제시문;
       if (!제 || 제.사유) throw new Error((제 && 제.사유) || (out.멈춘곳 && out.멈춘곳.사유) || '제시문에서 멈춤');
       const 경로 = 제.수렴경로;
+      if (경로 && 경로.극성오류) throw new Error(경로.극성오류);
       Object.assign(x, { 상태: '완료', 분석: 제, flag: (경로 && 경로.flag) || (경로 ? '' : 제.flag || 'NO_B'),
-        경로: 경로 ? 경로.경로 : [], 수렴점: 경로 ? 경로.수렴점 : null });
+        경로: 경로 ? 경로.경로 : [], 수렴점: 경로 ? 경로.수렴점 : null,
+        극성: 경로 && 경로.극성 ? 경로.극성.map((k, i) => ({ B: 경로.경로[i], 극성: k.극성, 이유: k.표지.length ? `표지 ${k.표지.map(m => `「${m}」`).join(' ')}` : '표지 없음' })) : null });
+      x.급소 = 최종입장(x);
     } catch (e) {
       if (차례 !== C3차례) return;
       Object.assign(x, { 상태: '실패', flag: e.message });
     }
     renderC3();
   }
-  await 극성판정();
-}
-
-async function 극성판정() {
-  const 차례 = C3차례;
-  const 대상 = C.제시문급소.filter(x => x.경로.length);
   const 논제B = 논제Bof();
-  if (!대상.length) { renderC3(); return; }
-  if (!논제B.length) { C.극성 = { 상태: '실패', 오류: '2단계에서 엔진이 논제 B(핵심)를 세우지 못해 기준 극이 없습니다' }; renderC3(); return; }
-  C.극성 = { 상태: '판정 중' };
-  C.관계도 = null;
+  C.극성 = { 상태: '완료', 논제B };
   renderC3();
-  try {
-    const { out } = await postJSON('/api/passage-polarity', { 논제: C.논제, 논제B, 제시문: 대상.map(x => ({ id: x.id, 원문: x.원문, 경로: x.경로 })) });
-    if (차례 !== C3차례) return;
-    if (out.error) { C.극성 = { 상태: '실패', 오류: out.error }; renderC3(); return; }
-    C.극성 = { 상태: '완료', 논제B: out.논제B };
-    for (const x of C.제시문급소) {
-      x.극성 = out.극성[x.id] || null;
-      x.급소 = 최종입장(x);
-    }
-  } catch (e) {
-    if (차례 !== C3차례) return;
-    C.극성 = { 상태: '실패', 오류: e.message };
-  }
-  renderC3();
-  if (C.극성.상태 === '완료' && C.제시문급소.filter(x => x.급소).length >= 2) await 관계판정();
+  if (C.제시문급소.filter(x => x.급소).length >= 2) await 관계판정();
 }
 
 async function 관계판정() {
@@ -1233,7 +1214,7 @@ function 관계줄Html(r) {
   </div>`;
 }
 
-/** 수렴 경로 — 극성 판정 전에는 엔진 경로 그대로, 뒤에는 강한 B만 (당김·밀침 표시) → [최종 입장]. 약함은 접어 둔다 */
+/** 수렴 경로 — 극성이 없으면 엔진 경로 그대로, 있으면 강한 B만 (당김·밀침 표시) → [최종 입장]. 표지 없는 B는 접어 둔다 */
 function 경로Html(x) {
   if (!x.경로.length) return '';
   const 칸 = (t, 붙임, 끝) => `<span class="rel-node"${끝 ? ' style="border-color: var(--tool-make); font-weight:700;"' : ''}>${끝 ? `[${esc(t)}]` : esc(t)}${붙임}</span>`;
@@ -1244,8 +1225,8 @@ function 경로Html(x) {
   const 약 = x.경로.map((t, i) => ({ t, p: x.극성[i] || {} })).filter(b => !극성강함(b.p.극성));
   return (강.length ? 줄(강.map((b, k) => 칸(b.i === 끝i ? b.t : `B${k + 1} ${b.t}`, ` <span class="badge ${b.p.극성 === '밀침' ? 'warn' : 'muted'}" title="${esc(b.p.이유 || '')}">${esc(b.p.극성)}</span>`, b.i === 끝i)))
       : '')
-    + (약.length ? `<details class="c-text"><summary>배경 · 제외한 B ${약.length}개</summary><div>${약.map(b => `「${esc(b.t)}」${b.p.극성 ? '' : ' (판정 없음)'} — ${esc(b.p.이유 || '')}`).join('\n')}</div></details>` : '')
-    + (강.length ? `<details class="c-text"><summary>극성 근거</summary><div>${강.map(b => `「${esc(b.t)}」 ${esc(b.p.극성)} — ${esc(b.p.이유)}`).join('\n')}</div></details>` : '');
+    + (약.length ? `<details class="c-text"><summary>배경 · 제외한 B ${약.length}개</summary><div>${약.map(b => `「${esc(b.t)}」 — ${esc(b.p.이유 || '')}`).join('\n')}</div></details>` : '')
+    + (강.length ? `<details class="c-text"><summary>극성 표지</summary><div>${강.map(b => `「${esc(b.t)}」 ${esc(b.p.극성)} — ${esc(b.p.이유)}`).join('\n')}</div></details>` : '');
 }
 
 function renderC3() {
@@ -1254,17 +1235,16 @@ function renderC3() {
   const 목록 = C.제시문급소 || [];
   const 끝남 = 목록.length && 목록.every(x => x.상태 === '완료' || x.상태 === '실패');
   const 극 = C.극성;
-  const 극줄 = !끝남 ? '' : !극 ? '' : 극.상태 === '판정 중' ? '<div class="c-meta">극성 판정 중… (Claude)</div>'
-    : 극.상태 === '실패' ? `<div class="flag-box">극성 판정 실패 — ${esc(극.오류)}</div>`
-    : `<div class="c-meta">기준 극(논제 B): ${극.논제B.map(t => `「${esc(t)}」`).join(' · ')} — 당김·밀침은 급소, 약함은 배경으로 뺍니다.</div>`;
+  const 극줄 = !끝남 || !극 ? ''
+    : `<div class="c-meta">기준 극(논제 B): ${(극.논제B || []).length ? 극.논제B.map(t => `「${esc(t)}」`).join(' · ') : '— (2단계 핵심이 서지 않음)'} — 경로 B가 든 문장의 기능표지로 당김·밀침이면 급소, 표지가 없으면 배경으로 뺍니다 (엔진).</div>`;
   const 급소카드 = 목록.map(x => {
     const 줄 = x.상태 === '완료'
       ? (!x.경로.length ? `엔진이 이 제시문의 수렴 경로를 세우지 못했습니다 (${esc(x.flag || '—')}).`
-        : x.극성 ? (x.급소 ? `이 제시문의 최종 입장은 「${esc(x.급소)}」입니다.${x.급소 !== x.수렴점 ? ` <span class="c-meta">(엔진 수렴점 「${esc(x.수렴점 || '—')}」은 극성이 약해 뺐습니다)</span>` : ''}` : '극성 강한 B가 없어 배경 제시문입니다.')
-        : `엔진 수렴점은 「${esc(x.수렴점 || '—')}」입니다 — 극성 판정을 기다립니다.`)
+        : x.극성 ? (x.급소 ? `이 제시문의 최종 입장은 「${esc(x.급소)}」입니다.${x.급소 !== x.수렴점 ? ` <span class="c-meta">(엔진 수렴점 「${esc(x.수렴점 || '—')}」은 극성 표지가 없어 뺐습니다)</span>` : ''}` : '극성 표지가 있는 B가 없어 배경 제시문입니다.')
+        : `엔진 수렴점은 「${esc(x.수렴점 || '—')}」입니다 — 엔진 극성 결과가 없습니다.`)
       : x.상태 === '실패' ? `엔진 분석 실패 — ${esc(x.flag)}` : `${esc(x.상태)}…`;
     return `<div class="card">
-      <div class="card-title">${엔진배지}${x.극성 ? AI배지 : ''}제시문 (${esc(x.id)}) — 수렴 경로</div>
+      <div class="card-title">${엔진배지}제시문 (${esc(x.id)}) — 수렴 경로</div>
       <div class="reading-box"><p>${줄}</p></div>
       ${경로Html(x)}
       <details class="c-text"><summary>원문 보기</summary><div>${esc(x.원문)}</div></details>
@@ -1273,20 +1253,19 @@ function renderC3() {
   }).join('');
   const g = C.관계도;
   const 선수 = 목록.filter(x => x.급소).length;
-  const 관계내용 = !끝남 || !극 || 극.상태 !== '완료' ? '<div class="c-meta">수렴 경로와 극성이 서면 판정합니다.</div>'
+  const 관계내용 = !끝남 || !극 ? '<div class="c-meta">수렴 경로와 극성이 서면 판정합니다.</div>'
     : 선수 < 2 ? `<div class="c-meta">최종 입장이 선 제시문이 ${선수}개라 관계를 판정하지 않습니다.</div>`
     : !g || g.상태 === '판정 중' ? '<div class="c-meta">관계 판정 중…</div>'
     : g.상태 === '실패' ? `<div class="flag-box">관계 판정 실패 — ${esc(g.오류)}</div>`
     : g.관계.length ? g.관계.map(관계줄Html).join('') : '<div class="c-meta">최종 입장 사이에 분명한 관계가 없습니다.</div>';
   const 버튼 = [
     !목록.length || (끝남 && 목록.some(x => x.상태 === '실패')) ? '<button class="type-btn" onclick="제시문급소추출()">제시문 수렴 경로 다시 추출</button>' : '',
-    끝남 && 극 && 극.상태 !== '판정 중' ? '<button class="type-btn" onclick="극성판정()">극성 다시 판정</button>' : '',
     끝남 && 선수 >= 2 && g && g.상태 !== '판정 중' ? '<button class="type-btn" onclick="관계판정()">관계 다시 판정</button>' : '',
   ].filter(Boolean).join('');
-  body.innerHTML = `<div class="card">${극줄 || '<div class="c-meta">제시문마다 엔진 수렴 경로 → 논제 B 기준 극성(Claude) → 최종 입장 관계(Claude) 순으로 진행합니다.</div>'}${버튼 ? `<div class="type-selector" style="margin-top:10px;">${버튼}</div>` : ''}</div>` + 급소카드 + `
+  body.innerHTML = `<div class="card">${극줄 || '<div class="c-meta">제시문마다 엔진 수렴 경로 · 극성(기능표지) → 최종 입장 관계(Claude) 순으로 진행합니다.</div>'}${버튼 ? `<div class="type-selector" style="margin-top:10px;">${버튼}</div>` : ''}</div>` + 급소카드 + `
     <div class="card">
       <div class="card-title">${AI배지}제시문 관계도</div>
-      <div class="c-meta" style="margin-bottom:8px;">최종 입장은 엔진 수렴 경로에서 극성 강한 B만 남긴 것이고, 그 사이 관계(${['병렬', '대비', '대조', '흡수', '근거·주장', '수렴'].join('·')})는 Claude가 판정합니다. ▶는 포함되는 쪽 → 포함하는 쪽 · 근거 → 주장 · 모이는 제시문 → 결론.</div>
+      <div class="c-meta" style="margin-bottom:8px;">최종 입장은 엔진 수렴 경로에서 극성 표지(당김·밀침)가 있는 B만 남긴 것이고, 그 사이 관계(${['병렬', '대비', '대조', '흡수', '근거·주장', '수렴'].join('·')})는 Claude가 판정합니다. ▶는 포함되는 쪽 → 포함하는 쪽 · 근거 → 주장 · 모이는 제시문 → 결론.</div>
       ${관계내용}
       ${g && g.관계 ? 엔진원본Html(g.관계) : ''}
     </div>`;
@@ -1574,7 +1553,7 @@ const C = { 논제: '', 제시문: [], 분석: null, 제시문급소: [], 극성
 
 const C화면 = {
   2: { 제목: '논제 인식', 도구: 'make', 설명: '엔진 — 소문항마다 핵심 · 서술 방식 · 조건 · 배경을 문장으로. 공통 발문은 떼어 내고 인식합니다' },
-  3: { 제목: '제시문 분석', 도구: 'make', 설명: '엔진 수렴 경로(B₁ → … → 최종 입장) · 논제 B 기준 극성으로 강한 B만(Claude) · 최종 입장 관계 6유형(Claude) 관계도' },
+  3: { 제목: '제시문 분석', 도구: 'make', 설명: '엔진 수렴 경로(B₁ → … → 최종 입장) · 기능표지 극성(당김·밀침)으로 강한 B만(엔진) · 최종 입장 관계 6유형(Claude) 관계도' },
   4: { 제목: '연결 평가 (4축)', 도구: 'make', 설명: '엔진 — 논제 핵심과 제시문 단락이 어디서 연결되는지 문장으로' },
   5: { 제목: '논제 정교화', 도구: 'make', 설명: '엔진 — 정교화할 곳을 문장으로 · 정교화안 문장은 Claude가 엔진 진단에서' },
   6: { 제목: '추가 논제 생성', 도구: 'make', 설명: '엔진 — 단락 핵심 관계(유사·대비·보완·병렬) → 6유형 논제 뼈대 · 문장은 Claude가 다듬음' },

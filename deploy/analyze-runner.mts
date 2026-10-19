@@ -27,6 +27,8 @@ const { split_thesis } = await load('src/thesis/split.ts');
 const { find_logic_markers } = await load('src/fq/logic_markers.ts');
 // 답구하기 · 답표현하기 표지 — 채점 4축 (오종래 2026-10-19). 표지 목록은 봉인 표지사전, 찾기는 엔진 answer_markers
 const { check_math_answer, check_human_answer } = await load('src/fq/answer_markers.ts');
+// 제시문 B 극성 — 논술 3단계 (오종래 2026-10-19). 표지 목록은 봉인 표지사전 「극성」, 찾기는 엔진 polarity_markers. Claude 판정 없음
+const { passage_polarity } = await load('src/fq/polarity_markers.ts');
 const { align_passage } = await load('src/thesis/align.ts');
 const { essay_pivot_chunks } = await load('src/thesis/chunk.ts');
 const { 봉인14_6단계 } = await load('src/thesis/relate.ts');
@@ -358,6 +360,13 @@ try {
             ? { 경로: passage.convergence.path.map((n: any) => n.entity.trim().replace(/^[\s,]+/, '')), 수렴점: passage.convergence.sink ? passage.convergence.sink.entity.trim().replace(/^[\s,]+/, '') : null, flag: passage.convergence.flag ?? null }
             : null,
         };
+        // 극성 (오종래 2026-10-19) — 수렴 경로 B마다 주변(문장) 기능표지: 당김·밀침은 급소, 없으면 배경. 봉인에 「극성」이 없으면 극성만 비우고 분석은 잇는다
+        if (passage.convergence) {
+          const 봉인 = JSON.parse(readFileSync(fq.sealedPath(), 'utf8'));
+          if (봉인.극성 && Array.isArray(봉인.극성.당김) && Array.isArray(봉인.극성.밀침)) {
+            out.단계.제시문.수렴경로.극성 = passage_polarity(passage.graph, passage.convergence.path, 봉인.극성).map((x: any) => ({ 극성: x.polarity, 표지: x.markers, 문장: x.sentence }));
+          } else out.단계.제시문.수렴경로.극성오류 = '봉인 표지사전에 「극성」(당김·밀침)이 없습니다';
+        }
         // 연결단락 = 그 소문항이 연결선(급소·지정·기호)을 가진 단락 기호 — 6단계 자가검증이 읽는다
         out.단계.정합 = { 연결: 정합.연결, 사족: 정합.사족, 소문항: 정합.소문항.map((x: any) => ({ 번호: x.번호, 배경: x.연결.background, 범위밖: x.연결.outOfScope, 연결단락: [...new Set(x.연결.links.map((l: any) => 라벨들[l.paragraph] ?? `#${l.paragraph + 1}`))] })) };
         // 6단계 — 단락 급소 관계 → 6유형 뼈대 → 기존 논제와 비교 [봉인⑭, 오종래 2026-10-14]. 보완은 5단계로 넘긴다
