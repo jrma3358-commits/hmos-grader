@@ -25,6 +25,8 @@ const { 봉인13_정교화진단 } = await load('src/filter/sealed/items.ts');
 const { split_thesis } = await load('src/thesis/split.ts');
 // 논리 펼치기 표지 — 인문 채점 3축 도달 조건 ② (오종래 2026-10-19). 표지 목록은 봉인 표지사전 「논리펼치기」, 찾기는 엔진 logic_markers
 const { find_logic_markers } = await load('src/fq/logic_markers.ts');
+// 답구하기 · 답표현하기 표지 — 채점 4축 (오종래 2026-10-19). 표지 목록은 봉인 표지사전, 찾기는 엔진 answer_markers
+const { check_math_answer, check_human_answer } = await load('src/fq/answer_markers.ts');
 const { align_passage } = await load('src/thesis/align.ts');
 const { essay_pivot_chunks } = await load('src/thesis/chunk.ts');
 const { 봉인14_6단계 } = await load('src/thesis/relate.ts');
@@ -281,6 +283,17 @@ try {
     const 봉인 = JSON.parse(readFileSync(fq.sealedPath(), 'utf8'));
     if (!봉인.논리펼치기 || typeof 봉인.논리펼치기 !== 'object') throw Object.assign(new Error('봉인 표지사전에 「논리펼치기」가 없습니다'), { name: 'SealedError' });
     out.단계.논리표지 = find_logic_markers(String(req.학생답 ?? ''), 봉인.논리펼치기);
+  } else if (req.작업 === '답표지') {
+    // ── 채점 4축 답구하기(수리) · 답표현하기(인문) — 엔진이 셀 수 있는 조건만 (오종래 2026-10-19, hmos-spec/답구하기_답표현하기_명세서.md) ──
+    //   수리: ② 단위 · ③ 형식 / 인문: ① 서술 형식 표지 · ② 분량 · ④ 완결. 표지 목록은 봉인 표지사전 「답구하기」·「답표현하기」
+    const 봉인 = JSON.parse(readFileSync(fq.sealedPath(), 'utf8'));
+    const 수리 = req.계열 === '수리';
+    const 칸 = 수리 ? 봉인.답구하기 : 봉인.답표현하기;
+    if (!칸 || typeof 칸 !== 'object') throw Object.assign(new Error(`봉인 표지사전에 「${수리 ? '답구하기' : '답표현하기'}」가 없습니다`), { name: 'SealedError' });
+    const 학생답 = String(req.학생답 ?? ''), 문항 = String(req.문항 ?? '');
+    out.단계.답표지 = 수리
+      ? { 축: '답구하기', ...check_math_answer(학생답, 문항, String(req.모범답안 ?? ''), 칸) }
+      : { 축: '답표현하기', ...check_human_answer(학생답, 문항, 칸) };
   } else if (req.작업 === '소논제') {
     // ── 1단계 소논제 미리보기 (오종래 2026-10-15 안 a) ── 엔진 split_thesis로 나누기만 한다. 인식은 2단계에서
     out.단계.소논제 = split_thesis(String(req.논제 ?? 문항원문)).map((s: any) => ({ 번호: s.번호, 텍스트: s.텍스트, 공통발문: s.공통발문, 참조: s.참조 }));
