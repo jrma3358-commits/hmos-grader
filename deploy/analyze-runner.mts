@@ -23,6 +23,8 @@ const { recognizePassage, passageLabels, PASSAGE_REFERENCE, referenceGroup, desi
 const { make_screen } = await load('src/filter/confirm.ts');
 const { 봉인13_정교화진단 } = await load('src/filter/sealed/items.ts');
 const { split_thesis } = await load('src/thesis/split.ts');
+// 수리논술 C-2 인식 규칙 — 제약 C · 이어달리기 · 「각각」 조각 조합 (오종래 2026-10-19 확정)
+const { math_constraints, relay_constraint, constraint_links } = await load('src/thesis/math_essay.ts');
 // 논리 펼치기 표지 — 인문 채점 3축 도달 조건 ② (오종래 2026-10-19). 표지 목록은 봉인 표지사전 「논리펼치기」, 찾기는 엔진 logic_markers
 const { find_logic_markers } = await load('src/fq/logic_markers.ts');
 // 답구하기 · 답표현하기 표지 — 채점 4축 (오종래 2026-10-19). 표지 목록은 봉인 표지사전, 찾기는 엔진 answer_markers
@@ -334,6 +336,23 @@ try {
       })),
     };
 
+    // 수리논술 C-2 [오종래 2026-10-19 확정] — 라벨 없는 글(공통 발문의 설정 · 제시문 [I] · 조건 (가))은 제약 C로 먼저 읽고 소문항에 얹는다.
+    //   이어달리기: 앞 소문항 급소 B가 다음 소문항 제약 C로 (같은 공통 발문 안, 소문항 창 하나면 요청의 앞소문항). 제약 연결 = 함수 꼴이 노드에 나오는가
+    const 수리논술 = /^C-2/.test(String(req.형식 ?? ''));
+    if (수리논술) {
+      const B들 = (u: any) => ((u.급소덩어리 && u.급소덩어리.length ? u.급소덩어리 : u.급소) ?? []).map((d: any) => String(d.실체).trim().replace(/^[\s,]+/, '')).filter(Boolean);
+      const 요청앞 = req.앞소문항 && typeof req.앞소문항 === 'object' && Array.isArray(req.앞소문항.급소) ? { 번호: String(req.앞소문항.번호 ?? ''), B: req.앞소문항.급소.map(String) } : null;
+      out.단계.인식.소문항.forEach((u: any, i: number) => {
+        const 앞u = i > 0 && 소문항[i - 1].공통발문 === 소문항[i].공통발문 ? out.단계.인식.소문항[i - 1] : null;
+        const 앞 = 앞u ? { 번호: 앞u.번호, B: B들(앞u) } : i === 0 ? 요청앞 : null;
+        // 제시문 [I]은 참조가 있으면 그 범위만, 설정·조건은 문제 설정이라 늘 얹는다
+        const 공통 = math_constraints(u.공통발문 ?? '', 제시문목록 ?? []).filter((c: any) => c.종류 !== '제시문' || !u.참조.length || u.참조.includes(c.출처));
+        u.제약 = [...공통, ...(앞 ? relay_constraint(앞.번호, 앞.B) : [])];
+        u.제약연결 = constraint_links(u.노드.map((n: any) => String(n.실체)), u.제약);
+      });
+      out.단계.수리 = { 형식: String(req.형식), 제약묶음: 발문들.map((t) => ({ 공통발문: t, 제약: math_constraints(t, 제시문목록 ?? []) })) };
+    }
+
     // 3·4단계 — 제시문 단락 급소(엔진 connectPassage) ↔ 논제 급소 연결, 사족 (HMOS 절대 원칙: 엔진이 잡는다)
     if (제시문목록) {
       try {
@@ -376,10 +395,16 @@ try {
       }
     }
 
+    // 수리논술 C-2 — 제약에 얹힌 소문항은 사족이 아니다 (논제 급소가 제약·앞 소문항 결과에 기댄다)
+    const 얹힘 = (번호: any) => 수리논술 && (out.단계.인식.소문항.find((u: any) => u.번호 === 번호)?.제약연결 ?? []).length > 0;
+    if (out.단계.정합) out.단계.정합.사족 = out.단계.정합.사족.filter((x: any) => !얹힘(x.소문항));
+
     // 5단계 — 정교화 4갈래 진단 [봉인⑬]. ④사족은 4단계 결과, 제시문이 없으면 요청의 사족
     const 사족 = out.단계.정합?.사족 ?? (Array.isArray(req.사족) ? req.사족 : []);
     // 6단계 ⑤ 보완(참조 범위 안 단락을 끌어들일 수 있는 소문항)은 5단계 진단 「보완」으로 (오종래 2026-10-14)
     out.단계.정교화 = { 진단: [...봉인13_정교화진단(소문항.map((s: any) => ({ 이름: s.번호, 인식: s.a })), 사족), ...(out.단계.관계?.보완 ?? [])] };
+    // 수리논술 C-2 — 제약 C가 얹힌 소문항은 「C 없이 한 방향」(일방흐름)이 아니다
+    if (수리논술) out.단계.정교화.진단 = out.단계.정교화.진단.filter((d: any) => !(d.갈래 === '일방흐름' && (out.단계.인식.소문항.find((u: any) => u.번호 === d.단위)?.제약 ?? []).length));
   } else {
     // ── A·B ──
     // ① 인식
