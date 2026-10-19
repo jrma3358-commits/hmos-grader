@@ -1129,19 +1129,13 @@ function renderC2() {
 
 // ── 3단계 제시문 분석 (오종래 2026-10-19 — 전체 무게중심 폐기) ──
 // 제시문(가·나·다…)을 하나씩 엔진(/analyze)에 넣어 그 제시문의 급소(전체급소 = 그 제시문 하나의 pivot)를 따로 잡는다.
-// 차례로 보낸다 (서버 과부하로 병렬 금지). pivot이 안 서면 1단계 분석에서 그 제시문 단락에 선 단락급소(엔진)로, 그것도 없으면 「서지 않음」.
+// 차례로 보낸다 (서버 과부하로 병렬 금지). 급소 B가 여럿이면 엔진 수렴 경로(B₁ → B₂ → … → 수렴점)로 — 수렴점이 그 제시문의 급소 (10-19).
 // 급소 사이 관계(병렬·대비·대조·흡수·근거·주장·수렴)는 Claude가 판정한다 (/api/passage-relation)
 let C3차례 = 0;
 
-/** 1단계 분석의 단락급소 — 그 제시문 라벨에 선 것 (지정 제외) */
-function 단락급소of(id) {
-  const 연결 = (C.분석.단계.정합 && C.분석.단계.정합.연결) || [];
-  return [...new Set(연결.flatMap(x => x.단락.filter(d => d.단락 === id && d.자리 !== '지정').map(d => d.단락급소)))];
-}
-
 async function 제시문급소추출() {
   const 차례 = ++C3차례;
-  C.제시문급소 = C.제시문.map(p => ({ id: p.id, 원문: p.텍스트, 상태: '대기', 급소: null, 출처: '', flag: '', 분석: null }));
+  C.제시문급소 = C.제시문.map(p => ({ id: p.id, 원문: p.텍스트, 상태: '대기', 급소: null, 경로: [], flag: '', 분석: null }));
   C.관계도 = null;
   renderC3();
   for (const x of C.제시문급소) {
@@ -1152,10 +1146,10 @@ async function 제시문급소추출() {
       if (!out.ok) throw new Error((out.error && (out.error.사유 || out.error)) || '알 수 없음');
       const 제 = out.단계.제시문;
       if (!제 || 제.사유) throw new Error((제 && 제.사유) || (out.멈춘곳 && out.멈춘곳.사유) || '제시문에서 멈춤');
-      const 단락 = 단락급소of(x.id);
-      Object.assign(x, { 상태: '완료', 분석: 제, flag: 제.flag || '',
-        ...(제.전체급소 ? { 급소: displayEntity(제.전체급소.실체), 출처: '제시문 급소' }
-          : 단락.length ? { 급소: 단락.join(' · '), 출처: '단락 급소' } : {}) });
+      // 수렴 경로 (오종래 2026-10-19) — 급소 B 여럿은 오류가 아니다. 수렴점(최종 입장)이 이 제시문의 급소
+      const 경로 = 제.수렴경로;
+      Object.assign(x, { 상태: '완료', 분석: 제, flag: (경로 && 경로.flag) || (경로 ? '' : 제.flag || 'NO_B'),
+        경로: 경로 ? 경로.경로 : [], ...(경로 && 경로.수렴점 ? { 급소: 경로.수렴점 } : {}) });
     } catch (e) {
       if (차례 !== C3차례) return;
       Object.assign(x, { 상태: '실패', flag: e.message });
@@ -1205,12 +1199,18 @@ function renderC3() {
   const 끝남 = 목록.length && 목록.every(x => x.상태 === '완료' || x.상태 === '실패');
   const 급소카드 = 목록.map(x => {
     const 줄 = x.상태 === '완료'
-      ? (x.급소 ? `이 제시문의 급소는 「${esc(x.급소)}」입니다.${x.출처 === '단락 급소' ? ` <span class="c-meta">(제시문 급소가 서지 않아 단락 급소 — ${esc(x.flag || '—')})</span>` : ''}`
-        : `엔진이 이 제시문의 급소를 세우지 못했습니다 (${esc(x.flag || '—')}).`)
+      ? (x.급소 ? `이 제시문의 최종 입장은 「${esc(x.급소)}」입니다.`
+        : `엔진이 이 제시문의 수렴점을 세우지 못했습니다 (${esc(x.flag || '—')}).`)
       : x.상태 === '실패' ? `엔진 분석 실패 — ${esc(x.flag)}` : `${esc(x.상태)}…`;
+    // B₁ → B₂ → … → [최종 입장]
+    const 경로 = (x.경로 || []).length ? `<div class="rel-row">${x.경로.map((t, i) => {
+      const 끝 = x.급소 && i === x.경로.length - 1;
+      return `<span class="rel-node"${끝 ? ' style="border-color: var(--tool-make); font-weight:700;"' : ''}>${끝 ? `[${esc(t)}]` : `B<sub>${i + 1}</sub> ${esc(t)}`}</span>`;
+    }).join('<span class="rel-link">→</span>')}</div>` : '';
     return `<div class="card">
-      <div class="card-title">${엔진배지}제시문 (${esc(x.id)})</div>
+      <div class="card-title">${엔진배지}제시문 (${esc(x.id)}) — 수렴 경로</div>
       <div class="reading-box"><p>${줄}</p></div>
+      ${경로}
       <details class="c-text"><summary>원문 보기</summary><div>${esc(x.원문)}</div></details>
       ${x.분석 ? 엔진원본Html(x.분석) : ''}
     </div>`;
@@ -1514,7 +1514,7 @@ const C = { 논제: '', 제시문: [], 분석: null, 제시문급소: [], 관계
 
 const C화면 = {
   2: { 제목: '논제 인식', 도구: 'make', 설명: '엔진 — 소문항마다 핵심 · 서술 방식 · 조건 · 배경을 문장으로. 공통 발문은 떼어 내고 인식합니다' },
-  3: { 제목: '제시문 분석', 도구: 'make', 설명: '엔진 — 제시문마다 급소를 따로 · 급소 사이 관계(6유형)는 Claude가 판정해 관계도로' },
+  3: { 제목: '제시문 분석', 도구: 'make', 설명: '엔진 — 제시문마다 수렴 경로(B₁ → B₂ → … → 최종 입장) · 최종 입장 사이 관계(6유형)는 Claude가 판정해 관계도로' },
   4: { 제목: '연결 평가 (4축)', 도구: 'make', 설명: '엔진 — 논제 핵심과 제시문 단락이 어디서 연결되는지 문장으로' },
   5: { 제목: '논제 정교화', 도구: 'make', 설명: '엔진 — 정교화할 곳을 문장으로 · 정교화안 문장은 Claude가 엔진 진단에서' },
   6: { 제목: '추가 논제 생성', 도구: 'make', 설명: '엔진 — 단락 핵심 관계(유사·대비·보완·병렬) → 6유형 논제 뼈대 · 문장은 Claude가 다듬음' },

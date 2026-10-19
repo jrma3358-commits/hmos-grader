@@ -69,6 +69,8 @@ export { split_units } from './v2/units.ts';
 export {
   connectPassage,
   recognizePassage,
+  convergencePath,
+  type ConvergencePath,
   type PassageConnection,
   type PassageLink,
   type PassageParagraph,

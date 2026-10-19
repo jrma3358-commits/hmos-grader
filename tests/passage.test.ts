@@ -54,6 +54,18 @@ describe('제시문 인식 — 단락 분리 · 5색 · 서두·말미 (§2·§3
     assert.equal(recognizePassage('[가] 다수결를 본다.\n\n[나] 그냥 본다.', table).pivot?.node.entity, '다수결');
     assert.equal(recognizePassage('[가] 다수결를 본다.\n\n[나] 만장일치를 본다.', table).flag, 'MULTIPLE_CONVERGENCE');
   });
+
+  it('수렴 경로 [오종래 2026-10-19] — 급소 B 여럿은 오류가 아니다. 간선을 따라 모두 닿는 B가 수렴점, 경로 맨 끝', () => {
+    const c = recognizePassage('다수결를 본다. 가운데 본다. 만장일치를 본다.', table).convergence;
+    assert.deepEqual(c?.path.map((n) => n.entity), ['다수결', '만장일치']);
+    assert.equal(c?.sink?.entity, '만장일치');
+  });
+
+  it('수렴 경로 — 급소 하나면 경로도 하나, 그것이 수렴점', () => {
+    const c = recognizePassage('[가] 다수결를 본다.\n\n[나] 그냥 본다.', table).convergence;
+    assert.deepEqual(c?.path.map((n) => n.entity), ['다수결']);
+    assert.equal(c?.sink?.entity, '다수결');
+  });
 });
 
 describe('단락 급소 — 논제 방향 · 서두·말미 · background (판별 확정 원칙)', () => {

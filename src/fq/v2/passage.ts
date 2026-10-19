@@ -23,7 +23,6 @@ import type { SealedTable } from '../sealed/schema.ts';
 import type { Color } from '../types.ts';
 import { build_path_graph, type PathGraph, type PathNode } from './graph.ts';
 import { analyze_pivot, DEICTICS, type Pivot, type PivotAnalysis } from './pivot.ts';
-
 /** 급소가 B 하나로 서지 않은 까닭 — 엔진 플래그(NO_B·MULTIPLE_CONVERGENCE) 그대로, 또는
  *  NOT_B = 급소가 B가 아니다(§2: 급소는 B다) · MULTIPLE = 급소가 둘 이상 */
 export type PassagePivotFlag = 'NO_B' | 'MULTIPLE_CONVERGENCE' | 'NOT_B' | 'MULTIPLE';
@@ -53,6 +52,22 @@ export interface PassageRecognition {
   analysis: PivotAnalysis;
   /** 제시문 열쇠 예외 (apply.passageKeyExceptions) — 연결 때 쓴다 */
   keyExceptions: string[];
+  /** 수렴 경로 — 제시문은 하나의 입장으로 수렴하는 폭포다 (convergencePath). B 급소가 하나도 없으면 없다 */
+  convergence?: ConvergencePath;
+}
+
+/**
+ * 수렴 경로 [오종래 2026-10-19] — 제시문은 하나의 입장으로 수렴하는 폭포다.
+ * 엔진이 뽑은 B 급소가 여럿이어도 오류가 아니다 — 그 B들이 수렴하는 경로를 따라 모두 급소다.
+ * 수렴점(최종 입장)이 그 제시문이 논제에 대응하는 실체다. 수렴점이 서지 않았으면 없다 — flag가 까닭이다
+ */
+export interface ConvergencePath {
+  /** 경로의 B 급소 — 읽는 순서, 수렴점이 맨 끝 */
+  path: PathNode[];
+  /** 최종 입장 = 다른 경로 B가 모두 간선을 따라 닿는 B */
+  sink?: PathNode;
+  /** NO_SINK = 경로 B가 모두 닿는 B가 하나로 서지 않았다 */
+  flag?: 'NO_SINK';
 }
 
 /** 단락 머리 기호 — [가] · <가> · (가) · 단락N: */
@@ -110,7 +125,32 @@ export function recognizePassage(text: string, table: SealedTable): PassageRecog
       : analysis.pivot.node.color !== 'B'
         ? { flag: 'NOT_B' }
         : { pivot: analysis.pivot };
-  return { paragraphs, graph, analysis, keyExceptions: table.apply.passageKeyExceptions ?? [], ...whole };
+  const convergence = convergencePath(graph, analysis);
+  return { paragraphs, graph, analysis, keyExceptions: table.apply.passageKeyExceptions ?? [], ...whole, ...(convergence && { convergence }) };
+}
+
+/**
+ * 수렴 경로 [오종래 2026-10-19] — 엔진 급소 결과의 B들(급소 하나 · Q마다 급소 · MULTIPLE_CONVERGENCE 후보)을
+ * 간선 방향으로 따라간다. 수렴점 = 다른 경로 B가 모두 간선을 따라 닿는 B (폭포의 아래). 경로는 읽는 순서, 수렴점이 맨 끝.
+ * B가 아닌 후보(서술형태 C-F)는 경로에 넣지 않는다 — 급소는 B다 (§2). 5색 그래프만 보고 해석을 더하지 않는다.
+ */
+export function convergencePath(graph: PathGraph, analysis: PivotAnalysis): ConvergencePath | undefined {
+  const picked = analysis.ok ? (analysis.pivots ?? [analysis.pivot]).map((p) => p.node) : analysis.flag === 'MULTIPLE_CONVERGENCE' ? analysis.candidates : [];
+  const bs = [...new Map(picked.filter((n) => n.color === 'B').map((n) => [n.id, n])).values()].sort((a, b) => a.index - b.index);
+  if (!bs.length) return undefined;
+  const next = new Map<string, string[]>();
+  for (const e of graph.edges) next.set(e.from, [...(next.get(e.from) ?? []), e.to]);
+  const reach = (from: string): Set<string> => {
+    const seen = new Set<string>();
+    const stack = [from];
+    while (stack.length) for (const to of next.get(stack.pop()!) ?? []) if (!seen.has(to)) seen.add(to), stack.push(to);
+    return seen;
+  };
+  const reaches = new Map(bs.map((n) => [n.id, reach(n.id)]));
+  const sinks = bs.filter((s) => bs.every((n) => n.id === s.id || reaches.get(n.id)!.has(s.id)));
+  if (sinks.length !== 1) return { path: bs, flag: 'NO_SINK' };
+  const sink = sinks[0];
+  return { path: [...bs.filter((n) => n.id !== sink.id), sink], sink };
 }
 
 /**

@@ -353,6 +353,10 @@ try {
           단락: passage.paragraphs.map((p: any, i: number) => ({ label: p.label ?? null, 라벨: 라벨들[i] ?? `#${i + 1}`, 텍스트: p.text, 색: p.colors })),
           전체급소: passage.pivot ? { 실체: passage.pivot.node.entity, keyword: passage.pivot.keyword ?? '' } : null,
           flag: passage.flag ?? null,
+          // 수렴 경로 (오종래 2026-10-19) — 급소 B 여럿은 오류가 아니다. 경로 B들 → 수렴점(최종 입장)
+          수렴경로: passage.convergence
+            ? { 경로: passage.convergence.path.map((n: any) => n.entity.trim().replace(/^[\s,]+/, '')), 수렴점: passage.convergence.sink ? passage.convergence.sink.entity.trim().replace(/^[\s,]+/, '') : null, flag: passage.convergence.flag ?? null }
+            : null,
         };
         // 연결단락 = 그 소문항이 연결선(급소·지정·기호)을 가진 단락 기호 — 6단계 자가검증이 읽는다
         out.단계.정합 = { 연결: 정합.연결, 사족: 정합.사족, 소문항: 정합.소문항.map((x: any) => ({ 번호: x.번호, 배경: x.연결.background, 범위밖: x.연결.outOfScope, 연결단락: [...new Set(x.연결.links.map((l: any) => 라벨들[l.paragraph] ?? `#${l.paragraph + 1}`))] })) };
