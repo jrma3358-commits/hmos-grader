@@ -805,9 +805,9 @@
       <strong style="color: var(--accent);">채점 솔루션 →</strong>
       <span>분석한 문항의 확정 루브릭이 자동으로 연결됩니다 — 이 탭을 닫지 마세요 (새 탭)</span>
     </a>
-    <!-- 문제 출제 도구 /tools (오종래 2026-10-19) — 논술 정교화·추가 논제 · 면접 · 수행평가. 확정 논제는 「문항분석으로 넘기기」로 이 화면 0단계에 들어온다 -->
+    <!-- 질문 설계 도구 /tools (오종래 2026-10-19) — 논술 정교화·추가 논제 · 면접 · 수행평가. 확정 논제는 「문항분석으로 넘기기」로 이 화면 0단계에 들어온다 -->
     <a class="pipeline-badge" href="/tools" target="_blank" rel="noopener" style="display:block; margin-top:8px; text-decoration:none;">
-      <strong style="color: var(--tool-make);">문제 출제 도구 →</strong>
+      <strong style="color: var(--tool-make);">질문 설계 도구 →</strong>
       <span>논술 논제 정교화·추가 논제 · 면접 문제 출제 (새 탭)</span>
     </a>
   </aside>
@@ -4132,7 +4132,7 @@ async function 목록불러오기(input) {
 목록.지금 = 목록.문항[0].id;
 목록그리기();
 
-// 문제 출제 도구(/tools)에서 넘긴 논제 (오종래 2026-10-19) — 같은 브라우저 localStorage로 받아 읽고 지운다.
+// 질문 설계 도구(/tools)에서 넘긴 논제 (오종래 2026-10-19) — 같은 브라우저 localStorage로 받아 읽고 지운다.
 // 넘긴 논제마다 문항 하나(논술형, 제시문 있으면 인문·있음 / 없으면 인문·없음)로 넣고 첫 문항의 0단계 등록을 연다. 출제의도는 교사가 채운다
 (function 출제도구받기() {
   const 키 = 'hmos-출제도구-넘김';
@@ -4150,7 +4150,7 @@ async function 목록불러오기(input) {
   });
   목록.문항.push(...새것);
   문항열기(새것[0].id);
-  document.getElementById('batch-status').textContent = `문제 출제 도구에서 논제 ${새것.length}개를 받았습니다 — 출제의도를 채우고 등록하세요`;
+  document.getElementById('batch-status').textContent = `질문 설계 도구에서 논제 ${새것.length}개를 받았습니다 — 출제의도를 채우고 등록하세요`;
 })();
 </script>
 

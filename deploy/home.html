@@ -134,6 +134,9 @@
   /* 채점 대시보드 (2026-10-17) — 같은 크기 · 둥글기, 보조 색(올리브) */
   .cta.alt { background: var(--olive); box-shadow: 0 10px 24px -10px rgba(107, 122, 58, 0.7); }
   .cta.alt:hover { background: #59662F; }
+  /* 질문 설계 도구 (2026-10-19) — 같은 크기 · 둥글기, 갈색 */
+  .cta.tool { background: var(--brown); box-shadow: 0 10px 24px -10px rgba(59, 42, 32, 0.6); }
+  .cta.tool:hover { background: #2A1D16; }
   .cta:focus-visible, .header-btn:focus-visible, .modal button:focus-visible { outline: 3px solid var(--olive); outline-offset: 3px; }
   .cta-note { font-size: 13px; color: var(--brown-sub); }
 
@@ -327,7 +330,7 @@
     .pivot-net { margin-top: 24px; }
     .needs { padding: 88px 0 96px; }
   }
-  /* 좁은 화면 — 헤더 메뉴 넷(문제 출제 도구 더함, 2026-10-19)이 로고 옆에 안 들어가면 로고 아래 줄로, 그래도 넘치면 메뉴끼리 줄을 바꾼다 */
+  /* 좁은 화면 — 헤더 메뉴 넷(질문 설계 도구 더함, 2026-10-19)이 로고 옆에 안 들어가면 로고 아래 줄로, 그래도 넘치면 메뉴끼리 줄을 바꾼다 */
   @media (max-width: 720px) {
     header .wrap { height: auto; flex-wrap: wrap; padding-top: 10px; padding-bottom: 10px; row-gap: 8px; }
     .header-nav { width: 100%; justify-content: flex-end; flex-wrap: wrap; row-gap: 8px; }
@@ -351,7 +354,7 @@
     <nav class="header-nav">
       <a class="header-link" href="/about">HMOS 이야기</a>
       <button class="header-btn" type="button" onclick="열기('/dashboard')">문항 분석</button>
-      <button class="header-btn" type="button" onclick="열기('/tools')">문제 출제 도구</button>
+      <button class="header-btn" type="button" onclick="열기('/tools')">질문 설계 도구</button>
       <button class="header-btn alt" type="button" onclick="열기('/dashboard2')">채점 대시보드</button>
     </nav>
   </div>
@@ -369,6 +372,10 @@
       <div class="hero-cta">
         <button class="cta" type="button" onclick="열기('/dashboard')">
           문항 분석 시작하기
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </button>
+        <button class="cta tool" type="button" onclick="열기('/tools')">
+          질문 설계 도구
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
         </button>
         <button class="cta alt" type="button" onclick="열기('/dashboard2')">
@@ -487,7 +494,7 @@ AI는 질문에 답을 내놓는다.
   const 버튼 = document.getElementById('access-btn');
 
   // 들어갈 화면 — 문항 분석 /dashboard · 채점 대시보드 /dashboard2 (2026-10-17)
-  const 화면 = { '/dashboard': '문항 분석', '/dashboard2': '채점 대시보드', '/tools': '문제 출제 도구' };
+  const 화면 = { '/dashboard': '문항 분석', '/dashboard2': '채점 대시보드', '/tools': '질문 설계 도구' };
   let 갈곳 = '/dashboard';
   function 열기(곳 = '/dashboard') {
     갈곳 = 화면[곳] ? 곳 : '/dashboard';

@@ -89,7 +89,7 @@ app.get('/dashboard2',(req,res)=>{
   res.sendFile(path.join(__dirname,'dashboard2.html'));
 });
 app.get('/dashboard2.html',(req,res)=>res.redirect(302,'/dashboard2'));
-// /tools = 문제 출제 도구 (오종래 2026-10-19) — 논술(0~4 /analyze · 5 /api/refine · 6 /api/propose · 7 교사 확정) · 면접 · 수행평가. 같은 접속 쿠키
+// /tools = 질문 설계 도구 (오종래 2026-10-19) — 논술(0~4 /analyze · 5 /api/refine · 6 /api/propose · 7 교사 확정) · 면접 · 수행평가. 같은 접속 쿠키
 app.get('/tools',(req,res)=>{
   if(!접속됨(req)){res.redirect(302,'/?login=1&next=tools');return;}
   res.setHeader('Cache-Control','no-store');
