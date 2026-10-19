@@ -804,8 +804,9 @@
     <div id="nav-interview" style="display:none;">
       <button class="nav-item" data-step="i0" onclick="showStep('i0')"><div class="nav-num">0</div>자료 등록</button>
       <button class="nav-item" data-step="i1" onclick="showStep('i1')"><div class="nav-num">1</div>급소 추출</button>
-      <button class="nav-item" data-step="i2" onclick="showStep('i2')"><div class="nav-num">2</div>면접 질문 생성</button>
-      <button class="nav-item" data-step="i3" onclick="showStep('i3')"><div class="nav-num">3</div>면접관 확정</button>
+      <button class="nav-item" data-step="i2" onclick="showStep('i2')"><div class="nav-num">2</div>면접관 유형 선택</button>
+      <button class="nav-item" data-step="i3" onclick="showStep('i3')"><div class="nav-num">3</div>면접 질문 생성</button>
+      <button class="nav-item" data-step="i4" onclick="showStep('i4')"><div class="nav-num">4</div>면접관 확정</button>
     </div>
 
     <!-- 수행평가 -->
@@ -911,7 +912,7 @@
       <div class="card">
         <div class="card-title">④ 지원자 성적 분위 <span class="badge warn">필수</span></div>
         <div class="type-selector" id="iv-rank"></div>
-        <div class="c-meta">2단계 면접 질문의 기대 수준을 정합니다 — 고르지 않으면 1단계로 넘어가지 않습니다.</div>
+        <div class="c-meta">3단계 면접 질문의 기대 수준을 정합니다 — 고르지 않으면 1단계로 넘어가지 않습니다.</div>
       </div>
 
       <button class="run-btn" id="iv-reg-btn" onclick="면접등록()">등록 완료 → 1단계 급소 추출</button>
@@ -926,22 +927,31 @@
       <div id="i1-body"><div class="card c-empty">0단계에서 자료를 등록하면 표시됩니다</div></div>
     </div>
 
-    <!-- 면접 2 · 면접 질문 생성 (Claude — 급소만으로) -->
+    <!-- 면접 2 · 면접관 유형 선택 -->
     <div class="tab-pane" id="pane-i2">
       <div class="section-header">
-        <div class="section-title"><span class="tool-tag make">출제도구</span>2 · 면접 질문 생성</div>
-        <div class="section-sub">1단계에서 확인한 급소마다 본질문 · 꼬리질문 1·2 · 근거 — 문장은 Claude가 급소에서만 씁니다</div>
+        <div class="section-title"><span class="tool-tag make">출제도구</span>2 · 면접관 유형 선택</div>
+        <div class="section-sub">전문성 · 성향 · 성별 · 연령대 · 직위 — 0단계 성적 분위와 함께 질문의 말투·기대 수준을 정합니다</div>
       </div>
       <div id="i2-body"></div>
     </div>
 
-    <!-- 면접 3 · 면접관 확정 -->
+    <!-- 면접 3 · 면접 질문 생성 (Claude — 급소만으로) -->
     <div class="tab-pane" id="pane-i3">
       <div class="section-header">
-        <div class="section-title"><span class="tool-tag grade">채점도구</span>3 · 면접관 확정</div>
-        <div class="section-sub">질문 카드마다 수정 · 삭제 · 확정 — 확정한 질문을 저장하거나 인쇄합니다</div>
+        <div class="section-title"><span class="tool-tag make">출제도구</span>3 · 면접 질문 생성</div>
+        <div class="section-sub">1단계에서 확인한 급소마다 본질문 · 꼬리질문 1·2 · 근거 — 문장은 Claude가 급소에서만 씁니다</div>
       </div>
       <div id="i3-body"></div>
+    </div>
+
+    <!-- 면접 4 · 면접관 확정 -->
+    <div class="tab-pane" id="pane-i4">
+      <div class="section-header">
+        <div class="section-title"><span class="tool-tag grade">채점도구</span>4 · 면접관 확정</div>
+        <div class="section-sub">질문 카드마다 수정 · 삭제 · 확정 — 확정한 질문을 저장하거나 인쇄합니다</div>
+      </div>
+      <div id="i4-body"></div>
     </div>
 
     <!-- 인쇄용 — 확정한 질문만 (면접 3 「인쇄」) -->
@@ -1482,7 +1492,7 @@ function 타입고르기(k) {
   showStep(k === 'essay' ? 0 : k === 'interview' ? 'i0' : 't0');
 }
 
-/** n — 논술 0~7 · 면접 i0~i3 · 수행 t0 */
+/** n — 논술 0~7 · 면접 i0~i4 · 수행 t0 */
 function showStep(n) {
   n = String(n);
   document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
@@ -1491,6 +1501,7 @@ function showStep(n) {
   if (n === 'i1') renderI1();
   if (n === 'i2') renderI2();
   if (n === 'i3') renderI3();
+  if (n === 'i4') renderI4();
   document.querySelector('.main').scrollTop = 0;
 }
 
@@ -1787,8 +1798,8 @@ function renderI1() {
     </div>
     ${카드}
     <div class="card">
-      <div class="c-meta">${끝남 ? `쓰는 급소 ${급소수}개 — 확인한 급소만 2단계 질문 생성에 갑니다.` : '엔진이 항목을 차례로 분석하고 있습니다…'}</div>
-      <button class="confirm-btn" style="background: var(--tool-make);" ${끝남 && 급소수 ? '' : 'disabled'} onclick="급소확인()">교사 확인 완료 → 2단계</button>
+      <div class="c-meta">${끝남 ? `쓰는 급소 ${급소수}개 — 확인한 급소만 3단계 질문 생성에 갑니다.` : '엔진이 항목을 차례로 분석하고 있습니다…'}</div>
+      <button class="confirm-btn" style="background: var(--tool-make);" ${끝남 && 급소수 ? '' : 'disabled'} onclick="급소확인()">교사 확인 완료 → 2단계 면접관 유형</button>
     </div>`;
 }
 
@@ -1807,11 +1818,39 @@ function 급소확인() {
   showStep('i2');
 }
 
-// ── 2 · 면접 질문 생성 (/api/interview) ──
+// ── 2 · 면접관 유형 선택 ──
+const 유형다됨 = () => 면접관칸.every(([칸]) => 면접.면접관[칸]);
+const 분위됨 = () => 성적분위들.includes(면접.성적분위);
+
+function renderI2() {
+  document.getElementById('i2-body').innerHTML = `
+    <div class="card">
+      <div class="card-title">면접관 유형 <span class="badge warn">필수</span> <span class="c-meta">· 지원자 ${분위됨() ? `상위 ${면접.성적분위}%` : '성적 분위 미선택 (0단계)'}</span></div>
+      ${면접관칸.map(([칸, 값들]) => `
+        <div class="field-label">${칸}</div>
+        <div class="type-selector">${값들.map(v => `<button class="type-btn${면접.면접관[칸] === v ? ' selected' : ''}" onclick="면접관고르기('${칸}', '${v}')">${esc(v)}</button>`).join('')}</div>`).join('')}
+      <div class="c-meta" style="margin-top:8px;">면접관 유형과 성적 분위로 질문의 말투·기대 수준을 맞춥니다. 묻는 내용은 1단계 급소에서만 나옵니다.</div>
+      <button class="confirm-btn" style="background: var(--tool-make);" ${유형다됨() ? '' : 'disabled'} onclick="유형확인()">${유형다됨() ? '선택 완료 → 3단계 질문 생성' : '다섯 칸을 모두 고르세요'}</button>
+    </div>`;
+}
+
+function 면접관고르기(칸, 값) {
+  면접.면접관[칸] = 값;
+  if (!유형다됨()) document.querySelector('#nav-interview .nav-item[data-step="i2"]').classList.remove('done');
+  renderI2();
+}
+
+function 유형확인() {
+  if (!유형다됨()) return;
+  markCDone('i2');
+  showStep('i3');
+}
+
+// ── 3 · 면접 질문 생성 (/api/interview) ──
 /** 질문 단위 = 항목 × 쓰는 급소 하나 */
 const 급소단위 = () => 면접.항목.flatMap(x => 쓰는급소(x).map((k, j) => ({ id: `${x.id}-${j + 1}`, 자료: x.자료, 근거: x.근거, 급소: k.실체, 출처: k.출처, 원문: x.원문 })));
 
-function renderI2() {
+function renderI3() {
   const 단위 = 급소단위();
   const g = 면접.생성;
   const 카드 = g ? g.질문.map(q => `
@@ -1822,49 +1861,46 @@ function renderI2() {
       <div class="c-row"><strong>근거</strong> ${esc(q.근거)}</div>
       ${q.점검.length ? `<div class="flag-box">${q.점검.map(t => `<div>면접관 확인 — ${esc(t)}</div>`).join('')}</div>` : ''}
     </div>`).join('') : '';
-  const 유형다 = 면접관칸.every(([칸]) => 면접.면접관[칸]);
-  const 분위됨 = 성적분위들.includes(면접.성적분위);
-  const 막힘 = !단위.length ? '' : !분위됨 ? '0단계에서 지원자 성적 분위를 고르세요' : !유형다 ? '면접관 유형을 모두 고르세요' : '';
-  document.getElementById('i2-body').innerHTML = `
+  const 막힘 = !단위.length ? '1단계에서 급소를 확인하세요' : !분위됨() ? '0단계에서 지원자 성적 분위를 고르세요' : !유형다됨() ? '2단계에서 면접관 유형을 모두 고르세요' : '';
+  const 유형글 = 면접관칸.map(([칸]) => `${칸} ${면접.면접관[칸] ? `<strong>${esc(면접.면접관[칸])}</strong>` : '<span class="badge warn">미선택</span>'}`).join(' · ');
+  document.getElementById('i3-body').innerHTML = `
     <div class="card">
-      <div class="card-title">면접관 유형 <span class="badge warn">필수</span> <span class="c-meta">· 지원자 ${분위됨 ? `상위 ${면접.성적분위}%` : '성적 분위 미선택'}</span></div>
-      ${면접관칸.map(([칸, 값들]) => `
-        <div class="field-label">${칸}</div>
-        <div class="type-selector">${값들.map(v => `<button class="type-btn${면접.면접관[칸] === v ? ' selected' : ''}" onclick="면접관고르기('${칸}', '${v}')">${esc(v)}</button>`).join('')}</div>`).join('')}
-      <div class="c-meta" style="margin-top:8px;">면접관 유형과 성적 분위로 질문의 말투·기대 수준을 맞춥니다. 묻는 내용은 아래 급소에서만 나옵니다.</div>
+      <div class="card-title">선택한 면접관 유형</div>
+      <div class="c-row">${유형글}</div>
+      <div class="c-row">지원자 ${분위됨() ? `<strong>상위 ${esc(면접.성적분위)}%</strong>` : '<span class="badge warn">성적 분위 미선택</span>'}
+        <button class="type-btn" style="padding:2px 10px; margin-left:8px;" onclick="showStep('i2')">유형 바꾸기</button></div>
     </div>
     <div class="card">
       <div class="card-title">${엔진배지}질문의 바탕이 되는 급소 (${단위.length}개)</div>
       ${단위.length ? `<div class="note-list">${단위.map(u => `<div class="note-item">「${esc(u.급소)}」 — ${esc(u.근거)}${u.출처 === '교사' ? ' <span class="badge muted">교사 확인</span>' : ''}</div>`).join('')}</div>`
         : '<div class="c-empty">확인한 급소가 없습니다 — 급소 없이 일반 질문은 만들지 않습니다. 1단계에서 급소를 확인하세요</div>'}
       <div class="c-meta" style="margin-top:8px;">급소마다 본질문 하나 · 꼬리질문 둘 · 근거를 씁니다. 급소에 없는 내용은 묻지 않습니다.</div>
-      <button class="type-btn" id="i2-btn" ${단위.length && !막힘 ? '' : 'disabled'} onclick="질문생성()">${g ? '질문 다시 생성' : '면접 질문 생성'} (${단위.length}개 급소)</button>
+      <button class="type-btn" id="i3-btn" ${막힘 ? 'disabled' : ''} onclick="질문생성()">${g ? '질문 다시 생성' : '면접 질문 생성'} (${단위.length}개 급소)</button>
       ${막힘 ? `<span class="c-meta" style="margin-left:8px;">${막힘}</span>` : ''}
     </div>
     ${카드}
-    ${g ? '<div class="c-nav"><span></span><button class="type-btn" onclick="showStep(\'i3\')">3 · 면접관 확정 →</button></div>' : ''}`;
+    ${g ? '<div class="c-nav"><span></span><button class="type-btn" onclick="showStep(\'i4\')">4 · 면접관 확정 →</button></div>' : ''}`;
 }
-
-function 면접관고르기(칸, 값) { 면접.면접관[칸] = 값; renderI2(); }
 
 async function 질문생성() {
   const 단위 = 급소단위();
-  if (!단위.length || !성적분위들.includes(면접.성적분위) || !면접관칸.every(([칸]) => 면접.면접관[칸])) return;
-  if (면접.질문.some(q => q.수정됨 || q.확정) && !confirm('다시 생성하면 3단계에서 고치거나 확정한 질문이 지워집니다. 다시 생성할까요?')) return;
-  await withBusy(document.getElementById('i2-btn'), '면접 질문 생성 중… (약 1분)', async () => {
+  if (!단위.length || !분위됨() || !유형다됨()) return;
+  if (면접.질문.some(q => q.수정됨 || q.확정) && !confirm('다시 생성하면 4단계에서 고치거나 확정한 질문이 지워집니다. 다시 생성할까요?')) return;
+  await withBusy(document.getElementById('i3-btn'), '면접 질문 생성 중… (약 1분)', async () => {
     const { out } = await postJSON('/api/interview', { 급소: 단위, 지원: 면접.지원, 성적분위: 면접.성적분위, 면접관: 면접.면접관 });
     if (out.error) { alert('질문 생성 실패: ' + out.error); return; }
     면접.생성 = out;
     면접.질문 = out.질문.map(q => ({ ...q, 꼬리질문: [...q.꼬리질문], 확정: false, 수정됨: false }));
-    markCDone('i2');
-    renderI2();
+    document.querySelector('#nav-interview .nav-item[data-step="i4"]').classList.remove('done');
+    markCDone('i3');
+    renderI3();
   });
 }
 
-// ── 3 · 면접관 확정 ──
-function renderI3() {
-  const body = document.getElementById('i3-body');
-  if (!면접.질문.length) { body.innerHTML = '<div class="card c-empty">2단계에서 질문을 생성하면 표시됩니다</div>'; return; }
+// ── 4 · 면접관 확정 ──
+function renderI4() {
+  const body = document.getElementById('i4-body');
+  if (!면접.질문.length) { body.innerHTML = '<div class="card c-empty">3단계에서 질문을 생성하면 표시됩니다</div>'; return; }
   const 확정수 = 면접.질문.filter(q => q.확정).length;
   body.innerHTML = 면접.질문.map((q, i) => `
     <div class="card"${q.확정 ? ' style="border-color: var(--tool-grade);"' : ''}>
@@ -1891,7 +1927,7 @@ function renderI3() {
       <div class="type-selector" style="margin-top:12px;">
         <button class="type-btn" ${확정수 ? '' : 'disabled'} onclick="면접저장()">확정한 질문 저장 (.json)</button>
         <button class="type-btn" ${확정수 ? '' : 'disabled'} onclick="면접인쇄()">인쇄용 출력</button>
-        <button class="type-btn" onclick="면접.질문.forEach(q => q.확정 = true); renderI3()">모두 확정</button>
+        <button class="type-btn" onclick="면접.질문.forEach(q => q.확정 = true); renderI4()">모두 확정</button>
       </div>
     </div>`;
 }
@@ -1901,9 +1937,9 @@ function 질문고침(i, 칸, 값) {
   if (typeof 칸 === 'number') q.꼬리질문[칸] = 값; else q[칸] = 값;
   q.수정됨 = true;
 }
-function 질문확정(i) { 면접.질문[i].확정 = !면접.질문[i].확정; renderI3(); 확정표시(); }
-function 질문삭제(i) { if (!confirm('이 질문 카드를 지울까요?')) return; 면접.질문.splice(i, 1); renderI3(); 확정표시(); }
-function 확정표시() { document.querySelector('#nav-interview .nav-item[data-step="i3"]').classList.toggle('done', 면접.질문.some(q => q.확정)); }
+function 질문확정(i) { 면접.질문[i].확정 = !면접.질문[i].확정; renderI4(); 확정표시(); }
+function 질문삭제(i) { if (!confirm('이 질문 카드를 지울까요?')) return; 면접.질문.splice(i, 1); renderI4(); 확정표시(); }
+function 확정표시() { document.querySelector('#nav-interview .nav-item[data-step="i4"]').classList.toggle('done', 면접.질문.some(q => q.확정)); }
 
 function 면접확정자료() {
   const 이름 = (면접.확정자 || '').trim();
