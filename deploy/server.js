@@ -1556,7 +1556,57 @@ app.post('/api/interview',async(req,res)=>{
   res.json({model:r.msg.model,usage:r.msg.usage,면접유형:유형,대입세부:세부,성적분위:분위,면접관:Object.fromEntries(Object.keys(면접관목록).map(k=>[k,관[k]])),질문});
 });
 
-// ── POST /api/passage-relation — 출제도구 논술 3단계: 제시문 급소 사이 관계 6유형 (오종래 2026-10-19) ──
+// ── POST /api/passage-polarity — 논술 3단계: 제시문 수렴 경로 B ↔ 논제 B 극성 (오종래 2026-10-19) ──
+// 논제 B(2단계 엔진 핵심)가 기준 극(N극). 경로 B는 엔진이 제시문마다 잡은 수렴 경로 그대로 받는다.
+// Claude는 B마다 당김(연관·같은 방향 → 급소) · 밀침(대립·긴장 → 급소, 대비) · 약함(무관 → 배경)만 판정한다. 경로를 바꾸거나 B를 만들지 않는다
+const 극성목록={당김:'논제 B와 연관되거나 같은 방향 — 급소',밀침:'논제 B와 대립하거나 긴장 — 급소 (대비 제시문)',약함:'논제 B와 무관 — 배경, 제외'};
+const 극성시스템=`너는 논술 제시문의 B(급소 후보)가 논제 B에 대해 갖는 극성을 판정한다.
+논제 B는 기준 극(N극)이다. 논제 B와 제시문 B는 모두 HMOS 엔진이 잡은 것이다. 다시 고르거나 바꾸지 말고 그대로 받는다.
+
+극성 (이 셋만):
+${Object.entries(극성목록).map(([k,v])=>`- ${k}: ${v}`).join('\n')}
+
+지킬 것:
+- 제시문 B 하나당 판정 하나. key는 블록의 key 그대로. 블록에 없는 B를 만들지 않는다.
+- 판정은 그 B가 원문에서 무엇을 가리키는지에 기대어 한다. 실체 경계가 어긋난 조각(「통해 얻」처럼 뜻이 서지 않는 말)은 약함.
+- 같은 낱말이 경로에 여러 번 나와도 key마다 따로 판정한다.
+- reason은 한 문장. 어느 논제 B와 어떻게 당기거나 밀치는지 밝힌다.
+- 모든 출력은 한국어.`;
+const 극성형식=keys=>({type:'json_schema',schema:{type:'object',additionalProperties:false,required:['judgments'],properties:{
+  judgments:{type:'array',items:{type:'object',additionalProperties:false,required:['key','polarity','reason'],properties:{
+    key:{type:'string',enum:keys},
+    polarity:{type:'string',enum:Object.keys(극성목록)},
+    reason:{type:'string'},
+  }}},
+}}});
+app.post('/api/passage-polarity',async(req,res)=>{
+  const {논제,논제B,제시문}=req.body||{};
+  const 극=Array.isArray(논제B)?[...new Set(논제B.map(t=>String(t||'').trim()).filter(Boolean))]:[];
+  if(!극.length){res.status(400).json({error:'논제 B가 없습니다 — 2단계에서 엔진이 논제 핵심을 세우지 못했습니다'});return;}
+  const 목록=Array.isArray(제시문)?제시문.filter(p=>p&&typeof p.id==='string'&&Array.isArray(p.경로)&&p.경로.length):[];
+  if(!목록.length){res.status(400).json({error:'수렴 경로가 선 제시문이 없습니다'});return;}
+  if(new Set(목록.map(p=>p.id)).size!==목록.length){res.status(400).json({error:'제시문 id가 겹칩니다'});return;}
+  const keys=목록.flatMap(p=>p.경로.map((_,i)=>`${p.id}:${i}`));
+  const user=[
+    String(논제||'').trim()?`논제 (참고):\n${String(논제).trim()}`:'',
+    `논제 B (기준 극 — HMOS 엔진):\n${극.map(t=>`- 「${t}」`).join('\n')}`,
+    `제시문 수렴 경로 B (HMOS 엔진 — 그대로 받을 것):\n\n${목록.map(p=>[
+      `[제시문 ${p.id}]`,
+      ...p.경로.map((b,i)=>`key ${p.id}:${i} — 「${String(b).trim()}」`),
+      `원문: ${String(p.원문||'').trim().slice(0,2000)}`,
+    ].join('\n')).join('\n\n')}`,
+  ].filter(Boolean).join('\n\n');
+  const r=await askClaude(res,극성시스템,user,극성형식(keys),o=>Array.isArray(o.judgments));
+  if(!r)return;
+  // 빠진 key는 판정 없음으로 — 약함으로 짐작하지 않고 교사 확인
+  const 극성=Object.fromEntries(목록.map(p=>[p.id,p.경로.map((b,i)=>{
+    const j=r.out.judgments.find(x=>x.key===`${p.id}:${i}`);
+    return j?{B:String(b).trim(),극성:j.polarity,이유:String(j.reason||'').trim()}:{B:String(b).trim(),극성:null,이유:'Claude가 판정하지 않음 — 교사 확인'};
+  })]));
+  res.json({model:r.msg.model,usage:r.msg.usage,논제B:극,극성});
+});
+
+// ── POST /api/passage-relation —출제도구 논술 3단계: 제시문 급소 사이 관계 6유형 (오종래 2026-10-19) ──
 // 급소는 엔진이 제시문마다 따로 잡은 것 그대로 받는다 (제시문 하나씩 /analyze). Claude는 급소 사이 관계 유형만 판정한다.
 // 방향 있는 관계(흡수·근거·주장·수렴)는 from → to: 포함되는 쪽 → 포함하는 쪽 · 근거 → 주장 · 모이는 제시문들 → 결론
 const 관계유형={
