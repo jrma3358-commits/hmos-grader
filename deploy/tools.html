@@ -908,6 +908,12 @@
         <textarea class="input-area" id="iv-info" style="min-height: 80px;" oninput="면접.지원.인재상 = this.value" placeholder="학과 인재상·모집요강에서 면접과 관련된 글을 붙여넣으세요."></textarea>
       </div>
 
+      <div class="card">
+        <div class="card-title">④ 지원자 성적 분위 <span class="badge warn">필수</span></div>
+        <div class="type-selector" id="iv-rank"></div>
+        <div class="c-meta">2단계 면접 질문의 기대 수준을 정합니다 — 고르지 않으면 1단계로 넘어가지 않습니다.</div>
+      </div>
+
       <button class="run-btn" id="iv-reg-btn" onclick="면접등록()">등록 완료 → 1단계 급소 추출</button>
     </div>
 
@@ -1575,7 +1581,23 @@ function 문항분석으로넘기기() {
 // ── 면접 출제 (오종래 2026-10-19) ──
 // 0 자료 등록 → 1 급소 추출(엔진 /analyze) → 2 면접 질문 생성(/api/interview — Claude는 급소에서만 문장) → 3 면접관 확정(저장·인쇄)
 // HMOS 원칙: 급소는 엔진이 잡는다. 엔진이 못 세운 항목은 「확인 필요」 — 교사는 엔진이 잡은 노드에서만 고른다. 급소가 없으면 질문을 만들지 않는다.
-const 면접 = { 자소서: ['', '', '', ''], 세특: [{ 과목: '', 내용: '' }], 지원: { 대학: '', 학과: '', 전형: '', 인재상: '' }, 항목: [], 질문: [], 생성: null };
+const 면접 = { 자소서: ['', '', '', ''], 세특: [{ 과목: '', 내용: '' }], 지원: { 대학: '', 학과: '', 전형: '', 인재상: '' }, 성적분위: '', 면접관: {}, 항목: [], 질문: [], 생성: null };
+
+// 성적 분위 · 면접관 유형 (오종래 2026-10-19) — 2단계 질문 생성 프롬프트에 넣는다. 서버(/api/interview)도 같은 목록만 받는다
+const 성적분위들 = ['3', '10', '25', '50'];
+const 면접관칸 = [
+  ['전문성', ['학자형', '경영인형', '실무형']],
+  ['성향', ['내성적', '외향적']],
+  ['성별', ['남성', '여성']],
+  ['연령대', ['중년 (40~50대)', '장년 (60대 이상)']],
+  ['직위', ['교수', '부교수', '산업체', '기타']],
+];
+
+function 성적분위그리기() {
+  document.getElementById('iv-rank').innerHTML = 성적분위들.map(v =>
+    `<button class="type-btn${면접.성적분위 === v ? ' selected' : ''}" onclick="면접.성적분위 = '${v}'; 성적분위그리기()">상위 ${v}%</button>`).join('');
+}
+성적분위그리기();
 
 // ── 0 · 자료 등록 ──
 function 면접0그리기() {
@@ -1680,6 +1702,7 @@ function 면접항목() {
 async function 면접등록() {
   const 항목 = 면접항목();
   if (!항목.some(x => x.자료 !== '지원정보')) { alert('자기소개서나 학생부 세부특기사항을 넣으세요.'); return; }
+  if (!성적분위들.includes(면접.성적분위)) { alert('지원자 성적 분위를 고르세요.'); return; }
   if (면접.질문.length && !confirm('다시 등록하면 급소와 생성한 질문이 지워집니다. 다시 등록할까요?')) return;
   면접.항목 = 항목.map(x => ({ ...x, 상태: '대기', 급소: [], 후보: [], 무게중심: null, 실패: '', 분석: null }));
   면접.질문 = []; 면접.생성 = null;
@@ -1799,24 +1822,37 @@ function renderI2() {
       <div class="c-row"><strong>근거</strong> ${esc(q.근거)}</div>
       ${q.점검.length ? `<div class="flag-box">${q.점검.map(t => `<div>면접관 확인 — ${esc(t)}</div>`).join('')}</div>` : ''}
     </div>`).join('') : '';
+  const 유형다 = 면접관칸.every(([칸]) => 면접.면접관[칸]);
+  const 분위됨 = 성적분위들.includes(면접.성적분위);
+  const 막힘 = !단위.length ? '' : !분위됨 ? '0단계에서 지원자 성적 분위를 고르세요' : !유형다 ? '면접관 유형을 모두 고르세요' : '';
   document.getElementById('i2-body').innerHTML = `
+    <div class="card">
+      <div class="card-title">면접관 유형 <span class="badge warn">필수</span> <span class="c-meta">· 지원자 ${분위됨 ? `상위 ${면접.성적분위}%` : '성적 분위 미선택'}</span></div>
+      ${면접관칸.map(([칸, 값들]) => `
+        <div class="field-label">${칸}</div>
+        <div class="type-selector">${값들.map(v => `<button class="type-btn${면접.면접관[칸] === v ? ' selected' : ''}" onclick="면접관고르기('${칸}', '${v}')">${esc(v)}</button>`).join('')}</div>`).join('')}
+      <div class="c-meta" style="margin-top:8px;">면접관 유형과 성적 분위로 질문의 말투·기대 수준을 맞춥니다. 묻는 내용은 아래 급소에서만 나옵니다.</div>
+    </div>
     <div class="card">
       <div class="card-title">${엔진배지}질문의 바탕이 되는 급소 (${단위.length}개)</div>
       ${단위.length ? `<div class="note-list">${단위.map(u => `<div class="note-item">「${esc(u.급소)}」 — ${esc(u.근거)}${u.출처 === '교사' ? ' <span class="badge muted">교사 확인</span>' : ''}</div>`).join('')}</div>`
         : '<div class="c-empty">확인한 급소가 없습니다 — 급소 없이 일반 질문은 만들지 않습니다. 1단계에서 급소를 확인하세요</div>'}
       <div class="c-meta" style="margin-top:8px;">급소마다 본질문 하나 · 꼬리질문 둘 · 근거를 씁니다. 급소에 없는 내용은 묻지 않습니다.</div>
-      <button class="type-btn" id="i2-btn" ${단위.length ? '' : 'disabled'} onclick="질문생성()">${g ? '질문 다시 생성' : '면접 질문 생성'} (${단위.length}개 급소)</button>
+      <button class="type-btn" id="i2-btn" ${단위.length && !막힘 ? '' : 'disabled'} onclick="질문생성()">${g ? '질문 다시 생성' : '면접 질문 생성'} (${단위.length}개 급소)</button>
+      ${막힘 ? `<span class="c-meta" style="margin-left:8px;">${막힘}</span>` : ''}
     </div>
     ${카드}
     ${g ? '<div class="c-nav"><span></span><button class="type-btn" onclick="showStep(\'i3\')">3 · 면접관 확정 →</button></div>' : ''}`;
 }
 
+function 면접관고르기(칸, 값) { 면접.면접관[칸] = 값; renderI2(); }
+
 async function 질문생성() {
   const 단위 = 급소단위();
-  if (!단위.length) return;
+  if (!단위.length || !성적분위들.includes(면접.성적분위) || !면접관칸.every(([칸]) => 면접.면접관[칸])) return;
   if (면접.질문.some(q => q.수정됨 || q.확정) && !confirm('다시 생성하면 3단계에서 고치거나 확정한 질문이 지워집니다. 다시 생성할까요?')) return;
   await withBusy(document.getElementById('i2-btn'), '면접 질문 생성 중… (약 1분)', async () => {
-    const { out } = await postJSON('/api/interview', { 급소: 단위, 지원: 면접.지원 });
+    const { out } = await postJSON('/api/interview', { 급소: 단위, 지원: 면접.지원, 성적분위: 면접.성적분위, 면접관: 면접.면접관 });
     if (out.error) { alert('질문 생성 실패: ' + out.error); return; }
     면접.생성 = out;
     면접.질문 = out.질문.map(q => ({ ...q, 꼬리질문: [...q.꼬리질문], 확정: false, 수정됨: false }));
@@ -1875,6 +1911,7 @@ function 면접확정자료() {
   return {
     종류: 'HMOS 면접 질문', 버전: 2, 확정자: 이름, 확정일: 면접.확정일 || new Date().toISOString().split('T')[0],
     지원: 면접.지원,
+    성적분위: 면접.생성 ? 면접.생성.성적분위 : 면접.성적분위, 면접관: 면접.생성 ? 면접.생성.면접관 : 면접.면접관,
     질문: 면접.질문.filter(q => q.확정).map(q => ({ 급소: q.급소, 자료근거: q.자료근거, 본질문: q.본질문.trim(), 꼬리질문: q.꼬리질문.map(t => t.trim()).filter(Boolean), 근거: q.근거.trim(), 면접관수정: q.수정됨 })),
     급소: 면접.항목.map(x => ({ 근거: x.근거, 급소: 쓰는급소(x).map(k => ({ 실체: k.실체, 출처: k.출처 })), 확인필요: 확인필요(x) })),
   };
@@ -1892,6 +1929,7 @@ function 면접인쇄() {
   document.getElementById('iv-print').innerHTML = `
     <h1>면접 질문</h1>
     <div class="p-meta">${지원 || '지원 정보 없음'} — 확정 ${esc(d.확정자)} · ${esc(d.확정일)}</div>
+    <div class="p-meta">지원자 상위 ${esc(d.성적분위)}% · 면접관 ${면접관칸.map(([칸]) => esc((d.면접관 || {})[칸] || '—')).join(' · ')}</div>
     ${d.질문.map((q, i) => `<section>
       <h2>${i + 1}. ${esc(q.본질문)}</h2>
       ${q.꼬리질문.map((t, k) => `<p>꼬리질문 ${k + 1}. ${esc(t)}</p>`).join('')}
