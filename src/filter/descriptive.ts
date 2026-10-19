@@ -27,8 +27,9 @@ export interface 서술형분석 {
  * 서술형문항분석(문항텍스트) → 실체 | 거르기(급소 불명)
  * @throws SealedError 봉인②가 비어 있을 때 (F2에서 그대로 올라온다)
  */
-export function analyze_descriptive(문항텍스트: string): 서술형분석 | 급소불명거르기 {
-  const 입력 = f2_input_from_v2(recognizeV2Analysis(문항텍스트));
+export function analyze_descriptive(문항텍스트: string, 서술형 = false): 서술형분석 | 급소불명거르기 {
+  // 서술형 = 파이프라인 B — 서술형 급소 규칙(실체 명사 B, 서술 방식 C-F 제외, 오종래 2026-10-19)
+  const 입력 = f2_input_from_v2(recognizeV2Analysis(문항텍스트, { 서술형 }));
   if (!입력.ok) return { 판정: '거르기', 증상: '급소 명확', 초석: 1, 실패: 입력 };
   const { 물음, k, 인식 } = 입력;
   const 조각들 = derive_pieces(물음, k, 인식);

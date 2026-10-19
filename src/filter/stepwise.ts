@@ -13,6 +13,6 @@ export interface 소문항분석 {
  * 계단식문항분석(문항텍스트) → 소문항마다의 서술형 분석
  * @throws SealedError 봉인⑦이 비어 있을 때, 또는 소문항의 F2(봉인②)에서
  */
-export function analyze_stepwise(문항텍스트: string): 소문항분석[] {
-  return 봉인7_소문항분리(문항텍스트).map((s) => ({ 소문항: s, 결과: analyze_descriptive(s.텍스트) }));
+export function analyze_stepwise(문항텍스트: string, 서술형 = false): 소문항분석[] {
+  return 봉인7_소문항분리(문항텍스트).map((s) => ({ 소문항: s, 결과: analyze_descriptive(s.텍스트, 서술형) }));
 }

@@ -37,8 +37,9 @@ export interface Pivot {
   node: PathNode;
   /** '강한 C 연결 B' = 강한 C(apply.strongC)에 연결된 B라서 급소다 (graph.ts) · 'Q 직전 B' = 마지막 Q 바로 앞의 B라서 급소다
    *  · '서술형태' = 서술형태 제약(apply.formPivot, C-F) 노드라서 급소다 — 이때만 급소가 B가 아니다
-   *  · '수량 값 B' = 「몇 ~」 수량 물음(apply.quantityHeads)이라 Q에 접힌 값 B가 급소다 — 노드는 그 Q, 실체는 「몇 ~」 */
-  reason: '최수렴 B' | '강한 C 연결 B' | 'Q 직전 B' | '서술형태' | '수량 값 B';
+   *  · '수량 값 B' = 「몇 ~」 수량 물음(apply.quantityHeads)이라 Q에 접힌 값 B가 급소다 — 노드는 그 Q, 실체는 「몇 ~」
+   *  · '실체 명사 B' = 서술형(B)에서 「배경」「이유」 등 실체 명사(PIVOT_NOUNS)로 끝나는 B라서 급소다 */
+  reason: '최수렴 B' | '강한 C 연결 B' | 'Q 직전 B' | '서술형태' | '수량 값 B' | '실체 명사 B';
   /** 급소의 실체값 — B 급소는 B가 묻는 실체(이름 뒤의 식·기호, 예: 「일반항 a_n」 → 「a_n」, 없으면 실체 그대로),
    *  서술형태 급소는 표지에서 서술 틀을 떼고 남은 말 (예: 「논박하는 방식으로」 → 「논박」) */
   keyword?: string;
@@ -216,6 +217,14 @@ const CLAUSE_ENDS = ['하고', '기술하고', '요약하고', '나타내고', '
  *  [오종래 2026-10-13] 「측면에서」 추가 — 정교화안 「B국 기업의 경쟁력 측면에서 설명하시오」가 B 대신 급소를 가져감 */
 const METHOD_MARKERS = ['비판적으로', '비판하여', '입장에서', '관점에서', '참고하여', '참조하여', '바탕으로', '근거하여', '경제주체별로', '측면에서'];
 
+/** 서술형 실체 명사 — 서술형(B)에서 이 말로 끝나는 B가 급소다 [오종래 2026-10-19 세계사 서술형 「개최하였던 배경」] */
+const PIVOT_NOUNS = ['배경', '이유', '원인', '결과', '영향'];
+
+/** 급소 산출 선택 — 서술형: 파이프라인 B (서술형) 문항이다 */
+export interface PivotOptions {
+  서술형?: boolean;
+}
+
 /** 주격 표지 — 간접의문 절의 주어를 찾는다 [오종래 2026-10-13] */
 export const SUBJECT_MARKERS = ['가', '이', '께서'];
 
@@ -276,7 +285,28 @@ function formClauses(graph: PathGraph, forms: PathNode[], perspectives: string[]
  * 급소를 산출한다 — 결정론 (구현명세 §2-4).
  * 실패도 값으로 돌려준다: B가 없거나(NO_B) 둘로 수렴하면(MULTIPLE_CONVERGENCE) 플래그.
  */
-export function analyze_pivot(graph: PathGraph, table?: SealedTable): PivotAnalysis {
+export function analyze_pivot(graph: PathGraph, table?: SealedTable, options: PivotOptions = {}): PivotAnalysis {
+  // 서술형 실체 명사 B [오종래 2026-10-19 확정] — 서술형(B)에서는 서술 방식 노드(C-F: 「연관지어」「비교하여」「분석하여」 등)를
+  //   급소 후보에서 뺀다. 대신 실체 명사(PIVOT_NOUNS 「배경」「이유」「원인」「결과」「영향」)로 끝나는 B가 급소다
+  //   (「…행사를 개최하였던 배경을 … 자연 환경과 연관지어 서술하시오」 → 「개최하였던 배경」, 「연관지어」 ✕).
+  //   여럿이면 급소 복수, `pivot`은 마지막. 없으면 아래 B 규칙 그대로 (서술형태 급소만 건너뛴다)
+  if (options.서술형) {
+    const nouns = graph.nodes.filter((n) => {
+      if (n.color !== 'B' || n.foldedFrom === 'C' || n.foldedFrom === 'D') return false;
+      const last = n.entity.trim().split(/\s+/).at(-1) ?? '';
+      return PIVOT_NOUNS.some((w) => last.endsWith(w));
+    });
+    if (nouns.length) {
+      const pivots = nouns.map((node): Pivot => ({
+        node,
+        reason: '실체 명사 B',
+        ...bValue(node, graph),
+        convergence: convergenceOf(graph, node, table),
+        sameAsDeepest: deepest_node(graph)?.id === node.id,
+      }));
+      return pivots.length > 1 ? { ok: true, pivot: pivots[pivots.length - 1], pivots } : { ok: true, pivot: pivots[0] };
+    }
+  }
   // 서술형태 급소 [오종래 2026-10-05] — 서술형태 제약(apply.formPivot, C-F) 노드가 있으면 다른 급소 규칙보다 먼저
   //   그 노드가 급소이고, 실체는 그 안의 핵심어다 (예: 인문논술_문1 「논박하는 방식으로」 → 「논박」).
   //   「급소는 B」의 예외다 — 이 규칙에서만 급소가 C 노드다. 둘 이상이면 급소가 둘 — 문제 설계 오류로 플래그한다.
@@ -284,7 +314,7 @@ export function analyze_pivot(graph: PathGraph, table?: SealedTable): PivotAnaly
   //   (사회 논제2-2 「비판적으로」 · 논제3-2 「참고하여」). 나머지 서술형태 표지는 그대로 B보다 먼저다.
   const formIds = table?.apply.formPivot ?? [];
   const hasB = graph.nodes.some((n) => n.color === 'B');
-  let forms = graph.nodes.filter(
+  let forms = options.서술형 ? [] : graph.nodes.filter(
     (n) => formIds.includes(n.switchId) && !(hasB && METHOD_MARKERS.some((m) => n.surface.includes(m))),
   );
   // 서술 형태 우선 [오종래 2026-10-06] — 서술형태 노드가 둘 이상이면 입장·관점 표지(apply.formPerspective, 「입장에서」 등)가

@@ -98,9 +98,11 @@ const 파트순서 = ['근거대기', '세우기', '풀기', '답구하기'];
  * 대시보드는 7단계에서 확정한 논제만 보낸다. 소문항 하나가 멈춰도 나머지는 낸다
  * 인문논술(계열 인문사회국어) ② 세우기 = 소문항 급소와 엔진이 연결한 제시문 단락(정합 연결)의 문장 수 — 3·4단계와 같은 정합을 다시 돌려 연결을 얻는다 (봉인②, 오종래 2026-10-14)
  */
-function 루브릭작업(논제글: string, 계열: string, 총배점: number, 제시문목록: { id: string; 텍스트: string }[] | null, 공통자료 = false, 이어받기 = false, 모범답안: unknown = [], 정답: unknown = '', 핵심: unknown = '', 세우기남길: unknown = null) {
+function 루브릭작업(논제글: string, 계열: string, 총배점: number, 제시문목록: { id: string; 텍스트: string }[] | null, 공통자료 = false, 이어받기 = false, 모범답안: unknown = [], 정답: unknown = '', 핵심: unknown = '', 세우기남길: unknown = null, 서술형 = false) {
+  // 서술형 B 급소 (오종래 2026-10-19 확정) — 서술 방식(C-F)은 급소 후보가 아니고 실체 명사(배경·이유 등) B가 급소다 (pivot.ts)
+  const 인식 = (글: string) => fq.recognizeV2Analysis(글, { 서술형 });
   // 출제의도는 급소를 고르거나 바꾸지 않는다 — 소문항 몫을 루브릭 화면 참고 정보로만 낸다 (오종래 2026-10-16, 급소 대체 제거)
-  const 소문항들 = split_thesis(논제글).map((s: any) => ({ ...s, a: fq.recognizeV2Analysis(s.텍스트) }));
+  const 소문항들 = split_thesis(논제글).map((s: any) => ({ ...s, a: 인식(s.텍스트) }));
   // 서술형 B (오종래 2026-10-14) — 제시문을 따로 받지 않는다. 소문항 공통발문의 첫 빈 줄 뒤 글(대화·자료)을 제시문으로 본다
   if (공통자료 && !제시문목록) {
     const 자료 = String(소문항들[0]?.공통발문 ?? '').split(/\r?\n\s*\r?\n/).slice(1).join('\n\n').trim();
@@ -163,7 +165,7 @@ function 루브릭작업(논제글: string, 계열: string, 총배점: number, �
     try {
       // [오종래 2026-10-16 q4 ①] 소문항 글에 물음이 없으면 공통 발문 급소를 물려받는다 (급소와 그 물음만 — ①② 노드는 소문항 자기 것)
       const 물려받을물음 = !has_question(s.a) ? common_question(s.공통발문) : '';
-      const 입력 = 물려받을물음 ? f2_input_inherit(s.a, fq.recognizeV2Analysis(물려받을물음)) : f2_input_from_v2(s.a);
+      const 입력 = 물려받을물음 ? f2_input_inherit(s.a, 인식(물려받을물음)) : f2_input_from_v2(s.a);
       if (!입력.ok) return { ...소, 멈춤: { 멈춤: 입력.flag, 종류: '급소', 사유: `급소가 서지 않아 조각을 뽑지 못했습니다 (${입력.flag})` } };
       const { 물음, k } = 입력;
       let 연결문장 = 연결of(s.번호);
@@ -310,7 +312,7 @@ try {
     // 수학 문항은 수리로만 (오종래 2026-10-16) — 「자동」이면 엔진이 고르고, 인문사회국어로 수학 문항이 오면 계열오류
     const 계열 = resolve_subject(req.계열, String(req.논제 ?? 문항원문));
     const 총배점 = Number(req.총배점) > 0 ? Number(req.총배점) : 10;
-    out.단계.루브릭 = { 계열, 총배점, 소문항: 루브릭작업(String(req.논제 ?? 문항원문), 계열, 총배점, 제시문목록, !!req.공통자료, !!req.이어받기, req.모범답안 ?? [], req.정답 ?? '', req.핵심 ?? '', req.세우기남길 ?? null) };
+    out.단계.루브릭 = { 계열, 총배점, 소문항: 루브릭작업(String(req.논제 ?? 문항원문), 계열, 총배점, 제시문목록, !!req.공통자료, !!req.이어받기, req.모범답안 ?? [], req.정답 ?? '', req.핵심 ?? '', req.세우기남길 ?? null, !!req.서술형) };
   } else if (파이프라인 === 'C') {
     // ── C·논술 (조립설명서 C·논술 9단계) — 논제를 먼저 읽는다. 1차 필터는 타지 않는다 (2026-10-13 확정 4) ──
     const 논제글 = String(req.논제 ?? 문항원문);
@@ -408,11 +410,13 @@ try {
   } else {
     // ── A·B ──
     // ① 인식
-    const a = fq.recognizeV2Analysis(문항원문);
+    // 서술형 B 급소 (오종래 2026-10-19 확정) — 실체 명사 B · 서술 방식(C-F) 제외 (pivot.ts)
+    const 서술형 = 파이프라인 === 'B';
+    const a = fq.recognizeV2Analysis(문항원문, { 서술형 });
     out.단계.인식 = { 입력: '문항원문', 전체: 인식of(a), 단위: (a.units ?? []).map(인식of) };
     // 서술형 B 단계형 (오종래 2026-10-14) — 소문항(계단 (1)(2)(3))마다 따로 인식해 2 인식 결과에 순서대로 보인다 (C 2단계와 같은 split_thesis)
     if (파이프라인 === 'B') {
-      out.단계.인식.소문항 = split_thesis(문항원문).map((s: any) => ({ 번호: s.번호, 텍스트: s.텍스트, 공통발문: s.공통발문, ...인식of(fq.recognizeV2Analysis(s.텍스트)) }));
+      out.단계.인식.소문항 = split_thesis(문항원문).map((s: any) => ({ 번호: s.번호, 텍스트: s.텍스트, 공통발문: s.공통발문, ...인식of(fq.recognizeV2Analysis(s.텍스트, { 서술형 })) }));
     }
     out.단계.타입 = fq.confirmType(문항원문, a, undefined);
 
