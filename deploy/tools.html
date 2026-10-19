@@ -742,7 +742,25 @@
   .soon { text-align: center; padding: 64px 16px; color: var(--text-sub); }
   .soon strong { display: block; font-size: 20px; color: var(--text); margin-bottom: 8px; }
   @media (max-width: 768px) { .iv-row { grid-template-columns: 1fr; } }
+  /* 면접 출제 (2026-10-19) */
+  .iv-row3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+  .iv-sub { display: flex; gap: 8px; align-items: center; }
+  .iv-sub .text-input { flex: 1; }
+  #iv-print { display: none; }
+  @media print {
+    header, .sidebar, .tab-pane { display: none !important; }
+    .layout { display: block; }
+    .main { padding: 0; overflow: visible; }
+    #iv-print { display: block; color: #000; }
+    #iv-print h1 { font-size: 20px; margin: 0 0 4px; }
+    #iv-print h2 { font-size: 15px; margin: 18px 0 6px; }
+    #iv-print p { margin: 4px 0 4px 16px; font-size: 13px; }
+    #iv-print .p-meta { color: #555; font-size: 12px; }
+    #iv-print section { break-inside: avoid; }
+  }
+  @media (max-width: 768px) { .iv-row3 { grid-template-columns: 1fr; } }
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 </head>
 <body>
 
@@ -785,9 +803,9 @@
     <!-- 면접 출제 -->
     <div id="nav-interview" style="display:none;">
       <button class="nav-item" data-step="i0" onclick="showStep('i0')"><div class="nav-num">0</div>자료 등록</button>
-      <button class="nav-item" data-step="i1" onclick="showStep('i1')"><div class="nav-num">1</div>자료 분석</button>
-      <button class="nav-item" data-step="i2" onclick="showStep('i2')"><div class="nav-num">2</div>예상 면접 문제 추출</button>
-      <button class="nav-item" data-step="i3" onclick="showStep('i3')"><div class="nav-num">3</div>교사·면접관 확정</button>
+      <button class="nav-item" data-step="i1" onclick="showStep('i1')"><div class="nav-num">1</div>급소 추출</button>
+      <button class="nav-item" data-step="i2" onclick="showStep('i2')"><div class="nav-num">2</div>면접 질문 생성</button>
+      <button class="nav-item" data-step="i3" onclick="showStep('i3')"><div class="nav-num">3</div>면접관 확정</button>
     </div>
 
     <!-- 수행평가 -->
@@ -853,54 +871,75 @@
     <!-- 논술 2~7 — buildPanes()가 채운다 -->
     <div id="c-panes"></div>
 
-    <!-- 면접 0 · 자료 등록 -->
+    <!-- 면접 0 · 자료 등록 (오종래 2026-10-19) — 자기소개서 문항별 · 학생부 세특 과목별 · 지원 대학·학과 -->
     <div class="tab-pane" id="pane-i0">
       <div class="section-header">
         <div class="section-title"><span class="tool-tag make">출제도구</span>0 · 자료 등록</div>
-        <div class="section-sub">면접 문제의 근거가 될 자료를 넣으세요</div>
+        <div class="section-sub">면접 질문의 근거가 될 자료를 넣으세요 — 글을 붙여넣거나 파일(.txt · .docx · .pdf)을 올립니다</div>
       </div>
+
       <div class="card">
-        <div class="field-label">자기소개서</div>
-        <textarea class="input-area" id="iv-self" oninput="면접자료동기()" placeholder="자기소개서 원문을 붙여넣으세요."></textarea>
-        <div class="field-label">학생부 세부특기사항</div>
-        <textarea class="input-area" id="iv-record" oninput="면접자료동기()" placeholder="교과별 세부능력 및 특기사항을 붙여넣으세요."></textarea>
-        <div class="field-label">지원 대학 · 학과</div>
-        <div class="iv-row">
-          <input class="text-input" id="iv-univ" oninput="면접자료동기()" placeholder="지원 대학 (예: ○○대학교)">
-          <input class="text-input" id="iv-major" oninput="면접자료동기()" placeholder="지원 학과 (예: 사회학과)">
+        <div class="card-title">① 자기소개서 · 문항별</div>
+        <div class="type-selector">
+          <label class="type-btn" style="cursor:pointer;">파일 올리기 (.txt · .docx · .pdf)<input type="file" accept=".txt,.docx,.pdf,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" style="display:none;" onchange="자료파일(this, '자소서')"></label>
+          <span class="c-meta" id="iv-self-status"></span>
         </div>
-        <div class="field-label">학과 정보 · 인재상 (선택)</div>
-        <textarea class="input-area" id="iv-info" style="min-height: 80px;" oninput="면접자료동기()" placeholder="학과 소개·인재상·면접 방식 등"></textarea>
-        <button class="run-btn" onclick="면접등록()">등록 → 1단계</button>
+        <div id="iv-self-items"></div>
       </div>
+
+      <div class="card">
+        <div class="card-title">② 학생부 세부특기사항 · 과목별</div>
+        <div class="type-selector">
+          <label class="type-btn" style="cursor:pointer;">파일 올리기 (.txt · .docx · .pdf)<input type="file" accept=".txt,.docx,.pdf,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" style="display:none;" onchange="자료파일(this, '세특')"></label>
+          <span class="c-meta" id="iv-record-status"></span>
+        </div>
+        <div id="iv-record-items"></div>
+        <div class="type-selector" style="margin-top:10px;"><button class="type-btn" onclick="세특더하기()">+ 과목 더하기</button></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">③ 지원 대학 · 학과 정보</div>
+        <div class="iv-row3">
+          <input class="text-input" id="iv-univ" oninput="면접.지원.대학 = this.value" placeholder="대학명">
+          <input class="text-input" id="iv-major" oninput="면접.지원.학과 = this.value" placeholder="학과명">
+          <input class="text-input" id="iv-track" oninput="면접.지원.전형 = this.value" placeholder="전형명">
+        </div>
+        <div class="field-label">학과 인재상 · 모집요강 (선택)</div>
+        <textarea class="input-area" id="iv-info" style="min-height: 80px;" oninput="면접.지원.인재상 = this.value" placeholder="학과 인재상·모집요강에서 면접과 관련된 글을 붙여넣으세요."></textarea>
+      </div>
+
+      <button class="run-btn" id="iv-reg-btn" onclick="면접등록()">등록 완료 → 1단계 급소 추출</button>
     </div>
 
-    <!-- 면접 1 · 자료 분석 -->
+    <!-- 면접 1 · 급소 추출 (엔진 /analyze) -->
     <div class="tab-pane" id="pane-i1">
       <div class="section-header">
-        <div class="section-title"><span class="tool-tag make">출제도구</span>1 · 자료 분석</div>
-        <div class="section-sub">핵심 키워드·경험 추출 · 지원동기 · 학업경험 · 미래방향</div>
+        <div class="section-title"><span class="tool-tag make">출제도구</span>1 · 급소 추출</div>
+        <div class="section-sub">엔진 — 자료 항목마다 5색·급소. 엔진이 급소를 세우지 못한 항목은 「확인 필요」 — 엔진이 잡은 노드에서 교사가 골라 확인합니다</div>
       </div>
-      <div id="i1-body"></div>
+      <div id="i1-body"><div class="card c-empty">0단계에서 자료를 등록하면 표시됩니다</div></div>
     </div>
 
-    <!-- 면접 2 · 예상 면접 문제 추출 -->
+    <!-- 면접 2 · 면접 질문 생성 (Claude — 급소만으로) -->
     <div class="tab-pane" id="pane-i2">
       <div class="section-header">
-        <div class="section-title"><span class="tool-tag make">출제도구</span>2 · 예상 면접 문제 추출</div>
-        <div class="section-sub">면접관 체크 포인트 · 근거 (어느 자료에서 나왔는가)</div>
+        <div class="section-title"><span class="tool-tag make">출제도구</span>2 · 면접 질문 생성</div>
+        <div class="section-sub">1단계에서 확인한 급소마다 본질문 · 꼬리질문 1·2 · 근거 — 문장은 Claude가 급소에서만 씁니다</div>
       </div>
       <div id="i2-body"></div>
     </div>
 
-    <!-- 면접 3 · 교사·면접관 확정 -->
+    <!-- 면접 3 · 면접관 확정 -->
     <div class="tab-pane" id="pane-i3">
       <div class="section-header">
-        <div class="section-title"><span class="tool-tag grade">채점도구</span>3 · 교사·면접관 확정</div>
-        <div class="section-sub">면접 문제를 쓰고 체크 포인트·근거 자료를 붙여 확정합니다</div>
+        <div class="section-title"><span class="tool-tag grade">채점도구</span>3 · 면접관 확정</div>
+        <div class="section-sub">질문 카드마다 수정 · 삭제 · 확정 — 확정한 질문을 저장하거나 인쇄합니다</div>
       </div>
       <div id="i3-body"></div>
     </div>
+
+    <!-- 인쇄용 — 확정한 질문만 (면접 3 「인쇄」) -->
+    <div id="iv-print"></div>
 
     <!-- 수행평가 -->
     <div class="tab-pane" id="pane-t0">
@@ -1533,108 +1572,332 @@ function 문항분석으로넘기기() {
   window.open('/dashboard', '_blank');
 }
 
-// ── 면접 출제 ──
-// 1 자료 분석 · 2 예상 문제 추출은 엔진 규칙이 아직 없다 — HMOS 원칙대로 AI로 채우지 않고 비어 있다고 보인다 (오종래 확정 대기).
-// 3 확정은 교사·면접관이 직접 쓰고 근거 자료를 붙여 저장한다.
-const 면접 = { 자료: { 자기소개서: '', 세특: '', 대학: '', 학과: '', 학과정보: '' }, 문제: [] };
-const 면접자료이름 = { 자기소개서: '자기소개서', 세특: '학생부 세부특기사항', 학과정보: '지원 대학·학과 정보' };
+// ── 면접 출제 (오종래 2026-10-19) ──
+// 0 자료 등록 → 1 급소 추출(엔진 /analyze) → 2 면접 질문 생성(/api/interview — Claude는 급소에서만 문장) → 3 면접관 확정(저장·인쇄)
+// HMOS 원칙: 급소는 엔진이 잡는다. 엔진이 못 세운 항목은 「확인 필요」 — 교사는 엔진이 잡은 노드에서만 고른다. 급소가 없으면 질문을 만들지 않는다.
+const 면접 = { 자소서: ['', '', '', ''], 세특: [{ 과목: '', 내용: '' }], 지원: { 대학: '', 학과: '', 전형: '', 인재상: '' }, 항목: [], 질문: [], 생성: null };
 
-function 면접자료동기() {
-  Object.assign(면접.자료, {
-    자기소개서: document.getElementById('iv-self').value,
-    세특: document.getElementById('iv-record').value,
-    대학: document.getElementById('iv-univ').value.trim(),
-    학과: document.getElementById('iv-major').value.trim(),
-    학과정보: document.getElementById('iv-info').value,
+// ── 0 · 자료 등록 ──
+function 면접0그리기() {
+  document.getElementById('iv-self-items').innerHTML = 면접.자소서.map((t, i) => `
+    <div class="field-label">${i + 1}번 문항</div>
+    <textarea class="input-area" style="min-height:90px;" oninput="면접.자소서[${i}] = this.value" placeholder="자기소개서 ${i + 1}번 문항의 답을 붙여넣으세요.">${esc(t)}</textarea>`).join('');
+  document.getElementById('iv-record-items').innerHTML = 면접.세특.map((r, i) => `
+    <div class="iv-q">
+      <div class="iv-sub">
+        <input class="text-input" value="${esc(r.과목)}" oninput="면접.세특[${i}].과목 = this.value" placeholder="과목 (예: 사회·문화)">
+        <button class="type-btn" onclick="세특빼기(${i})">빼기</button>
+      </div>
+      <textarea class="input-area" style="min-height:80px; margin-top:8px;" oninput="면접.세특[${i}].내용 = this.value" placeholder="이 과목의 세부능력 및 특기사항">${esc(r.내용)}</textarea>
+    </div>`).join('');
+}
+면접0그리기();
+
+function 세특더하기() { 면접.세특.push({ 과목: '', 내용: '' }); 면접0그리기(); }
+function 세특빼기(i) { 면접.세특.splice(i, 1); if (!면접.세특.length) 면접.세특.push({ 과목: '', 내용: '' }); 면접0그리기(); }
+
+/** .docx → 글 — word/document.xml의 문단(w:p)마다 한 줄 (JSZip) */
+async function docx글(f) {
+  const zip = await JSZip.loadAsync(await f.arrayBuffer());
+  const xml = await zip.file('word/document.xml')?.async('string');
+  if (!xml) throw new Error('word/document.xml이 없습니다');
+  const doc = new DOMParser().parseFromString(xml, 'application/xml');
+  const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+  return [...doc.getElementsByTagNameNS(W, 'p')].map(p =>
+    [...p.getElementsByTagNameNS(W, '*')].map(n => (n.localName === 't' ? n.textContent : n.localName === 'tab' ? '\t' : n.localName === 'br' ? '\n' : '')).join('')).join('\n');
+}
+
+const 파일base64 = f => new Promise((ok, no) => {
+  const r = new FileReader();
+  r.onload = () => ok(String(r.result).split(',')[1]);
+  r.onerror = () => no(r.error);
+  r.readAsDataURL(f);
+});
+
+/** 파일 → 글. .pdf는 /api/ocr(유형 「자료」 — 글자를 옮겨 적기만) */
+async function 파일글(f) {
+  const 이름 = f.name.toLowerCase();
+  if (이름.endsWith('.txt')) return await f.text();
+  if (이름.endsWith('.docx')) return await docx글(f);
+  if (이름.endsWith('.pdf')) {
+    const { out } = await postJSON('/api/ocr', { 유형: '자료', 파일: [{ 종류: 'application/pdf', 데이터: await 파일base64(f) }] });
+    if (out.error) throw new Error(out.error);
+    return out.텍스트;
+  }
+  throw new Error('.txt · .docx · .pdf만 올릴 수 있습니다');
+}
+
+/** 자기소개서 글 → 1~4번. 줄 머리 「1.」「1번」「[1]」「문항 1」「1)」로 나눈다. 둘 이상 못 찾으면 null */
+function 자소서나누기(글) {
+  const 머리 = [...글.matchAll(/(?:^|\n)[ \t]*[\[(【]?[ \t]*(?:문항|질문)?[ \t]*([1-4])[ \t]*(?:번|\.|\)|\]|】|:)/g)];
+  if (머리.length < 2) return null;
+  const 칸 = ['', '', '', ''];
+  머리.forEach((m, i) => {
+    const 끝 = 머리[i + 1]?.index ?? 글.length;
+    const n = +m[1] - 1;
+    칸[n] = (칸[n] ? 칸[n] + '\n\n' : '') + 글.slice(m.index + m[0].length, 끝).trim();
+  });
+  return 칸;
+}
+
+/** 세특 글 → [{과목, 내용}]. 줄 머리 「[과목]」「【과목】」「과목:」로 나눈다. 못 찾으면 null */
+function 세특나누기(글) {
+  const 머리 = [...글.matchAll(/(?:^|\n)[ \t]*(?:[\[【<]([^\]】>\n]{1,20})[\]】>]|([가-힣A-Za-zⅠⅡⅢ·0-9 ]{1,15}?)[ \t]*[:：])/g)];
+  if (!머리.length) return null;
+  return 머리.map((m, i) => ({ 과목: (m[1] || m[2]).trim(), 내용: 글.slice(m.index + m[0].length, 머리[i + 1]?.index ?? 글.length).trim() }));
+}
+
+async function 자료파일(input, 종류) {
+  const f = input.files[0];
+  input.value = '';
+  if (!f) return;
+  const 상태 = document.getElementById(종류 === '자소서' ? 'iv-self-status' : 'iv-record-status');
+  상태.textContent = `${f.name} 읽는 중…${f.name.toLowerCase().endsWith('.pdf') ? ' (PDF는 글자를 옮겨 적는 데 1분쯤 걸립니다)' : ''}`;
+  let 글;
+  try { 글 = (await 파일글(f)).replace(/\r\n?/g, '\n'); }
+  catch (e) { 상태.textContent = `${f.name} — 읽지 못했습니다: ${e.message}`; return; }
+  if (종류 === '자소서') {
+    const 칸 = 자소서나누기(글);
+    면접.자소서 = 칸 || [글.trim(), '', '', ''];
+    상태.textContent = 칸 ? `${f.name} — 문항 머리로 ${칸.filter(Boolean).length}개 문항을 나눴습니다. 확인하세요` : `${f.name} — 문항 머리(1. · 1번 · [1])를 찾지 못해 1번 칸에 모두 넣었습니다. 문항별로 옮기세요`;
+  } else {
+    const 줄 = 세특나누기(글);
+    면접.세특 = 줄 || [{ 과목: '', 내용: 글.trim() }];
+    상태.textContent = 줄 ? `${f.name} — 과목 머리로 ${줄.length}과목을 나눴습니다. 확인하세요` : `${f.name} — 과목 머리([과목] · 과목:)를 찾지 못해 한 칸에 넣었습니다. 과목별로 나누세요`;
+  }
+  면접0그리기();
+}
+
+/** 등록한 자료 → 엔진에 보낼 항목 (빈 칸은 뺀다) */
+function 면접항목() {
+  const 항목 = [];
+  면접.자소서.forEach((t, i) => { if (t.trim()) 항목.push({ id: `self${i + 1}`, 자료: '자소서', 근거: `자소서 ${i + 1}번 문항`, 원문: t.trim() }); });
+  면접.세특.forEach((r, i) => { if (r.내용.trim()) 항목.push({ id: `rec${i + 1}`, 자료: '학생부', 근거: `${r.과목.trim() || `과목 ${i + 1}`} 세특`, 원문: r.내용.trim() }); });
+  if (면접.지원.인재상.trim()) 항목.push({ id: 'major', 자료: '지원정보', 근거: '학과 인재상·모집요강', 원문: 면접.지원.인재상.trim() });
+  return 항목;
+}
+
+async function 면접등록() {
+  const 항목 = 면접항목();
+  if (!항목.some(x => x.자료 !== '지원정보')) { alert('자기소개서나 학생부 세부특기사항을 넣으세요.'); return; }
+  if (면접.질문.length && !confirm('다시 등록하면 급소와 생성한 질문이 지워집니다. 다시 등록할까요?')) return;
+  면접.항목 = 항목.map(x => ({ ...x, 상태: '대기', 급소: [], 후보: [], 무게중심: null, 실패: '', 분석: null }));
+  면접.질문 = []; 면접.생성 = null;
+  document.querySelectorAll('#nav-interview .nav-item').forEach(b => b.classList.remove('done'));
+  markCDone('i0');
+  showStep('i1');
+  await 급소추출();
+}
+
+// ── 1 · 급소 추출 (엔진) ──
+// 항목마다 /analyze 한 번 (차례로 — 서버 과부하로 병렬로 보내지 않는다). 글을 논제로 넣어 소문항 급소(급소덩어리 · 없으면 pivot)를,
+// 같은 글을 제시문으로 넣어 무게중심(제시문 전체급소)을 함께 받는다. 급소가 안 서면 「확인 필요」 + 엔진 노드(B·C)를 후보로
+const 색of = n => String(n.색 || '').split(' ')[0];
+
+function 항목급소(out) {
+  const 소 = (out.단계 && out.단계.인식 && out.단계.인식.소문항) || [];
+  const 급소 = [...new Set(소.flatMap(s => (s.급소덩어리 && s.급소덩어리.length ? s.급소덩어리.map(d => d.실체) : (s.급소 || []).map(k => k.실체)).map(displayEntity)).filter(Boolean))];
+  const 후보 = [...new Set(소.flatMap(s => (s.노드 || []).filter(n => ['B', 'C'].includes(색of(n))).map(n => displayEntity(n.실체))).filter(Boolean))];
+  const 실패 = 소.map(s => s.급소실패 && s.급소실패.flag).filter(Boolean).join(' · ');
+  const 제 = out.단계 && out.단계.제시문;
+  return { 급소, 후보, 실패, 무게중심: 제 && 제.전체급소 ? displayEntity(제.전체급소.실체) : null };
+}
+
+async function 급소추출() {
+  renderI1();
+  for (const x of 면접.항목) {
+    if (x.상태 === '완료') continue;
+    x.상태 = '분석 중'; renderI1();
+    try {
+      const { out } = await postJSON('/analyze', { 파이프라인: 'C', 논제: x.원문, 제시문: [{ id: '자료', 텍스트: x.원문 }] });
+      if (!out.ok) throw new Error((out.error && (out.error.사유 || out.error)) || '알 수 없음');
+      const g = 항목급소(out);
+      Object.assign(x, { 상태: '완료', 분석: out, 후보: g.후보, 무게중심: g.무게중심, 실패: g.실패,
+        급소: g.급소.map(실체 => ({ 실체, 출처: '엔진', 씀: true })) });
+    } catch (e) {
+      Object.assign(x, { 상태: '실패', 실패: e.message });
+    }
+    renderI1();
+  }
+}
+
+const 쓰는급소 = x => x.급소.filter(k => k.씀);
+const 확인필요 = x => x.상태 === '완료' && !x.급소.some(k => k.출처 === '엔진');
+
+function renderI1() {
+  const body = document.getElementById('i1-body');
+  if (!면접.항목.length) { body.innerHTML = '<div class="card c-empty">0단계에서 자료를 등록하면 표시됩니다</div>'; return; }
+  const 묶음 = [['자소서', '자소서 급소'], ['학생부', '학생부 급소'], ['지원정보', '지원정보 급소']];
+  const 요약 = 묶음.map(([자료, 이름]) => {
+    const xs = 면접.항목.filter(x => x.자료 === 자료);
+    if (!xs.length) return `<div class="note-item"><strong>${이름}</strong> — 자료 없음</div>`;
+    return xs.map(x => {
+      const ks = 쓰는급소(x);
+      const 글 = x.상태 !== '완료' ? `<span class="badge muted">${esc(x.상태)}</span>`
+        : ks.length ? ks.map(k => `「${esc(k.실체)}」${k.출처 === '교사' ? ' <span class="badge muted">교사 확인</span>' : ''}`).join(' · ')
+        : '<span class="badge warn">확인 필요</span>';
+      return `<div class="note-item"><strong>${이름}</strong>: ${글} <span class="c-meta">(근거: ${esc(x.근거)})</span></div>`;
+    }).join('');
+  }).join('');
+  const 카드 = 면접.항목.map((x, i) => {
+    if (x.상태 !== '완료') return `<div class="card"><div class="card-title">${esc(x.근거)} <span class="badge ${x.상태 === '실패' ? 'warn' : 'muted'}">${esc(x.상태)}</span></div>
+      ${x.상태 === '실패' ? `<div class="flag-box">엔진 분석 실패 — ${esc(x.실패)}</div><button class="type-btn" style="margin-top:8px;" onclick="급소다시(${i})">다시 분석</button>` : ''}
+      <details class="c-text"><summary>원문 보기</summary><div>${esc(x.원문)}</div></details></div>`;
+    const 남은후보 = x.후보.filter(t => !x.급소.some(k => k.실체 === t));
+    return `<div class="card">
+      <div class="card-title">${엔진배지}${esc(x.근거)} ${확인필요(x) ? '<span class="badge warn">확인 필요</span>' : ''}</div>
+      ${확인필요(x) ? `<div class="flag-box">엔진이 이 글의 급소를 세우지 못했습니다${x.실패 ? ` (${esc(x.실패)})` : ''} — 아래 엔진 노드에서 급소를 골라 확인하세요.</div>` : ''}
+      <div class="c-row"><strong>급소</strong> ${x.급소.length ? x.급소.map((k, j) => `<label style="margin-right:10px;"><input type="checkbox" ${k.씀 ? 'checked' : ''} onchange="면접.항목[${i}].급소[${j}].씀 = this.checked; renderI1()"> 「${esc(k.실체)}」${k.출처 === '교사' ? ' <span class="badge muted">교사 확인</span>' : ''}</label>`).join('') : '<span class="c-meta">없음</span>'}</div>
+      ${x.무게중심 ? `<div class="c-row"><strong>무게중심</strong> 「${esc(x.무게중심)}」 <span class="c-meta">(엔진 — 글 전체)</span>${x.급소.some(k => k.실체 === x.무게중심) ? '' : ` <button class="type-btn" style="padding:2px 10px;" onclick="급소고르기(${i}, '무게')">급소로</button>`}</div>` : ''}
+      ${남은후보.length ? `<div class="c-row"><strong>엔진 노드</strong> ${남은후보.map((t, j) => `<button class="type-btn" style="padding:2px 10px; margin:2px;" onclick="급소고르기(${i}, ${j})">${esc(t)}</button>`).join('')}</div>
+        <div class="c-meta">노드를 누르면 교사 확인 급소로 더합니다.</div>` : ''}
+      <details class="c-text"><summary>원문 보기</summary><div>${esc(x.원문)}</div></details>
+      ${엔진원본Html(x.분석 && x.분석.단계 && x.분석.단계.인식)}
+    </div>`;
+  }).join('');
+  const 끝남 = 면접.항목.every(x => x.상태 === '완료' || x.상태 === '실패');
+  const 급소수 = 면접.항목.reduce((a, x) => a + 쓰는급소(x).length, 0);
+  body.innerHTML = `
+    <div class="card">
+      <div class="card-title">이 학생의 핵심</div>
+      <div class="note-list">${요약}</div>
+    </div>
+    ${카드}
+    <div class="card">
+      <div class="c-meta">${끝남 ? `쓰는 급소 ${급소수}개 — 확인한 급소만 2단계 질문 생성에 갑니다.` : '엔진이 항목을 차례로 분석하고 있습니다…'}</div>
+      <button class="confirm-btn" style="background: var(--tool-make);" ${끝남 && 급소수 ? '' : 'disabled'} onclick="급소확인()">교사 확인 완료 → 2단계</button>
+    </div>`;
+}
+
+function 급소고르기(i, j) {
+  const x = 면접.항목[i];
+  const 실체 = j === '무게' ? x.무게중심 : x.후보.filter(t => !x.급소.some(k => k.실체 === t))[j];
+  if (!실체) return;
+  x.급소.push({ 실체, 출처: '교사', 씀: true });
+  renderI1();
+}
+
+async function 급소다시(i) { 면접.항목[i].상태 = '대기'; await 급소추출(); }
+
+function 급소확인() {
+  markCDone('i1');
+  showStep('i2');
+}
+
+// ── 2 · 면접 질문 생성 (/api/interview) ──
+/** 질문 단위 = 항목 × 쓰는 급소 하나 */
+const 급소단위 = () => 면접.항목.flatMap(x => 쓰는급소(x).map((k, j) => ({ id: `${x.id}-${j + 1}`, 자료: x.자료, 근거: x.근거, 급소: k.실체, 출처: k.출처, 원문: x.원문 })));
+
+function renderI2() {
+  const 단위 = 급소단위();
+  const g = 면접.생성;
+  const 카드 = g ? g.질문.map(q => `
+    <div class="card">
+      <div class="card-title">${AI배지}급소 「${esc(q.급소)}」 <span class="c-meta">(${esc(q.자료근거)})</span></div>
+      <div class="c-row"><strong>본질문</strong> ${esc(q.본질문)}</div>
+      ${q.꼬리질문.map((t, k) => `<div class="c-row"><strong>꼬리질문 ${k + 1}</strong> ${esc(t)}</div>`).join('')}
+      <div class="c-row"><strong>근거</strong> ${esc(q.근거)}</div>
+      ${q.점검.length ? `<div class="flag-box">${q.점검.map(t => `<div>면접관 확인 — ${esc(t)}</div>`).join('')}</div>` : ''}
+    </div>`).join('') : '';
+  document.getElementById('i2-body').innerHTML = `
+    <div class="card">
+      <div class="card-title">${엔진배지}질문의 바탕이 되는 급소 (${단위.length}개)</div>
+      ${단위.length ? `<div class="note-list">${단위.map(u => `<div class="note-item">「${esc(u.급소)}」 — ${esc(u.근거)}${u.출처 === '교사' ? ' <span class="badge muted">교사 확인</span>' : ''}</div>`).join('')}</div>`
+        : '<div class="c-empty">확인한 급소가 없습니다 — 급소 없이 일반 질문은 만들지 않습니다. 1단계에서 급소를 확인하세요</div>'}
+      <div class="c-meta" style="margin-top:8px;">급소마다 본질문 하나 · 꼬리질문 둘 · 근거를 씁니다. 급소에 없는 내용은 묻지 않습니다.</div>
+      <button class="type-btn" id="i2-btn" ${단위.length ? '' : 'disabled'} onclick="질문생성()">${g ? '질문 다시 생성' : '면접 질문 생성'} (${단위.length}개 급소)</button>
+    </div>
+    ${카드}
+    ${g ? '<div class="c-nav"><span></span><button class="type-btn" onclick="showStep(\'i3\')">3 · 면접관 확정 →</button></div>' : ''}`;
+}
+
+async function 질문생성() {
+  const 단위 = 급소단위();
+  if (!단위.length) return;
+  if (면접.질문.some(q => q.수정됨 || q.확정) && !confirm('다시 생성하면 3단계에서 고치거나 확정한 질문이 지워집니다. 다시 생성할까요?')) return;
+  await withBusy(document.getElementById('i2-btn'), '면접 질문 생성 중… (약 1분)', async () => {
+    const { out } = await postJSON('/api/interview', { 급소: 단위, 지원: 면접.지원 });
+    if (out.error) { alert('질문 생성 실패: ' + out.error); return; }
+    면접.생성 = out;
+    면접.질문 = out.질문.map(q => ({ ...q, 꼬리질문: [...q.꼬리질문], 확정: false, 수정됨: false }));
+    markCDone('i2');
+    renderI2();
   });
 }
 
-function 면접등록() {
-  면접자료동기();
-  const a = 면접.자료;
-  if (!a.자기소개서.trim() && !a.세특.trim()) { alert('자기소개서나 학생부 세부특기사항을 넣으세요.'); return; }
-  markCDone('i0');
-  showStep('i1');
-}
-
-const 글자수 = t => String(t || '').replace(/\s/g, '').length;
-
-function 엔진미확정Html(할일) {
-  return `<div class="card">
-      <div class="flag-box">엔진 규칙 미확정 — 이 단계는 HMOS 엔진 규칙이 정해진 뒤 연결합니다. 원칙대로 AI로 채우지 않습니다.</div>
-      <div class="c-meta" style="margin-top:8px;">이 단계에서 낼 것</div>
-      <div class="note-list">${할일.map(t => `<div class="note-item">${t}</div>`).join('')}</div>
-    </div>`;
-}
-
-function renderI1() {
-  const a = 면접.자료;
-  document.getElementById('i1-body').innerHTML = `
-    <div class="card">
-      <div class="card-title">등록한 자료</div>
-      <div class="note-list">
-        <div class="note-item">자기소개서 — ${a.자기소개서.trim() ? `${글자수(a.자기소개서)}자` : '없음'}</div>
-        <div class="note-item">학생부 세부특기사항 — ${a.세특.trim() ? `${글자수(a.세특)}자` : '없음'}</div>
-        <div class="note-item">지원 — ${esc(a.대학 || '대학 미입력')} · ${esc(a.학과 || '학과 미입력')}${a.학과정보.trim() ? ` · 학과 정보 ${글자수(a.학과정보)}자` : ''}</div>
-      </div>
-    </div>
-    ${엔진미확정Html(['핵심 키워드·경험 추출 — 자료마다 어떤 경험·활동이 나오는가', '지원동기 — 학과와 이어지는 계기', '학업경험 — 교과·탐구 활동', '미래방향 — 진로·학업 계획'])}`;
-}
-
-function renderI2() {
-  document.getElementById('i2-body').innerHTML = 엔진미확정Html(['예상 면접 문제', '면접관 체크 포인트 — 이 문제로 무엇을 확인하는가', '근거 — 어느 자료(자기소개서 · 세특 · 학과 정보)의 어느 대목에서 나왔는가'])
-    + '<div class="c-nav"><span></span><button class="type-btn" onclick="showStep(\'i3\')">3 · 교사·면접관 확정에서 직접 쓰기 →</button></div>';
-}
-
+// ── 3 · 면접관 확정 ──
 function renderI3() {
-  const 자료선택 = (q, i) => Object.entries(면접자료이름).map(([k, 이름]) =>
-    `<label style="margin-right:12px; font-size:13px;"><input type="checkbox" ${q.근거.includes(k) ? 'checked' : ''} onchange="면접근거(${i}, '${k}', this.checked)"> ${이름}</label>`).join('');
-  document.getElementById('i3-body').innerHTML = `
-    <div class="card">
-      <div class="card-title">면접 문제</div>
-      <div class="c-meta">문제마다 면접관 체크 포인트와 근거 자료를 붙이세요. 근거 대목은 자료에서 그대로 옮겨 적습니다.</div>
-      ${면접.문제.map((q, i) => `
-        <div class="iv-q">
-          <div class="field-label">문제 ${i + 1}</div>
-          <textarea class="input-area" style="min-height:60px;" oninput="면접.문제[${i}].문제 = this.value">${esc(q.문제)}</textarea>
-          <div class="iv-row">
-            <div><div class="field-label">면접관 체크 포인트</div><textarea class="input-area" style="min-height:60px;" oninput="면접.문제[${i}].체크 = this.value">${esc(q.체크)}</textarea></div>
-            <div><div class="field-label">근거 대목</div><textarea class="input-area" style="min-height:60px;" oninput="면접.문제[${i}].대목 = this.value">${esc(q.대목)}</textarea></div>
-          </div>
-          <div style="margin-top:8px;">${자료선택(q, i)}</div>
-          <button class="type-btn" style="margin-top:8px;" onclick="면접문제빼기(${i})">이 문제 빼기</button>
-        </div>`).join('') || '<div class="c-empty" style="margin-top:8px;">아직 문제가 없습니다</div>'}
-      <div class="type-selector" style="margin-top:12px;">
-        <button class="type-btn" onclick="면접문제더하기()">+ 문제 더하기</button>
+  const body = document.getElementById('i3-body');
+  if (!면접.질문.length) { body.innerHTML = '<div class="card c-empty">2단계에서 질문을 생성하면 표시됩니다</div>'; return; }
+  const 확정수 = 면접.질문.filter(q => q.확정).length;
+  body.innerHTML = 면접.질문.map((q, i) => `
+    <div class="card"${q.확정 ? ' style="border-color: var(--tool-grade);"' : ''}>
+      <div class="card-title">${i + 1}. 급소 「${esc(q.급소)}」 <span class="c-meta">(${esc(q.자료근거)})</span>
+        ${q.확정 ? '<span class="badge ok">확정</span>' : ''}${q.수정됨 ? '<span class="badge muted">면접관 수정</span>' : ''}</div>
+      <div class="field-label">본질문</div>
+      <textarea class="input-area" style="min-height:56px;" oninput="질문고침(${i}, '본질문', this.value)">${esc(q.본질문)}</textarea>
+      ${q.꼬리질문.map((t, k) => `<div class="field-label">꼬리질문 ${k + 1}</div>
+      <textarea class="input-area" style="min-height:48px;" oninput="질문고침(${i}, ${k}, this.value)">${esc(t)}</textarea>`).join('')}
+      <div class="field-label">근거</div>
+      <textarea class="input-area" style="min-height:48px;" oninput="질문고침(${i}, '근거', this.value)">${esc(q.근거)}</textarea>
+      ${q.점검.length ? `<div class="flag-box" style="margin-top:8px;">${q.점검.map(t => `<div>면접관 확인 — ${esc(t)}</div>`).join('')}</div>` : ''}
+      <div class="type-selector" style="margin-top:10px;">
+        <button class="type-btn${q.확정 ? ' selected' : ''}" onclick="질문확정(${i})">${q.확정 ? '확정 풀기' : '확정'}</button>
+        <button class="type-btn" onclick="질문삭제(${i})">삭제</button>
       </div>
-    </div>
+    </div>`).join('') + `
     <div class="card">
-      <div class="card-title">확정</div>
+      <div class="card-title">저장 · 인쇄 — 확정한 질문 ${확정수}개</div>
       <div class="iv-row">
-        <input class="text-input" id="iv-confirm-name" placeholder="확정자 이름 (교사·면접관)">
-        <input class="text-input" id="iv-confirm-date" type="date" value="${new Date().toISOString().split('T')[0]}">
+        <input class="text-input" id="iv-confirm-name" value="${esc(면접.확정자 || '')}" oninput="면접.확정자 = this.value" placeholder="확정자 이름 (교사·면접관)">
+        <input class="text-input" id="iv-confirm-date" type="date" value="${면접.확정일 || new Date().toISOString().split('T')[0]}" oninput="면접.확정일 = this.value">
       </div>
-      <button class="confirm-btn" style="background: var(--tool-grade); margin-top:12px;" onclick="면접확정()">확정하고 저장 (.json)</button>
+      <div class="type-selector" style="margin-top:12px;">
+        <button class="type-btn" ${확정수 ? '' : 'disabled'} onclick="면접저장()">확정한 질문 저장 (.json)</button>
+        <button class="type-btn" ${확정수 ? '' : 'disabled'} onclick="면접인쇄()">인쇄용 출력</button>
+        <button class="type-btn" onclick="면접.질문.forEach(q => q.확정 = true); renderI3()">모두 확정</button>
+      </div>
     </div>`;
 }
 
-function 면접문제더하기() { 면접.문제.push({ 문제: '', 체크: '', 대목: '', 근거: [] }); renderI3(); }
-function 면접문제빼기(i) { 면접.문제.splice(i, 1); renderI3(); }
-function 면접근거(i, k, 켬) {
-  const q = 면접.문제[i];
-  q.근거 = 켬 ? [...new Set([...q.근거, k])] : q.근거.filter(x => x !== k);
+function 질문고침(i, 칸, 값) {
+  const q = 면접.질문[i];
+  if (typeof 칸 === 'number') q.꼬리질문[칸] = 값; else q[칸] = 값;
+  q.수정됨 = true;
+}
+function 질문확정(i) { 면접.질문[i].확정 = !면접.질문[i].확정; renderI3(); 확정표시(); }
+function 질문삭제(i) { if (!confirm('이 질문 카드를 지울까요?')) return; 면접.질문.splice(i, 1); renderI3(); 확정표시(); }
+function 확정표시() { document.querySelector('#nav-interview .nav-item[data-step="i3"]').classList.toggle('done', 면접.질문.some(q => q.확정)); }
+
+function 면접확정자료() {
+  const 이름 = (면접.확정자 || '').trim();
+  if (!이름) { alert('확정자 이름을 입력하세요.'); return null; }
+  return {
+    종류: 'HMOS 면접 질문', 버전: 2, 확정자: 이름, 확정일: 면접.확정일 || new Date().toISOString().split('T')[0],
+    지원: 면접.지원,
+    질문: 면접.질문.filter(q => q.확정).map(q => ({ 급소: q.급소, 자료근거: q.자료근거, 본질문: q.본질문.trim(), 꼬리질문: q.꼬리질문.map(t => t.trim()).filter(Boolean), 근거: q.근거.trim(), 면접관수정: q.수정됨 })),
+    급소: 면접.항목.map(x => ({ 근거: x.근거, 급소: 쓰는급소(x).map(k => ({ 실체: k.실체, 출처: k.출처 })), 확인필요: 확인필요(x) })),
+  };
 }
 
-function 면접확정() {
-  const 이름 = document.getElementById('iv-confirm-name').value.trim();
-  if (!이름) { alert('확정자 이름을 입력하세요.'); return; }
-  const 문제 = 면접.문제.filter(q => q.문제.trim());
-  if (!문제.length) { alert('면접 문제를 하나 이상 쓰세요.'); return; }
-  면접자료동기();
-  내려받기({ 종류: 'HMOS 면접 문제', 버전: 1, 확정자: 이름, 확정일: document.getElementById('iv-confirm-date').value,
-    지원: { 대학: 면접.자료.대학, 학과: 면접.자료.학과 }, 자료: 면접.자료,
-    문제: 문제.map(q => ({ 문제: q.문제.trim(), 체크포인트: q.체크.trim(), 근거자료: q.근거.map(k => 면접자료이름[k]), 근거대목: q.대목.trim() })) }, '면접문제');
-  markCDone('i3');
+function 면접저장() {
+  const d = 면접확정자료();
+  if (d) 내려받기(d, '면접질문');
+}
+
+function 면접인쇄() {
+  const d = 면접확정자료();
+  if (!d) return;
+  const 지원 = [d.지원.대학, d.지원.학과, d.지원.전형].filter(t => t && t.trim()).map(esc).join(' · ');
+  document.getElementById('iv-print').innerHTML = `
+    <h1>면접 질문</h1>
+    <div class="p-meta">${지원 || '지원 정보 없음'} — 확정 ${esc(d.확정자)} · ${esc(d.확정일)}</div>
+    ${d.질문.map((q, i) => `<section>
+      <h2>${i + 1}. ${esc(q.본질문)}</h2>
+      ${q.꼬리질문.map((t, k) => `<p>꼬리질문 ${k + 1}. ${esc(t)}</p>`).join('')}
+      <p class="p-meta">근거: ${esc(q.근거)} (급소 「${esc(q.급소)}」 · ${esc(q.자료근거)})</p>
+    </section>`).join('')}`;
+  window.print();
 }
 </script>
 

@@ -1225,6 +1225,79 @@ ${rules}`;
   res.json({model:r.msg.model,usage:r.msg.usage,비교불가:!!관계.비교불가,추가논제});
 });
 
+// ── POST /api/interview — 출제도구 면접 2단계: 급소별 면접 질문 (오종래 2026-10-19) ──
+// 급소는 1단계에서 엔진(/analyze)이 잡고 교사가 확인한 것 그대로 받는다. Claude는 급소마다 본질문·꼬리질문 2·근거 문장만 쓴다.
+// 급소가 없으면 만들지 않는다 (일반 질문 차단). 원문은 근거 인용용으로만 준다 — 질문은 급소에서만.
+const 면접시스템=`당신은 대학 면접관입니다.
+아래 급소만을 기반으로 질문을 생성하세요.
+급소에 없는 내용은 절대 묻지 마세요.
+각 질문마다 반드시 근거를 명시하세요.
+(예: 자소서 2번 문항 '○○ 경험'에서)
+꼬리질문도 같은 급소에서 생성하세요.
+
+지킬 것:
+- 급소 블록 하나당 카드 하나. id는 블록의 id 그대로. 블록에 없는 급소를 만들지 않는다.
+- 급소는 HMOS 엔진이 잡고 교사가 확인한 것이다. 다시 고르거나 바꾸지 않는다. 본질문은 그 급소를 직접 묻는다.
+- 「근거 대목」은 근거를 인용하는 데만 쓴다. 대목에 있어도 급소와 닿지 않는 내용은 묻지 않는다.
+- basis는 「자료 근거」(예: 자소서 2번 문항)를 그대로 쓰고, 근거 대목에서 급소가 나온 말을 작은따옴표로 짧게 인용한다.
+- 꼬리질문 둘은 본질문의 답을 더 깊이 확인하는 질문이다. 같은 급소 안에서만 묻는다.
+- 지원 대학·학과·전형은 질문 말투를 맞추는 데만 쓴다. 학과 정보로 새 주제를 묻지 않는다.
+- 학생이 읽고 답할 질문이다. 엔진·급소·노드·5색 같은 분석 용어를 질문과 근거에 쓰지 않는다.
+- 모든 출력은 한국어.`;
+
+const 면접형식=ids=>({type:'json_schema',schema:{type:'object',additionalProperties:false,required:['cards'],properties:{
+  cards:{type:'array',description:'급소 블록 하나당 하나 — 블록의 id를 그대로',items:{type:'object',additionalProperties:false,required:['id','question','followups','basis'],properties:{
+    id:{type:'string',enum:ids},
+    question:{type:'string',description:'본질문 — 급소를 직접 묻는다'},
+    followups:{type:'array',items:{type:'string'},description:'꼬리질문 두 개 — 같은 급소에서'},
+    basis:{type:'string',description:"근거 — 자료 근거 + 원문 대목 인용 (예: 자소서 2번 문항 '○○ 경험'에서)"},
+  }}},
+}}});
+
+const 면접용어=[/엔진/,/급소/,/노드/,/5색/,/봉인/];
+/** 근거 대목 — 원문에서 급소가 나온 문장만 (없으면 급소 낱말이 든 문장). 원문 전체를 주면 급소 밖 내용까지 묻는다 (2026-10-19 로컬 확인) */
+function 근거대목(원문,급소){
+  const 문장=String(원문||'').split(/(?<=[.!?。])\s+|\n+/).map(t=>t.trim()).filter(Boolean);
+  const 낱=String(급소).split(/[\s,·]+/).filter(w=>w.length>=2);
+  const 딱=문장.filter(t=>t.includes(급소));
+  return (딱.length?딱:문장.filter(t=>낱.some(w=>t.includes(w)))).join(' ').slice(0,600);
+}
+app.post('/api/interview',async(req,res)=>{
+  const {급소,지원}=req.body||{};
+  const 목록=Array.isArray(급소)?급소.filter(u=>u&&typeof u.id==='string'&&String(u.급소||'').trim()&&String(u.근거||'').trim()):[];
+  if(!목록.length){res.status(400).json({error:'급소가 없습니다 — 1단계에서 급소를 확인하세요 (급소 없이 일반 질문은 만들지 않습니다)'});return;}
+  const ids=[...new Set(목록.map(u=>u.id))];
+  if(ids.length!==목록.length){res.status(400).json({error:'급소 id가 겹칩니다'});return;}
+  const 지원글=지원&&typeof 지원==='object'?['대학','학과','전형'].map(k=>String(지원[k]||'').trim()).filter(Boolean).join(' · '):'';
+  const user=[
+    지원글?`지원: ${지원글}`:'',
+    `급소 (HMOS 엔진 · 교사 확인 — 그대로 받을 것):\n\n${목록.map(u=>[
+      `[급소 ${u.id}]`,
+      `급소: 「${String(u.급소).trim()}」`,
+      `자료 근거: ${String(u.근거).trim()}`,
+      `근거 대목 (급소가 나온 문장 — 인용용): ${근거대목(u.원문,String(u.급소).trim())||'(급소가 나온 문장을 찾지 못함 — 자료 근거만 밝힐 것)'}`,
+    ].join('\n')).join('\n\n')}`,
+  ].filter(Boolean).join('\n\n');
+  const r=await askClaude(res,면접시스템,user,면접형식(ids),o=>Array.isArray(o.cards));
+  if(!r)return;
+  // 점검 — 판정하지 않고 면접관 확인으로 표시만: 카드 빠짐 · 꼬리질문 수 · 근거에 자료 근거 없음 · 급소 말이 질문·근거에 없음 · 분석 용어
+  const 질문=목록.map(u=>{
+    const c=r.out.cards.find(x=>x.id===u.id);
+    const 기본={id:u.id,급소:String(u.급소).trim(),자료:u.자료||'',자료근거:String(u.근거).trim(),급소출처:u.출처||'엔진'};
+    if(!c)return {...기본,본질문:'',꼬리질문:['',''],근거:'',점검:['Claude가 이 급소의 질문을 내지 않음']};
+    const 꼬리=(c.followups||[]).slice(0,2);
+    while(꼬리.length<2)꼬리.push('');
+    const 점검=[];
+    if((c.followups||[]).length!==2)점검.push(`꼬리질문이 ${(c.followups||[]).length}개`);
+    if(!String(c.basis).includes(기본.자료근거))점검.push(`근거에 「${기본.자료근거}」가 없음`);
+    if(![c.question,c.basis].some(t=>String(t).includes(기본.급소)))점검.push(`급소 「${기본.급소}」가 본질문·근거에 그대로 나오지 않음`);
+    const 용어=[...new Set([c.question,...꼬리,c.basis].flatMap(t=>면접용어.flatMap(re=>{const m=String(t).match(re);return m?[m[0]]:[];})))];
+    if(용어.length)점검.push(`분석 용어 ${용어.map(x=>`「${x}」`).join(' ')}`);
+    return {...기본,본질문:c.question,꼬리질문:꼬리,근거:c.basis,점검};
+  });
+  res.json({model:r.msg.model,usage:r.msg.usage,질문});
+});
+
 // ── POST /api/ocr — 0단계 문항 등록: 이미지(1~2장)·PDF → 원문 텍스트 + 그림 영역 (오종래 2026-10-14) ──
 // 글자를 옮겨 적기만 한다. 인식·분석은 엔진이 하므로 Claude는 고치거나 요약하지 않는다.
 // 이미지는 대시보드가 Claude가 보는 크기(긴 변 1568px 이하)로 줄여 크기와 함께 보낸다 — 그림 영역은 그 사진의 픽셀 좌표로 받아
@@ -1240,6 +1313,8 @@ app.post('/api/ocr',async(req,res)=>{
   const 크기=f=>Array.isArray(f.크기)&&f.크기.length===2&&f.크기.every(v=>Number.isFinite(v)&&v>0)?f.크기:null;
   // 유형 '답안' — /grader 학생 답안 사진 (2026-10-15). 옮겨 적기만 한다 — 채점은 엔진(/api/grade)이 한다
   const 답안=req.body.유형==='답안';
+  // 유형 '자료' — 출제도구 면접 0단계 자기소개서·학생부 PDF (2026-10-19). 옮겨 적기만 한다 — 급소는 엔진이 잡는다
+  const 자료=req.body.유형==='자료';
   const content=[
     ...파일.flatMap((f,i)=>f.종류==='application/pdf'
       ?[{type:'document',source:{type:'base64',media_type:'application/pdf',data:f.데이터}}]
@@ -1247,6 +1322,8 @@ app.post('/api/ocr',async(req,res)=>{
         {type:'image',source:{type:'base64',media_type:f.종류,data:f.데이터}}]),
     {type:'text',text:답안
       ?'위 자료에 있는 학생 답안의 글자를 그대로 옮겨 적어라. 문제 글(발문·제시문)이 함께 찍혀 있으면 빼고 학생이 쓴 답만 적는다.'
+      :자료
+      ?'위 자료(자기소개서 또는 학생부)의 글자를 그대로 옮겨 적어라. 문항 번호·과목 이름 머리는 원문 모양 그대로 둔다.'
       :['A','B'].includes(req.body.유형)
       ?'위 자료에 있는 시험 문항(문항 번호·발문·조건·보기·배점)의 글자를 그대로 옮겨 적어라.'
       :'위 자료에 있는 논술 문항(논제와 제시문)의 글자를 그대로 옮겨 적어라.'},
