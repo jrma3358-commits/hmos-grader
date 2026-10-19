@@ -11,6 +11,7 @@
 //   - 계단식 단계형(A·B)의 소문항 분리 — 그건 [봉인⑦]이다. 여기는 C 논제만 본다
 
 import { designatedLabels, PASSAGE_REFERENCE, referenceGroup } from '../fq/v2/passage.ts';
+import { condition_blocks, relay_marker } from './math_essay.ts';
 
 export interface 소문항 {
   /** 「1-1」 같은 번호. 번호 없는 논제 하나면 null */
@@ -23,6 +24,12 @@ export interface 소문항 {
   참조: string[];
   /** 텍스트에서 뗀 분량·배점 표기 원문 (「(300자 안팎, 40점)」 등, 여럿이면 공백으로 잇는다). 없으면 빈 문자열 */
   분량배점?: string;
+  /** 조건 블록 (들여쓴 (가)(나), 오종래 2026-10-20) — 텍스트에서 뗐다. 있을 때만 */
+  조건?: { id: string; 텍스트: string }[];
+  /** 이어달리기 참조 표지 (「[1-3]에서 구한」, 오종래 2026-10-20) — 텍스트에서 뗐다. 있을 때만 */
+  이어받기?: { 번호: string | null; 표지: string; 대상: string };
+  /** 조건 블록·표지를 떼기 전 본문 — 소문항 창 논제를 다시 세울 때 쓴다. 뗀 것이 있을 때만 */
+  원문?: string;
 }
 
 /**
@@ -90,9 +97,16 @@ function 계단으로(u: 소문항): 소문항[] {
  */
 export function split_thesis(논제: string): 소문항[] {
   // 분량·배점 표기는 나눈 뒤 소문항마다 뗀다 — 표기가 어느 소문항 것인지 남기려고
+  // 조건 블록·이어받기 표지(오종래 2026-10-20 서경대)도 소문항마다 뗀다 — 인식에는 발문만 넣고, 뗀 것은 제약 C로 (math_essay)
   return 나누기(논제).map((u) => {
     const 본문 = 분량배점떼기(u.텍스트), 발문 = 분량배점떼기(u.공통발문);
-    return { ...u, 텍스트: 본문.글, 공통발문: 발문.글, 분량배점: 본문.뗀것.join(' ') };
+    const 블록 = condition_blocks(본문.글);
+    const 표지 = relay_marker(블록.텍스트);
+    const 뗌 = 블록.조건.length > 0 || !!표지.이어받기;
+    return {
+      ...u, 텍스트: 표지.텍스트, 공통발문: 발문.글, 분량배점: 본문.뗀것.join(' '),
+      ...(블록.조건.length ? { 조건: 블록.조건 } : {}), ...(표지.이어받기 ? { 이어받기: 표지.이어받기 } : {}), ...(뗌 ? { 원문: 본문.글 } : {}),
+    };
   });
 }
 

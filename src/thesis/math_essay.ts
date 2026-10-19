@@ -26,16 +26,63 @@ export interface 조각조합 {
 export interface 제약C {
   색: 'C';
   종류: 제약종류;
-  /** 「설정」 · 제시문 기호(I·가…) · 이어받기면 앞 소문항 번호 */
+  /** 「설정」 · 제시문 기호(I·가…) · 소문항 조건 블록은 「(가)」 · 이어받기면 앞 소문항 번호 */
   출처: string;
   /** 짧은 실체 — 첫 문장 (이어받기는 앞 소문항 급소 B) */
   실체: string;
   텍스트: string;
   구조?: 조각조합;
+  /** 이어받기 표지가 가리킨 대상 (「[1-3]에서 구한 함수 f(x)」 → 「함수 f(x)」) — 제약 연결의 열쇠 */
+  대상?: string;
+}
+
+// ── 서경대 수리논술 인식 규칙 [오종래 2026-10-20 확정] ──
+//   1. 조건 블록: 들여쓰기 3자 이상으로 시작하는 (가)·(나)·(다) 줄은 본문·발문과 분리된 조건 블록. 제시문 [가]·[나]와 다르다
+//   2. 이어달리기 참조 표지: 「[N-M]에서 구한」·「문항 [N]에서 구한」·「앞 문항에서 구한」 → 그 소문항 결과를 이 소문항의 제약 C로
+
+/** 조건 블록 줄 — 들여쓰기 3자 이상 + (가)·(나)… */
+const 조건줄 = /^[ \t　]{3,}\(([가-하])\)[ \t]*/;
+/** 조건 블록 이어지는 줄 — 들여쓰기 3자 이상 (「(i) …」 같은 조건 안의 줄) */
+const 들여쓴줄 = /^[ \t　]{3,}\S/;
+
+/** 소문항 본문 → 조건 블록을 뗀 본문(앞뒤 글은 한 칸으로 잇는다) + 조건들. 블록이 없으면 본문 그대로, 조건 [] */
+export function condition_blocks(본문: string): { 텍스트: string; 조건: { id: string; 텍스트: string }[] } {
+  const 조건: { id: string; 텍스트: string }[] = [];
+  const 남은: string[] = [];
+  let 블록 = false;
+  for (const 줄 of 본문.split('\n')) {
+    const m = 조건줄.exec(줄);
+    if (m) { 조건.push({ id: m[1], 텍스트: 줄.slice(m[0].length).trim() }); 블록 = true; continue; }
+    if (블록 && 들여쓴줄.test(줄)) { 조건[조건.length - 1].텍스트 += '\n' + 줄.trim(); continue; }
+    if (블록) { 블록 = false; 남은.push('\u0000'); }
+    남은.push(줄);
+  }
+  if (!조건.length) return { 텍스트: 본문, 조건 };
+  // 블록 자리는 한 칸 — 「…다음 조건을 만족한다. 상수 m의 값을 구하시오.」가 한 글로 이어진다
+  const 텍스트 = 남은.join('\n').replace(/\s*\u0000\s*/g, ' ').trim();
+  return { 텍스트, 조건 };
+}
+
+/** 이어달리기 참조 표지 — 「[1-3]에서 구한」 · 「문항 [1]에서 구한」 · 「앞 문항에서 구한」 */
+const 이어받기표지 = /(?:문항[ \t]*)?\[(\d+(?:-\d+)?)\][ \t]*에서[ \t]*구한[ \t]*|앞[ \t]*문항에서[ \t]*구한[ \t]*/;
+
+/**
+ * 소문항 본문 → 표지를 뗀 본문 + 이어받기 { 번호(앞 문항이면 null), 표지, 대상(표지 뒤 실체, 「함수 f(x)」) }.
+ * 표지는 앞 소문항 결과라는 제약 C라 인식(급소 후보)에 넣지 않는다. 표지가 없으면 null
+ */
+export function relay_marker(본문: string): { 텍스트: string; 이어받기: { 번호: string | null; 표지: string; 대상: string } | null } {
+  const m = 이어받기표지.exec(본문);
+  if (!m) return { 텍스트: 본문, 이어받기: null };
+  const 뒤 = 본문.slice(m.index + m[0].length);
+  // 대상 = 표지 바로 뒤 첫 함수 꼴까지 (「함수 f(x)」), 없으면 첫 어절
+  const 대상 = (뒤.match(/^[^,.\n]{0,15}?[A-Za-z]'?\([A-Za-z]\)/) ?? 뒤.match(/^\S+/) ?? [''])[0];
+  return { 텍스트: (본문.slice(0, m.index) + 뒤).trim(), 이어받기: { 번호: m[1] ?? null, 표지: m[0].trim(), 대상 } };
 }
 
 /** 제시문 기호 — 로마 숫자 [I] · 자음 (ㄱ) (가톨릭대, 2026-10-19). 한글 음절 (가)(나)는 조건 */
 const 로마 = /^(?:I{1,3}|IV|VI{0,3}|IX|X|[ㄱ-ㅎ])$/;
+/** 대괄호 한글 [가]·[나]는 제시문 (서경대, 오종래 2026-10-20) — 기호를 함께 받았을 때만 가른다 */
+const 제시문인가 = (p: { id: string; 기호?: string }) => 로마.test(p.id) || /^\[/.test(p.기호 ?? '');
 /** 함수 꼴 「f(x)」「g(t)」「h(t)」 — 이어받기·제약 연결의 열쇠 */
 const 함수꼴 = /[A-Za-z]'?\([A-Za-z]\)/g;
 const 첫문장 = (t: string) => (t.trim().split(/(?<=[.。])\s|\n/)[0] ?? '').trim();
@@ -58,24 +105,31 @@ export function piece_structure(text: string, 설정: string = ''): 조각조합
  * 제약조건 C — 공통 발문의 문제 설정(첫 줄 = 발문은 빼고) → 제시문 [I][II] → 조건 (가)(나)(다) 순서 (규칙 2·3).
  * 공통 발문 첫 줄(「[문항 2] 다음 제시문을 이용하여 … 서술하시오.」)은 상황 P 그대로다
  */
-export function math_constraints(공통발문: string, 제시문: { id: string; 텍스트: string }[]): 제약C[] {
+export function math_constraints(공통발문: string, 제시문: { id: string; 텍스트: string; 기호?: string }[]): 제약C[] {
   const 설정글 = 공통발문.split('\n').slice(1).join('\n').trim();
   const out: 제약C[] = [];
   if (설정글) out.push({ 색: 'C', 종류: '설정', 출처: '설정', 실체: 첫문장(설정글), 텍스트: 설정글 });
   for (const p of 제시문) {
-    if (로마.test(p.id)) out.push({ 색: 'C', 종류: '제시문', 출처: p.id, 실체: 첫문장(p.텍스트), 텍스트: p.텍스트 });
+    if (제시문인가(p)) out.push({ 색: 'C', 종류: '제시문', 출처: p.id, 실체: 첫문장(p.텍스트), 텍스트: p.텍스트 });
   }
   for (const p of 제시문) {
-    if (로마.test(p.id)) continue;
+    if (제시문인가(p)) continue;
     const 구조 = piece_structure(p.텍스트, 설정글);
     out.push({ 색: 'C', 종류: '조건', 출처: p.id, 실체: 첫문장(p.텍스트), 텍스트: p.텍스트, ...(구조 ? { 구조 } : {}) });
   }
   return out;
 }
 
-/** 이어달리기 (규칙 4) — 앞 소문항 결과(급소 B)를 이 소문항의 제약 C로 */
-export const relay_constraint = (앞번호: string, 앞급소: string[]): 제약C[] =>
-  앞급소.filter(Boolean).map((b) => ({ 색: 'C', 종류: '이어받기', 출처: 앞번호, 실체: b, 텍스트: `(${앞번호}) 결과 「${b}」` }));
+/** 소문항 조건 블록 (2026-10-20 규칙 1) → 조건 C. 출처는 「(가)」 — 제시문 [가]와 섞이지 않게 괄호째 */
+export const block_constraints = (조건: { id: string; 텍스트: string }[], 설정: string = ''): 제약C[] =>
+  조건.map((p) => {
+    const 구조 = piece_structure(p.텍스트, 설정);
+    return { 색: 'C', 종류: '조건', 출처: `(${p.id})`, 실체: 첫문장(p.텍스트), 텍스트: p.텍스트, ...(구조 ? { 구조 } : {}) };
+  });
+
+/** 이어달리기 (규칙 4) — 앞 소문항 결과(급소 B)를 이 소문항의 제약 C로. 표지가 대상을 가리켰으면(2026-10-20 규칙 2) 대상을 함께 */
+export const relay_constraint = (앞번호: string, 앞급소: string[], 대상: string = ''): 제약C[] =>
+  앞급소.filter(Boolean).map((b) => ({ 색: 'C', 종류: '이어받기', 출처: 앞번호, 실체: b, 텍스트: `(${앞번호}) 결과 「${b}」`, ...(대상 ? { 대상 } : {}) }));
 
 /**
  * 제약 연결 — 소문항 노드 실체에 제약의 함수 꼴(「f(x)」「g(t)」)이 나오면 그 제약이 이 소문항에 얹힌 것이다.
@@ -85,7 +139,8 @@ export function constraint_links(노드실체: string[], 제약: 제약C[]): { �
   const 글 = 노드실체.join(' ');
   const out: { 출처: string; 종류: 제약종류; 말: string }[] = [];
   for (const c of 제약) {
-    const 열쇠 = c.구조?.완성 ? [c.구조.완성] : 함수들(c.종류 === '이어받기' ? c.실체 : c.텍스트);
+    // 이어받기 표지의 대상(「함수 f(x)」)은 그 함수 꼴로, 아니면 앞 급소 글로
+    const 열쇠 = c.구조?.완성 ? [c.구조.완성] : c.대상 && 함수들(c.대상).length ? 함수들(c.대상) : 함수들(c.종류 === '이어받기' ? c.실체 : c.텍스트);
     const 말 = (열쇠.length ? 열쇠 : [c.실체]).find((k) => k && 글.includes(k));
     if (말) out.push({ 출처: c.출처, 종류: c.종류, 말 });
   }

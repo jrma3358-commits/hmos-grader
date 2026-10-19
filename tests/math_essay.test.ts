@@ -3,7 +3,8 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { constraint_links, math_constraints, piece_structure, relay_constraint } from '../src/thesis/math_essay.ts';
+import { block_constraints, condition_blocks, constraint_links, math_constraints, piece_structure, relay_constraint, relay_marker } from '../src/thesis/math_essay.ts';
+import { split_thesis } from '../src/thesis/split.ts';
 
 const 공통발문 = '[문항 2] 다음 제시문을 이용하여 아래 논제의 풀이 과정과 답을 논리적으로 서술하시오.\n구간 [0, 2π]에서 정의된 연속함수 f(x)가 구간 (0, 2π)에서 미분가능하고 다음 조건을 만족시킨다.';
 const 제시문 = [
@@ -65,5 +66,75 @@ describe('이어달리기 · 제약 연결 (규칙 4)', () => {
 
   it('제약 함수가 노드에 없으면 얹히지 않는다', () => {
     assert.deepEqual(constraint_links(['자유무역'], relay_constraint('1-1', ['함수 g(t)'])), []);
+  });
+});
+
+// 서경대 자연계 수리논술 [오종래 2026-10-20 확정] — 조건 블록 · 이어달리기 참조 표지
+const 서경대 = [
+  '[1-3] 최고차항의 계수가 1인 사차함수 f(x)가 다음 조건을 만족한다.',
+  '   (가) 곡선 y=f(x)는 x=-3과 x=0에서 변곡점을 갖는다.',
+  '   (나) 함수 g(x)=|f(x)|는 x=m에서만 미분가능하지 않다. (단, m은 0보다 큰 상수)',
+  '상수 m의 값을 구하시오.',
+  '[1-4] 문항 [1-3]에서 구한 함수 f(x)에 대하여 곡선 y=f(x)와 직선 y=kx+f(0)의 교점의 개수를 실수 k의 값에 따라 조사하시오.',
+].join('\n');
+
+describe('조건 블록 — 들여쓰기 3자 이상 (가)(나) (2026-10-20 규칙 1)', () => {
+  it('블록을 떼고 앞뒤 발문을 한 글로 잇는다', () => {
+    const r = condition_blocks(서경대.split('\n').slice(1, 4).join('\n').replace(/^/, '최고차항의 계수가 1인 사차함수 f(x)가 다음 조건을 만족한다.\n'));
+    assert.equal(r.텍스트, '최고차항의 계수가 1인 사차함수 f(x)가 다음 조건을 만족한다. 상수 m의 값을 구하시오.');
+    assert.deepEqual(r.조건.map((c) => c.id), ['가', '나']);
+    assert.match(r.조건[1].텍스트, /^함수 g\(x\)=\|f\(x\)\|는/);
+  });
+
+  it('들여쓰지 않은 (가)는 블록이 아니다', () => {
+    const t = '다음 조건을 만족한다.\n(가) f(0)=1\n값을 구하시오.';
+    assert.deepEqual(condition_blocks(t), { 텍스트: t, 조건: [] });
+  });
+
+  it('블록 안 더 들여쓴 줄은 그 조건에 잇는다', () => {
+    const r = condition_blocks('조건을 만족한다.\n   (가) 각각의 k에 대하여\n      (i) f(k)=0\n값을 구하시오.');
+    assert.equal(r.조건[0].텍스트, '각각의 k에 대하여\n(i) f(k)=0');
+  });
+
+  it('split_thesis — (1-3) 텍스트는 발문만, 조건은 따로, 원문은 그대로', () => {
+    const [u3] = split_thesis(서경대);
+    assert.equal(u3.텍스트, '최고차항의 계수가 1인 사차함수 f(x)가 다음 조건을 만족한다. 상수 m의 값을 구하시오.');
+    assert.deepEqual(u3.조건?.map((c) => c.id), ['가', '나']);
+    assert.match(u3.원문 ?? '', /\n   \(가\)/);
+  });
+
+  it('조건 C 출처는 괄호째 「(가)」 — 제시문 [가]와 다르다', () => {
+    const c = block_constraints([{ id: '가', 텍스트: '곡선 y=f(x)는 x=-3에서 변곡점을 갖는다.' }]);
+    assert.deepEqual(c.map((x) => [x.종류, x.출처]), [['조건', '(가)']]);
+  });
+
+  it('대괄호 [가]로 받은 제시문은 제시문 C (기호 있을 때)', () => {
+    const c = math_constraints('', [{ id: '가', 기호: '[가]', 텍스트: '넓이 S' }, { id: '가', 기호: '(가)', 텍스트: 'f(0)=1' }]);
+    assert.deepEqual(c.map((x) => [x.종류, x.출처]), [['제시문', '가'], ['조건', '가']]);
+  });
+});
+
+describe('이어달리기 참조 표지 (2026-10-20 규칙 2)', () => {
+  it('「문항 [1-3]에서 구한」 — 번호 1-3, 대상 함수 f(x), 표지는 텍스트에서 뗀다', () => {
+    const r = relay_marker('문항 [1-3]에서 구한 함수 f(x)에 대하여 교점의 개수를 조사하시오.');
+    assert.deepEqual(r.이어받기, { 번호: '1-3', 표지: '문항 [1-3]에서 구한', 대상: '함수 f(x)' });
+    assert.equal(r.텍스트, '함수 f(x)에 대하여 교점의 개수를 조사하시오.');
+  });
+
+  it('「[2-1]에서 구한」 · 「문항 [1]에서 구한」 · 「앞 문항에서 구한」', () => {
+    assert.equal(relay_marker('[2-1]에서 구한 a의 값을 이용하여 구하시오.').이어받기?.번호, '2-1');
+    assert.equal(relay_marker('문항 [1]에서 구한 g(x)를 쓰시오.').이어받기?.번호, '1');
+    assert.deepEqual(relay_marker('앞 문항에서 구한 f(x)에 대하여 답하시오.').이어받기, { 번호: null, 표지: '앞 문항에서 구한', 대상: 'f(x)' });
+  });
+
+  it('표지가 없으면 그대로', () => {
+    assert.deepEqual(relay_marker('곡선 y=f(x)의 넓이를 구하시오.'), { 텍스트: '곡선 y=f(x)의 넓이를 구하시오.', 이어받기: null });
+  });
+
+  it('split_thesis — (1-4) 이어받기 1-3 · 이어받기 C는 대상 함수 꼴로 얹힌다', () => {
+    const u4 = split_thesis(서경대)[1];
+    assert.equal(u4.이어받기?.번호, '1-3');
+    const c = relay_constraint('1-3', ['상수 m의 값'], u4.이어받기?.대상);
+    assert.deepEqual(constraint_links(['함수 f(x)', '곡선 y=f(x)'], c), [{ 출처: '1-3', 종류: '이어받기', 말: 'f(x)' }]);
   });
 });

@@ -24,7 +24,7 @@ const { make_screen } = await load('src/filter/confirm.ts');
 const { 봉인13_정교화진단 } = await load('src/filter/sealed/items.ts');
 const { split_thesis } = await load('src/thesis/split.ts');
 // 수리논술 C-2 인식 규칙 — 제약 C · 이어달리기 · 「각각」 조각 조합 (오종래 2026-10-19 확정)
-const { math_constraints, relay_constraint, constraint_links } = await load('src/thesis/math_essay.ts');
+const { math_constraints, block_constraints, relay_constraint, constraint_links } = await load('src/thesis/math_essay.ts');
 // 논리 펼치기 표지 — 인문 채점 3축 도달 조건 ② (오종래 2026-10-19). 표지 목록은 봉인 표지사전 「논리펼치기」, 찾기는 엔진 logic_markers
 const { find_logic_markers } = await load('src/fq/logic_markers.ts');
 // 답구하기 · 답표현하기 표지 — 채점 4축 (오종래 2026-10-19). 표지 목록은 봉인 표지사전, 찾기는 엔진 answer_markers
@@ -160,7 +160,8 @@ function 루브릭작업(논제글: string, 계열: string, 총배점: number, �
     const 소배점 = 소배점들[n];
     const 답안글 = item_portion(모범답안, s.번호, n, true);
     const 의도 = item_portion(핵심, s.번호, n).trim();
-    const 소 = { 번호: s.번호, 텍스트: s.텍스트, 공통발문: s.공통발문, 배점: 소배점, ...(의도 ? { 출제의도: 의도 } : {}) };
+    // 텍스트 = 학생이 보는 소문항 글 — 엔진이 인식에서 뗀 조건 블록·이어받기 표지까지 (모범답안·채점 프롬프트가 조건을 봐야 한다, 2026-10-20). 인식은 s.a 그대로
+    const 소 = { 번호: s.번호, 텍스트: s.원문 ?? s.텍스트, 공통발문: s.공통발문, 배점: 소배점, ...(의도 ? { 출제의도: 의도 } : {}) };
     if (연결멈춤) return { ...소, 멈춤: 연결멈춤 };
     try {
       // [오종래 2026-10-16 q4 ①] 소문항 글에 물음이 없으면 공통 발문 급소를 물려받는다 (급소와 그 물음만 — ①② 노드는 소문항 자기 것)
@@ -182,9 +183,9 @@ function 루브릭작업(논제글: string, 계열: string, 총배점: number, �
       if (연결문장 && Array.isArray(남길)) 연결문장 = 연결문장.filter((x: any) => 남길.includes(x.문장));
       const 앞급소 = 이어받기 && n > 0 ? 급소들of(소문항들[n - 1]) : [];
       // 원식 — 소문항 글(없으면 공통 발문)의 수 계수 이차방정식. 수리만 (2026-10-16 다경로)
-      const 원식 = 계열 === '수리' ? (parse_quadratic(s.텍스트) ?? parse_quadratic(String(s.공통발문 ?? ''))) : null;
+      const 원식 = 계열 === '수리' ? (parse_quadratic(소.텍스트) ?? parse_quadratic(String(s.공통발문 ?? ''))) : null;
       // 다항식 · 나머지 조건 (「다항식 …를 x-2로 나누었을 때 나머지가 1」) — 수 계수 이차방정식이 없는 수리 문항 (2026-10-16 q7)
-      const 문항글 = [s.공통발문, s.텍스트].filter(Boolean).join('\n');
+      const 문항글 = [s.공통발문, 소.텍스트].filter(Boolean).join('\n');
       const 다항식 = 계열 === '수리' && !원식 ? parse_polynomial_conditions(문항글) : null;
       // 경우의 수 문항 (「a,a,b,c,d,e … 경우의 수」) — 모범답안 줄 조각으로 채점 (2026-10-17 q3 안 A)
       const 경우의수 = 계열 === '수리' && !원식 && !다항식 ? parse_counting_item(문항글) : null;
@@ -333,7 +334,8 @@ try {
       단위: [],
       // 급소덩어리 — 논술 논제 급소 = Q 앞 B+C (오종래 2026-10-13). 급소(엔진 pivot)는 그대로 함께 싣는다
       소문항: 소문항.map((s: any) => ({
-        번호: s.번호, 텍스트: s.텍스트, 공통발문: s.공통발문, 참조: s.참조, 분량배점: s.분량배점 || '', ...인식of(s.a),
+        번호: s.번호, 텍스트: s.텍스트, 공통발문: s.공통발문, 참조: s.참조, 분량배점: s.분량배점 || '',
+        ...(s.조건 ? { 조건: s.조건 } : {}), ...(s.이어받기 ? { 이어받기: s.이어받기 } : {}), ...(s.원문 ? { 원문: s.원문 } : {}), ...인식of(s.a),
         급소덩어리: essay_pivot_chunks(s.a.graph).map((d: any) => ({ B: d.B.id, C: d.C.map((n: any) => n.id), Q: d.Q.map((n: any) => n.id), 실체: d.실체 })),
       })),
     };
@@ -343,13 +345,26 @@ try {
     const 수리논술 = /^C-2/.test(String(req.형식 ?? ''));
     if (수리논술) {
       const B들 = (u: any) => ((u.급소덩어리 && u.급소덩어리.length ? u.급소덩어리 : u.급소) ?? []).map((d: any) => String(d.실체).trim().replace(/^[\s,]+/, '')).filter(Boolean);
-      const 요청앞 = req.앞소문항 && typeof req.앞소문항 === 'object' && Array.isArray(req.앞소문항.급소) ? { 번호: String(req.앞소문항.번호 ?? ''), B: req.앞소문항.급소.map(String) } : null;
+      const 앞꼴 = (x: any) => (x && typeof x === 'object' && Array.isArray(x.급소) ? { 번호: String(x.번호 ?? ''), B: x.급소.map(String) } : null);
+      const 요청앞 = 앞꼴(req.앞소문항);
+      // 소문항 창이면 앞 창들 결과 — 이어받기 표지가 가리킨 번호를 여기서 찾는다 (오종래 2026-10-20)
+      const 요청앞들 = (Array.isArray(req.앞소문항들) ? req.앞소문항들.map(앞꼴) : []).filter(Boolean);
       out.단계.인식.소문항.forEach((u: any, i: number) => {
         const 앞u = i > 0 && 소문항[i - 1].공통발문 === 소문항[i].공통발문 ? out.단계.인식.소문항[i - 1] : null;
-        const 앞 = 앞u ? { 번호: 앞u.번호, B: B들(앞u) } : i === 0 ? 요청앞 : null;
-        // 제시문 [I]은 참조가 있으면 그 범위만, 설정·조건은 문제 설정이라 늘 얹는다
+        let 앞 = 앞u ? { 번호: 앞u.번호, B: B들(앞u) } : i === 0 ? 요청앞 : null;
+        // 이어달리기 참조 표지 (오종래 2026-10-20 규칙 2) — 「[N-M]에서 구한」은 그 번호 소문항, 「앞 문항에서 구한」은 바로 앞 소문항
+        if (u.이어받기) {
+          const 번호 = u.이어받기.번호;
+          if (번호 === null) 앞 = i > 0 ? { 번호: out.단계.인식.소문항[i - 1].번호, B: B들(out.단계.인식.소문항[i - 1]) } : 요청앞;
+          else {
+            const 같은요청 = out.단계.인식.소문항.slice(0, i).find((x: any) => x.번호 === 번호);
+            앞 = 같은요청 ? { 번호, B: B들(같은요청) } : (요청앞들.find((x: any) => x.번호 === 번호) ?? (요청앞 && 요청앞.번호 === 번호 ? 요청앞 : null));
+          }
+        }
+        // 제시문 [I]은 참조가 있으면 그 범위만, 설정·조건은 문제 설정이라 늘 얹는다. 소문항 조건 블록은 그 소문항에만 (2026-10-20)
         const 공통 = math_constraints(u.공통발문 ?? '', 제시문목록 ?? []).filter((c: any) => c.종류 !== '제시문' || !u.참조.length || u.참조.includes(c.출처));
-        u.제약 = [...공통, ...(앞 ? relay_constraint(앞.번호, 앞.B) : [])];
+        const 자기조건 = block_constraints(u.조건 ?? [], u.공통발문 ?? '');
+        u.제약 = [...공통, ...자기조건, ...(앞 ? relay_constraint(앞.번호, 앞.B, u.이어받기?.대상 ?? '') : [])];
         u.제약연결 = constraint_links(u.노드.map((n: any) => String(n.실체)), u.제약);
       });
       out.단계.수리 = { 형식: String(req.형식), 제약묶음: 발문들.map((t) => ({ 공통발문: t, 제약: math_constraints(t, 제시문목록 ?? []) })) };
