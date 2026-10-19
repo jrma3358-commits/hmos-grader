@@ -13,6 +13,7 @@
 //
 //   [오종래 2026-10-08] B계열 재추적은 하지 않는다 — 서술형태(C-F) 급소는 그대로 평가한다 (문항5 「반례」)
 //   [오종래 2026-10-08] 보완 권장인데 대안이 막히거나 없으면 결론은 그대로, 「대안 불가」·「대안 없음」으로 둔다
+//   [오종래 2026-10-19] 서술형 실체 명사 급소 뒤에 서술 방향(C-F)이 있으면 8 「Q 연결」은 이어진 것 — 보완 권장을 내지 않는다
 // 이 층은 평가하고 멈춘다. 풀지 않는다.
 
 import type { PathGraph, PathNode } from './graph.ts';
@@ -80,6 +81,9 @@ function coherence(graph: PathGraph, p: Pivot): Coherence {
     }
     if (n.color === 'B') break;
   }
+  // 서술 방향 [오종래 2026-10-19 확정] — 서술형 실체 명사 급소 뒤에 서술 방향(C-F 「연관지어」 등)이 있으면 묻는 말과 이어진 것이다.
+  //   사이의 B(「그리스의 자연 환경과 연관지어」의 「그리스」)는 서술 방향이 끌어온 말이다
+  if (p.direction) linked = true;
   const inP = graph.nodes.some((n) => n.color === 'P' && n.entity.includes(kw));
   const elsewhere = graph.nodes.some((n) => n.color !== 'P' && n.entity.includes(kw));
   const passageOnly = inP && !elsewhere;

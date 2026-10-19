@@ -45,6 +45,8 @@ export interface Pivot {
   keyword?: string;
   /** B 급소 실체에서 식·기호 앞의 이름 (예: 「일반항 a_n」 → 「일반항」). 식·기호가 따로 없으면 없다 */
   name?: string;
+  /** '실체 명사 B' 급소 뒤, 그 Q 앞의 서술 방향 노드(C-F 「연관지어」 등) — 있으면 급소가 묻는 말과 이어진 것으로 본다 (evaluate.ts) */
+  direction?: PathNode;
   /** 이 노드로 수렴한 간선의 무게 합 */
   convergence: number;
   /** 최심점과 같은 노드인가. 같더라도 '깊어서'가 아니라 '수렴해서' 급소다 */
@@ -297,9 +299,19 @@ export function analyze_pivot(graph: PathGraph, table?: SealedTable, options: Pi
       return PIVOT_NOUNS.some((w) => last.endsWith(w));
     });
     if (nouns.length) {
+      // 서술 방향 [오종래 2026-10-19 확정] — 급소 뒤 그 Q 앞의 C-F 노드. 급소는 아니고(근거대기 조각으로 남는다) 급소를 Q에 잇는다
+      const formIds = table?.apply.formPivot ?? [];
+      const directionOf = (node: PathNode) => {
+        for (const n of graph.nodes.slice(graph.nodes.indexOf(node) + 1)) {
+          if (n.color === 'Q') return undefined;
+          if (formIds.includes(n.switchId)) return n;
+        }
+        return undefined;
+      };
       const pivots = nouns.map((node): Pivot => ({
         node,
         reason: '실체 명사 B',
+        ...(directionOf(node) ? { direction: directionOf(node) } : {}),
         ...bValue(node, graph),
         convergence: convergenceOf(graph, node, table),
         sameAsDeepest: deepest_node(graph)?.id === node.id,

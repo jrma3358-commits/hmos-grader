@@ -3,6 +3,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { recognizeV2Analysis } from '../src/fq/pipeline.ts';
+import { evaluate_pivot } from '../src/fq/v2/evaluate.ts';
 
 const 급소 = (q: string, 서술형: boolean) => {
   const p = recognizeV2Analysis(q, { 서술형 }).pivot;
@@ -14,6 +15,14 @@ describe('서술형 급소 — 실체 명사 B, 서술 방식(C-F) 제외', () =
 
   it('세계사 서술형 2 — 「연관지어」가 아니라 「개최하였던 배경」', () => {
     assert.deepEqual(급소(그리스, true), [['개최하였던 배경', '실체 명사 B']]);
+  });
+
+  it('서술 방향 「연관지어」가 있으면 평가는 통과 (보완 권장 아님) [오종래 2026-10-19]', () => {
+    const a = recognizeV2Analysis(그리스, { 서술형: true });
+    assert.ok(a.pivot.ok && a.pivot.pivot.direction?.entity.includes('연관지어'));
+    const ev = evaluate_pivot(a.pivot, a.graph);
+    assert.ok(ev.ok);
+    assert.deepEqual(ev.items.map((x) => [x.coherence.linked, x.verdict]), [[true, '통과']]);
   });
 
   it('서술형이 아니면 지금 규칙 그대로 (서술형태 급소 「연관지어」)', () => {
