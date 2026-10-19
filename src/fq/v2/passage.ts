@@ -70,8 +70,20 @@ export interface ConvergencePath {
   flag?: 'NO_SINK';
 }
 
-/** 단락 머리 기호 — [가] · <가> · (가) · 단락N: */
-const HEAD_LABEL = /^\s*(?:\[([가-힣])\]|<([가-힣])>|\(([가-힣])\)|단락\s*(\d+)\s*:)\s*/;
+/**
+ * 로마 숫자 제시문 기호 [I]·[II]·…·[X] [오종래 2026-10-19 수리논술] — 대괄호 안일 때만. 전각 Ⅰ~Ⅹ는 같은 기호(「I」…)로 읽는다.
+ * 긴 것부터 맞춘다 (「III」이 「I」로 잘리지 않게)
+ */
+export const ROMAN_LABELS = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
+const ROMAN_WIDE = 'ⅠⅡⅢⅣⅤⅥⅦⅧⅨⅩ';
+const ROMAN_SRC = `(?:${[...ROMAN_LABELS].sort((a, b) => b.length - a.length).join('|')}|[${ROMAN_WIDE}])`;
+/** 전각 로마 숫자 → 반각 기호 */
+export const romanLabel = (s: string): string => (ROMAN_WIDE.includes(s) ? ROMAN_LABELS[ROMAN_WIDE.indexOf(s)] : s);
+/** 제시문 기호 하나 — [가]·<가>·(가) 또는 [I] (묶음 없음) */
+const LABEL_SRC = `(?:[[<(][가-힣][\\]>)]|\\[${ROMAN_SRC}\\])`;
+
+/** 단락 머리 기호 — [가] · <가> · (가) · [I] · 단락N: */
+const HEAD_LABEL = new RegExp(`^\\s*(?:\\[([가-힣])\\]|<([가-힣])>|\\(([가-힣])\\)|단락\\s*(\\d+)\\s*:|\\[(${ROMAN_SRC})\\])\\s*`);
 /** 문장 끝 — 마침표·물음표·느낌표 뒤 공백 */
 const SENTENCE_END = /[.?!](?=\s|$)/g;
 
@@ -99,7 +111,7 @@ export function recognizePassage(text: string, table: SealedTable): PassageRecog
     .split('\n')
     .map((raw): PassageParagraph => {
       const m = raw.match(HEAD_LABEL);
-      const label = m ? (m[1] ?? m[2] ?? m[3] ?? m[4]) : undefined;
+      const label = m ? (m[1] ?? m[2] ?? m[3] ?? m[4] ?? (m[5] && romanLabel(m[5]))) : undefined;
       const body = m ? raw.slice(m[0].length) : raw;
       const graph = build_path_graph(body, table);
       const { headEnd, tailStart } = sentenceSpan(body);
@@ -220,16 +232,26 @@ export interface PassageConnection {
 const CIRCLED = /[㉠-㉻]/g;
 /** 괄호 기호 순서 — 범위 「(나)~(라)」를 펼 때 쓴다 */
 const LABEL_ORDER = '가나다라마바사아자차카타파하';
+/** 기호 차례 — 한글 「가~하」 또는 로마 숫자 「I~X」 (범위 「[I]~[III]」) */
+const LABEL_SEQUENCES = [[...LABEL_ORDER], ROMAN_LABELS];
+/** 제시문 기호인가 — 한글 차례 또는 로마 숫자 (숫자 머리 「단락N:」은 아니다) */
+const isPassageLabel = (label: string) => LABEL_SEQUENCES.some((s) => s.includes(label));
 
-/** 노드 실체 속 제시문 지정 기호의 글자들 — [가]·<가>·(가), 나열과 범위 포함 */
+/** 기호 하나(묶음 둘: 한글 · 로마 숫자) → 기호 글자 */
+const LABEL_ONE = `(?:[[<(]([가-힣])[\\]>)]|\\[(${ROMAN_SRC})\\])`;
+
+/** 노드 실체 속 제시문 지정 기호의 글자들 — [가]·<가>·(가)·[I], 나열과 범위 포함 */
 export function designatedLabels(entity: string): string[] {
   const out: string[] = [];
-  const re = /[[<(]([가-힣])[\]>)](?:\s*[~∼～]\s*[[<(]([가-힣])[\]>)])?/g;
+  const re = new RegExp(`${LABEL_ONE}(?:\\s*[~∼～]\\s*${LABEL_ONE})?`, 'g');
   for (const m of entity.matchAll(re)) {
-    const from = LABEL_ORDER.indexOf(m[1]);
-    const to = m[2] ? LABEL_ORDER.indexOf(m[2]) : -1;
-    if (from >= 0 && to > from) out.push(...LABEL_ORDER.slice(from, to + 1));
-    else out.push(m[1], ...(m[2] ? [m[2]] : []));
+    const a = m[1] ?? romanLabel(m[2]);
+    const b = m[3] ?? (m[4] ? romanLabel(m[4]) : undefined);
+    const seq = LABEL_SEQUENCES.find((s) => s.includes(a));
+    const from = seq ? seq.indexOf(a) : -1;
+    const to = seq && b ? seq.indexOf(b) : -1;
+    if (seq && from >= 0 && to > from) out.push(...seq.slice(from, to + 1));
+    else out.push(a, ...(b ? [b] : []));
   }
   return out;
 }
@@ -244,8 +266,11 @@ export function designatedLabels(entity: string): string[] {
  * [오종래 2026-10-15 안 B] 「기호의 내용을/를」도 목적어와 같다 (「(가)~(바)의 내용을 바탕으로」). 「[가]의 관점에서」는 그대로 아니다.
  * 기호는 1번 묶음(「제시문」 뒤) 또는 2번 묶음(「제시문」 없는 나열) — referenceGroup으로 꺼낸다.
  */
-export const PASSAGE_REFERENCE =
-  /(?:제시문\s*((?:[[<(][가-힣][\]>)](?:\s*(?:[,·~∼～]|및|와|과)\s*)?)+)|(?<![가-힣A-Za-z0-9])([[<(][가-힣][\]>)](?:\s*(?:[,·~∼～]|및|와|과)\s*[[<(][가-힣][\]>)])+))(?:\s*의\s*내용)?(?=\s*[를을])/g;
+//   [오종래 2026-10-19 수리논술] 기호에 [I]·[II]도 — 「제시문 [I], [II]를 이용하여」
+export const PASSAGE_REFERENCE = new RegExp(
+  `(?:제시문\\s*((?:${LABEL_SRC}(?:\\s*(?:[,·~∼～]|및|와|과)\\s*)?)+)|(?<![가-힣A-Za-z0-9])(${LABEL_SRC}(?:\\s*(?:[,·~∼～]|및|와|과)\\s*${LABEL_SRC})+))(?:\\s*의\\s*내용)?(?=\\s*[를을])`,
+  'g',
+);
 
 /** PASSAGE_REFERENCE 일치 → 기호 묶음 글 */
 export const referenceGroup = (m: RegExpMatchArray): string => m[1] ?? m[2] ?? '';
@@ -311,7 +336,7 @@ function paragraphPivot(
  */
 export function passageLabels(paragraphs: PassageParagraph[]): (string | undefined)[] {
   let current: string | undefined;
-  return paragraphs.map((p) => (current = p.label && LABEL_ORDER.includes(p.label) ? p.label : p.label ? undefined : current));
+  return paragraphs.map((p) => (current = p.label && isPassageLabel(p.label) ? p.label : p.label ? undefined : current));
 }
 
 /**

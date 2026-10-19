@@ -6,6 +6,7 @@ import { describe, it } from 'node:test';
 
 import { analyze_pivot, build_path_graph, connectPassage, describeCombination, recognizePassage } from '../src/fq/index.ts';
 import type { V2Analysis } from '../src/fq/pipeline.ts';
+import { designatedLabels, passageLabels } from '../src/fq/v2/passage.ts';
 import type { SealedSwitch, SealedTable } from '../src/fq/sealed/schema.ts';
 import type { Color } from '../src/fq/types.ts';
 
@@ -32,6 +33,14 @@ describe('제시문 인식 — 단락 분리 · 5색 · 서두·말미 (§2·§3
   it('빈 줄로 단락을 끊고, 머리 기호([가]·단락N:)를 떼어 label로 남긴다', () => {
     const r = recognizePassage('[가] 다수결를 본다.\n\n단락2:\n만장일치를 본다.', table);
     assert.deepEqual(r.paragraphs.map((p) => [p.label, p.text]), [['가', '다수결를 본다.'], ['2', '만장일치를 본다.']]);
+  });
+
+  it('수리논술 로마 숫자 머리 [I]·[II]·[III] · 전각 [Ⅳ]도 제시문 기호 [오종래 2026-10-19]', () => {
+    const r = recognizePassage('[I] 다수결를 본다.\n\n[II] 만장일치를 본다.\n\n[III] 합의를 본다.\n\n[Ⅳ] 투표를 본다.', table);
+    assert.deepEqual(r.paragraphs.map((p) => p.label), ['I', 'II', 'III', 'IV']);
+    assert.deepEqual(passageLabels(r.paragraphs), ['I', 'II', 'III', 'IV']);
+    assert.deepEqual(designatedLabels('제시문 [I]~[III]'), ['I', 'II', 'III']);
+    assert.deepEqual(designatedLabels('[가], [II]'), ['가', 'II']);
   });
 
   it('단락마다 색별 노드 실체를 낸다', () => {

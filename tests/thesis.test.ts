@@ -84,6 +84,12 @@ describe('split_thesis', () => {
     assert.deepEqual(r[0].참조, ['가']);
   });
 
+  it('수리논술 대괄호형 「[2-1][2-2][2-3]」도 소문항 번호 — 참조 [I]·[II]', () => {
+    const r = split_thesis('[문항 2] 제시문 [I], [II]를 이용하여 답하시오.\n[2-1] 첫째를 구하시오.\n[2-2] 둘째를 구하시오.\n[2-3] 제시문 [III]을 이용하여 셋째를 구하시오.');
+    assert.deepEqual(r.map((s) => s.번호), ['2-1', '2-2', '2-3']);
+    assert.deepEqual(r.map((s) => s.참조), [['I', 'II'], ['I', 'II'], ['III']]);
+  });
+
   it('문장 안의 「①」은 계단이 아니다', () => {
     assert.equal(split_thesis('밑줄 친 ①의 의미를 설명하시오.').length, 1);
   });
