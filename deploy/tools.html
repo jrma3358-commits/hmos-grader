@@ -1421,6 +1421,8 @@ async function 샘플불러오기(파일) {
   let d = null;
   try { d = await (await fetch('/api/samples/' + encodeURIComponent(파일))).json(); } catch (_) {}
   if (!d || d.종류 !== 'HMOS 샘플' || !d.결과) { alert(`샘플 「${파일}」을 읽지 못했습니다`); return; }
+  // 서술형(B) 샘플은 결과.AB — 출제도구는 논술만 연다 (2026-10-19)
+  if (!d.결과.C) { alert(`샘플 「${d.이름}」은 서술형 샘플입니다 — 문항 분석 대시보드에서 불러오세요`); return; }
   창.차례++; 창.진행 = false; C3차례++;
   샘플되살리기(d);
   불러온샘플 = { 이름: d.이름, 논제: (d.입력 && d.입력.논제) || '' };

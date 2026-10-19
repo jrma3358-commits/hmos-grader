@@ -1100,13 +1100,13 @@ app.post('/api/subq-save',(req,res)=>{
   res.json({ok:true,파일:'검증/'+파일});
 });
 
-// POST /api/samples — 샘플 저장 (덮어쓰기). 내용은 화면이 모은 그대로 (입력 · 형식 · 결과 C · 소문항 창)
+// POST /api/samples — 샘플 저장 (덮어쓰기). 내용은 화면이 모은 그대로 (입력 · 형식 · 결과 C · 소문항 창, 서술형 B는 결과 AB)
 app.post('/api/samples',(req,res)=>{
   const {이름,내용}=req.body||{};
   const n=샘플이름(이름);
   if(!n){res.status(400).json({error:'샘플 이름은 글자 · 숫자 · _ · - 로만'});return;}
   const 결과=내용&&typeof 내용==='object'?내용.결과:null;
-  if(!결과||!((결과.C&&결과.C.분석)||(Array.isArray(결과.창)&&결과.창.some(w=>w&&w.C&&w.C.분석)))){res.status(400).json({error:'저장할 분석 결과가 없습니다 — 분석을 먼저 돌리세요'});return;}
+  if(!결과||!((결과.C&&결과.C.분석)||(결과.AB&&결과.AB.단계2)||(Array.isArray(결과.창)&&결과.창.some(w=>w&&w.C&&w.C.분석)))){res.status(400).json({error:'저장할 분석 결과가 없습니다 — 분석을 먼저 돌리세요'});return;}
   try{fs.mkdirSync(샘플폴더,{recursive:true});fs.writeFileSync(path.join(샘플폴더,n+'.json'),JSON.stringify({...내용,종류:'HMOS 샘플',이름:n,저장:new Date().toISOString()})+'\n','utf8');}
   catch(e){res.status(500).json({error:'샘플 저장 실패: '+e.message});return;}
   res.json({ok:true,이름:n,파일:'검증/샘플/'+n+'.json'});
