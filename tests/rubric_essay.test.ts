@@ -264,12 +264,13 @@ describe('계열별 파트 구조 · ① 급소 K 제외', () => {
     assert.ok(조각.some((c) => c.파트 === '답구하기' && c.node?.id === 입력.k.node.id));
   });
 
-  it('수리 ① = b·d — C·P 노드는 ② 세우기로 (접힌 C는 B라 ①)', () => {
+  // [오종래 2026-10-20] 함숫값 지정 조건 「f'(x)=…이고 f(1)=6일 때」는 접지 않는 C — ① 근거대기가 아니라 ② 세우기로 간다
+  it('수리 ① = b·d — C·P 노드는 ② 세우기로 (함숫값 지정 「~일 때」는 C)', () => {
     const 입력 = f2_input_from_v2(recognizeV2Analysis(수능17));
     assert.ok(입력.ok);
     const 조각 = derive_pieces(입력.물음, 입력.k, 입력.인식, '수리').map((c) => ({ ...c, 요소: judge_element(c, '수리') }));
-    assert.deepEqual(조각.filter((c) => c.파트 === '근거대기').map((c) => `${c.node?.color}:${c.요소}`), ['B:b']);
-    assert.deepEqual(조각.filter((c) => c.파트 === '세우기').map((c) => `${c.node?.color}:${c.요소}`), ['P:c']);
+    assert.deepEqual(조각.filter((c) => c.파트 === '근거대기').map((c) => `${c.node?.color}:${c.요소}`), []);
+    assert.deepEqual(조각.filter((c) => c.파트 === '세우기').map((c) => `${c.node?.color}:${c.요소}`), ['P:c', 'C:c']);
   });
 
   it('수리 ③ 풀기 = ②와 1:1 · 계열을 주지 않으면 수리 구조', () => {
@@ -300,8 +301,8 @@ describe('계열별 파트 구조 · ① 급소 K 제외', () => {
     assert.ok(풀기.every((c) => c.node === null && judge_element(c, '수리') === null));
     // ①②④는 줄과 상관없이 그대로
     assert.deepEqual(조각.filter((c) => c.파트 !== '풀기').map((c) => c.id), 뼈대.filter((c) => c.파트 !== '풀기').map((c) => c.id));
-    // 배점 — 수리도 네 파트 모두 배점 · 충족조건에 그 줄 · 채점은 교사
-    assert.deepEqual(allocate_points(조각, 10, '수리').미배정, []);
+    // 배점 — 조각이 선 수리 파트는 모두 배점 · 충족조건에 그 줄 · 채점은 교사. ① 근거대기는 조각이 없어 미배정 (2026-10-20 「~일 때」 C)
+    assert.deepEqual(allocate_points(조각, 10, '수리').미배정, ['근거대기']);
     assert.match(specify_condition(풀기[0], '수리'), /모범답안 풀기-1: 「x=1을 넣으면/);
     const 맥락 = { 답노드: [], 질문급소: 입력.k, 계열: '수리' as const, 루브릭: 조각 as any, 앞결과: new Map() };
     assert.equal(봉인6_조각대조('아무 답', 풀기[0] as any, 맥락).결과, '판정불가');
@@ -342,7 +343,8 @@ describe('계열별 파트 구조 · ① 급소 K 제외', () => {
     const 인문 = derive_pieces(입력.물음, 입력.k, 입력.인식, '인문사회국어');
     assert.equal(인문.filter((c) => c.파트 === '풀기').length, 0);
     assert.ok(allocate_points(인문, 10, '인문사회국어').미배정.includes('풀기'));
-    assert.deepEqual(allocate_points(derive_pieces(입력.물음, 입력.k, 입력.인식, '수리'), 10, '수리').미배정, []);
+    // 수리는 ①이 비면 그 파트만 미배정 (2026-10-20 「~일 때」 C → ② 세우기)
+    assert.deepEqual(allocate_points(derive_pieces(입력.물음, 입력.k, 입력.인식, '수리'), 10, '수리').미배정, ['근거대기']);
   });
 });
 

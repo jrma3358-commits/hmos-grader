@@ -389,6 +389,9 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
       const m = rest.match(c.re);
       if (m && m.index === 0) {
         if (c.sw.kind === NODE_KIND && inException(i)) continue; // 어절 예외 — 낱말 안의 조사·어미가 아니다
+        // 수식 안 괄호 [오종래 2026-10-20] — 어휘형 괄호 기호(「(a)」「[イ]」)가 영문·숫자·「'」·닫는 괄호 바로 뒤에 붙으면
+        //   함수 인자다 (「f'(a)=0」·「g(b)」) — 보기 기호로 걸지 않는다. 앞이 공백·한글이면 그대로 기호다.
+        if (isLexical(c.sw, c.surface) && /^[(\[]/.test(c.surface.trim()) && /[A-Za-z0-9'’′″)\]]/.test(question[i - 1] ?? '')) continue;
         const inside =
           endOfWord && c.sw.kind === NODE_KIND && !isLexical(c.sw, c.surface) && insideWord(rest[m[0].length]);
         if (inside && !chainsToMarker(c.sw, rest.slice(m[0].length))) {
@@ -1118,8 +1121,10 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
   //   [오종래 2026-10-07] 수치 지정 조건(실체 끝 식이 「변수=수」, 예: 「n=7일 때」)도 판단기준이 아니라 조건 C다 —
   //   접지 않는다. 묻는 대상은 뒤 B다 (논제5-1 「n=7일 때, 내적 b₂·b₅의 값」). 「눈의 수가 k일 때」처럼 값이 정해지지 않은 조건은 그대로 접는다.
   //   같은 문장 안에 「~값」으로 끝나는 B가 뒤에 있을 때만 — 묻는 값이 없으면 그대로 접는다 (수능_수학_11 「시각 t=0일 때 출발하여」).
+  //   [오종래 2026-10-20] 함수값 지정도 — 좌변이 「f(0)」「f'(2)」 꼴이어도 같은 수치 지정 조건 C다
+  //   (「f'(x)=6x²+5이고 f(0)=3일 때, f(1)의 값」 → 병렬 덩이 C, 접지 않는다).
   const assignment = (i: number) =>
-    /^[\s,]*[A-Za-z][A-Za-z0-9_]*\s*=\s*-?\d+(?:\.\d+)?\s*$/.test(nodes[i].entity.match(/[^가-힣ㄱ-ㅎㅏ-ㅣ]*$/)![0]) &&
+    /^[\s,]*[A-Za-z][A-Za-z0-9_]*(?:['’′]+)?(?:\([^()]*\))?\s*=\s*-?\d+(?:\.\d+)?\s*$/.test(nodes[i].entity.match(/[^가-힣ㄱ-ㅎㅏ-ㅣ]*$/)![0]) &&
     nodes.slice(i + 1).some(
       (n) => n.color === 'B' && n.entity.trim().endsWith('값') && !/[.?!。](?=\s|$)|\n/.test(question.slice(nodes[i].index, n.index)),
     );

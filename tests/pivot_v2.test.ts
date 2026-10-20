@@ -1629,6 +1629,41 @@ describe('부등호 조건은 판단기준이 아니라 C · 「의 값」은 �
     const g = build_path_graph('t=0일 때 출발한다. 가속도를 구하시오', table);
     assert.equal(g.nodes[0].color, 'B');
   });
+
+  it("함숫값 지정 「f(1)=4일 때」·「f'(2)=0일 때」도 수치 지정 조건 C — 접지 않는다 (오종래 2026-10-20)", () => {
+    for (const q of ['f(1)=4일 때, g(1)의 값을 구하시오', "f'(2)=0일 때, a의 값을 구하시오"]) {
+      const g = build_path_graph(q, table);
+      assert.equal(g.nodes[0].color, 'C', q);
+      assert.equal(g.edges.some((e) => e.kind === '접힘'), false, q);
+    }
+  });
+});
+
+describe('수식 안 괄호 — 함수 인자는 보기 기호가 아니다 (오종래 2026-10-20)', () => {
+  // B = SB(~을), 보기 기호 = SL(어휘형 「(a)」 B), Q = SQ(어휘형 「쓰시오」)
+  const sw = (id: string, markers: string[], color: Color, lexical?: boolean) =>
+    ({ id, kind: '조사·어미', markers, intent: '', color, lexical }) as SealedSwitch;
+  const table: SealedTable = {
+    version: 1,
+    source: { document: '(테스트)', sections: [] },
+    switches: [sw('SB', ['~을'], 'B'), sw('SL', ['(a)'], 'B', true), sw('SQ', ['쓰시오'], 'Q', true)],
+    lights: [],
+    matrix: [],
+    symbols: [],
+    forms: [],
+    apply: { longestMatchFirst: true, precedence: [], endOfWord: true },
+    pending: [],
+  };
+  const entities = (q: string) => build_path_graph(q, table).nodes.map((n) => `${n.color}:${n.entity}`);
+
+  it("「f'(a)」「g(a)」의 (a)는 걸지 않는다 — 식 전체가 실체", () => {
+    assert.deepEqual(entities("f'(a)=0을 쓰시오"), ["B:f'(a)=0", 'Q:쓰시오']);
+    assert.deepEqual(entities('g(a)을 쓰시오'), ['B:g(a)', 'Q:쓰시오']);
+  });
+
+  it('앞이 공백이면 그대로 보기 기호', () => {
+    assert.deepEqual(entities('빈칸 (a)을 쓰시오'), ['B:(a)', 'Q:쓰시오']);
+  });
 });
 
 describe('인용 명제 — 따옴표 안 「…다.」 명제 전체가 노드 하나 (오종래 2026-10-06)', () => {
