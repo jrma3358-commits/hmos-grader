@@ -43,6 +43,7 @@ const { background_paragraphs } = await load('src/thesis/background.ts');
 const { passage_message, all_passages_required, contrast_cause } = await load('src/thesis/message.ts');
 const { essay_pivot_chunks } = await load('src/thesis/chunk.ts');
 const { passage_cores } = await load('src/thesis/passage_core.ts');
+const { 봉인9_논제요구 } = await load('src/filter/sealed/thesis.ts');
 const { 봉인14_6단계 } = await load('src/thesis/relate.ts');
 // 8단계 루브릭 — 엔진 F1~F5·문항평가 (src/rubric). GJ는 쓰지 않는다 (오종래 2026-10-14: GJ 검산 대신 조각 충족 여부)
 const { derive_pieces, f2_input_from_v2, f2_input_inherit, has_question, common_question, link_sentences, thesis_polarity, speaker_lines } = await load('src/rubric/f2.ts');
@@ -515,6 +516,25 @@ try {
         out.단계.관계 = 봉인14_6단계(정합, passage);
         // 제시문 핵심 한 줄 · 제시문 간 관계(봉인⑧) — 5·6단계 키워드 입력창 위 (오종래 2026-10-21). 핵심은 6단계 단락 급소, 없으면 제시문 전체 급소
         out.단계.제시문.핵심요약 = passage_cores(제시문목록, out.단계.관계?.급소단락 ?? []);
+        // 논제 요구(봉인⑨) — 키워드 방향 논제의 근거 (오종래 2026-10-21). 소문항마다 요구 종류·부른 제시문, 쌍의 ⑧ 관계는 핵심요약.관계에서
+        //   관계·표적은 쌍에 ⑧ 관계가 하나라도 서면 성립, 도구는 늘 성립 (filter/essay.ts 연결점과 같은 꼴). 봉인이 비면 논제요구만 비우고 잇는다
+        try {
+          const ids = 제시문목록.map((p) => p.id);
+          const 관계of = (a: string, b: string) => out.단계.제시문.핵심요약.관계.filter((x: any) => (x.a === a && x.b === b) || (x.a === b && x.b === a)).map((x: any) => x.유형);
+          out.단계.제시문.논제요구 = 소문항.map((s: any) => ({
+            번호: s.번호,
+            요구: 봉인9_논제요구(null, ids, [s.공통발문, s.텍스트].filter(Boolean).join('\n')).map((r: any) => {
+              if (r.종류 === '도구') return { ...r, 쌍: [], 성립: true };
+              const 짝 = r.제시문.length > 1
+                ? r.제시문.flatMap((a: string, i: number) => r.제시문.slice(i + 1).map((b: string) => [a, b]))
+                : r.제시문.flatMap((a: string) => ids.filter((b) => b !== a).map((b) => [a, b]));
+              const 쌍 = 짝.map(([a, b]: string[]) => ({ a, b, 실제: [...new Set(관계of(a, b))] }));
+              return { ...r, 쌍, 성립: 쌍.some((x: any) => x.실제.length) ? true : null };
+            }),
+          }));
+        } catch (e) {
+          out.단계.제시문.논제요구오류 = (e as Error).message;
+        }
       } catch (e) {
         stop('제시문', 멈춤of(e));
       }

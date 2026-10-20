@@ -1469,7 +1469,7 @@ app.post('/api/propose',async(req,res)=>{
   const {논제,소문항,제시문,관계}=req.body||{};
   const 키워드=키워드of((req.body||{}).키워드);
   if(!(논제||'').trim()||!Array.isArray(소문항)||!소문항.length){res.status(400).json({error:'논제·소문항(2단계 인식)이 필요합니다'});return;}
-  if((req.body||{}).방향){await 키워드방향논제(res,{소문항,제시문,키워드});return;}
+  if((req.body||{}).방향){await 키워드방향논제(res,{소문항,제시문,키워드,인식:(req.body||{}).인식||{}});return;}
   if(!관계||!Array.isArray(관계.추가후보)){res.status(400).json({error:'6단계 엔진 결과(단계.관계)가 없습니다 — 제시문을 넣고 다시 분석하세요'});return;}
   const 후보=관계.추가후보;
   if(!후보.length){res.json({비교불가:!!관계.비교불가,추가논제:[],사유:'엔진이 추가할 단락 쌍을 찾지 못했습니다 — 모든 단락 쌍이 기존 논제에 이미 들어 있거나 5단계 보완으로 넘어갔습니다'});return;}
@@ -1529,61 +1529,91 @@ ${rules}`;
   res.json({model:r.msg.model,usage:r.msg.usage,...(키워드?{키워드}:{}),비교불가:!!관계.비교불가,추가논제});
 });
 
-// 키워드 방향 논제 (오종래 2026-10-21 지시 — 엔진 원칙의 예외 자리) — /api/propose {방향:true, 키워드}.
-// 엔진 진단·추가 후보와 무관하게 교사 키워드 방향으로 논제 문장을 Claude가 쓴다. 기존 논제·제시문과 엔진 소문항 급소는 참고로만 준다.
-// 쓴 논제는 엔진에 다시 넣어 핵심이 서는지 · 쓴 제시문 단락에 연결되는지 본다 (판정하지 않고 표시만 — 교사 확인).
+// 키워드 + 인식 기반 논제 (오종래 2026-10-21 확정) — /api/propose {방향:true, 키워드, 인식}.
+// 엔진 인식 결과(소문항 급소 · 제시문 핵심 · 제시문 관계 봉인⑧ · 논제 요구 봉인⑨)를 프롬프트에 싣고, Claude는 그 가운데서 급소·관계를 골라
+// 키워드 방향으로 논제를 쓴다. 고른 급소·관계는 목록 id로만 받아 생성 근거 줄은 서버가 짓는다 (Claude가 근거를 지어내지 않게).
+// 키워드 없이 · 인식 결과(논제 급소) 없이 생성하지 않는다. 쓴 논제는 엔진에 다시 넣어 핵심·연결 단락을 본다 (표시만 — 교사 확인).
 const 방향논제수=3;
-const 방향Format={type:'json_schema',schema:{type:'object',additionalProperties:false,required:['proposals'],properties:{
-  proposals:{type:'array',description:`키워드 방향 논제 ${방향논제수}개`,items:{type:'object',additionalProperties:false,required:['thesis','passages','difference','measures'],properties:{
+const 방향Format=(급소ids,관계ids)=>({type:'json_schema',schema:{type:'object',additionalProperties:false,required:['proposals'],properties:{
+  proposals:{type:'array',description:`키워드 방향 논제 ${방향논제수}개`,items:{type:'object',additionalProperties:false,required:['thesis','pivots','relations','difference','measures'],properties:{
     thesis:{type:'string',description:'논제 전문'},
-    passages:{type:'array',items:{type:'string'},description:'논제가 쓰는 제시문 기호 — [가]면 「가」. 제시문이 없으면 빈 배열'},
+    pivots:{type:'array',items:{type:'string',enum:급소ids},description:'이 논제가 기댄 논제 급소 id (g1 꼴) — 하나 이상'},
+    relations:{type:'array',items:관계ids.length?{type:'string',enum:관계ids}:{type:'string'},description:'이 논제가 기댄 제시문 관계 id (r1 꼴). 관계를 쓰지 않았거나 목록이 없으면 빈 배열'},
     difference:{type:'string',description:'기존 논제와 다른 점 — 교사가 읽는 문장'},
     measures:{type:'string',description:'새로 측정하는 것 — 교사가 읽는 문장'},
   }}},
-}}};
+}}});
 
-async function 키워드방향논제(res,{소문항,제시문,키워드}){
+/** 인식 결과 → 목록 (id 붙임). 급소는 소문항 급소 실체, 관계는 핵심요약.관계(⑧), 요구는 논제요구(⑨) */
+function 인식목록(소문항,인식){
+  const 급소=[...new Set(소문항.flatMap(s=>(s.급소||[]).map(k=>String(k.실체).trim().replace(/^[\s,]+/,''))).filter(Boolean))].map((실체,i)=>({id:'g'+(i+1),실체}));
+  const 핵심=Array.isArray(인식.제시문핵심)?인식.제시문핵심:[];
+  const 관계=(Array.isArray(인식.제시문관계)?인식.제시문관계:[]).map((x,i)=>({id:'r'+(i+1),a:x.a,b:x.b,유형:x.유형,핵심:x.핵심||[]}));
+  const 요구=Array.isArray(인식.논제요구)?인식.논제요구:[];
+  return {급소,핵심,관계,요구};
+}
+
+async function 키워드방향논제(res,{소문항,제시문,키워드,인식}){
   if(!키워드){res.status(400).json({error:'방향 키워드를 입력하세요'});return;}
+  const 목록=인식목록(소문항,인식);
+  if(!목록.급소.length){res.status(400).json({error:'엔진 인식 결과(논제 급소)가 없습니다 — 2단계 인식에서 급소가 서야 생성할 수 있습니다'});return;}
   const 제시문있음=Array.isArray(제시문)&&제시문.length;
   let rules;
   try{rules=sliceSpec(REFINE_SPEC,'## 4. 추가 논제의 원칙','## 6.');}
   catch(e){res.status(500).json({error:'명세서-2를 읽지 못함 — '+e.message});return;}
-  const system=`너는 HMOS 논제 문장가다. 교사가 준 방향 키워드 「${키워드}」로 논제 ${방향논제수}개를 쓴다.
+  const system=`너는 HMOS 논제 문장가다. HMOS 엔진 인식 결과를 바탕으로, 교사가 준 방향 키워드 「${키워드}」로 논제 ${방향논제수}개를 쓴다.
 
 지킬 것:
-- 키워드 방향을 논제의 묻는 초점으로 삼는다 — 예: 비교 → 둘을 견주게, 비판 → 평가·비판하게, 원인 → 까닭을 묻게, 구체화 → 범위·관점을 좁혀서. ${방향논제수}개는 서로 다른 각도로 쓴다.
-- 기존 논제와 제시문의 실체(개념·사례·주장)에서 벗어나지 않는다. 제시문에 없는 사실·사례를 지어내지 않는다.
-- 제시문이 있으면 쓰는 제시문을 [가] 꼴 기호로 논제에 밝히고, passages에 그 기호를 넣는다.
-- 묻는 말은 설명하시오·논하시오·서술하시오·제시하시오 가운데서 쓴다. 기존 논제의 공통 발문·소문항 번호는 쓰지 않는다.
-- difference·measures는 교사가 읽는 문장이다. 「이 논제는」「두 제시문은」처럼 쓰고, 다음 내부 표현을 쓰지 않는다: 엔진, 급소, 사족, 봉인, 뼈대, 후보, 열쇠, 노드, 5색 기호(B·C·P·D·Q), 노드 id(n2 등), 「교사 키워드」.
+- 논제는 엔진 인식 결과(논제 급소 · 제시문 핵심 · 제시문 관계 · 논제 요구)에서 짓는다. 인식 결과는 다시 계산하거나 바꾸지 않는다.
+- 논제마다 기댄 논제 급소를 pivots에 id로 하나 이상 고르고, 그 급소 실체를 글자 그대로 논제에 쓴다. 목록에 없는 실체를 논제의 핵심으로 세우지 않는다.
+- 제시문 관계를 쓰면 relations에 id로 고르고, 그 두 제시문 기호를 [가] 꼴로 논제에 쓴다. 관계의 유형(유사·대비·실증)에 맞게 묻는다 — 대비면 견주거나 맞서게, 유사면 공통 근거를, 실증이면 사례로 뒷받침하게.
+- 논제 요구(표적·관계·도구)는 원 논제가 제시문을 어떻게 쓰는지다. 새 논제가 제시문을 쓰는 방식을 정할 때 참고한다.
+- 키워드 방향을 논제의 묻는 초점으로 삼는다 — 예: 비교 → 둘을 견주게, 비판 → 평가·비판하게, 원인 → 까닭을 묻게, 구체화 → 범위·관점을 좁혀서. ${방향논제수}개는 서로 다른 급소·관계 조합으로 쓴다.
+- 제시문에 없는 사실·사례를 지어내지 않는다. 묻는 말은 설명하시오·논하시오·서술하시오·제시하시오 가운데서 쓴다. 기존 논제의 공통 발문·소문항 번호는 쓰지 않는다.
+- difference·measures는 교사가 읽는 문장이다. 「이 논제는」「두 제시문은」처럼 쓰고, 다음 내부 표현을 쓰지 않는다: 엔진, 급소, 사족, 봉인, 뼈대, 후보, 열쇠, 노드, 5색 기호(B·C·P·D·Q), 노드 id(n2·g1·r1 등), 「유사 관계」「대비 관계」 같은 관계 이름, 「교사 키워드」.
 - AI는 제안만 한다. 확정은 교사가 한다. 모든 출력은 한국어.
 
 === 명세서-2 §4·§5 (원문) ===
 ${rules}`;
+  const 요구줄=목록.요구.flatMap(u=>(u.요구||[]).map(r=>`${u.번호?`(${u.번호}) `:''}${(r.제시문||[]).map(l=>`[${l}]`).join('')}를 ${r.종류}로${r.표지?` — 표지 「${r.표지}」`:''}${(r.쌍||[]).length?` · 쌍 ${r.쌍.map(x=>`[${x.a}]↔[${x.b}] ${(x.실제||[]).join('·')||'관계 없음'}`).join(', ')}`:''}`));
   const user=[
     `방향 키워드: 「${키워드}」`,
-    `기존 논제 (참고):\n${소문항.map(s=>`${s.번호?`(${s.번호}) `:''}${s.텍스트}${(s.급소||[]).length?`  — 핵심 ${s.급소.map(k=>`「${String(k.실체).trim()}」`).join(' · ')}`:''}`).join('\n')}`,
+    `기존 논제 (비교 대상):\n${소문항.map(s=>`${s.번호?`(${s.번호}) `:''}${s.텍스트}`).join('\n')}`,
+    `HMOS 엔진 인식 결과 (그대로 받을 것):`,
+    `논제 급소:\n${목록.급소.map(g=>`${g.id} 「${g.실체}」`).join('\n')}`,
+    목록.핵심.length?`제시문 핵심:\n${목록.핵심.map(x=>`[${x.id}] ${(x.핵심||[]).length?x.핵심.map(k=>`「${k}」`).join(' · '):'핵심이 서지 않음'}`).join('\n')}`:'제시문 핵심: 없음',
+    목록.관계.length?`제시문 관계:\n${목록.관계.map(x=>`${x.id} [${x.a}]↔[${x.b}] ${x.유형}${x.핵심.length?` (핵심 「${x.핵심[0]}」·「${x.핵심[1]}」)`:''}`).join('\n')}`:'제시문 관계: 없음',
+    요구줄.length?`논제 요구:\n${요구줄.join('\n')}`:'논제 요구: 없음',
     제시문있음?`제시문:\n${제시문글(제시문)}`:'',
   ].filter(Boolean).join('\n\n');
-  const r=await askClaude(res,system,user,방향Format,o=>Array.isArray(o.proposals));
+  const r=await askClaude(res,system,user,방향Format(목록.급소.map(g=>g.id),목록.관계.map(x=>x.id)),o=>Array.isArray(o.proposals));
   if(!r)return;
 
   const 추가논제=await 하나씩(r.out.proposals.slice(0,방향논제수).map((p,i)=>({...p,id:'k'+(i+1)})),async p=>{
-    const 단락=(p.passages||[]).map(l=>String(l).replace(/[\[\]\s]/g,'')).filter(Boolean);
-    const 점검=[...내부표현(p.difference).map(w=>`「기존과 다른 점」에 내부 표현 「${w}」`),
-      ...내부표현(p.measures).map(w=>`「새로 측정하는 것」에 내부 표현 「${w}」`),
-      ...단락.filter(l=>!p.thesis.includes(`[${l}]`)).map(l=>`단락 기호 [${l}]가 논제에 없음`)];
+    const 급소=목록.급소.filter(g=>(p.pivots||[]).includes(g.id));
+    const 관계=목록.관계.filter(x=>(p.relations||[]).includes(x.id));
+    // 쓰는 제시문 = 고른 관계의 두 제시문 + 논제에 기호로 쓴 제시문
+    const 단락=(제시문있음?제시문.map(x=>x.id):[]).filter(id=>관계.some(x=>x.a===id||x.b===id)||new RegExp(`[\\[(]\\s*${id.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}\\s*[\\])]`).test(p.thesis));
+    // 생성 근거 — 서버가 엔진 목록에서 짓는다 (오종래 2026-10-21: 「급소 [X], 제시문 관계 [Y↔Z: 대비], 키워드 [비판] 방향으로 생성」)
+    const 근거=[`급소 ${급소.length?급소.map(g=>`[${g.실체}]`).join(' '):'[없음]'}`,
+      ...(관계.length?[`제시문 관계 ${관계.map(x=>`[${x.a}↔${x.b}: ${x.유형}]`).join(' ')}`]:[]),
+      `키워드 [${키워드}] 방향으로 생성`].join(', ');
+    const 점검=[...(급소.length?[]:['기댄 논제 급소를 고르지 않음']),
+      ...급소.filter(g=>!p.thesis.includes(g.실체)).map(g=>`급소 「${g.실체}」가 논제에 그대로 남지 않음`),
+      ...관계.flatMap(x=>[x.a,x.b]).filter((l,i,a)=>a.indexOf(l)===i&&!p.thesis.includes(`[${l}]`)).map(l=>`관계의 제시문 기호 [${l}]가 논제에 없음`),
+      ...내부표현(p.difference).map(w=>`「기존과 다른 점」에 내부 표현 「${w}」`),
+      ...내부표현(p.measures).map(w=>`「새로 측정하는 것」에 내부 표현 「${w}」`)];
     const a=await runAnalyze({파이프라인:'C',논제:p.thesis,...(제시문있음?{제시문}:{})});
     let 자가검증;
     if(!a.ok||!a.단계||!a.단계.인식)자가검증={통과:false,사유:(a.error&&a.error.사유)||'재인식 실패'};
     else{
       const 연결단락=[...new Set(((a.단계.정합&&a.단계.정합.소문항)||[]).flatMap(x=>x.연결단락||[]))];
-      const 급소=a.단계.인식.소문항.flatMap(s=>s.급소.map(k=>k.실체.trim().replace(/^[\s,]+/,'')));
+      const 재급소=a.단계.인식.소문항.flatMap(s=>s.급소.map(k=>k.실체.trim().replace(/^[\s,]+/,'')));
       const 빠진=제시문있음?단락.filter(l=>!연결단락.includes(l)):[];
-      자가검증={통과:!빠진.length&&급소.length>0,연결단락,급소,
-        ...(빠진.length?{사유:`[${빠진.join('], [')}]에 연결되지 않음`}:!급소.length?{사유:'핵심이 서지 않음'}:{})};
+      자가검증={통과:!빠진.length&&재급소.length>0,연결단락,급소:재급소,
+        ...(빠진.length?{사유:`[${빠진.join('], [')}]에 연결되지 않음`}:!재급소.length?{사유:'핵심이 서지 않음'}:{})};
     }
-    return {id:p.id,유형:`키워드 「${키워드}」`,제시문:단락,논제:p.thesis,기존과다른점:p.difference,새로측정하는것:p.measures,점검,자가검증};
+    return {id:p.id,유형:`키워드 「${키워드}」`,제시문:단락,논제:p.thesis,기존과다른점:p.difference,새로측정하는것:p.measures,근거,점검,자가검증};
   });
   res.json({model:r.msg.model,usage:r.msg.usage,키워드,방향:true,추가논제});
 }
