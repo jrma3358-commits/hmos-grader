@@ -860,15 +860,18 @@
              다 고르면 문항 입력란이 열린다. 단계 버튼은 /format-detect.js 형식선택 (문항분석 · 채점 대시보드와 같다) -->
         <div id="c-form-steps" style="margin-bottom: 6px;"></div>
         <div class="c-meta" id="c-form-note" style="margin-bottom: 14px;">문제 형식을 1단계부터 차례로 고르세요 — 다 고르면 문항 입력란이 열립니다.</div>
+        <!-- 형식을 다 고르기 전에는 입력란 · .txt · 등록 버튼을 감춘다 (오종래 2026-10-20 — 형식 먼저, 문항분석 대시보드와 같은 순서). 샘플은 형식을 같이 가져오므로 열어 둔다 -->
+        <div id="reg-entry" style="display:none;">
         <div class="card-title" id="reg-title">논제 + 제시문</div>
         <textarea class="input-area" id="reg-input" style="min-height: 260px;" placeholder="논제와 제시문을 한꺼번에 붙여넣으세요. 순서는 상관없습니다.&#10;[가] …&#10;[나] …&#10;&#10;[문항 1] 제시문 [가], [나]를 참고하여 …&#10;(1-1) …설명하시오."></textarea>
+        </div>
         <div class="type-selector" style="margin-top: 12px;">
-          <label class="type-btn" id="reg-txt-btn" style="cursor:pointer;">.txt 불러오기<input type="file" id="reg-txt" accept=".txt,text/plain" style="display:none;" onchange="txt불러오기(this)"></label>
+          <label class="type-btn" id="reg-txt-btn" style="cursor:pointer; display:none;">.txt 불러오기<input type="file" id="reg-txt" accept=".txt,text/plain" style="display:none;" onchange="txt불러오기(this)"></label>
           <button class="type-btn" onclick="샘플목록보기()">샘플 불러오기</button>
         </div>
         <div id="sample-list"></div>
         <div class="c-meta" id="sample-status" style="margin-top:6px;"></div>
-        <button class="run-btn" onclick="등록()">등록 → 1단계</button>
+        <button class="run-btn" id="reg-btn" style="display:none;" onclick="등록()">등록 → 1단계</button>
       </div>
     </div>
 
@@ -2078,15 +2081,12 @@ const 형식단계 = HMOS형식.형식선택(document.getElementById('c-form-ste
   줄: 'type-selector', 버튼: 'type-btn', 고름: 'selected', 이름표: 'card-title',
   바뀜: (형식) => 형식고르기(형식 || ''),
 });
-/** 형식을 다 고르기 전에는 문항 입력란(원문 칸 · .txt 불러오기)을 잠근다 */
-const 원문안내 = document.getElementById('reg-input').placeholder;
+/** 형식을 다 고르기 전에는 문항 입력란(원문 칸 · .txt 불러오기 · 등록)을 감춘다 */
 function 입력칸잠금() {
-  const 열림 = !!(C형식 || 넘길형식), box = document.getElementById('reg-input');
-  box.disabled = !열림;
-  box.placeholder = 열림 ? 원문안내 : '위에서 문제 형식을 1단계부터 차례로 고르세요 — 다 고르면 문항을 넣을 수 있습니다.';
+  const 열림 = !!(C형식 || 넘길형식);
+  document.getElementById('reg-input').disabled = !열림;
   document.getElementById('reg-txt').disabled = !열림;
-  document.getElementById('reg-txt-btn').style.opacity = 열림 ? '' : '0.5';
-  document.getElementById('reg-txt-btn').style.cursor = 열림 ? 'pointer' : 'not-allowed';
+  for (const id of ['reg-entry', 'reg-txt-btn', 'reg-btn']) document.getElementById(id).style.display = 열림 ? '' : 'none';
 }
 입력칸잠금();
 const 형식of = () => C형식;
