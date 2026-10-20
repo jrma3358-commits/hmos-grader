@@ -418,6 +418,14 @@ describe('봉인⑬ 정교화 4갈래 진단 (오종래 2026-10-13)', () => {
     assert.deepEqual(갈래들(논제([...명사, 붙은, node('c', 'C'), node('q', 'Q')], { ok: true, pivot: pv(명사[1], 2) })), ['서술복잡']);
   });
 
+  it('② 단일 알파벳 기호 B(「A」「C」「A~C」)는 세지 않는다 — 말이 붙으면 센다 (오종래 2026-10-20)', () => {
+    const 기호들 = ['A', 'C', 'A~C', 'A, B'].map((e, i) => node(`s${i}`, 'B', e));
+    const 명사 = [node('b1', 'B', '흥분 전도'), node('b2', 'B', '뉴런')];
+    assert.deepEqual(갈래들(논제([...명사, ...기호들, node('c', 'C'), node('q', 'Q')], { ok: true, pivot: pv(명사[1], 2) })), []);
+    const 붙은 = node('b3', 'B', 'A의 속도');
+    assert.deepEqual(갈래들(논제([...명사, 붙은, node('c', 'C'), node('q', 'Q')], { ok: true, pivot: pv(명사[1], 2) })), ['서술복잡']);
+  });
+
   it('② C-F 노드가 있으면 서술복잡이 아니다', () => {
     const bs = [node('b1', 'B'), node('b2', 'B'), node('b3', 'B')];
     const cf = { ...node('cf', 'C'), switchId: 'C-F' };
