@@ -45,13 +45,21 @@ const 조건줄 = /^[ \t　]{3,}\(([가-하])\)[ \t]*/;
 /** 조건 블록 이어지는 줄 — 들여쓰기 3자 이상 (「(i) …」 같은 조건 안의 줄) */
 const 들여쓴줄 = /^[ \t　]{3,}\S/;
 
+/**
+ * 원문자 조건 블록 [오종래 2026-10-20 확정] (논술가이드북 수리 함수개수) — 「다음 조건을 모두 만족시키는」 뒤 ①②… 줄은 소문항(계단)이 아니라 조건 블록.
+ * 발문 = 줄 머리 ①② 앞 글
+ */
+export const 조건발문re = /다음[ \t]*조건을[ \t]*모두[ \t]*만족/;
+const 원문자조건줄 = /^[ \t　]*([①-⑳])[ \t]*/;
+
 /** 소문항 본문 → 조건 블록을 뗀 본문(앞뒤 글은 한 칸으로 잇는다) + 조건들. 블록이 없으면 본문 그대로, 조건 [] */
 export function condition_blocks(본문: string): { 텍스트: string; 조건: { id: string; 텍스트: string }[] } {
   const 조건: { id: string; 텍스트: string }[] = [];
   const 남은: string[] = [];
   let 블록 = false;
+  const 원문자조건 = 조건발문re.test(본문);
   for (const 줄 of 본문.split('\n')) {
-    const m = 조건줄.exec(줄);
+    const m = 조건줄.exec(줄) ?? (원문자조건 ? 원문자조건줄.exec(줄) : null);
     if (m) { 조건.push({ id: m[1], 텍스트: 줄.slice(m[0].length).trim() }); 블록 = true; continue; }
     if (블록 && 들여쓴줄.test(줄)) { 조건[조건.length - 1].텍스트 += '\n' + 줄.trim(); continue; }
     if (블록) { 블록 = false; 남은.push('\u0000'); }

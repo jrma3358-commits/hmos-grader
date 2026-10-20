@@ -11,7 +11,7 @@
 //   - 계단식 단계형(A·B)의 소문항 분리 — 그건 [봉인⑦]이다. 여기는 C 논제만 본다
 
 import { designatedLabels, PASSAGE_REFERENCE, referenceGroup } from '../fq/v2/passage.ts';
-import { condition_blocks, relay_marker } from './math_essay.ts';
+import { condition_blocks, relay_marker, 조건발문re } from './math_essay.ts';
 
 export interface 소문항 {
   /** 「1-1」 같은 번호. 번호 없는 논제 하나면 null */
@@ -111,6 +111,8 @@ function 계단으로(u: 소문항): 소문항[] {
   const steps = [...u.텍스트.matchAll(STEP)];
   if (!steps.length) return [u];
   const 발문 = u.텍스트.slice(0, steps[0].index!).trim();
+  // 「다음 조건을 모두 만족시키는」 뒤 ①②… 줄은 계단이 아니라 조건 블록 [오종래 2026-10-20 확정] — 나누지 않는다 (split_thesis가 condition_blocks로 뗀다)
+  if (조건발문re.test(발문) && steps.every((m) => m[2])) return [u];
   const 공통발문 = [u.공통발문, 발문].filter(Boolean).join('\n');
   // [오종래 2026-10-19] 위 참조는 계단 발문 → 공통 발문에서만 — u.참조는 계단 본문까지 읽은 것이라 뒤 계단의 참조가 앞 계단으로 샌다
   const 위참조 = 참조of(발문).length ? 참조of(발문) : 참조of(u.공통발문);
