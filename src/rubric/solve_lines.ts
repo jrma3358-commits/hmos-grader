@@ -5,7 +5,10 @@
 //              (답 줄을 먼저 잡는다 — 세우기 실체는 대개 논제 주어라 답 줄에도 나온다, 오종래 2026-10-16 보완)
 //   풀기      = 그 사이의 빈 줄 아닌 줄들
 import type { 모범답, 조각뼈대 } from './types.ts';
-import { evaluate } from './multipath.ts';
+import { evaluate, 물리단위 } from './multipath.ts';
+
+/** 끝 물리 단위 — 「30(N)」 「-3(Ns)」 「30 N」 (물리·과학 계산 문항, 오종래 2026-10-20). 수 바로 뒤거나 괄호 안만 */
+const 끝단위 = new RegExp(`(?:\\(\\s*${물리단위}\\s*\\)|(?<=\\d)\\s*${물리단위})$`);
 
 export interface 풀기구간 {
   /** 빈 줄을 뺀 줄 수 */
@@ -166,7 +169,7 @@ export function line_answer_values(줄: string): string[] {
 
 /**
  * @param 문항글 주면 — 「∴」 결론 말고도 문항 문자로 시작해 수로 끝나는 줄을 답 값에 더한다 (답이 둘인 문항, q7 ①)
- * @param 수리논술 C-2a·C-2b면 세우기 → 풀기 → 답구하기를 줄 차례로 가른다 (오종래 2026-10-20 확정, 세우기풀기가르기)
+ * @param 수리논술 C-2a·C-2b · 물리·과학 계산 문항이면 세우기 → 풀기 → 답구하기를 줄 차례로 가른다 (오종래 2026-10-20 확정, 세우기풀기가르기)
  */
 export function classify_math_lines(답안: string, 문항글?: string, 수리논술 = false): 수리줄나누기 {
   const 줄 = String(답안 ?? '').split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
@@ -181,6 +184,9 @@ export function classify_math_lines(답안: string, 문항글?: string, 수리�
       const v = final_value(결론);
       if (v !== null && 수계산(계산)) {
         out.풀기.push(계산);
+        out.답 = { 줄: 결론, 값: [v], 끝값: true };
+      } else if (v !== null && 끝단위.test(결론.replace(/[.。]$/, '').trim())) {
+        // 「∴F의 크기=30(N)」 — 단위 붙은 끝 값이 답 (물리·과학 계산 문항, 오종래 2026-10-20)
         out.답 = { 줄: 결론, 값: [v], 끝값: true };
       }
     }
@@ -313,7 +319,7 @@ export function 최종값of(줄: string): string | null {
 /** 줄 끝 값 — 마지막 「=」 뒤가 수이면 그 수(1/2 = 0.5로 맞춘 글자), 아니면 null (2026-10-16 q6) */
 export function final_value(줄: string): string | null {
   // 단위 「72(가지)」 「72가지」는 뗀다 (2026-10-17 q3)
-  const 뒤 = String(줄 ?? '').replace(/∴/g, '').split('=').at(-1)!.replace(/\s+/g, '').replace(/[−–]/g, '-').replace(/[.。]$/, '').replace(/\(?[가-힣]+\)?$/, '');
+  const 뒤 = String(줄 ?? '').replace(/∴/g, '').split('=').at(-1)!.replace(/\s+/g, '').replace(/[−–]/g, '-').replace(/[.。]$/, '').replace(/\(?[가-힣]+\)?$/, '').replace(끝단위, '');
   if (!뒤) return null;
   const v = 수맞춤(뒤);
   return /^-?\d+(\.\d+)?$/.test(v) ? v : null;

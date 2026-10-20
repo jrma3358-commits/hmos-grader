@@ -340,9 +340,24 @@ export function is_math_item(글: string): boolean {
   return /=/.test(s) && /(?<![a-zA-Z])x(?:²|[=+\-<>*/)])|\dx(?![a-zA-Z])|[=+\-(*/]x(?![a-zA-Z])/.test(s);
 }
 
-/** 요청 계열 → 실제 계열. 「자동」이면 수학 문항은 수리, 아니면 인문사회국어. 인문사회국어로 수학 문항을 넣으면 계열오류 */
-export function resolve_subject(요청: unknown, 글: string): '수리' | '인문사회국어' {
-  const 수학 = is_math_item(글);
+/**
+ * 물리·과학 계산 문항 [오종래 2026-10-20 확정] (물리 단문서술 운동량) — 답에 단위가 있고 「F=…」·「I=…」 꼴 수식이 있으면 수리 줄 규칙.
+ *   단위 = 수 뒤(괄호 안도) 물리 단위 「30(N)」 「-3(Ns)」 「10 m/s」, 또는 논제가 「몇 N인가」처럼 단위로 묻는다
+ *   수식 = 줄 머리(「∴」 「⇒」 뒤도) 문자 하나(아래 첨자 포함)가 「=」로 서는 줄 — 「F=-3/0.1」 「I=0.2×(-5-10)」
+ */
+export const 물리단위 = '(?:N·?s|N|J|W|kW|kg|g|m\\/s²|m\\/s\\^2|m\\/s|km\\/h|m|cm|mm|km|s|Pa|V|A|Ω|Hz|mol|K|℃|°C|L|mL|cal|kcal|eV|C|T)';
+const 단위값 = new RegExp(`\\d\\s*\\(?\\s*${물리단위}\\s*\\)?(?![A-Za-z가-힣])`);
+const 단위물음 = new RegExp(`몇\\s*${물리단위}(?![A-Za-z])`);
+const 문자식줄 = /(?:^|\n)[ \t]*(?:[∴⇒→][ \t]*)?[A-Za-z](?:_?\w)?[ \t]*=/;
+export function is_science_calc(글: string, 답안: string = ''): boolean {
+  const 답 = String(답안 ?? '');
+  const 단위 = 단위값.test(답) || 단위물음.test(String(글 ?? ''));
+  return 단위 && 문자식줄.test(답);
+}
+
+/** 요청 계열 → 실제 계열. 「자동」이면 수학 문항(물리·과학 계산 문항 포함, 2026-10-20)은 수리, 아니면 인문사회국어. 인문사회국어로 수학 문항을 넣으면 계열오류 */
+export function resolve_subject(요청: unknown, 글: string, 답안: string = ''): '수리' | '인문사회국어' {
+  const 수학 = is_math_item(글) || is_science_calc(글, 답안);
   if (요청 === '자동') return 수학 ? '수리' : '인문사회국어';
   const 계열 = 요청 === '수리' ? '수리' : '인문사회국어';
   if (계열 === '인문사회국어' && 수학) throw Object.assign(new Error(계열오류글), { name: '계열오류' });

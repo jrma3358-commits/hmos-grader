@@ -10,7 +10,8 @@ import { recognizeV2Analysis } from '../src/fq/pipeline.ts';
 import { derive_pieces, f2_input_from_v2 } from '../src/rubric/f2.ts';
 import { grade } from '../src/rubric/g1.ts';
 import { 봉인4b_게이트 } from '../src/rubric/sealed/g1.ts';
-import { answer_list, answer_values, classify_math_lines, solve_segments, student_answer_line, 최종값of } from '../src/rubric/solve_lines.ts';
+import { is_science_calc, resolve_subject } from '../src/rubric/multipath.ts';
+import { answer_list, answer_values, final_value, classify_math_lines, solve_segments, student_answer_line, 최종값of } from '../src/rubric/solve_lines.ts';
 import type { 조각 } from '../src/rubric/types.ts';
 
 const q5 = '이차방정식 x²+2x-3=0의 두 근을 구하고, 풀이 과정을 서술하시오. [5점]';
@@ -317,5 +318,32 @@ describe('다중 답값 채점 — 순서 무관 (2026-10-20)', () => {
   it('순서가 달라도 O · 하나 빠지면 X', () => {
     assert.equal(grade('따라서 a의 값은 2, 5^(1/4), 1이다.', 루브릭, '', k, '수리').파트별.답구하기.조각별[0].결과, 'O');
     assert.equal(grade('따라서 a의 값은 1, 2이다.', 루브릭, '', k, '수리').파트별.답구하기.조각별[0].결과, 'X');
+  });
+});
+
+// [오종래 2026-10-20 확정] 물리·과학 계산 문항 — 답에 단위 + 「F=…」 꼴 식이면 수리 줄 규칙 (물리 단문서술 운동량)
+describe('is_science_calc · resolve_subject — 물리 계산 문항', () => {
+  const 논제 = '질량이 200 g인 축구공을 … 발이 축구공에 가한 평균 힘의 크기는 몇 N인가? [4점]';
+  const 답안 = 'I=0.2×(-5-10)=-3(Ns)\n=-3=F×0.1\n⇒F=-3/0.1s=-30(N)\n∴F의 크기=30(N)';
+  it('단위 있는 답 + 문자식 줄 → 수리', () => {
+    assert.equal(is_science_calc(논제, 답안), true);
+    assert.equal(resolve_subject('자동', 논제, 답안), '수리');
+  });
+  it('문자식 줄이 없으면 아니다 · 모범답안이 없으면 논제만으로 정한다', () => {
+    assert.equal(is_science_calc(논제, '평균 힘의 크기는 30 N이다.'), false);
+    assert.equal(resolve_subject('자동', 논제), '인문사회국어');
+  });
+});
+
+describe('물리 계산 문항 줄 나누기 — 단위 붙은 끝 값 (2026-10-20)', () => {
+  it('세우기(개념→식) · 풀기(식→값) · 답 30', () => {
+    const r = classify_math_lines('I=0.2×(-5-10)=-3(Ns)\n=-3=F×0.1\n⇒F=-3/0.1s=-30(N)\n∴F의 크기=30(N)', '', true);
+    assert.deepEqual(r.세우기, ['I=0.2×(-5-10)=-3(Ns)']);
+    assert.deepEqual(r.풀기, ['=-3=F×0.1', '⇒F=-3/0.1s=-30(N)']);
+    assert.deepEqual(r.답, { 줄: '∴F의 크기=30(N)', 값: ['30'], 끝값: true });
+  });
+  it('final_value — 단위 뗌', () => {
+    assert.equal(final_value('F=30N'), '30');
+    assert.equal(final_value('∴F의 크기=30(N)'), '30');
   });
 });
