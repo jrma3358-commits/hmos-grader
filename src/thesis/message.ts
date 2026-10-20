@@ -24,13 +24,24 @@ export interface 제시문메시지 {
 //   「때문이다」 앞 원인절이 핵심 메시지다. 결론 문장보다 먼저 본다. 3단계 단락 급소도 이 원인절로 바꾼다 (화면 최종입장)
 const 반론어re = /^(?:하지만|그러나)\s+/;
 const 원인단정re = /\s*때문이다[.。]$/;
-function 반론원인(줄: string[]): 제시문메시지 | null {
+
+/**
+ * 「하지만 … 때문이다」 무게중심 [오종래 2026-10-20 확정] — 앞: 현상 제시(배경 P) · 「하지만/그러나」 전환 · 뒤: 「때문이다」 단정.
+ * 무게중심은 뒤의 「때문이다」 앞 원인절(급소 B), 전환 문장 앞 글은 배경 P. 서지 않으면 null
+ */
+export function contrast_cause(글: string): { 원인절: string; 원인문장: string; 전환문장: string; 배경글: string } | null {
+  const 줄 = 문장들(글);
   const k = 줄.map((s, i) => (반론어re.test(s) ? i : -1)).filter((i) => i >= 0).at(-1);
   if (k === undefined) return null;
-  const 문장 = 줄.slice(k).find((s) => 원인단정re.test(s));
-  if (!문장) return null;
-  const 실체 = 문장.replace(원인단정re, '').replace(반론어re, '').trim();
-  return 실체 ? { 실체, 문장, 근거: '반론 원인' } : null;
+  const 원인문장 = 줄.slice(k).find((s) => 원인단정re.test(s));
+  if (!원인문장) return null;
+  const 원인절 = 원인문장.replace(원인단정re, '').replace(반론어re, '').trim();
+  return 원인절 ? { 원인절, 원인문장, 전환문장: 줄[k], 배경글: 줄.slice(0, k).join(' ') } : null;
+}
+
+function 반론원인(줄: string[]): 제시문메시지 | null {
+  const c = contrast_cause(줄.join(' '));
+  return c ? { 실체: c.원인절, 문장: c.원인문장, 근거: '반론 원인' } : null;
 }
 
 const 결론어 = ['따라서', '그래서', '결국', '그러므로', '이처럼', '요컨대', '즉', '이제'];

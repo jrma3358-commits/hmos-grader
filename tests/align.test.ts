@@ -10,7 +10,7 @@ import type { SealedSwitch, SealedTable } from '../src/fq/sealed/schema.ts';
 import type { Color } from '../src/fq/types.ts';
 import { align_passage, background_passage, box_passages, data_calls, data_tables, strip_passage_notes } from '../src/thesis/align.ts';
 import { background_paragraphs } from '../src/thesis/background.ts';
-import { all_passages_required, passage_message } from '../src/thesis/message.ts';
+import { all_passages_required, contrast_cause, passage_message } from '../src/thesis/message.ts';
 
 const sw = (id: string, markers: string[], color: Color, lexical?: string[]) =>
   ({ id, kind: '조사·어미', markers, intent: '', color, lexical }) as SealedSwitch;
@@ -165,5 +165,15 @@ describe('passage_message — 「하지만 … 때문이다」 반론 원인', (
   it('때문이다 앞 원인절', () => {
     const m = passage_message('두 수치가 함께 증가했다. 하지만 전문가들은 신중해야 한다고 조언한다. 여름에는 기온이 높아져서 방문객의 수도 증가하기 때문이다.');
     assert.deepEqual(m && [m.실체, m.근거], ['여름에는 기온이 높아져서 방문객의 수도 증가하기', '반론 원인']);
+  });
+});
+
+describe('contrast_cause — 「하지만 … 때문이다」 무게중심 (2026-10-20)', () => {
+  it('전환 앞은 배경, 「때문이다」 앞 원인절이 급소', () => {
+    const c = contrast_cause('기사가 실렸다. 두 수치가 함께 증가했다. 하지만 전문가들은 신중해야 한다고 조언한다. 여름에는 기온이 높아져서 방문객의 수도 증가하기 때문이다.');
+    assert.deepEqual(c && [c.배경글, c.전환문장, c.원인절], ['기사가 실렸다. 두 수치가 함께 증가했다.', '하지만 전문가들은 신중해야 한다고 조언한다.', '여름에는 기온이 높아져서 방문객의 수도 증가하기']);
+  });
+  it('전환이 없으면 null', () => {
+    assert.equal(contrast_cause('기온이 높기 때문이다.'), null);
   });
 });

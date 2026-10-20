@@ -35,7 +35,7 @@ const { align_passage, background_passage, box_passages, data_calls, strip_passa
 // 배경 제시문 단락 실체 — 단락마다 실체 하나 = ② 세우기 조각 (오종래 2026-10-20 확정, 정의문 우선)
 const { background_paragraphs } = await load('src/thesis/background.ts');
 // 제시문 핵심 메시지 · 「모두 활용하여」 세우기 하한 (오종래 2026-10-20 확정)
-const { passage_message, all_passages_required } = await load('src/thesis/message.ts');
+const { passage_message, all_passages_required, contrast_cause } = await load('src/thesis/message.ts');
 const { essay_pivot_chunks } = await load('src/thesis/chunk.ts');
 const { 봉인14_6단계 } = await load('src/thesis/relate.ts');
 // 8단계 루브릭 — 엔진 F1~F5·문항평가 (src/rubric). GJ는 쓰지 않는다 (오종래 2026-10-14: GJ 검산 대신 조각 충족 여부)
@@ -481,6 +481,18 @@ try {
           if (봉인.극성 && Array.isArray(봉인.극성.당김) && Array.isArray(봉인.극성.밀침)) {
             out.단계.제시문.수렴경로.극성 = passage_polarity(passage.graph, passage.convergence.path, 봉인.극성).map((x: any) => ({ 극성: x.polarity, 표지: x.markers, 문장: x.sentence }));
           } else out.단계.제시문.수렴경로.극성오류 = '봉인 표지사전에 「극성」(당김·밀침)이 없습니다';
+        }
+        // 「하지만 … 때문이다」 무게중심 (오종래 2026-10-20 확정, message.ts contrast_cause) — 제시문 하나(3단계 제시문별 요청)일 때
+        //   전환 앞 현상 문장의 경로 B는 배경 P(극성 지움), 전환 뒤 B도 급소가 아니다. 「때문이다」 앞 원인절을 경로 끝 급소 B(극성 「원인」)로 세운다
+        const 무게 = 제시문목록.length === 1 ? contrast_cause(제시문목록[0].텍스트) : null;
+        const 경로 = out.단계.제시문.수렴경로;
+        if (무게 && 경로 && Array.isArray(경로.극성)) {
+          const 자리of = (문장: string) => (!문장 ? '전환 뒤 B' : 무게.배경글.includes(문장) ? '반론 전환 앞 현상 — 배경 P' : 무게.원인문장.includes(문장) || 문장.includes(무게.원인절) ? '원인절 안 B — 원인절 하나로 묶음' : '전환 문장 B');
+          경로.극성 = 경로.극성.map((k: any) => ({ ...k, 극성: null, 표지: [], 배경: 자리of(String(k.문장 ?? '').trim()) }));
+          경로.경로.push(무게.원인절);
+          경로.극성.push({ 극성: '원인', 표지: ['~때문이다'], 문장: 무게.원인문장 });
+          경로.수렴점 = 무게.원인절;
+          out.단계.제시문.무게중심 = 무게;
         }
         // 연결단락 = 그 소문항이 연결선(급소·지정·기호)을 가진 단락 기호 — 6단계 자가검증이 읽는다
         out.단계.정합 = { 연결: 정합.연결, 사족: 정합.사족, 소문항: 정합.소문항.map((x: any) => ({ 번호: x.번호, 배경: x.연결.background, 범위밖: x.연결.outOfScope, 연결단락: [...new Set(x.연결.links.map((l: any) => 라벨들[l.paragraph] ?? `#${l.paragraph + 1}`))] })) };
