@@ -991,7 +991,23 @@ const 제시문앞src = '(?:제시문[ \\t]+)?';
 const 제시문기호src = `${제시문앞src}(?:[\\[<(][가-하ㄱ-ㅎ][\\]>)]|\\[(?:${로마src})\\])`;
 
 /** 제시문 칸 → [{id, 텍스트}] — [가]·<가>·(가)·[I] 단락 머리로 나눈다(기호 바로 뒤가 공백·줄끝일 때만, splitRegistration과 같다). 머리가 없으면 한 덩어리 */
+/** 〈보기〉·<보기> 머리 줄 (2026-10-20) */
+const 보기머리re = /^[ \t]*[〈<][ \t]*보[ \t]*기[ \t]*[〉>][ \t]*$/m;
+/** 글 → { 블록: 〈보기〉 본문(없으면 ''), 나머지: 〈보기〉 머리·본문을 뺀 글 }. 본문 끝 = 다음 〈제시문〉 머리 · 제시문 기호 머리([가]…) · 논제 머리 */
+function 보기떼기(text) {
+  const m = 보기머리re.exec(text);
+  if (!m) return { 블록: '', 나머지: text };
+  const 뒤 = text.slice(m.index + m[0].length);
+  const 끝들 = [/^[ \t]*[〈<][ \t]*제시문[ \t]*[〉>][ \t]*$/m.exec(뒤), new RegExp(`^[ \\t]*(?:${제시문기호src})(?=\\s|$)`, 'm').exec(뒤), 논제머리re.exec(뒤)]
+    .filter(Boolean).map(x => x.index);
+  const 끝 = 끝들.length ? Math.min(...끝들) : 뒤.length;
+  return { 블록: 뒤.slice(0, 끝).trim(), 나머지: text.slice(0, m.index) + 뒤.slice(끝) };
+}
+
 function splitPassages(text) {
+  // 〈보기〉 블록 — 별도 배경 블록 id 「보기」 (오종래 2026-10-20 확정). 나머지는 아래 규칙대로
+  const 보기 = 보기떼기(text);
+  if (보기.블록) return [{ id: '보기', 기호: '〈보기〉', 텍스트: 보기.블록 }, ...splitPassages(보기.나머지)];
   text = text.replace(/^[ \t]*[〈<][ \t]*제시문[ \t]*[〉>][ \t]*$/gm, ''); // 〈제시문〉 머리 줄 (2026-10-20)
   const heads = [...text.matchAll(new RegExp(`(?:^|\\n)\\s*${제시문앞src}(?:[\\[<(]([가-하ㄱ-ㅎ])[\\]>)]|\\[(${로마src})\\])(?:\\s+|$)`, 'g'))];
   if (!heads.length) return text.trim() ? [{ id: '제시문', 텍스트: text.trim() }] : [];
@@ -1027,6 +1043,11 @@ function splitRegistration(text, 수리 = false) {
   const 뺀것 = [];
   const 덜어 = 글 => { if (글.trim()) 뺀것.push(글.trim()); };
   text = text.replace(/\r\n?/g, '\n');
+  // 〈보기〉·<보기> 머리 [오종래 2026-10-20 확정] — 〈제시문〉과 동급인 별도 배경 블록. 본문은 논제 칸에 넣지 않고
+  //   제시문 칸 맨 앞에 「〈보기〉」 머리째 둔다 (splitPassages가 id 「보기」 블록으로). 끝 = 다음 〈제시문〉 머리 · 제시문 기호 머리 · 논제 머리
+  const 보기 = 보기떼기(text);
+  text = 보기.나머지;
+  const 보기붙여 = 제 => (보기.블록 ? `〈보기〉\n${보기.블록}${제 ? '\n\n' + 제 : ''}` : 제);
   // 〈제시문〉·<제시문> 머리 [오종래 2026-10-20 숭실대] — 그 줄 다음부터 제시문 (기호 없는 한 덩어리도 제시문 하나).
   //   머리 앞 글은 논제, 머리 뒤에 논제 머리(「[문제 N]」 등)가 다시 서면 거기부터 논제
   const 제시문머리줄 = /^[ \t]*[〈<][ \t]*제시문[ \t]*[〉>][ \t]*$/m.exec(text);
@@ -1035,7 +1056,7 @@ function splitRegistration(text, 수리 = false) {
     const 논제뒤 = 논제머리re.exec(뒤);
     const 논제 = [앞, 논제뒤 ? 뒤.slice(논제뒤.index) : ''].join('\n').trim();
     const 제시문 = (논제뒤 ? 뒤.slice(0, 논제뒤.index) : 뒤).trim().replace(new RegExp(`\\n+(?=[ \\t]*(?:${제시문기호src})(?:\\s|$))`, 'g'), '\n\n');
-    return 논제 ? { 논제, 제시문, 뺀것 } : null;
+    return 논제 ? { 논제, 제시문: 보기붙여(제시문), 뺀것 } : null;
   }
   // 「논제:」「제시문:」「[논제]」「[제시문]」만 있는 줄은 머리말 — 본문에 넣지 않는다 (오종래 2026-10-15)
   text = text.replace(/^[ \t]*[\[<【]?[ \t]*(?:논제|제시문)[ \t]*[\]>】]?[ \t]*[:：]?[ \t]*$/gm, m => { 덜어(m); return ''; });
@@ -1090,7 +1111,7 @@ function splitRegistration(text, 수리 = false) {
   제시문 = 제시문.replace(/[ \t]*<주의사항[^>]*>[ \t]*/g, m => { 덜어(m); return ''; });
   제시문 = 제시문.trim().replace(new RegExp(`\\n+(?=[ \\t]*(?:${제시문기호src})(?:\\s|$))`, 'g'), '\n\n');
   if (!논제.trim()) return null;
-  return { 논제: 논제.trim(), 제시문, 뺀것 };
+  return { 논제: 논제.trim(), 제시문: 보기붙여(제시문), 뺀것 };
 }
 
 /** 분석 시작 → — A·B는 1단계 문항 원문 칸에 그대로. 파이프라인을 아직 안 골랐으면 1단계에서 고른다 */
@@ -1184,7 +1205,12 @@ function renderC2() {
   const 인식 = C.분석.단계.인식;
   // 상황 P (오종래 2026-10-15) — 대표 발문은 인식하지 않고 P 블록으로만. 참조 범위만 소논제에 물려준다
   // 배경 P 제시문 (오종래 2026-10-20) — 라벨 없는 한 덩어리 제시문은 대표 발문 카드가 아니라 배경 카드로
-  const 상황 = (C.분석.단계.상황 || []).map(p => p.배경제시문 ? `
+  const 상황 = (C.분석.단계.상황 || []).map(p => p.보기 ? `
+    <div class="card">
+      <div class="card-title">${엔진배지}배경 P · 〈보기〉</div>
+      <details class="c-text"><summary>〈보기〉 보기</summary><div>${esc(p.실체)}</div></details>
+      <div class="c-meta">〈보기〉는 〈제시문〉과 동급인 별도 배경 블록입니다 — 논제·제시문 정합에 넣지 않습니다.</div>
+    </div>` : p.배경제시문 ? `
     <div class="card">
       <div class="card-title">${엔진배지}배경 P · 제시문 (라벨 없음)</div>
       <details class="c-text"><summary>제시문 보기</summary><div>${esc(p.실체)}</div></details>
@@ -1201,7 +1227,7 @@ function renderC2() {
       ${실체문장Html(s)}
       <div class="question-box">${esc(s.텍스트)}</div>
       ${제약Html(s)}
-      ${s.공통발문 && !(C.분석.단계.상황 || []).filter(p => !p.배경제시문).length ? `<div class="c-meta">공통 발문 — 인식에서 뗌: ${esc(s.공통발문)}</div>` : ''}
+      ${s.공통발문 && !(C.분석.단계.상황 || []).filter(p => !p.배경제시문 && !p.보기).length ? `<div class="c-meta">공통 발문 — 인식에서 뗌: ${esc(s.공통발문)}</div>` : ''}
       <div class="c-meta">참조 제시문: ${s.참조.length ? s.참조.map(l => `[${esc(l)}]`).join(' ') : '전체'}</div>
       ${엔진원본Html(s)}
     </div>`).join('');
@@ -1236,8 +1262,10 @@ function 최종입장(x) {
 function 참조제시문() {
   const 소 = (C.분석 && C.분석.단계.인식 && C.분석.단계.인식.소문항) || [];
   const 범위 = !소.length || 소.some(s => !(s.참조 || []).length) ? null : new Set(소.flatMap(s => s.참조));
-  const 고른 = 범위 ? C.제시문.filter(p => 범위.has(p.id)) : [];
-  return 고른.length ? 고른 : C.제시문;
+  // 〈보기〉는 별도 배경 블록 — 3단계 제시문 분석에 넣지 않는다 (2026-10-20)
+  const 제시문들 = C.제시문.filter(p => p.id !== '보기');
+  const 고른 = 범위 ? 제시문들.filter(p => 범위.has(p.id)) : [];
+  return 고른.length ? 고른 : 제시문들;
 }
 
 /** 제시문 하나의 엔진 결과(수렴 경로·극성)는 논제와 무관하다 — 소문항 창마다 다시 보내지 않는다. 열쇠 = 기호 + 글 */

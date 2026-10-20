@@ -8,7 +8,7 @@ import { analyze_pivot, build_path_graph, describeCombination, recognizePassage 
 import type { V2Analysis } from '../src/fq/pipeline.ts';
 import type { SealedSwitch, SealedTable } from '../src/fq/sealed/schema.ts';
 import type { Color } from '../src/fq/types.ts';
-import { align_passage, background_passage } from '../src/thesis/align.ts';
+import { align_passage, background_passage, box_passages } from '../src/thesis/align.ts';
 import { background_paragraphs } from '../src/thesis/background.ts';
 
 const sw = (id: string, markers: string[], color: Color, lexical?: string[]) =>
@@ -111,5 +111,13 @@ describe('background_paragraphs — 단락마다 실체 하나', () => {
   });
   it('정의문도 논제 실체도 없으면 첫 문장 급소', () => {
     assert.equal(background_paragraphs(글.split('\n\n')[0], [])[0].근거, '첫 문장 급소');
+  });
+});
+
+describe('box_passages — 〈보기〉 별도 배경 블록 (2026-10-20)', () => {
+  it('id 「보기」만 따로, 나머지는 제시문 그대로', () => {
+    const r = box_passages([{ id: '보기', 텍스트: '쇼핑카트를 미는 순간' }, { id: '가', 텍스트: '…' }, { id: '나', 텍스트: '…' }]);
+    assert.deepEqual(r.보기.map((p) => p.id), ['보기']);
+    assert.deepEqual(r.제시문.map((p) => p.id), ['가', '나']);
   });
 });

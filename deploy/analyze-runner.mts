@@ -31,7 +31,7 @@ const { find_logic_markers } = await load('src/fq/logic_markers.ts');
 const { check_math_answer, check_human_answer } = await load('src/fq/answer_markers.ts');
 // 제시문 B 극성 — 논술 3단계 (오종래 2026-10-19). 표지 목록은 봉인 표지사전 「극성」, 찾기는 엔진 polarity_markers. Claude 판정 없음
 const { passage_polarity } = await load('src/fq/polarity_markers.ts');
-const { align_passage, background_passage } = await load('src/thesis/align.ts');
+const { align_passage, background_passage, box_passages } = await load('src/thesis/align.ts');
 // 배경 제시문 단락 실체 — 단락마다 실체 하나 = ② 세우기 조각 (오종래 2026-10-20 확정, 정의문 우선)
 const { background_paragraphs } = await load('src/thesis/background.ts');
 const { essay_pivot_chunks } = await load('src/thesis/chunk.ts');
@@ -253,7 +253,11 @@ try {
   if (!문항원문 && !req.논제) throw Object.assign(new Error('문항원문이 비어 있습니다'), { name: '입력오류' });
   if (!['A', 'B', 'C'].includes(파이프라인)) throw Object.assign(new Error(`파이프라인은 A·B·C 중 하나여야 합니다 (받은 값: ${req.파이프라인})`), { name: '입력오류' });
 
-  const 제시문목록: { id: string; 텍스트: string }[] | null = Array.isArray(req.제시문) ? req.제시문 : typeof req.제시문 === 'string' && req.제시문.trim() ? [{ id: '제시문', 텍스트: req.제시문 }] : null;
+  const 받은제시문: { id: string; 텍스트: string }[] | null = Array.isArray(req.제시문) ? req.제시문 : typeof req.제시문 === 'string' && req.제시문.trim() ? [{ id: '제시문', 텍스트: req.제시문 }] : null;
+  // 〈보기〉 별도 배경 블록 (오종래 2026-10-20 확정) — id 「보기」는 제시문 정합·수렴·관계·루브릭 연결에서 빼고 C 2단계 상황 P로 싣는다 (align.ts box_passages)
+  const 나눈제시문 = 받은제시문 ? box_passages(받은제시문) : { 보기: [], 제시문: [] };
+  const 보기목록 = 나눈제시문.보기;
+  const 제시문목록: { id: string; 텍스트: string }[] | null = 나눈제시문.제시문.length ? 나눈제시문.제시문 : null;
 
   if (req.작업 === '채점') {
     // ── 8단계 학생 답안 채점 ── 루브릭(러너 루브릭 작업 출력의 조각)을 엔진 조각으로 되살려 G1에 넣는다. Claude는 쓰지 않는다
@@ -384,6 +388,8 @@ try {
     }
 
     // 라벨 없는 단일 제시문 (오종래 2026-10-20 확정) — 통째로 배경 P. 단락 급소·수렴 경로·연결·사족·6단계 관계를 세우지 않는다 (align.ts background_passage)
+    // 〈보기〉 — 별도 배경 P 블록 (2026-10-20)
+    for (const b of 보기목록) out.단계.상황.push({ 색: 'P', 실체: b.텍스트, 참조: [], 소논제: 소문항.map((s: any) => s.번호), 보기: true });
     const 배경글 = 제시문목록 ? background_passage(제시문목록) : null;
     if (배경글) {
       out.단계.상황.push({ 색: 'P', 실체: 배경글, 참조: [], 소논제: 소문항.map((s: any) => s.번호), 배경제시문: true });

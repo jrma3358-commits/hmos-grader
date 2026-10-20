@@ -32,6 +32,14 @@ export function background_passage(제시문: readonly { id: string; 텍스트: 
   return 글 || null;
 }
 
+/**
+ * 〈보기〉 별도 배경 블록 [오종래 2026-10-20 확정] — 〈보기〉·<보기> 머리 블록(화면이 id 「보기」로 넘긴다)은 〈제시문〉과 동급인 별도 배경(P)이다.
+ * 제시문 정합·수렴 경로·관계·루브릭 연결에 넣지 않는다. 제시문 목록 → { 보기, 제시문(나머지) }
+ */
+export function box_passages<T extends { id: string; 텍스트: string }>(제시문: readonly T[]): { 보기: T[]; 제시문: T[] } {
+  return { 보기: 제시문.filter((p) => p.id === '보기'), 제시문: 제시문.filter((p) => p.id !== '보기') };
+}
+
 /** 2단계 산출 — 소문항 하나 (엔진) */
 export interface 인식소문항 {
   번호: string | null;
