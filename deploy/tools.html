@@ -1183,7 +1183,13 @@ function 실체문장Html(s, 대상 = '논제') {
 function renderC2() {
   const 인식 = C.분석.단계.인식;
   // 상황 P (오종래 2026-10-15) — 대표 발문은 인식하지 않고 P 블록으로만. 참조 범위만 소논제에 물려준다
-  const 상황 = (C.분석.단계.상황 || []).map(p => `
+  // 배경 P 제시문 (오종래 2026-10-20) — 라벨 없는 한 덩어리 제시문은 대표 발문 카드가 아니라 배경 카드로
+  const 상황 = (C.분석.단계.상황 || []).map(p => p.배경제시문 ? `
+    <div class="card">
+      <div class="card-title">${엔진배지}배경 P · 제시문 (라벨 없음)</div>
+      <details class="c-text"><summary>제시문 보기</summary><div>${esc(p.실체)}</div></details>
+      <div class="c-meta">〈제시문〉 뒤 라벨 없이 한 덩어리로 이어진 본문은 통째로 배경입니다 — 단락 급소를 세우지 않고 사족도 가리지 않습니다.</div>
+    </div>` : `
     <div class="card">
       <div class="card-title">${엔진배지}상황 P · 대표 발문${p.소논제 && p.소논제.length > 1 ? ` — 소논제 ${p.소논제.map(n => esc(단위이름(n))).join('·')}` : ''}</div>
       <div class="question-box">${esc(p.실체)}</div>
@@ -1195,7 +1201,7 @@ function renderC2() {
       ${실체문장Html(s)}
       <div class="question-box">${esc(s.텍스트)}</div>
       ${제약Html(s)}
-      ${s.공통발문 && !(C.분석.단계.상황 || []).length ? `<div class="c-meta">공통 발문 — 인식에서 뗌: ${esc(s.공통발문)}</div>` : ''}
+      ${s.공통발문 && !(C.분석.단계.상황 || []).filter(p => !p.배경제시문).length ? `<div class="c-meta">공통 발문 — 인식에서 뗌: ${esc(s.공통발문)}</div>` : ''}
       <div class="c-meta">참조 제시문: ${s.참조.length ? s.참조.map(l => `[${esc(l)}]`).join(' ') : '전체'}</div>
       ${엔진원본Html(s)}
     </div>`).join('');
@@ -1253,6 +1259,8 @@ async function 제시문급소추출() {
       제시문캐시.set(열쇠, out);
       const 제 = out.단계.제시문;
       if (!제 || 제.사유) throw new Error((제 && 제.사유) || (out.멈춘곳 && out.멈춘곳.사유) || '제시문에서 멈춤');
+      // 라벨 없는 단일 제시문 — 엔진이 통째로 배경 P로 읽었다 (오종래 2026-10-20). 수렴 경로·극성 없음
+      if (제.배경) { Object.assign(x, { 상태: '완료', 배경: true, 분석: 제, flag: '', 경로: [], 수렴점: null, 극성: null, 급소: null }); renderC3(); continue; }
       const 경로 = 제.수렴경로;
       if (경로 && 경로.극성오류) throw new Error(경로.극성오류);
       Object.assign(x, { 상태: '완료', 분석: 제, flag: (경로 && 경로.flag) || (경로 ? '' : 제.flag || 'NO_B'),
@@ -1330,7 +1338,8 @@ function renderC3() {
   const 극줄 = !끝남 || !극 ? ''
     : `<div class="c-meta">기준 극(논제 B): ${(극.논제B || []).length ? 극.논제B.map(t => `「${esc(t)}」`).join(' · ') : '— (2단계 핵심이 서지 않음)'} — 경로 B가 든 문장의 기능표지로 당김·밀침이면 급소, 표지가 없으면 배경으로 뺍니다 (엔진). 참조 제시문 ${목록.map(x => `(${esc(x.id)})`).join('')}${목록.length < C.제시문.length ? ' — 이 소문항이 짚은 것만' : ''}.</div>`;
   const 급소카드 = 목록.map(x => {
-    const 줄 = x.상태 === '완료'
+    const 줄 = x.상태 === '완료' && x.배경 ? '라벨 없는 한 덩어리 제시문 — 엔진이 통째로 배경(P)으로 읽습니다. 수렴 경로·단락 급소를 세우지 않고 논제 급소와 잇지 않습니다.'
+      : x.상태 === '완료'
       ? (!x.경로.length ? `엔진이 이 제시문의 수렴 경로를 세우지 못했습니다 (${esc(x.flag || '—')}).`
         : x.극성 ? (x.급소 ? `이 제시문의 최종 입장은 「${esc(x.급소)}」입니다.${x.급소 !== x.수렴점 ? ` <span class="c-meta">(엔진 수렴점 「${esc(x.수렴점 || '—')}」은 극성 표지가 없어 뺐습니다)</span>` : ''}` : '극성 표지가 있는 B가 없어 배경 제시문입니다.')
         : `엔진 수렴점은 「${esc(x.수렴점 || '—')}」입니다 — 엔진 극성 결과가 없습니다.`)

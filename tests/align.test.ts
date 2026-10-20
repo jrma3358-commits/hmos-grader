@@ -8,7 +8,7 @@ import { analyze_pivot, build_path_graph, describeCombination, recognizePassage 
 import type { V2Analysis } from '../src/fq/pipeline.ts';
 import type { SealedSwitch, SealedTable } from '../src/fq/sealed/schema.ts';
 import type { Color } from '../src/fq/types.ts';
-import { align_passage } from '../src/thesis/align.ts';
+import { align_passage, background_passage } from '../src/thesis/align.ts';
 
 const sw = (id: string, markers: string[], color: Color, lexical?: string[]) =>
   ({ id, kind: '조사·어미', markers, intent: '', color, lexical }) as SealedSwitch;
@@ -77,5 +77,17 @@ describe('align_passage', () => {
     const r = align_passage([{ 번호: null, 참조: [], 인식: 인식('설명하시오.') }], 제시문);
     assert.deepEqual(r.연결, []);
     assert.deepEqual(r.사족, []);
+  });
+});
+
+// 라벨 없는 단일 제시문 [오종래 2026-10-20 확정] — 〈제시문〉 뒤 한 덩어리 본문은 통째로 배경 P (숭실대 인문논술 다수결)
+describe('background_passage — 라벨 없는 단일 제시문', () => {
+  it('제시문이 하나이고 라벨이 없으면 그 본문', () => {
+    assert.equal(background_passage([{ id: '제시문', 텍스트: ' 오늘날 민주주의는 … 주장한다. ' }]), '오늘날 민주주의는 … 주장한다.');
+  });
+  it('라벨 있는 제시문([가] · [I])은 기존대로 — null', () => {
+    assert.equal(background_passage([{ id: '가', 텍스트: '…' }]), null);
+    assert.equal(background_passage([{ id: 'I', 텍스트: '…' }]), null);
+    assert.equal(background_passage([{ id: '가', 텍스트: '…' }, { id: '나', 텍스트: '…' }]), null);
   });
 });

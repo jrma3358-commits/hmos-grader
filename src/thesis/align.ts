@@ -18,6 +18,20 @@ import { essay_pivot_chunks } from './chunk.ts';
 import { connectPassage, passageLabels, type PassageConnection, type PassageRecognition } from '../fq/v2/passage.ts';
 import type { 사족노드 } from '../filter/sealed/items.ts';
 
+/** 제시문 라벨 — 한 글자 기호(가·나·ㄱ…)와 로마 숫자(I·II…). 화면이 머리 기호에서 떼어 id로 넘긴다 */
+const 라벨id = /^(?:[가-하ㄱ-ㅎ]|I{1,3}|IV|VI{0,3}|IX|X)$/;
+
+/**
+ * 라벨 없는 단일 제시문 [오종래 2026-10-20 확정] — 〈제시문〉·<제시문> 머리 뒤에 [가][나] 같은 라벨 없이 한 덩어리로 이어지는 본문은
+ * 통째로 배경(P)이다. 단락 급소·수렴 경로를 세우지 않고 논제 급소와 잇지 않는다 (사족 진단도 없다). 라벨 있는 제시문은 기존대로 단락마다.
+ * 제시문이 꼭 하나이고 라벨이 없으면 그 본문, 아니면 null
+ */
+export function background_passage(제시문: readonly { id: string; 텍스트: string }[]): string | null {
+  if (제시문.length !== 1 || 라벨id.test(제시문[0].id)) return null;
+  const 글 = 제시문[0].텍스트.trim();
+  return 글 || null;
+}
+
 /** 2단계 산출 — 소문항 하나 (엔진) */
 export interface 인식소문항 {
   번호: string | null;

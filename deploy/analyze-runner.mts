@@ -31,7 +31,7 @@ const { find_logic_markers } = await load('src/fq/logic_markers.ts');
 const { check_math_answer, check_human_answer } = await load('src/fq/answer_markers.ts');
 // 제시문 B 극성 — 논술 3단계 (오종래 2026-10-19). 표지 목록은 봉인 표지사전 「극성」, 찾기는 엔진 polarity_markers. Claude 판정 없음
 const { passage_polarity } = await load('src/fq/polarity_markers.ts');
-const { align_passage } = await load('src/thesis/align.ts');
+const { align_passage, background_passage } = await load('src/thesis/align.ts');
 const { essay_pivot_chunks } = await load('src/thesis/chunk.ts');
 const { 봉인14_6단계 } = await load('src/thesis/relate.ts');
 // 8단계 루브릭 — 엔진 F1~F5·문항평가 (src/rubric). GJ는 쓰지 않는다 (오종래 2026-10-14: GJ 검산 대신 조각 충족 여부)
@@ -121,7 +121,8 @@ function 루브릭작업(논제글: string, 계열: string, 총배점: number, �
   let 연결멈춤: unknown = null;
   if (계열 === '인문사회국어') {
     연결of = () => [];
-    if (제시문목록) {
+    // 라벨 없는 단일 제시문은 배경 P — 연결 단락이 없다 (2026-10-20). 서술형 B 공통자료(대화·자료 한 덩어리)는 그대로 잇는다
+    if (제시문목록 && (공통자료 || !background_passage(제시문목록))) {
       try {
         const 본문 = 제시문목록.map((p) => (/^(?:[가-하ㄱ-ㅎ]|I{1,3}|IV|VI{0,3}|IX|X)$/.test(p.id) ? `[${p.id}] ${p.텍스트}` : p.텍스트)).join('\n\n');
         const passage = recognizePassage(본문, fq.markerTable());
@@ -373,8 +374,15 @@ try {
       out.단계.수리 = { 형식: String(req.형식), 제약묶음: 발문들.map((t) => ({ 공통발문: t, 제약: math_constraints(t, 제시문목록 ?? []) })) };
     }
 
+    // 라벨 없는 단일 제시문 (오종래 2026-10-20 확정) — 통째로 배경 P. 단락 급소·수렴 경로·연결·사족·6단계 관계를 세우지 않는다 (align.ts background_passage)
+    const 배경글 = 제시문목록 ? background_passage(제시문목록) : null;
+    if (배경글) {
+      out.단계.상황.push({ 색: 'P', 실체: 배경글, 참조: [], 소논제: 소문항.map((s: any) => s.번호), 배경제시문: true });
+      out.단계.제시문 = { 배경: true, 단락: [{ label: null, 라벨: '제시문', 텍스트: 배경글, 색: { P: [배경글], B: [], C: [], D: [], Q: [] } }], 전체급소: null, flag: null, 수렴경로: null };
+      out.단계.정합 = { 연결: [], 사족: [], 소문항: 소문항.map((s: any) => ({ 번호: s.번호, 배경: ['제시문'], 범위밖: [], 연결단락: [] })) };
+    }
     // 3·4단계 — 제시문 단락 급소(엔진 connectPassage) ↔ 논제 급소 연결, 사족 (HMOS 절대 원칙: 엔진이 잡는다)
-    if (제시문목록) {
+    else if (제시문목록) {
       try {
         // 제시문 id가 한 글자 라벨(가·나…)이나 로마 숫자(I·II…, 수리논술 2026-10-19)면 [가]·[I] 머리를 붙여 단락 라벨로 읽히게 한다
         const 본문 = 제시문목록.map((p) => (/^(?:[가-하ㄱ-ㅎ]|I{1,3}|IV|VI{0,3}|IX|X)$/.test(p.id) ? `[${p.id}] ${p.텍스트}` : p.텍스트)).join('\n\n');
