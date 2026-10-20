@@ -268,6 +268,12 @@ describe('최종값of · 최종값 표지 줄이 답', () => {
     assert.equal(최종값of('따라서 P의 y좌표는 2m/(1+m²)이다.'), null);
     assert.equal(최종값of('∴ k=2'), null);
   });
+  it('수식 답값 — 「따라서 … 값은 X이다」의 X가 e·π·√ 식 (2026-10-20)', () => {
+    assert.equal(최종값of('따라서 lim(n→∞) eⁿaₙ의 값은 e/2이다.'), 'e/2');
+    assert.equal(최종값of('따라서 Σ(n=1→∞) bₙ의 값은 (1/2)/(1 - e^{-3}) = e³/(2(e³ - 1))이다.'), 'e³/(2(e³-1))');
+    assert.equal(최종값of('따라서 넓이의 값은 2√3이다.'), '2√3');
+    assert.equal(최종값of('따라서 이 값은 수렴한다.'), null);
+  });
   it('표지 줄이 있으면 문항 문자 줄(「직선 y=1과 …」)을 답으로 잡지 않는다', () => {
     const r = classify_math_lines('직선 y=1과 P 사이의 거리는 f(m)=1-2m/(1+m²)이다.\n따라서 구하는 값은 1이다.', '직선 y=1과 점 P', true);
     assert.deepEqual(r.답, { 줄: '따라서 구하는 값은 1이다.', 값: ['1'], 끝값: true });
