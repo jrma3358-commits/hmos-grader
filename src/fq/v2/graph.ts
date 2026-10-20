@@ -274,7 +274,8 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
   const afterModifiedNoun = (at: number) => {
     const noun = question.slice(0, at).match(/(\S*)$/)![1];
     const prev = question.slice(0, at - noun.length).match(/(\S+)[ \t]+$/)?.[1];
-    return /^[가-힣]{2,}$/.test(noun) && prev !== undefined && /[가-힣]([한된진던]|의)$/.test(prev);
+    //   [오종래 2026-10-20] 「…의」 앞이 닫는 따옴표·괄호여도 — 「'포장'의 역할이 소비주의 시대를」 → B「역할」·B「소비주의 시대」 (논술가이드북 포장)
+    return /^[가-힣]{2,}$/.test(noun) && prev !== undefined && /[가-힣][한된진던]$|(?:[가-힣]|['’"”」』)\]])의$/.test(prev);
   };
   //   간접의문 절의 주어 [오종래 2026-10-15 안 1] — 주격 「이」는 같은 문장 뒤쪽에 간접의문 표지(Q 「~인지」「~는지」 등, 표층 「~지」 두 글자 이하 —
   //   pivot.ts isIndirectQ와 같은 기준)가 어절 끝으로 오고, 붙은 명사가 두 음절 이상이면 건다. 주어가 B로 서야 간접의문 주어 규칙(pivot.ts, 10-13)이
@@ -749,6 +750,8 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
   /** 조사 연쇄가 넘긴 실체로 선 노드 (「것만을」의 「것」) — 아래 의존명사 빼기에서 건드리지 않는다 */
   const carriedNodes = new Set<string>();
   const mathNodes = new Set<PathNode>();
+  /** 따옴표 이름 노드(apply.quotedNames) — 바로 뒤 「의」도 수식 노드처럼 다음 B를 이어 붙인다 (「'포장'의 역할이」 → B「포장의 역할」, 오종래 2026-10-20) */
+  const quoteNameNodes = new Set<PathNode>();
   /** 수식 노드 바로 뒤에 붙은 명사구 연결 조사 — 다음 B 노드의 실체를 이 수식 노드에 이어 붙인다 */
   let attachTo: { node: PathNode; at: number } | undefined;
   /** 제시문 노드 id → 발문 빈칸 표지가 걸린 자리 (노드를 다 세운 뒤 빈칸 노드와 잇는다) */
@@ -838,7 +841,7 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
     if (chainsNoun(hit) && nextIsB) {
       if (entity !== '') continue;
       const prev = nodes.at(-1);
-      if (prev && mathNodes.has(prev)) attachTo = { node: prev, at: hit.at };
+      if (prev && (mathNodes.has(prev) || quoteNameNodes.has(prev))) attachTo = { node: prev, at: hit.at };
       cursor = hit.end;
       continue;
     }
@@ -915,6 +918,7 @@ export function build_path_graph(question: string, table: SealedTable): PathGrap
 
     link(node);
     if (hit.math) mathNodes.add(node);
+    if (hit.quote && quotedNameIds.includes(sw.id) && /^['‘]/.test(question.slice(hit.at, hit.end))) quoteNameNodes.add(node);
     if (fromCarry) carriedNodes.add(node.id);
     cursor = hit.end;
 

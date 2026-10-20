@@ -7,6 +7,7 @@ import type { Color } from '../src/fq/types.ts';
 import type { PathNode } from '../src/fq/v2/graph.ts';
 import { essay_pivot_chunks } from '../src/thesis/chunk.ts';
 import { evaluate_pivot, recognizeV2Analysis } from '../src/fq/index.ts';
+import { 봉인13_정교화진단 } from '../src/filter/sealed/items.ts';
 
 /** 길 순서 = 배열 순서 */
 const 길 = (...spec: [string, Color, string][]): { nodes: PathNode[] } => ({
@@ -102,5 +103,23 @@ describe('「민주주의」 어절 예외 · 지시 관형사 + 실체 명사 (
     assert.ok(ev.ok);
     assert.equal(ev.items[0].coherence.deictic, false);
     assert.equal(ev.items[0].verdict, '통과');
+  });
+});
+
+// 논술가이드북 포장 [오종래 2026-10-20 확정] — 급소 덩어리는 실체 명사만 · 「'포장'의 역할이」 노드 · 관형절 안 B는 서술복잡에서 빼기
+describe('포장 논제 — 실체 명사 덩어리 · 따옴표 이름의 「의」 · 서술복잡', () => {
+  const t = "〈보기〉 글에 나타난 '포장'의 역할이 소비주의 시대를 살아가는 인간의 삶에 미칠 수 있는 영향을 제시문 [가], [나], [다]를 모두 활용하여 논하시오.";
+  const a = recognizeV2Analysis(t, { 서술형: true });
+  it('덩어리 = 「인간의 삶에 미칠 수 있는 영향」 (C 「살아가」「활용하여」 ✕)', () => {
+    assert.deepEqual(essay_pivot_chunks(a.graph, a.pivot).map((d) => [d.실체, d.C.length]), [['인간의 삶에 미칠 수 있는 영향', 0]]);
+  });
+  it("「'포장'의 역할이」 → B「포장의 역할」, 「소비주의 시대」는 따로", () => {
+    const bs = a.graph.nodes.filter((n) => n.color === 'B').map((n) => n.entity);
+    assert.ok(bs.includes('포장의 역할'));
+    assert.ok(bs.includes('소비주의 시대'));
+  });
+  it('급소를 꾸미는 관형절 안 B는 서술복잡에서 세지 않는다', () => {
+    const 진단 = 봉인13_정교화진단([{ 이름: null, 인식: a }], []);
+    assert.ok(!진단.some((d) => d.갈래 === '서술복잡'));
   });
 });

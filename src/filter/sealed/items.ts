@@ -90,7 +90,16 @@ function 단위진단(u: 인식단위, 단위: string | null): 정교화진단[]
   //   대상이 아니라 가리키는 표시다. 「ⓐ~ⓓ에 담긴 차별적 인식」처럼 기호 뒤에 명사구가 붙으면 그대로 센다.
   //   [오종래 2026-10-15 안 B] 물음 문장 밖 B는 세지 않는다 — B 표지 뒤부터 다음 Q까지 사이에 평서 종결(「~다.」)이 있으면
   //   그 B는 물음 앞 배경 문장(「…주장이 제기되고 있다.」)에 있다. 인용 명제(「'…해야 한다.'는」)는 노드 표지가 인용 전체라 걸리지 않는다.
-  const bs = nodes.filter((n) => n.color === 'B' && !기호B(n.entity) && !배경문장B(u.question, n, nodes));
+  //   [오종래 2026-10-20] 급소를 꾸미는 관형절 안 B는 세지 않는다 — 급소 B 바로 앞이 관형형 C(「~는」 LS-21b, 「살아가는」)면
+  //   같은 물음(앞 Q 뒤 ~ 급소 앞)의 B는 급소 명사구를 꾸미는 말이다 (「'포장'의 역할이 소비주의 시대를 살아가는 인간의 삶에 미칠 수 있는 영향」 → B 하나)
+  const 꾸밈B = new Set<string>();
+  for (const p of pivots) {
+    const at = nodes.findIndex((n) => n.id === p.node.id);
+    const 앞 = nodes[at - 1];
+    if (p.node.color !== 'B' || !앞 || 앞.color !== 'C' || 앞.switchId !== 'LS-21b') continue;
+    for (let k = at - 2; k >= 0 && nodes[k].color !== 'Q'; k--) if (nodes[k].color === 'B') 꾸밈B.add(nodes[k].id);
+  }
+  const bs = nodes.filter((n) => n.color === 'B' && !기호B(n.entity) && !배경문장B(u.question, n, nodes) && !꾸밈B.has(n.id));
   if (bs.length >= 3 && !nodes.some((n) => n.switchId === 'C-F')) {
     진단.push({ 갈래: '서술복잡', 단위, 근거: `B 노드 ${bs.length}개 (${bs.map((n) => n.id).join('·')}), C-F 없음` });
   }

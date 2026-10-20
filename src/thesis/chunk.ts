@@ -29,25 +29,18 @@ const clean = (s: string) => s.trim().replace(/^[\s,，]+/, '');
 /** 케이스 분류 C 스위치 — 봉인 LS-52 「~에 따라」 */
 const 케이스분류 = 'LS-52';
 
-/** 서술 방향 스위치 — 봉인 apply.formPivot (C-F 「논박하는 방식으로」「비교하여」…) */
-const 서술방향 = 'C-F';
-
 /**
  * 실체 명사 급소 덩어리 [오종래 2026-10-20 확정] — 서술 방향을 급소에서 빼는 형식(서술형 B · 인문논술 C-1a)이면 엔진 급소(실체 명사 B)가 덩어리의 B다.
- * 덩어리 C = B 바로 앞에 붙은 C들 + B와 그 Q 사이의 C들 — 서술 방향(C-F)·케이스 분류(LS-52)는 넣지 않는다
- * (「그 이유를 아래에 제시된 두 가지 의사결정 형태를 논박하는 방식으로 설명하시오」 → 「그 이유」)
+ * 덩어리에 C는 넣지 않는다 — 급소는 실체 명사만 (오종래 2026-10-20 확정: 「살아가」「활용하여」 같은 C·서술 방향 C-F·케이스 분류 LS-52 모두 ✕)
+ * (「그 이유를 아래에 제시된 두 가지 의사결정 형태를 논박하는 방식으로 설명하시오」 → 「그 이유」,
+ *  「… 시대를 살아가는 인간의 삶에 미칠 수 있는 영향을 … 모두 활용하여 논하시오」 → 「인간의 삶에 미칠 수 있는 영향」)
  */
 function 실체명사덩어리(nodes: PathNode[], 급소들: PathNode[]): 급소덩어리[] {
-  const 넣을C = (n: PathNode) => n.color === 'C' && n.switchId !== 서술방향 && n.switchId !== 케이스분류;
   return 급소들.flatMap((b) => {
     const bi = nodes.findIndex((n) => n.id === b.id);
     const qi = nodes.findIndex((n, i) => i > bi && n.color === 'Q');
     if (bi < 0 || qi < 0) return [];
-    const 앞C: PathNode[] = [];
-    for (let k = bi - 1; k >= 0 && 넣을C(nodes[k]); k--) 앞C.unshift(nodes[k]);
-    const 뒤C = nodes.slice(bi + 1, qi).filter(넣을C);
-    const 길 = [...앞C, b, ...뒤C];
-    return [{ B: b, C: [...앞C, ...뒤C], Q: [nodes[qi]], 실체: 길.map((n) => clean(n.entity)).join(' · ') }];
+    return [{ B: b, C: [], Q: [nodes[qi]], 실체: clean(b.entity) }];
   });
 }
 
