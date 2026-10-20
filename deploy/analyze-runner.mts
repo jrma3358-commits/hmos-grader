@@ -22,6 +22,8 @@ const fq = await load('src/fq/index.ts');
 const { recognizePassage, passageLabels, PASSAGE_REFERENCE, referenceGroup, designatedLabels } = await load('src/fq/v2/passage.ts');
 const { make_screen } = await load('src/filter/confirm.ts');
 const { 봉인13_정교화진단 } = await load('src/filter/sealed/items.ts');
+// 봉인⑦ 이어달리기 표지 — 「(1)에서 구한」 · 「위에서 구한」이 있는 소문항만 앞 소문항을 이어받는다 (오종래 2026-10-20 확정)
+const { 이어달리기 } = await load('src/filter/sealed/stepwise.ts');
 const { split_thesis } = await load('src/thesis/split.ts');
 // 수리논술 C-2 인식 규칙 — 제약 C · 이어달리기 · 「각각」 조각 조합 (오종래 2026-10-19 확정)
 const { math_constraints, block_constraints, relay_constraint, constraint_links } = await load('src/thesis/math_essay.ts');
@@ -183,7 +185,7 @@ function 루브릭작업(논제글: string, 계열: string, 총배점: number, �
       }
     }
   }
-  // 단계형 이어받기 (서술형 B, 오종래 2026-10-14) — (n)은 (n-1)의 급소 K를 ① 「앞 결과」 조각으로 받는다
+  // 단계형 이어받기 (서술형 B, 오종래 2026-10-14) — (n)은 (n-1)의 급소 K를 ① 「앞 결과」 조각으로 받는다. 2026-10-20부터 계단식 소문항만 (봉인⑦)
   const 급소들of = (s: any) => (s.a.pivot.ok ? (s.a.pivot.pivots ?? [s.a.pivot.pivot]).map((p: any) => ({ 번호: s.번호, 실체: p.node.entity })) : []);
   // 소문항 배점 — 소문항 글에 「[N점]」이 있으면 그 값, 없으면 요청 총배점 (2026-10-14)
   //   [오종래 2026-10-15 ③] 괄호 안 「N점」도 — 「(200자 내외, 4점)」. 여럿이면 마지막 것 (앞에 붙은 공통 발문의 「(16점)」이 아니라)
@@ -214,7 +216,10 @@ function 루브릭작업(논제글: string, 계열: string, 총배점: number, �
       // 세우기 필터 (오종래 2026-10-19) — 서버가 filterSeuwogi로 고른 문장만 ② 세우기로 남긴다. F5 배점 전에 걸러 배점이 남은 조각에 나뉜다
       const 남길 = Array.isArray(세우기남길) ? 세우기남길[n] : null;
       if (연결문장 && Array.isArray(남길)) 연결문장 = 연결문장.filter((x: any) => 남길.includes(x.문장));
-      const 앞급소 = 이어받기 && n > 0 ? 급소들of(소문항들[n - 1]) : [];
+      // [봉인⑦ 오종래 2026-10-20 확정] 계단식(이어달리기 표지 있음)만 앞 결과를 잇는다 — 표지가 없으면 병렬 독립. 표지가 번호를 가리키면 그 소문항
+      const 표지 = n > 0 ? (이어달리기(s.원문 ?? s.텍스트) ?? (s.이어받기 ? { 번호: s.이어받기.번호 } : null)) : null;
+      const 앞소문항 = 표지 ? (소문항들.find((x: any, i: number) => i < n && 표지.번호 && x.번호 === 표지.번호) ?? 소문항들[n - 1]) : null;
+      const 앞급소 = 이어받기 && 앞소문항 ? 급소들of(앞소문항) : [];
       // 원식 — 소문항 글(없으면 공통 발문)의 수 계수 이차방정식. 수리만 (2026-10-16 다경로)
       const 원식 = 계열 === '수리' ? (parse_quadratic(소.텍스트) ?? parse_quadratic(String(s.공통발문 ?? ''))) : null;
       // 다항식 · 나머지 조건 (「다항식 …를 x-2로 나누었을 때 나머지가 1」) — 수 계수 이차방정식이 없는 수리 문항 (2026-10-16 q7)

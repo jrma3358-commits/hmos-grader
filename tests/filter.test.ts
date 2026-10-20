@@ -1,6 +1,6 @@
 // 1차 필터[a] — 문항분석 명세서-2 §2·§3·§5를 기준으로 한 테스트.
 // 기대값은 엔진 출력이 아니라 **명세와 2026-09-30 오종래 확정**에서 온다. 봉인 값은 쓰지 않는다(노드를 손으로 세운다).
-// 봉인⑦~⑨·⑪·⑫는 비어 있으므로 «소리 내어 실패하는지»만 본다. 봉인⑬은 오종래 2026-10-13, 봉인⑩은 2026-10-20 기준으로 채워졌다.
+// 봉인⑧⑨⑪⑫는 비어 있으므로 «소리 내어 실패하는지»만 본다. 봉인⑬은 오종래 2026-10-13, 봉인⑦⑩은 2026-10-20 기준으로 채워졌다.
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
@@ -14,7 +14,7 @@ import { analyze_descriptive } from '../src/filter/descriptive.ts';
 import { judge_item, 제시문상한 } from '../src/filter/judge.ts';
 import { 봉인10_관계적절, 봉인11_요소결손, 봉인12_중의성, 봉인13_정교화진단, 엔진단위 } from '../src/filter/sealed/items.ts';
 import { 봉인8_관계대조 } from '../src/filter/sealed/relation.ts';
-import { 봉인7_소문항분리 } from '../src/filter/sealed/stepwise.ts';
+import { 봉인7_소문항분리, 이어달리기 } from '../src/filter/sealed/stepwise.ts';
 import { 봉인9_논제요구 } from '../src/filter/sealed/thesis.ts';
 import { summarize_substance } from '../src/filter/substance.ts';
 import type { 급소K, 조각뼈대, 파트 } from '../src/rubric/types.ts';
@@ -140,11 +140,6 @@ describe('비어 있는 봉인은 소리 내어 실패한다 (⑦~⑬)', () => {
   const k = kOf(node('k', 'B', '급소'));
   const 핵심 = (id: string) => ({ id, 핵심: k });
 
-  it('⑦ 소문항분리 — 계단식 판정도 여기서 멈춘다', () => {
-    assert.throws(() => 봉인7_소문항분리('(1) … (2) …'), SealedError);
-    assert.throws(() => judge_item({ 유형: '계단식 단계형', 텍스트: '(1) … (2) …' }), /\[봉인⑦\]/);
-  });
-
   it('⑧ 관계대조', () => {
     assert.throws(() => 봉인8_관계대조(핵심('가'), 핵심('나')), /\[봉인⑧\]/);
   });
@@ -162,6 +157,7 @@ describe('비어 있는 봉인은 소리 내어 실패한다 (⑦~⑬)', () => {
 
   // [오종래 2026-10-16] 서술형 전용 판정(⑦ 소문항 분리 · ⑩ 바탕→도달 관계 · ⑪ 요소 결손 · ⑫ 중의성) — 파이프라인 A는 돌리지 않는다
   const 수능17 = "17. 다항함수 f(x)에 대하여 f'(x)=9x²+4x이고 f(1)=6일 때, f(2)의 값을 구하시오. [3점]";
+  const 계단2 = '질량 2 kg인 물체가 3 m/s로 움직인다. 물음에 답하시오.\n(1) 물체의 운동량을 구하시오.\n(2) (1)에서 구한 운동량으로 0.5초 동안 멈추게 하는 평균 힘의 크기를 구하시오.';
   /** A 판정 — 비어 있는 봉인 없이 끝까지 서고, 항목은 급소 명확 · 정교화 필요(⑬)뿐 */
   const A항목 = (r: ReturnType<typeof judge_item>) => {
     assert.ok(!('소문항' in r), 'A는 소문항으로 나누지 않는다');
@@ -176,8 +172,35 @@ describe('비어 있는 봉인은 소리 내어 실패한다 (⑦~⑬)', () => {
   });
 
   it('⑦ 소문항 분리는 B만 — A 계단식은 문항 전체를 하나로', () => {
-    assert.throws(() => judge_item({ 유형: '계단식 단계형', 텍스트: '(1) … (2) …', 파이프라인: 'B' }), /\[봉인⑦\]/);
+    // ⑦은 채워져 소문항마다 ⑩을 지나고, 비어 있는 ⑪에서 멈춘다
+    assert.throws(() => judge_item({ 유형: '계단식 단계형', 텍스트: 계단2, 파이프라인: 'B' }), /\[봉인⑪\]/);
     assert.deepEqual(A항목(judge_item({ 유형: '계단식 단계형', 텍스트: 수능17, 파이프라인: 'A' })), ['급소 명확', '정교화 필요']);
+  });
+});
+
+describe('봉인⑦ 계단식 단계형 소문항 분리 — 이어달리기 표지면 계단식, 없으면 병렬 (오종래 2026-10-20)', () => {
+  it('(1)(2)를 각각 소문항으로 나누고, 「(1)에서 구한」이 있으면 계단식 — 앞번호 1', () => {
+    const s = 봉인7_소문항분리('물음에 답하시오.\n(1) 운동량을 구하시오.\n(2) (1)에서 구한 운동량으로 평균 힘을 구하시오.');
+    assert.deepEqual(s.map((x) => [x.번호, x.관계, x.앞번호]), [['1', null, undefined], ['2', '계단식', '1']]);
+    assert.equal(s[0].텍스트, '운동량을 구하시오.');
+  });
+
+  it('「위에서 구한」 — 번호를 가리키지 않으면 바로 앞 소문항', () => {
+    const s = 봉인7_소문항분리('(1) 질량을 구하시오.\n(2) 부피를 구하시오.\n(3) 위에서 구한 값으로 밀도를 구하시오.');
+    assert.deepEqual(s.map((x) => [x.관계, x.앞번호]), [[null, undefined], ['병렬', undefined], ['계단식', '2']]);
+  });
+
+  it('이어달리기 표지가 없으면 병렬 독립', () => {
+    const s = 봉인7_소문항분리('(1) 반응식을 쓰시오.\n(2) 넣어야 할 질량을 계산하시오.');
+    assert.deepEqual(s.map((x) => x.관계), [null, '병렬']);
+  });
+
+  it('표지 꼴 — (N) · [N-M] · 위 · 앞 문항에서 구한', () => {
+    assert.deepEqual(이어달리기('(2)에서 구한 값'), { 번호: '2' });
+    assert.deepEqual(이어달리기('[1-3]에서 구한 함수'), { 번호: '1-3' });
+    assert.deepEqual(이어달리기('위에서 구한 값'), { 번호: null });
+    assert.deepEqual(이어달리기('앞 문항에서 구한 값'), { 번호: null });
+    assert.equal(이어달리기('위에서 설명한 원리'), null);
   });
 });
 
