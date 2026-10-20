@@ -52,6 +52,8 @@ export interface 진단단위 {
   인식: 인식단위;
   /** 자료 분석형 — 소문항(공통 발문 포함)이 〈자료 N〉·[자료 N]을 부른다 (오종래 2026-10-20, 서술복잡을 내리지 않는다) */
   자료분석?: boolean;
+  /** 자료 분석형 병렬 소문항 — 자료분석이고 앞 소문항을 이어받지 않는다 (오종래 2026-10-20, 일방흐름도 내리지 않는다) */
+  병렬자료?: boolean;
 }
 
 /** 엔진이 나눈 단위(split_units)로 — 나누지 않았으면 전체가 한 단위 */
@@ -71,13 +73,14 @@ function 배경문장B(question: string, n: { index: number; surface: string }, 
 }
 
 /** 소문항(단위) 하나의 ①②③ */
-function 단위진단(u: 인식단위, 단위: string | null, 자료분석 = false): 정교화진단[] {
+function 단위진단(u: 인식단위, 단위: string | null, 자료분석 = false, 병렬자료 = false): 정교화진단[] {
   const nodes = [...u.graph.nodes].sort((a, b) => a.index - b.index);
   const 진단: 정교화진단[] = [];
   const pivots = u.pivot.ok ? (u.pivot.pivots ?? [u.pivot.pivot]) : [];
 
   // ① 일방흐름 — 급소 B 바로 다음이 Q이고, 이 단위에 C 노드가 없다
-  if (!nodes.some((n) => n.color === 'C')) {
+  //   [오종래 2026-10-20 확정] 자료 분석형 병렬 소문항(소문항마다 다른 자료·제시문 참조)은 내리지 않는다 — 자료 분석 → 논지 전개는 정상 구조
+  if (!병렬자료 && !nodes.some((n) => n.color === 'C')) {
     for (const p of pivots) {
       if (p.node.color !== 'B') continue;
       const 다음 = nodes[nodes.findIndex((n) => n.id === p.node.id) + 1];
@@ -129,7 +132,7 @@ function 단위진단(u: 인식단위, 단위: string | null, 자료분석 = fal
  * ①②③은 단위(소문항)마다 본다. C 논제는 split_thesis로 나눈 소문항, 그 밖은 엔진단위().
  */
 export function 봉인13_정교화진단(단위들: 진단단위[], 사족: 사족노드[]): 정교화진단[] {
-  const 진단 = 단위들.flatMap((u) => 단위진단(u.인식, u.이름, !!u.자료분석));
+  const 진단 = 단위들.flatMap((u) => 단위진단(u.인식, u.이름, !!u.자료분석, !!u.병렬자료));
   for (const s of 사족) {
     진단.push({ 갈래: '사족', 단위: s.소문항, 근거: `논제 급소「${s.급소}」 — 제시문 어느 단락 급소와도 연결선 없음` });
   }
