@@ -4126,7 +4126,8 @@ function 확정Html(s) {
 /** 9단계 소문항 하나 — 모범답안 잇기 · 교사 수정 · 확정 (i = -1이면 서술형 B) */
 function 모범소문항Html(s, i, j) {
       const 이름 = esc(단위이름(s.번호));
-      if (!s.조각) return `<div class="flag-box">${이름} 엔진이 조각을 뽑지 못해 모범답안이 없습니다</div>`;
+      // 급소 없는 소문항(루브릭 멈춤 · 조각 없음)은 「급소 없음」으로 보이고 다음으로 간다 — 충족이 없어 아래에서 멈추던 버그 (오종래 2026-10-20 수정)
+      if (s.멈춤 || !s.조각 || !s.조각.length || !s.충족) return `<div class="flag-box">${이름} 급소 없음 — 엔진이 조각을 뽑지 못해 모범답안이 없습니다${s.멈춤 ? ` (${esc(s.멈춤.사유 || s.멈춤.멈춤 || '')})` : ''}</div>`;
       const 조각 = s.조각.map((c, k) => `
         <div class="answer-step">
           <div class="step-line"><div class="step-dot">${k + 1}</div>${k < s.조각.length - 1 ? '<div class="step-connector"></div>' : ''}</div>

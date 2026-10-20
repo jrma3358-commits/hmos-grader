@@ -146,7 +146,11 @@ export function split_thesis(논제: string): 소문항[] {
 
 function 나누기(논제: string): 소문항[] {
   const text = 논제.replace(/\r\n?/g, '\n');
-  const items = [...text.matchAll(ITEM)];
+  // 「[문제 N]」 공통 발문 머리 [오종래 2026-10-20 확정] (중앙대 자연계 접선넓이) — 같은 N의 「[문제 N-M]」 소문항이 있으면 「[문제 N]」은 소문항이 아니라
+  //   그 소문항들의 공통 발문 머리다 (「문제 N」「[문항 N]」 머리와 같다). 없으면 「[문제 N]」은 소문항 그대로 (연세대 2026-10-19)
+  const 전부 = [...text.matchAll(ITEM)];
+  const 문제머리 = 전부.filter((m) => m[5] && !m[5].includes('-') && 전부.some((x) => (itemNo(x) ?? '').startsWith(`${m[5]}-`)));
+  const items = 전부.filter((m) => !문제머리.includes(m));
   // 「[문항 N]」 소문항 — 「(N-M)」 번호가 없을 때 (번호가 있으면 [문항 N]은 공통 발문 머리다)
   const 문항머리 = [...text.matchAll(MUNHANG)];
   if (!items.length && (문항머리.length > 1 || (문항머리.length === 1 && ![...text.matchAll(STEP)].length))) return 문항으로(text, 문항머리);
@@ -155,7 +159,7 @@ function 나누기(논제: string): 소문항[] {
     const t = text.trim().replace(/^문제[ \t]*\d+(?:[ \t]*[:：.]|[ \t]+)[ \t]*(?=\S)/, '');
     return t ? 계단으로({ 번호: null, 텍스트: t, 공통발문: '', 참조: 참조of(t) }) : [];
   }
-  const heads = [...text.matchAll(HEAD)].map((m) => m.index!);
+  const heads = [...[...text.matchAll(HEAD)].map((m) => m.index!), ...문제머리.map((m) => m.index!)].sort((a, b) => a - b);
 
   return items.flatMap((m, k) => {
     const start = m.index! + m[0].length;
