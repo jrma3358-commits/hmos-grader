@@ -1131,7 +1131,7 @@ const 엔진원본Html = 값 => `<details class="engine-raw"><summary>엔진 결
 const 소문항이름 = s => (s && s.번호 ? `(${s.번호})` : '논제');
 const 단위이름 = u => (u ? `(${u})` : '논제');
 const 엔진배지 = '<span class="badge engine">엔진</span>';
-const AI배지 = '<span class="badge ai">Claude 문장</span>';
+const AI배지 = '<span class="badge ai">AI 문장</span>';
 
 /** 급소 — 논술은 Q 앞 B+C 덩어리(오종래 2026-10-13), 없으면 엔진 pivot. 서지 않았으면 그 사유 */
 function 급소글(s) {
@@ -2070,7 +2070,8 @@ const C화면 = {
   4: { 제목: '연결 평가 (4축)', 도구: 'make', 설명: '엔진 — 논제 핵심과 제시문 단락이 어디서 연결되는지 문장으로' },
   // 의미 — 제목 위 흐린 부제 (오종래 2026-10-21)
   5: { 제목: '논제 정교화', 도구: 'make', 의미: '바른 질문이 바른 사고를 이끌어냅니다', 설명: '엔진 — 정교화할 곳을 문장으로 · 정교화안 문장은 Claude가 엔진 진단에서' },
-  6: { 제목: '추가 논제 생성', 도구: 'make', 의미: '더 깊은 질문으로 사고의 지평을 넓혀갑니다', 설명: '엔진 — 단락 핵심 관계(유사·대비·보완·병렬) → 6유형 논제 뼈대 · 문장은 Claude가 다듬음' },
+  // 흐름 — 섹션 최상단 흐린 작은 글씨 한 줄 (오종래 2026-10-21)
+  6: { 제목: '추가 논제 생성', 도구: 'make', 흐름: '키워드 입력 → 엔진 분해·조각 분석 → AI 문장 생성', 의미: '더 깊은 질문으로 사고의 지평을 넓혀갑니다', 설명: '엔진 — 단락 핵심 관계(유사·대비·보완·병렬) → 6유형 논제 뼈대 · 문장은 Claude가 다듬음' },
   7: { 제목: '교사 확정', 도구: 'grade', 설명: '논제를 선택·수정·확정합니다 — 확정 논제는 엔진이 다시 인식합니다 · 저장하거나 문항분석으로 넘깁니다' },
 };
 
@@ -2078,6 +2079,7 @@ function buildPanes() {
   document.getElementById('c-panes').innerHTML = Object.entries(C화면).map(([n, s]) => `
     <div class="tab-pane" id="pane-${n}">
       <div class="section-header">
+        ${s.흐름 ? `<div class="section-sub" style="opacity:.55; font-size:11px; margin-bottom:4px;">${s.흐름}</div>` : ''}
         ${s.의미 ? `<div class="section-sub" style="opacity:.75; margin-bottom:4px;">${s.의미}</div>` : ''}
         <div class="section-title"><span class="tool-tag ${s.도구}">${s.도구 === 'make' ? '출제도구' : '채점도구'}</span>${n} · ${s.제목}</div>
         <div class="section-sub">${s.설명}</div>
