@@ -1500,7 +1500,9 @@ async function 샘플목록보기() {
 function 샘플목록그리기() {
   if (!샘플목록) return;
   const 형식 = C형식 || 넘길형식;
-  const 보임 = 형식 ? 샘플목록.filter(s => s.형식 === 형식) : 샘플목록;
+  // 질문 설계 도구는 논술(C) 샘플만 연다 — 단답형·서술형(A·B) 샘플은 목록에서 숨긴다 (오종래 2026-10-20)
+  const 논술 = 샘플목록.filter(s => /^C-/.test(s.형식 || ''));
+  const 보임 = 형식 ? 논술.filter(s => s.형식 === 형식) : 논술;
   document.getElementById('sample-list').innerHTML = 보임.length
     ? `<div class="type-selector" style="margin-top:8px;">${보임.map(s => `<button class="type-btn" onclick="샘플불러오기('${esc(s.파일)}')" title="${esc(s.저장 ? '저장 ' + s.저장 : '')}">${esc(s.이름)} <span class="c-meta">${esc([s.형식, s.소문항 && s.소문항.length ? `소문항 ${s.소문항.join('·')}` : '', s.오류].filter(Boolean).join(' · '))}</span></button>`).join('')}</div>`
     : `<div class="c-meta" style="margin-top:8px;">${형식 ? `${esc(형식)} 형식 샘플이 없습니다` : '검증/샘플/ 폴더에 샘플이 없습니다'}</div>`;
