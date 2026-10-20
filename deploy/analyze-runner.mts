@@ -414,15 +414,23 @@ try {
     // 연속 소문항 이어달리기 — 인문논술 C-1a [오종래 2026-10-20 확정] (숭실대 경상계열) — 앞 소문항 결론(급소 B)이 다음 소문항 출발점(제약 C 「이어받기」).
     //   같은 문항 묶음(「[문항 N]」 소문항은 머리 발문, 그 밖은 공통 발문)의 연속 소문항 모두. 소문항 창 하나면 요청의 앞소문항.
     //   표지가 없어도 이어받기를 단다 — 모범답안이 앞 창 답안을 이어받는다(화면 이어받을답안). 사족·일방흐름은 수리논술처럼 뺀다(아래)
+    //   [오종래 2026-10-20 확정] 계단식 vs 병렬 — 소문항 참조(제시문 기호 + 부른 자료 [자료 N])가 앞 소문항과 같으면 계단식(이어달리기),
+    //   다르면 병렬(각각 독립 논제, 이어달리기 없음)
     const 연속소문항 = String(req.형식 ?? '') === 'C-1a';
     if (연속소문항) {
       const B들 = (u: any) => ((u.급소덩어리 && u.급소덩어리.length ? u.급소덩어리 : u.급소) ?? []).map((d: any) => String(d.실체).trim().replace(/^[\s,]+/, '')).filter(Boolean);
-      const 요청앞 = req.앞소문항 && typeof req.앞소문항 === 'object' && Array.isArray(req.앞소문항.급소) ? { 번호: String(req.앞소문항.번호 ?? ''), B: req.앞소문항.급소.map(String) } : null;
+      const 참조열쇠 = (참조: unknown, 자료: unknown) => JSON.stringify([[...new Set((Array.isArray(참조) ? 참조 : []).map(String))].sort(), [...new Set((Array.isArray(자료) ? 자료 : []).map(String))].sort()]);
+      const 자료of = (s: any) => data_calls([s.공통발문, s.텍스트].filter(Boolean).join('\n'));
+      const 요청앞 = req.앞소문항 && typeof req.앞소문항 === 'object' && Array.isArray(req.앞소문항.급소)
+        ? { 번호: String(req.앞소문항.번호 ?? ''), B: req.앞소문항.급소.map(String), 열쇠: 참조열쇠(req.앞소문항.참조, req.앞소문항.자료) } : null;
       const 묶음 = (s: any) => (s.문항 ? s.문항.머리발문 : s.공통발문);
       out.단계.인식.소문항.forEach((u: any, i: number) => {
+        const 열쇠 = 참조열쇠(소문항[i].참조, 자료of(소문항[i]));
+        u.자료 = 자료of(소문항[i]);
         const 앞u = i > 0 && 묶음(소문항[i - 1]) === 묶음(소문항[i]) ? out.단계.인식.소문항[i - 1] : null;
-        const 앞 = 앞u ? { 번호: 앞u.번호, B: B들(앞u) } : i === 0 ? 요청앞 : null;
+        const 앞 = 앞u ? { 번호: 앞u.번호, B: B들(앞u), 열쇠: 참조열쇠(소문항[i - 1].참조, 자료of(소문항[i - 1])) } : i === 0 ? 요청앞 : null;
         if (!앞 || !앞.B.length) return;
+        if (앞.열쇠 !== 열쇠) { u.병렬 = { 앞번호: 앞.번호, 사유: '참조 제시문·자료가 앞 소문항과 다름' }; return; }
         u.제약 = relay_constraint(앞.번호, 앞.B, '');
         u.이어받기 ??= { 번호: 앞.번호, 표지: '연속 소문항', 대상: '' };
       });
