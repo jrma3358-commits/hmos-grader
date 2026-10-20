@@ -362,6 +362,15 @@ describe('봉인⑬ 정교화 4갈래 진단 (오종래 2026-10-13)', () => {
     assert.deepEqual(갈래들(a), [], '물음 문장 B는 둘');
   });
 
+  it('② 수치(숫자·단위)뿐인 B는 세지 않는다 — 실체 명사 B만 (오종래 2026-10-20)', () => {
+    const 수치들 = ['10 m/s', '200 g', '0.1초', '25℃, 1기압', '36L'].map((e, i) => node(`v${i}`, 'B', e));
+    const 명사 = [node('b1', 'B', '사고'), node('b2', 'B', '에어백의 부피')];
+    assert.deepEqual(갈래들(논제([...명사, ...수치들, node('c', 'C'), node('q', 'Q')], { ok: true, pivot: pv(명사[1], 2) })), []);
+    // 수치에 명사·서술이 붙으면 실체 명사로 센다
+    const 붙은 = node('b3', 'B', '10 m/s의 속도로 굴러오');
+    assert.deepEqual(갈래들(논제([...명사, 붙은, node('c', 'C'), node('q', 'Q')], { ok: true, pivot: pv(명사[1], 2) })), ['서술복잡']);
+  });
+
   it('② C-F 노드가 있으면 서술복잡이 아니다', () => {
     const bs = [node('b1', 'B'), node('b2', 'B'), node('b3', 'B')];
     const cf = { ...node('cf', 'C'), switchId: 'C-F' };

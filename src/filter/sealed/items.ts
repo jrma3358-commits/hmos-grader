@@ -121,6 +121,10 @@ export function 엔진단위(a: V2Analysis & { units?: V2Analysis[] }): 진단�
 /** 서술복잡에서 세지 않는 기호 B — 실체가 기호(나열·범위 포함)뿐 (오종래 2026-10-15, thesis/sign.ts) */
 const 기호B = 기호뿐;
 
+/** 서술복잡에서 세지 않는 수치 B — 숫자(+단위)를 다 떼면 구분 기호(쉼표·공백·가운뎃점·물결·괄호)만 남는다 (오종래 2026-10-20) */
+const 수치 = /[-+]?\d+(?:[.,]\d+)*\s*(?:[a-zA-Zμ°℃℉Ω%‰/²³⁻¹·]+|[가-힣]{1,2})?/g;
+const 수치B = (실체: string) => /\d/.test(실체) && 실체.replace(수치, '').replace(/[\s,，·~∼\-()（）]/g, '') === '';
+
 /** 물음 앞 배경 문장의 B — 표지 뒤부터 다음 Q 노드까지 사이에 평서 종결 「~다.」가 있다 (오종래 2026-10-15) */
 function 배경문장B(question: string, n: { index: number; surface: string }, nodes: readonly { index: number; color: string | null }[]): boolean {
   const q = nodes.find((x) => x.color === 'Q' && x.index > n.index);
@@ -160,7 +164,9 @@ function 단위진단(u: 인식단위, 단위: string | null, 자료분석 = fal
     if (p.node.color !== 'B' || !앞 || 앞.color !== 'C' || 앞.switchId !== 'LS-21b') continue;
     for (let k = at - 2; k >= 0 && nodes[k].color !== 'Q'; k--) if (nodes[k].color === 'B') 꾸밈B.add(nodes[k].id);
   }
-  const bs = nodes.filter((n) => n.color === 'B' && !기호B(n.entity) && !배경문장B(u.question, n, nodes) && !꾸밈B.has(n.id));
+  //   [오종래 2026-10-20 확정] 수치 B는 세지 않는다 — 실체가 수치(숫자·단위, 「10 m/s」「200 g」「0.1초」「25℃, 1기압」)뿐인 B는 조건 값이지 실체 명사가 아니다.
+  //   「10 m/s의 속도로 굴러오」처럼 수치에 명사·서술이 붙으면 그대로 센다
+  const bs = nodes.filter((n) => n.color === 'B' && !기호B(n.entity) && !수치B(n.entity) && !배경문장B(u.question, n, nodes) && !꾸밈B.has(n.id));
   //   [오종래 2026-10-20 확정] 자료 분석형 소문항(〈자료 N〉·[자료 N]을 부른다)은 서술복잡을 내리지 않는다 — 자료 분석 → 논지 전개는 상경계열 논술의 정상 구조
   if (!자료분석 && bs.length >= 3 && !nodes.some((n) => n.switchId === 'C-F')) {
     진단.push({ 갈래: '서술복잡', 단위, 근거: `B 노드 ${bs.length}개 (${bs.map((n) => n.id).join('·')}), C-F 없음` });
