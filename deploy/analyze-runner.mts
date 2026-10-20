@@ -31,7 +31,7 @@ const { find_logic_markers } = await load('src/fq/logic_markers.ts');
 const { check_math_answer, check_human_answer } = await load('src/fq/answer_markers.ts');
 // 제시문 B 극성 — 논술 3단계 (오종래 2026-10-19). 표지 목록은 봉인 표지사전 「극성」, 찾기는 엔진 polarity_markers. Claude 판정 없음
 const { passage_polarity } = await load('src/fq/polarity_markers.ts');
-const { align_passage, background_passage, box_passages, strip_passage_notes } = await load('src/thesis/align.ts');
+const { align_passage, background_passage, box_passages, data_calls, strip_passage_notes } = await load('src/thesis/align.ts');
 // 배경 제시문 단락 실체 — 단락마다 실체 하나 = ② 세우기 조각 (오종래 2026-10-20 확정, 정의문 우선)
 const { background_paragraphs } = await load('src/thesis/background.ts');
 // 제시문 핵심 메시지 · 「모두 활용하여」 세우기 하한 (오종래 2026-10-20 확정)
@@ -494,7 +494,8 @@ try {
     // 5단계 — 정교화 4갈래 진단 [봉인⑬]. ④사족은 4단계 결과, 제시문이 없으면 요청의 사족
     const 사족 = out.단계.정합?.사족 ?? (Array.isArray(req.사족) ? req.사족 : []);
     // 6단계 ⑤ 보완(참조 범위 안 단락을 끌어들일 수 있는 소문항)은 5단계 진단 「보완」으로 (오종래 2026-10-14)
-    out.단계.정교화 = { 진단: [...봉인13_정교화진단(소문항.map((s: any) => ({ 이름: s.번호, 인식: s.a })), 사족), ...(out.단계.관계?.보완 ?? [])] };
+    // 자료 분석형 소문항(공통 발문·본문이 「[자료 N]」을 부른다)은 서술복잡을 내리지 않는다 (오종래 2026-10-20 확정)
+    out.단계.정교화 = { 진단: [...봉인13_정교화진단(소문항.map((s: any) => ({ 이름: s.번호, 인식: s.a, 자료분석: data_calls([s.공통발문, s.텍스트].filter(Boolean).join('\n')).length > 0 })), 사족), ...(out.단계.관계?.보완 ?? [])] };
     // 수리논술 C-2 — 제약 C가 얹힌 소문항은 「C 없이 한 방향」(일방흐름)이 아니다
     if (수리논술 || 연속소문항) out.단계.정교화.진단 =out.단계.정교화.진단.filter((d: any) => !(d.갈래 === '일방흐름' && (out.단계.인식.소문항.find((u: any) => u.번호 === d.단위)?.제약 ?? []).length));
   } else {

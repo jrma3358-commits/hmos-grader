@@ -50,6 +50,8 @@ type 인식단위 = Pick<V2Analysis, 'question' | 'graph' | 'pivot'>;
 export interface 진단단위 {
   이름: string | null;
   인식: 인식단위;
+  /** 자료 분석형 — 소문항(공통 발문 포함)이 〈자료 N〉·[자료 N]을 부른다 (오종래 2026-10-20, 서술복잡을 내리지 않는다) */
+  자료분석?: boolean;
 }
 
 /** 엔진이 나눈 단위(split_units)로 — 나누지 않았으면 전체가 한 단위 */
@@ -69,7 +71,7 @@ function 배경문장B(question: string, n: { index: number; surface: string }, 
 }
 
 /** 소문항(단위) 하나의 ①②③ */
-function 단위진단(u: 인식단위, 단위: string | null): 정교화진단[] {
+function 단위진단(u: 인식단위, 단위: string | null, 자료분석 = false): 정교화진단[] {
   const nodes = [...u.graph.nodes].sort((a, b) => a.index - b.index);
   const 진단: 정교화진단[] = [];
   const pivots = u.pivot.ok ? (u.pivot.pivots ?? [u.pivot.pivot]) : [];
@@ -100,7 +102,8 @@ function 단위진단(u: 인식단위, 단위: string | null): 정교화진단[]
     for (let k = at - 2; k >= 0 && nodes[k].color !== 'Q'; k--) if (nodes[k].color === 'B') 꾸밈B.add(nodes[k].id);
   }
   const bs = nodes.filter((n) => n.color === 'B' && !기호B(n.entity) && !배경문장B(u.question, n, nodes) && !꾸밈B.has(n.id));
-  if (bs.length >= 3 && !nodes.some((n) => n.switchId === 'C-F')) {
+  //   [오종래 2026-10-20 확정] 자료 분석형 소문항(〈자료 N〉·[자료 N]을 부른다)은 서술복잡을 내리지 않는다 — 자료 분석 → 논지 전개는 상경계열 논술의 정상 구조
+  if (!자료분석 && bs.length >= 3 && !nodes.some((n) => n.switchId === 'C-F')) {
     진단.push({ 갈래: '서술복잡', 단위, 근거: `B 노드 ${bs.length}개 (${bs.map((n) => n.id).join('·')}), C-F 없음` });
   }
 
@@ -126,7 +129,7 @@ function 단위진단(u: 인식단위, 단위: string | null): 정교화진단[]
  * ①②③은 단위(소문항)마다 본다. C 논제는 split_thesis로 나눈 소문항, 그 밖은 엔진단위().
  */
 export function 봉인13_정교화진단(단위들: 진단단위[], 사족: 사족노드[]): 정교화진단[] {
-  const 진단 = 단위들.flatMap((u) => 단위진단(u.인식, u.이름));
+  const 진단 = 단위들.flatMap((u) => 단위진단(u.인식, u.이름, !!u.자료분석));
   for (const s of 사족) {
     진단.push({ 갈래: '사족', 단위: s.소문항, 근거: `논제 급소「${s.급소}」 — 제시문 어느 단락 급소와도 연결선 없음` });
   }
