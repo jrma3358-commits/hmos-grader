@@ -1745,6 +1745,7 @@ function pickForm(코드) {
   document.getElementById('form-select').value = selectedForm || '';
   형식칸맞춤();
   사이드바단계(selectedForm);
+  샘플목록그리기();
 }
 
 /** 형식에 따라 달라지는 칸 — 제시문 없는 논술은 제시문 칸을 감춘다 */
@@ -3258,6 +3259,8 @@ function 앞소문항들of(i) {
 // 페이지마다 따로 둘 것: 샘플입력() · 샘플결과() · 샘플되살리기(d)
 let 불러온샘플 = null;   // { 이름, 논제 }
 
+// 샘플 목록은 고른 문제 형식 것만 (오종래 2026-10-20 확정) — 형식을 안 골랐으면 전부. 형식을 바꾸면 열린 목록도 다시 거른다
+let 샘플목록 = null;
 async function 샘플목록보기() {
   const box = document.getElementById('sample-list');
   box.innerHTML = '<div class="c-meta">샘플 목록을 읽는 중…</div>';
@@ -3265,12 +3268,20 @@ async function 샘플목록보기() {
     const res = await fetch('/api/samples');
     const d = await res.json();
     if (!d.ok) throw new Error(d.error || res.status);
-    box.innerHTML = d.목록.length
-      ? `<div class="type-selector" style="margin-top:8px;">${d.목록.map(s => `<button class="type-btn" onclick="샘플불러오기('${esc(s.파일)}')" title="${esc(s.저장 ? '저장 ' + s.저장 : '')}">${esc(s.이름)} <span class="c-meta">${esc([s.형식, s.소문항 && s.소문항.length ? `소문항 ${s.소문항.join('·')}` : '', s.오류].filter(Boolean).join(' · '))}</span></button>`).join('')}</div>`
-      : '<div class="c-meta" style="margin-top:8px;">검증/샘플/ 폴더에 샘플이 없습니다</div>';
+    샘플목록 = d.목록;
+    샘플목록그리기();
   } catch (e) {
+    샘플목록 = null;
     box.innerHTML = `<div class="flag-box" style="margin-top:8px;">샘플 목록을 읽지 못했습니다 — ${esc(e.message)}</div>`;
   }
+}
+function 샘플목록그리기() {
+  if (!샘플목록) return;
+  const 형식 = selectedForm;
+  const 보임 = 형식 ? 샘플목록.filter(s => s.형식 === 형식) : 샘플목록;
+  document.getElementById('sample-list').innerHTML = 보임.length
+    ? `<div class="type-selector" style="margin-top:8px;">${보임.map(s => `<button class="type-btn" onclick="샘플불러오기('${esc(s.파일)}')" title="${esc(s.저장 ? '저장 ' + s.저장 : '')}">${esc(s.이름)} <span class="c-meta">${esc([s.형식, s.소문항 && s.소문항.length ? `소문항 ${s.소문항.join('·')}` : '', s.오류].filter(Boolean).join(' · '))}</span></button>`).join('')}</div>`
+    : `<div class="c-meta" style="margin-top:8px;">${형식 ? `${esc(형식)} 형식 샘플이 없습니다` : '검증/샘플/ 폴더에 샘플이 없습니다'}</div>`;
 }
 
 async function 샘플불러오기(파일) {

@@ -1481,6 +1481,8 @@ function 앞소문항들of(i) {
 // 페이지마다 따로 둘 것: 샘플입력() · 샘플결과() · 샘플되살리기(d)
 let 불러온샘플 = null;   // { 이름, 논제 }
 
+// 샘플 목록은 고른 문제 형식 것만 (오종래 2026-10-20 확정) — 형식을 안 골랐으면 전부. 형식을 바꾸면 열린 목록도 다시 거른다
+let 샘플목록 = null;
 async function 샘플목록보기() {
   const box = document.getElementById('sample-list');
   box.innerHTML = '<div class="c-meta">샘플 목록을 읽는 중…</div>';
@@ -1488,12 +1490,20 @@ async function 샘플목록보기() {
     const res = await fetch('/api/samples');
     const d = await res.json();
     if (!d.ok) throw new Error(d.error || res.status);
-    box.innerHTML = d.목록.length
-      ? `<div class="type-selector" style="margin-top:8px;">${d.목록.map(s => `<button class="type-btn" onclick="샘플불러오기('${esc(s.파일)}')" title="${esc(s.저장 ? '저장 ' + s.저장 : '')}">${esc(s.이름)} <span class="c-meta">${esc([s.형식, s.소문항 && s.소문항.length ? `소문항 ${s.소문항.join('·')}` : '', s.오류].filter(Boolean).join(' · '))}</span></button>`).join('')}</div>`
-      : '<div class="c-meta" style="margin-top:8px;">검증/샘플/ 폴더에 샘플이 없습니다</div>';
+    샘플목록 = d.목록;
+    샘플목록그리기();
   } catch (e) {
+    샘플목록 = null;
     box.innerHTML = `<div class="flag-box" style="margin-top:8px;">샘플 목록을 읽지 못했습니다 — ${esc(e.message)}</div>`;
   }
+}
+function 샘플목록그리기() {
+  if (!샘플목록) return;
+  const 형식 = C형식 || 넘길형식;
+  const 보임 = 형식 ? 샘플목록.filter(s => s.형식 === 형식) : 샘플목록;
+  document.getElementById('sample-list').innerHTML = 보임.length
+    ? `<div class="type-selector" style="margin-top:8px;">${보임.map(s => `<button class="type-btn" onclick="샘플불러오기('${esc(s.파일)}')" title="${esc(s.저장 ? '저장 ' + s.저장 : '')}">${esc(s.이름)} <span class="c-meta">${esc([s.형식, s.소문항 && s.소문항.length ? `소문항 ${s.소문항.join('·')}` : '', s.오류].filter(Boolean).join(' · '))}</span></button>`).join('')}</div>`
+    : `<div class="c-meta" style="margin-top:8px;">${형식 ? `${esc(형식)} 형식 샘플이 없습니다` : '검증/샘플/ 폴더에 샘플이 없습니다'}</div>`;
 }
 
 async function 샘플불러오기(파일) {
@@ -2064,7 +2074,7 @@ let 넘길형식 = null;
 
 /** 형식 하나로 — 논술(C)이면 여기서, A·B면 문항분석으로 넘길 형식으로. 빈 값이면 형식 없음 */
 function 형식고르기(코드) {
-  if (C형식들[코드]) { C형식고르기(코드); 입력칸잠금(); return; }
+  if (C형식들[코드]) { C형식고르기(코드); 입력칸잠금(); 샘플목록그리기(); return; }
   C형식 = null;
   넘길형식 = 형식목록[코드] ? 코드 : null;
   document.getElementById('c-form-note').textContent = 넘길형식
@@ -2074,6 +2084,7 @@ function 형식고르기(코드) {
   document.getElementById('c-step-note').style.display = 'none';
   입력칸잠금();
   창바그림();
+  샘플목록그리기();
 }
 
 // 형식 선택 [오종래 2026-10-20 확정] — 자동 판별 없음. 1 종류 · 2 계열 · 3 소문항 수 / 제시문을 다 고르면 형식이 정해지고 입력란이 열린다
