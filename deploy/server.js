@@ -654,7 +654,22 @@ const 엔진실패글=(머리,r)=>r.error&&r.error.종류==='계열오류'?r.err
 // [오종래 2026-10-20 확정] 서술형 B = B-s1·B-s2(수리·과학, 소문항 1개·2개+) · B-h1·B-h2(인문·사회, 소문항 1개·2개+). 옛 B1·B2 대신
 // 지금은 받아서 결과에 그대로 돌려줄 뿐이다 — 형식별 채점 기준(프롬프트에 넣을 글)은 확정 대기
 const 채점형식들=['B-s1','B-s2','B-h1','B-h2','C1','C2'];
-const 채점형식=req=>채점형식들.includes(req.body&&req.body.gradeFormat)?req.body.gradeFormat:null;
+// [오종래 2026-10-20 확정] 형식 자동 판별 — 화면과 같은 format-detect.js. gradeFormat이 없으면 논제(+제시문·총배점)로 판별한 형식 (교사가 고른 값이 먼저)
+const 형식판별=require('./format-detect.js');
+const 채점형식=req=>{
+  const b=req.body||{};
+  if(채점형식들.includes(b.gradeFormat))return b.gradeFormat;
+  const 글=typeof b.논제==='string'?b.논제:'';
+  if(!글.trim())return null;
+  const 제시문=Array.isArray(b.제시문)?b.제시문.map(p=>p&&typeof p==='object'?String(p.텍스트||''):String(p||'')).join('\n'):typeof b.제시문==='string'?b.제시문:'';
+  return 형식판별.채점형식으로(형식판별.판별(글,{제시문,총배점:b.총배점}).형식);
+};
+// POST /api/format {글, 제시문?, 총배점?, 정답?} → {형식, 단계, 근거, 계열?, 소문항?, 채점형식} — 화면이 판별을 서버에 물을 때
+app.post('/api/format',(req,res)=>{
+  const {글,제시문,총배점,정답}=req.body||{};
+  const r=형식판별.판별(String(글||''),{제시문:String(제시문||''),총배점,정답:String(정답||'')});
+  res.json({...r,채점형식:형식판별.채점형식으로(r.형식)});
+});
 
 app.post('/api/rubric',async(req,res)=>{
   // 논제: 7단계에서 교사가 확정한 논제 글 · 계열: 교사가 8단계에서 고른 값 · 총배점: 소문항 하나의 배점 (교사 입력)
@@ -929,7 +944,7 @@ app.post('/api/axis-grade',async(req,res)=>{
   // 소문항: /api/rubric 응답의 소문항 하나 그대로 (엔진 조각) · 학생답: 이 소문항 학생 답 · 계열: 루브릭 계열 (수리 · 인문사회국어)
   const {소문항:s,학생답,계열,논제,제시문}=req.body||{};
   const 형식=채점형식(req);
-  if(!형식){res.status(400).json({error:'문제 형식(B1·B2·C1·C2)이 필요합니다'});return;}
+  if(!형식){res.status(400).json({error:'문제 형식(B-s1·B-s2·B-h1·B-h2·C1·C2)이 필요합니다 — 논제로도 판별하지 못했습니다'});return;}
   if(!축이름[계열]){res.status(400).json({error:'계열(수리·인문사회국어)이 필요합니다'});return;}
   if(!s||!Array.isArray(s.조각)||!s.조각.length){res.status(400).json({error:'엔진 루브릭 조각이 있는 소문항이 필요합니다'});return;}
   const 답=String(학생답||'').trim();

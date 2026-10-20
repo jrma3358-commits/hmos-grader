@@ -204,6 +204,7 @@ th{font-size:11.5px;color:var(--muted);font-weight:600;background:var(--ivory)}
   <section class="panel" id="p7"></section>
 </div>
 
+<script src="/format-detect.js"></script>
 <script>
 // ── 상태 ── 지금 보는 기록 하나: 검증/ 폴더 JSON 또는 탭1에서 새로 채점한 결과 (같은 꼴: 문항 · 계열 · 정답 · 모범답안 · 학생답 · 루브릭 · 채점)
 let 목록 = [];
@@ -329,28 +330,80 @@ const 형식안내 = {
 let 입력형식 = '';
 // 옛 B1·B2(이 브라우저에 남은 값)는 지금 계열의 새 형식으로
 try { let v = localStorage.getItem('hmos-d2-format'); if (v === 'B1' || v === 'B2') v = B형식(입력계열, v === 'B2'); if (형식들[v]) 입력형식 = v; } catch (_) {}
+/** 계열 칸만 맞춘다 (형식은 그대로) */
+function 계열맞춤(계열) {
+  if (입력계열 === 계열) return;
+  입력계열 = 계열;
+  try { localStorage.setItem('hmos-d2-field', 계열); } catch (_) {}
+  document.querySelectorAll('#in-field button').forEach((b) => b.classList.toggle('on', b.dataset.v === 계열));
+}
 function 형식고르기(v) {
   입력형식 = 형식들[v] ? v : '';
   // 서술형 B는 형식에 계열이 들어 있다 — 계열 칸을 맞춘다
-  if (서술형B(입력형식)) {
-    const 계열 = 입력형식[2] === 'h' ? '인문·사회' : '수리·과학';
-    if (입력계열 !== 계열) { 입력계열 = 계열; try { localStorage.setItem('hmos-d2-field', 계열); } catch (_) {} document.querySelectorAll('#in-field button').forEach((b) => b.classList.toggle('on', b.dataset.v === 계열)); }
-  }
+  if (서술형B(입력형식)) 계열맞춤(입력형식[2] === 'h' ? '인문·사회' : '수리·과학');
   try { localStorage.setItem('hmos-d2-format', 입력형식); } catch (_) {}
   document.querySelectorAll('#in-fmt button').forEach((b) => b.classList.toggle('on', b.dataset.v === 입력형식));
-  document.querySelectorAll('#src-새로 [data-fmt]').forEach((el) => { el.style.display = el.dataset.fmt.split(' ').includes(입력형식) ? '' : 'none'; });
+  // 형식을 고르기 전에는 다문 칸만 빼고 다 보인다 — 문항(·제시문)을 넣으면 자동 판별이 형식을 고른다
+  document.querySelectorAll('#src-새로 [data-fmt]').forEach((el) => { const fs = el.dataset.fmt.split(' '); el.style.display = (입력형식 ? fs.includes(입력형식) : !fs.includes('B-s2')) ? '' : 'none'; });
   $('#in-ps-label').textContent = 입력형식 === 'C1' ? '제시문 — (가) (나) (다) …' : '제시문 · 조건 (선택)';
-  $('#in-q-label').textContent = 단문B(입력형식) ? '문항' : '논제';
+  $('#in-q-label').textContent = 단문B(입력형식) || !입력형식 ? '문항' : '논제';
   $('#in-st-wrap').style.display = 다문B(입력형식) && 문항방식 === '새로' ? 'none' : '';
   B2그리기();
-  $('#in-fmt-hint').textContent = 입력형식 ? `${형식들[입력형식]} — ${형식안내[입력형식]}` : '문제 형식을 고르면 입력 칸이 나옵니다.';
+  $('#in-fmt-hint').textContent = 입력형식 ? `${형식들[입력형식]} — ${형식안내[입력형식]}` : '문항을 넣으면 형식을 자동으로 고릅니다 — 버튼으로 직접 바꿀 수도 있습니다.';
   입력칸보이기();
   if (분석.목록) 단위목록그리기();
 }
-/** 계열 · 형식을 다 골라야 입력 칸 — 채점 칸은 두 계열 모두 (인문·사회는 2026-10-19부터), 인문·사회는 탭2 4축 문항분석 칸도 */
+/** 입력 칸은 늘 보인다 (형식은 문항을 넣으면 자동, 2026-10-20) — 인문·사회는 탭2 4축 문항분석 칸도 */
 function 입력칸보이기() {
-  $('#in-form').style.display = 입력형식 ? '' : 'none';
+  $('#in-form').style.display = '';
   $('#in-wait').style.display = 입력형식 && 입력계열 === '인문·사회' ? '' : 'none';
+}
+
+// 형식 자동 판별 [오종래 2026-10-20 확정] — 문항(·제시문·총배점)을 넣으면 /format-detect.js 판별(객관식 → 단답형 → 논술형 → 서술형 계열 → 소문항 수)로
+// 형식 버튼을 고른다. 논술 C-1a → C1(인문·사회) · C-2a·C-2b → C2(수리·과학). 객관식·단답형(A)은 채점 형식이 없어 알림만.
+// 교사가 형식 버튼을 누르면 그 형식을 지킨다 — 문항 칸을 다 비우거나 「자동으로」를 누르면 다시 자동.
+// 소문항 2개+로 바뀌고 소문항 칸이 비어 있으면 문항 글을 소문항 칸으로 나눠 넣는다 (공통 발문은 (1) 앞에)
+let 형식수동 = false;
+function 자동판별() {
+  if (typeof HMOS형식판별 === 'undefined' || !$('#in-q')) return null;
+  const 글 = $('#in-q').value;
+  if (!글.trim()) return null;
+  const D = HMOS형식판별;
+  const r = D.판별(글, { 제시문: $('#in-ps').value, 총배점: Math.max(D.배점합(글), Number($('#in-p').value) >= 20 ? Number($('#in-p').value) : 0) });
+  return { ...r, 채점형식: D.채점형식으로(r.형식) };
+}
+function 형식자동(되돌림) {
+  if (되돌림) 형식수동 = false;
+  if (!$('#in-q') || !$('#in-q').value.trim()) 형식수동 = false;
+  const r = 자동판별();
+  if (r && !형식수동 && r.채점형식 && r.채점형식 !== 입력형식) {
+    if (다문B(r.채점형식) && !B2칸.some((x) => x.q.trim())) B2채우기($('#in-q').value);
+    if (r.채점형식 === 'C1') 계열맞춤('인문·사회');
+    if (r.채점형식 === 'C2') 계열맞춤('수리·과학');
+    형식고르기(r.채점형식);
+  }
+  자동알림(r);
+}
+function 자동알림(r = 자동판별()) {
+  const el = $('#in-fmt-auto');
+  if (!el) return;
+  if (!r || !r.형식) { el.innerHTML = ''; return; }
+  const 다름 = r.채점형식 && 입력형식 && r.채점형식 !== 입력형식;
+  el.innerHTML = `자동 판별: <b>${esc(r.형식)}</b> — ${esc(r.근거.join(' · '))}`
+    + (!r.채점형식 ? ' · 객관식·단답형은 채점 대시보드에서 채점하지 않습니다 (문항 분석에서)' : '')
+    + (다름 ? ` · 지금은 교사가 고른 ${esc(입력형식)} <a href="#" id="in-fmt-autoback">자동으로</a>` : '');
+  const 되 = $('#in-fmt-autoback');
+  if (되) 되.addEventListener('click', (e) => { e.preventDefault(); 형식자동(true); });
+}
+/** 문항 글 → 소문항 칸 (소문항 번호 머리는 떼고, 「[N점]」은 배점 칸으로) */
+function B2채우기(글) {
+  const n = HMOS형식판별.소문항나누기(글);
+  if (!n) return;
+  const 점빼기 = (t) => t.replace(/\s*[\[(]\s*\d+(?:\.\d+)?\s*점\s*[\])]/g, '');
+  B2칸.splice(0, B2칸.length, ...n.소문항.map((s, i) => ({
+    q: (i === 0 && n.머리 ? 점빼기(n.머리) + '\n' : '') + s.글.replace(/^[(\[]?\s*(?:문제|문항)?\s*(?:\d{1,2}(?:-\d{1,2})?|[①-⑩])\s*[)\]]?\s*/, ''),
+    p: s.배점 ? String(s.배점) : '', m: '', a: '',
+  })));
 }
 // 문항 입력 방식 (오종래 2026-10-17): ① 문항 분석에서 불러오기 — 대시보드 문항 목록(열린 /dashboard 탭 또는 「목록 저장」 .json)의
 //   확정 루브릭을 그대로 쓴다 (루브릭을 다시 만들지 않는다, 옛 /grader와 같다) · ② 새로 입력 — 글 붙이기 또는 파일(.txt · .docx · .pdf)
@@ -385,7 +438,8 @@ function 입력칸그리기() {
       <div class="field-pick" id="in-field"><button data-v="수리·과학">수리·과학</button><button data-v="인문·사회">인문·사회</button></div>
       <div class="label">문제 형식</div>
       <div class="field-pick" id="in-fmt"><button data-v="B-s1">B-s1 수리·과학 1개</button><button data-v="B-s2">B-s2 수리·과학 2개+</button><button data-v="B-h1">B-h1 인문·사회 1개</button><button data-v="B-h2">B-h2 인문·사회 2개+</button><button data-v="C1">인문논술</button><button data-v="C2">수리논술</button></div>
-      <div class="fmt-hint" id="in-fmt-hint">문제 형식을 고르면 입력 칸이 나옵니다.</div>
+      <div class="fmt-hint" id="in-fmt-hint">문항을 넣으면 형식을 자동으로 고릅니다 — 버튼으로 직접 바꿀 수도 있습니다.</div>
+      <div class="fmt-hint" id="in-fmt-auto"></div>
       <div id="in-wait" style="display:none">
         <div class="label" style="margin-top:4px">탭2 4축 문항분석 (루브릭 저장용 · 기존)</div>
         <div class="sec-sub" style="margin:4px 0 12px">제시문과 문항을 넣은 뒤 <b>탭2 「문항분석 →」</b>을 누르세요. 엔진이 5색 · 급소 K를 읽고, 4축 루브릭을 만들어 검증/ 폴더에 저장합니다. (학생 답안 채점은 준비 중)</div>
@@ -427,7 +481,8 @@ function 입력칸그리기() {
     </div>`;
   $('#in-run').addEventListener('click', 새채점);
   document.querySelectorAll('#in-field button').forEach((b) => b.addEventListener('click', () => 계열고르기(b.dataset.v)));
-  document.querySelectorAll('#in-fmt button').forEach((b) => b.addEventListener('click', () => 형식고르기(b.dataset.v)));
+  document.querySelectorAll('#in-fmt button').forEach((b) => b.addEventListener('click', () => { 형식수동 = true; 형식고르기(b.dataset.v); 자동알림(); }));
+  for (const id of ['in-q', 'in-ps', 'in-p']) $('#' + id).addEventListener('input', () => 형식자동());
   document.querySelectorAll('#in-src button').forEach((b) => b.addEventListener('click', () => 방식고르기(b.dataset.v)));
   document.querySelectorAll('#in-form input[data-for], #in-wait input[data-for]').forEach((inp) => inp.addEventListener('change', () => 파일넣기(inp)));
   for (const id of ['hu-p', 'hu-q', 'hu-pt', 'hu-name']) { // 쓰던 글은 이 브라우저에 남긴다
@@ -513,6 +568,7 @@ async function 파일넣기(inp) {
     } else { 칸알림(id, `${f.name} — .txt · .docx · .pdf만 올릴 수 있습니다`, true); return; }
     if (!글.trim()) { 칸알림(id, `${f.name} — 글자를 찾지 못했습니다`, true); return; }
     칸채우기(id, 글);
+    if (id === 'in-q' || id === 'in-ps') 형식자동();
     칸알림(id, `${f.name}에서 넣었습니다${/\.pdf$/i.test(f.name) ? ' — 원문과 대조해 고치세요' : ''}`);
   } catch (e) { 칸알림(id, `${f.name} — ${e.message}`, true); }
 }

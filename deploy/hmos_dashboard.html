@@ -841,7 +841,7 @@
         <div style="margin-top: 16px;">
           <div class="card-title">문제 형식 선택</div>
           <!-- 형식 분류 (오종래 2026-10-20 확정) — 질문 설계 도구(tools)와 같은 목록·순서. 선택지는 형식들에서 채운다 -->
-          <select id="form-select" class="input-area" style="min-height:0; padding:8px 10px;" onchange="pickForm(this.value || null)"></select>
+          <select id="form-select" class="input-area" style="min-height:0; padding:8px 10px;" onchange="형식손으로(this.value || null)"></select>
         </div>
 
         <!-- C · 논술: 필터가 논제와 제시문을 따로 받는다 -->
@@ -929,6 +929,7 @@
         <div class="card-title" id="reg-title">문항 원문</div>
         <!-- 그림이 들어가는 편집기 — 글자는 [그림 n] 자리에 그림을 끼워 보이고, 꺼낼 때는 다시 [그림 n] 글자로 (regText) -->
         <div class="input-area" id="reg-input" contenteditable="true" spellcheck="false" onpaste="regPaste(event)" oninput="regInput()" data-placeholder="문항 원문을 붙여넣으세요.&#10;예) 4. 함수 f(x) = ... 가 실수 전체에서 연속일 때, 상수 a의 값은? [3점]"></div>
+        <div class="c-meta" id="reg-form-auto" style="margin-top: 6px;"></div>
 
         <!-- 교사 입력 (오종래 2026-10-16) — A: 정답(필수, 검증용) · 출제의도(선택) / B·C: 출제의도(필수), 정답(선택, 검증용) / B: 모범답안(선택).
              소문항이 여럿이면 줄 머리 (1) (2) -->
@@ -1129,6 +1130,7 @@
   </main>
 </div>
 
+<script src="/format-detect.js"></script>
 <script>
 // 샘플 데이터
 const SAMPLES = {
@@ -4407,6 +4409,35 @@ function 원문동기() {
   m.그림 = REG.그림;
   상태맞춤(m);
   if (m.상태 !== 전) 목록그리기();
+  형식자동(m);
+}
+
+// 형식 자동 판별 [오종래 2026-10-20 확정] — 0단계 원문을 넣으면 /format-detect.js 판별(객관식 → 단답형 → 논술형 → 서술형 계열 → 소문항 수)로 형식을 고른다.
+// 형식이 없거나 자동으로 고른 문항만 바꾼다 — 교사가 고른 형식 · 질문 설계 도구에서 넘어온 형식 · 분석 결과가 있는 문항은 그대로 (판별은 알림 줄에만)
+function 형식자동(m = 지금문항(), 되돌림) {
+  if (!m || typeof HMOS형식판별 === 'undefined') return;
+  if (되돌림) m.형식자동 = true;
+  const r = m.원문 && m.원문.trim() ? HMOS형식판별.판별(m.원문, { 정답: m.정답 }) : null;
+  if (r && r.형식 && 형식들[r.형식] && !m.결과 && (!m.형식 || m.형식자동) && r.형식 !== m.형식) {
+    pickForm(r.형식);
+    m.형식자동 = true;
+  }
+  자동알림(m, r);
+}
+function 자동알림(m, r) {
+  const el = document.getElementById('reg-form-auto');
+  if (!r || !r.형식) { el.innerHTML = ''; return; }
+  const 다름 = m.형식 && m.형식 !== r.형식;
+  el.innerHTML = `자동 판별: <b>${esc(r.형식)}</b> ${esc((형식들[r.형식] || {}).이름 || '')} — ${esc(r.근거.join(' · '))}`
+    + (다름 ? ` · 지금 형식 ${esc(m.형식)}${m.결과 ? ' (분석 결과가 있어 그대로)' : ''} <a href="#" onclick="형식자동(undefined, true); return false;">자동으로</a>` : '');
+}
+/** 형식 목록에서 교사가 고름 — 이 문항은 자동 판별이 바꾸지 않는다 */
+function 형식손으로(코드) {
+  const m = 지금문항();
+  pickForm(코드);
+  if (m) m.형식자동 = !코드;
+  if (m && !코드) 형식자동(m);
+  else if (m) 자동알림(m, m.원문 && m.원문.trim() ? HMOS형식판별.판별(m.원문, { 정답: m.정답 }) : null);
 }
 
 /** 파이프라인을 바꾸면 편집 중 문항에 — 결과가 있으면 지워지므로 묻는다. 그만두면 false */
@@ -4530,6 +4561,7 @@ function 문항열기(id) {
     목록.전환중 = false;
   }
   목록그리기();
+  자동알림(m, m.원문 && m.원문.trim() && typeof HMOS형식판별 !== 'undefined' ? HMOS형식판별.판별(m.원문, { 정답: m.정답 }) : null);
 }
 
 /** 새 문항 — 편집 중 문항의 파이프라인을 이어받는다 */

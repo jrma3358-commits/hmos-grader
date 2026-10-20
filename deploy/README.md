@@ -15,6 +15,7 @@
   analyze-runner.mts        /analyze 러너 — 엔진(hmos-grader/)을 부르기만 한다
   home.html                 / (홈) — 「문항 분석 시작하기」 → 접속 비밀번호 팝업
   hmos_dashboard.html       /dashboard — 접속 쿠키가 있어야 열린다 (없으면 /?login=1)
+  format-detect.js          문제 형식 자동 판별 (2026-10-20) — 세 화면이 <script src>로, server.js가 require로 같은 파일을 쓴다
   hmos-grader/              엔진 사본 — git clone (origin = ~/hmos-bundles/main.bundle). 봉인/표지사전.json은 git 밖이라 따로 scp
 ~/hmos-bundles/main.bundle  엔진 번들 (정적 서빙 폴더 밖)
   .env                      ANTHROPIC_API_KEY (이 폴더에는 없음)
