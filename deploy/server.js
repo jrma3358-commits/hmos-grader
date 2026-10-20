@@ -632,7 +632,8 @@ async function 세우기거르기(소문항들,계열){
   const {filterSeuwogiDetailed}=await import(require('url').pathToFileURL(path.join(process.env.HMOS_GRADER||GRADER,'src','rubric','filterSeuwogi.ts')).href);
   const 기록=[];
   for(const s of 소문항들){
-    const 원본=(s.조각||[]).filter(c=>c.파트==='세우기'&&c.근거).map(c=>({entity:c.근거.단락급소,source:c.근거.단락,text:c.근거.문장}));
+    // 배경 제시문 단락 실체(근거.배경)는 단락마다 하나라 거르지 않는다 (오종래 2026-10-20)
+    const 원본=(s.조각||[]).filter(c=>c.파트==='세우기'&&c.근거&&!c.근거.배경).map(c=>({entity:c.근거.단락급소,source:c.근거.단락,text:c.근거.문장}));
     const 급소수=s.급소수||1;
     if(원본.length<=급소수){기록.push(null);continue;}
     const f=await filterSeuwogiDetailed(원본,{keyword:s.급소.실체},급소수,'humanities',client);

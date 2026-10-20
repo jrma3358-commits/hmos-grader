@@ -9,6 +9,7 @@ import type { V2Analysis } from '../src/fq/pipeline.ts';
 import type { SealedSwitch, SealedTable } from '../src/fq/sealed/schema.ts';
 import type { Color } from '../src/fq/types.ts';
 import { align_passage, background_passage } from '../src/thesis/align.ts';
+import { background_paragraphs } from '../src/thesis/background.ts';
 
 const sw = (id: string, markers: string[], color: Color, lexical?: string[]) =>
   ({ id, kind: '조사·어미', markers, intent: '', color, lexical }) as SealedSwitch;
@@ -89,5 +90,26 @@ describe('background_passage — 라벨 없는 단일 제시문', () => {
     assert.equal(background_passage([{ id: '가', 텍스트: '…' }]), null);
     assert.equal(background_passage([{ id: 'I', 텍스트: '…' }]), null);
     assert.equal(background_passage([{ id: '가', 텍스트: '…' }, { id: '나', 텍스트: '…' }]), null);
+  });
+});
+
+// 배경 제시문 단락 실체 [오종래 2026-10-20 확정 — 정의문 우선] (숭실대 인문논술 다수결)
+describe('background_paragraphs — 단락마다 실체 하나', () => {
+  const 글 = [
+    '오늘날 민주주의는 자유와 평등의 원리를 가장 잘 구현하는 정치체제로 알려져 있다. 의사결정 과정에서 공동체의 다수가 원하는 방안을 선택하는 다수결 원칙은 민주주의의 작동과정에서 핵심적인 위치를 차지한다.',
+    '첫 번째 방식은 만장일치에 의한 의사결정이다. 만장일치를 선호하는 사람들은 다수결에 의해 도출된 결과가 소수의 이익을 침해할 수 있음을 지적한다.',
+    '두 번째 방식은 공동체의 의사결정을 소수에게 위임하는 것이다. 이러한 방식의 필요성은 고대 아테네 민주주의 이래로 꾸준히 제기되어 왔다.',
+  ].join('\n\n');
+  it('정의문 → 논제 실체 순서', () => {
+    const r = background_paragraphs(글, ['다수결 원칙', '그 이유']);
+    assert.deepEqual(r.map((p) => [p.라벨, p.근거, p.실체]), [
+      ['#1', '논제 실체', '다수결 원칙'],
+      ['#2', '정의문', '만장일치에 의한 의사결정'],
+      ['#3', '정의문', '공동체의 의사결정을 소수에게 위임하는 것'],
+    ]);
+    assert.match(r[0].문장, /^의사결정 과정에서 .*다수결 원칙은/);
+  });
+  it('정의문도 논제 실체도 없으면 첫 문장 급소', () => {
+    assert.equal(background_paragraphs(글.split('\n\n')[0], [])[0].근거, '첫 문장 급소');
   });
 });
