@@ -1469,6 +1469,7 @@ app.post('/api/propose',async(req,res)=>{
   const {논제,소문항,제시문,관계}=req.body||{};
   const 키워드=키워드of((req.body||{}).키워드);
   if(!(논제||'').trim()||!Array.isArray(소문항)||!소문항.length){res.status(400).json({error:'논제·소문항(2단계 인식)이 필요합니다'});return;}
+  if((req.body||{}).방향){await 키워드방향논제(res,{소문항,제시문,키워드});return;}
   if(!관계||!Array.isArray(관계.추가후보)){res.status(400).json({error:'6단계 엔진 결과(단계.관계)가 없습니다 — 제시문을 넣고 다시 분석하세요'});return;}
   const 후보=관계.추가후보;
   if(!후보.length){res.json({비교불가:!!관계.비교불가,추가논제:[],사유:'엔진이 추가할 단락 쌍을 찾지 못했습니다 — 모든 단락 쌍이 기존 논제에 이미 들어 있거나 5단계 보완으로 넘어갔습니다'});return;}
@@ -1527,6 +1528,65 @@ ${rules}`;
   });
   res.json({model:r.msg.model,usage:r.msg.usage,...(키워드?{키워드}:{}),비교불가:!!관계.비교불가,추가논제});
 });
+
+// 키워드 방향 논제 (오종래 2026-10-21 지시 — 엔진 원칙의 예외 자리) — /api/propose {방향:true, 키워드}.
+// 엔진 진단·추가 후보와 무관하게 교사 키워드 방향으로 논제 문장을 Claude가 쓴다. 기존 논제·제시문과 엔진 소문항 급소는 참고로만 준다.
+// 쓴 논제는 엔진에 다시 넣어 핵심이 서는지 · 쓴 제시문 단락에 연결되는지 본다 (판정하지 않고 표시만 — 교사 확인).
+const 방향논제수=3;
+const 방향Format={type:'json_schema',schema:{type:'object',additionalProperties:false,required:['proposals'],properties:{
+  proposals:{type:'array',description:`키워드 방향 논제 ${방향논제수}개`,items:{type:'object',additionalProperties:false,required:['thesis','passages','difference','measures'],properties:{
+    thesis:{type:'string',description:'논제 전문'},
+    passages:{type:'array',items:{type:'string'},description:'논제가 쓰는 제시문 기호 — [가]면 「가」. 제시문이 없으면 빈 배열'},
+    difference:{type:'string',description:'기존 논제와 다른 점 — 교사가 읽는 문장'},
+    measures:{type:'string',description:'새로 측정하는 것 — 교사가 읽는 문장'},
+  }}},
+}}};
+
+async function 키워드방향논제(res,{소문항,제시문,키워드}){
+  if(!키워드){res.status(400).json({error:'방향 키워드를 입력하세요'});return;}
+  const 제시문있음=Array.isArray(제시문)&&제시문.length;
+  let rules;
+  try{rules=sliceSpec(REFINE_SPEC,'## 4. 추가 논제의 원칙','## 6.');}
+  catch(e){res.status(500).json({error:'명세서-2를 읽지 못함 — '+e.message});return;}
+  const system=`너는 HMOS 논제 문장가다. 교사가 준 방향 키워드 「${키워드}」로 논제 ${방향논제수}개를 쓴다.
+
+지킬 것:
+- 키워드 방향을 논제의 묻는 초점으로 삼는다 — 예: 비교 → 둘을 견주게, 비판 → 평가·비판하게, 원인 → 까닭을 묻게, 구체화 → 범위·관점을 좁혀서. ${방향논제수}개는 서로 다른 각도로 쓴다.
+- 기존 논제와 제시문의 실체(개념·사례·주장)에서 벗어나지 않는다. 제시문에 없는 사실·사례를 지어내지 않는다.
+- 제시문이 있으면 쓰는 제시문을 [가] 꼴 기호로 논제에 밝히고, passages에 그 기호를 넣는다.
+- 묻는 말은 설명하시오·논하시오·서술하시오·제시하시오 가운데서 쓴다. 기존 논제의 공통 발문·소문항 번호는 쓰지 않는다.
+- difference·measures는 교사가 읽는 문장이다. 「이 논제는」「두 제시문은」처럼 쓰고, 다음 내부 표현을 쓰지 않는다: 엔진, 급소, 사족, 봉인, 뼈대, 후보, 열쇠, 노드, 5색 기호(B·C·P·D·Q), 노드 id(n2 등), 「교사 키워드」.
+- AI는 제안만 한다. 확정은 교사가 한다. 모든 출력은 한국어.
+
+=== 명세서-2 §4·§5 (원문) ===
+${rules}`;
+  const user=[
+    `방향 키워드: 「${키워드}」`,
+    `기존 논제 (참고):\n${소문항.map(s=>`${s.번호?`(${s.번호}) `:''}${s.텍스트}${(s.급소||[]).length?`  — 핵심 ${s.급소.map(k=>`「${String(k.실체).trim()}」`).join(' · ')}`:''}`).join('\n')}`,
+    제시문있음?`제시문:\n${제시문글(제시문)}`:'',
+  ].filter(Boolean).join('\n\n');
+  const r=await askClaude(res,system,user,방향Format,o=>Array.isArray(o.proposals));
+  if(!r)return;
+
+  const 추가논제=await 하나씩(r.out.proposals.slice(0,방향논제수).map((p,i)=>({...p,id:'k'+(i+1)})),async p=>{
+    const 단락=(p.passages||[]).map(l=>String(l).replace(/[\[\]\s]/g,'')).filter(Boolean);
+    const 점검=[...내부표현(p.difference).map(w=>`「기존과 다른 점」에 내부 표현 「${w}」`),
+      ...내부표현(p.measures).map(w=>`「새로 측정하는 것」에 내부 표현 「${w}」`),
+      ...단락.filter(l=>!p.thesis.includes(`[${l}]`)).map(l=>`단락 기호 [${l}]가 논제에 없음`)];
+    const a=await runAnalyze({파이프라인:'C',논제:p.thesis,...(제시문있음?{제시문}:{})});
+    let 자가검증;
+    if(!a.ok||!a.단계||!a.단계.인식)자가검증={통과:false,사유:(a.error&&a.error.사유)||'재인식 실패'};
+    else{
+      const 연결단락=[...new Set(((a.단계.정합&&a.단계.정합.소문항)||[]).flatMap(x=>x.연결단락||[]))];
+      const 급소=a.단계.인식.소문항.flatMap(s=>s.급소.map(k=>k.실체.trim().replace(/^[\s,]+/,'')));
+      const 빠진=제시문있음?단락.filter(l=>!연결단락.includes(l)):[];
+      자가검증={통과:!빠진.length&&급소.length>0,연결단락,급소,
+        ...(빠진.length?{사유:`[${빠진.join('], [')}]에 연결되지 않음`}:!급소.length?{사유:'핵심이 서지 않음'}:{})};
+    }
+    return {id:p.id,유형:`키워드 「${키워드}」`,제시문:단락,논제:p.thesis,기존과다른점:p.difference,새로측정하는것:p.measures,점검,자가검증};
+  });
+  res.json({model:r.msg.model,usage:r.msg.usage,키워드,방향:true,추가논제});
+}
 
 // ── POST /api/interview — 출제도구 면접 2단계: 급소별 면접 질문 (오종래 2026-10-19) ──
 // 급소는 1단계에서 엔진(/analyze)이 잡고 교사가 확인한 것 그대로 받는다. Claude는 급소마다 본질문·꼬리질문 2·근거 문장만 쓴다.
