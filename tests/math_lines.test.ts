@@ -10,7 +10,7 @@ import { recognizeV2Analysis } from '../src/fq/pipeline.ts';
 import { derive_pieces, f2_input_from_v2 } from '../src/rubric/f2.ts';
 import { grade } from '../src/rubric/g1.ts';
 import { 봉인4b_게이트 } from '../src/rubric/sealed/g1.ts';
-import { answer_values, classify_math_lines, solve_segments, student_answer_line } from '../src/rubric/solve_lines.ts';
+import { answer_values, classify_math_lines, solve_segments, student_answer_line, 최종값of } from '../src/rubric/solve_lines.ts';
 import type { 조각 } from '../src/rubric/types.ts';
 
 const q5 = '이차방정식 x²+2x-3=0의 두 근을 구하고, 풀이 과정을 서술하시오. [5점]';
@@ -253,7 +253,24 @@ describe('classify_math_lines — 수리논술 세우기·풀기·답구하기',
     assert.ok(!r.풀기.includes('따라서 구하는 값은 f(m)/g(m)=1이다.'));
     assert.deepEqual(r.답?.값, ['1']);
   });
-  it('단답·서술형 수리는 그대로 — 식 줄 모두 세우기', () => {
-    assert.equal(classify_math_lines(답안).세우기.length, 4);
+  it('단답·서술형 수리는 그대로 — 식 줄 모두 세우기 (최종값 표지 줄은 답)', () => {
+    assert.equal(classify_math_lines(답안).세우기.length, 3);
+  });
+});
+
+// [오종래 2026-10-20 확정] 최종값 표지 — 「따라서 … 값은 N이다」·「따라서 … N이다」·「∴ N」·「= N이다」
+describe('최종값of · 최종값 표지 줄이 답', () => {
+  it('표지 꼴', () => {
+    assert.equal(최종값of('따라서 구하는 lim(m→1) f(m)/g(m)의 값은 1이다.'), '1');
+    assert.equal(최종값of('따라서 답은 -3/2이다.'), '-1.5');
+    assert.equal(최종값of('∴ 72'), '72');
+    assert.equal(최종값of('= 1이다.'), '1');
+    assert.equal(최종값of('따라서 P의 y좌표는 2m/(1+m²)이다.'), null);
+    assert.equal(최종값of('∴ k=2'), null);
+  });
+  it('표지 줄이 있으면 문항 문자 줄(「직선 y=1과 …」)을 답으로 잡지 않는다', () => {
+    const r = classify_math_lines('직선 y=1과 P 사이의 거리는 f(m)=1-2m/(1+m²)이다.\n따라서 구하는 값은 1이다.', '직선 y=1과 점 P', true);
+    assert.deepEqual(r.답, { 줄: '따라서 구하는 값은 1이다.', 값: ['1'], 끝값: true });
+    assert.ok(!r.미분류.includes('따라서 구하는 값은 1이다.'));
   });
 });

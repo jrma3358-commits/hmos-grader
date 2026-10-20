@@ -202,6 +202,16 @@ export function classify_math_lines(답안: string, 문항글?: string, 수리�
       if (남은.length) out.미분류.push(남은.join(', '));
     } else out.미분류.push(l);
   }
+  // [오종래 2026-10-20 확정] 최종값 표지 — 「따라서 … 값은 N이다」·「따라서 … N이다」·「∴ N」·「= N이다」 단독 줄이면 그 N이 ④ 답구하기 최종값.
+  //   표지 줄이 있으면 그것이 답이다 (문항 문자 줄·끝 「=」 줄로 답을 더 찾지 않는다 — 「직선 y=1과 …」의 「y=1」을 답으로 잡지 않게). 그 줄은 다른 칸에서 뺀다
+  const 최종i = 마지막(줄, (l) => 최종값of(l) !== null);
+  if (최종i >= 0) {
+    const 표지줄 = 줄[최종i];
+    out.답 = { 줄: 표지줄, 값: [최종값of(표지줄)!], 끝값: true };
+    const 남김 = (x: string) => !표지줄.includes(x);
+    Object.assign(out, { 근거대기: out.근거대기.filter(남김), 세우기: out.세우기.filter(남김), 풀기: out.풀기.filter(남김), 미분류: out.미분류.filter(남김) });
+    return 수리논술 ? 세우기풀기가르기(out, 줄) : out;
+  }
   // [오종래 2026-10-16 q6 ①] 「∴」 줄이 없으면 「=」가 있는 마지막 줄의 끝 값(수)이 답 — 「= -1-6=-7」 → -7
   // [오종래 2026-10-16 q7 ①] 답이 둘인 문항 — 「∴ a=-7」 말고 「R=f(-1)=…=-8」도 답 값 (문항에 나오는 문자만)
   if (문항글) {
@@ -217,7 +227,7 @@ export function classify_math_lines(답안: string, 문항글?: string, 수리�
     const v = 끝줄 ? final_value(끝줄) : null;
     if (끝줄 && v !== null) out.답 = { 줄: 끝줄, 값: [v], 끝값: true };
   }
-  return 수리논술 ? 세우기풀기가르기(out) : out;
+  return 수리논술 ? 세우기풀기가르기(out, 줄) : out;
 }
 
 /**
@@ -226,10 +236,33 @@ export function classify_math_lines(답안: string, 문항글?: string, 수리�
  *   수식(등식) 줄이 여럿이면 처음 개념→식 변환 줄 = ② 세우기, 이후 연산 전개 줄 = ③ 풀기, 최종 값 도출 줄(끝 값 답 줄) = ④ 답구하기(세우기·풀기에서 뺀다).
  *   단답·서술형 수리(q3~q7 줄 규칙 — 나란한 세우기 줄 둘, 「D=…>0」 세우기 등)는 그대로다
  */
-function 세우기풀기가르기(out: 수리줄나누기): 수리줄나누기 {
+function 세우기풀기가르기(out: 수리줄나누기, 줄: string[]): 수리줄나누기 {
   const 답줄 = out.답?.끝값 ? out.답.줄 : null;
   const 세우기 = out.세우기.filter((l) => l !== 답줄);
-  return { ...out, 세우기: 세우기.slice(0, 1), 풀기: [...세우기.slice(1), ...out.풀기.filter((l) => l !== 답줄)] };
+  // 풀기는 모범답안 줄 차례로 (세우기에서 옮긴 줄 · 줄 안 풀기 마디가 섞인다)
+  const 자리 = (x: string) => { const i = 줄.findIndex((l) => l.includes(x)); return i < 0 ? 줄.length : i; };
+  const 풀기 = [...세우기.slice(1), ...out.풀기.filter((l) => l !== 답줄)].map((x, k) => ({ x, k })).sort((a, b) => 자리(a.x) - 자리(b.x) || a.k - b.k).map((y) => y.x);
+  return { ...out, 세우기: 세우기.slice(0, 1), 풀기 };
+}
+
+/** 수 하나 — 정수 · 소수 · 분수 (「1」 「-3/2」 「0.5」) */
+const 수src = '-?\\d+(?:\\.\\d+)?(?:\\/-?\\d+(?:\\.\\d+)?)?';
+const 최종값꼴 = [
+  // 「따라서 … 값은 N이다」 · 「따라서 … N이다」 — N 앞은 띄어쓰기·「=」·「은/는」
+  new RegExp(`^따라서[\\s,，].*?(?:^|[\\s=]|(?<=[은는]))(${수src})\\s*(?:이다|입니다)[.。]?$`),
+  // 「∴ N」 — 수만 (「∴ k=2」처럼 문자 값이면 기존 결론 규칙)
+  new RegExp(`^∴\\s*(${수src})\\s*(?:이다|입니다)?[.。]?$`),
+  // 「= N이다」 단독 줄
+  new RegExp(`^=\\s*(${수src})\\s*(?:이다|입니다)?[.。]?$`),
+];
+/** 최종값 표지 줄 [오종래 2026-10-20 확정] → 그 수(수로 맞춘 글자), 아니면 null */
+export function 최종값of(줄: string): string | null {
+  const s = String(줄 ?? '').trim().replace(/[−–]/g, '-');
+  for (const re of 최종값꼴) {
+    const m = s.match(re);
+    if (m) return 수맞춤(m[1]);
+  }
+  return null;
 }
 
 /** 줄 끝 값 — 마지막 「=」 뒤가 수이면 그 수(1/2 = 0.5로 맞춘 글자), 아니면 null (2026-10-16 q6) */
