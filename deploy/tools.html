@@ -1548,10 +1548,15 @@ const 빈C = () => ({ 논제: '', 제시문: [], 분석: null, 제시문급소: 
 const 창 = { 목록: [], 지금: 0, 진행: false, 차례: 0 };
 const C떼기 = () => Object.fromEntries(C열쇠.map(k => [k, C[k]]));
 
-/** 지금 C를 지금 창에 담는다 */
+/** 지금 C를 지금 창에 담는다 — 「전체」(창.지금 -1)면 전체 분석(창.전체)에 */
 function 창담기() {
+  if (창.지금 === -1) { if (창.전체) 창.전체 = C떼기(); return; }
   if (창.목록.length && 창.목록[창.지금]) 창.목록[창.지금].C = C떼기();
 }
+
+/** 「전체」 보기 탭 (오종래 2026-10-21) — 소문항 창이 있는 문항에서 문항 전체를 한 번에 본 분석(창.전체).
+ *  소문항을 가로지르는 단락 쌍의 추가 논제(6단계)는 여기서만 선다. 창.지금 = -1 */
+const 전체있음 = () => !!(창.전체 && 창.전체.분석);
 
 /** 소문항 하나 → 창 논제 글. 공통 발문 + 「(번호) 본문」 — 엔진에 다시 넣으면 그 소문항 하나로 나뉜다 */
 // 엔진이 뗀 분량·배점 표기는 뒤에 다시 붙인다 — 창의 기본배점이 읽는다 (2026-10-19)
@@ -1567,12 +1572,15 @@ function 창바그림() {
   const 단계형 = typeof 단계형of === 'function' && 단계형of();
   const html = 창.목록.length < 2 ? '' : `<div class="card" style="padding:10px 14px; margin-bottom:12px;">
     <div class="type-selector" style="align-items:center; gap:6px; margin:0;">
-      <button class="type-btn" ${창.진행 || 창.지금 === 0 ? 'disabled' : ''} onclick="창열기(${창.지금 - 1})">◀ 이전</button>
+      <button class="type-btn" ${창.진행 || 창.지금 <= 0 ? 'disabled' : ''} onclick="창열기(${창.지금 - 1})">◀ 이전</button>
+      ${전체있음() ? `<button class="type-btn${창.지금 === -1 ? ' selected' : ''}" ${창.진행 ? 'disabled' : ''} onclick="창열기(-1)" title="문항 전체를 한 번에 본 분석 — 소문항을 가로지르는 추가 논제">전체</button>` : ''}
       ${창.목록.map((w, i) => `<button class="type-btn${i === 창.지금 ? ' selected' : ''}" ${창.진행 && i !== 창.지금 ? 'disabled' : ''} onclick="창열기(${i})" title="${esc(w.사유 || w.저장오류 || w.저장 || w.상태)}">(${esc(w.번호)}) <span class="c-meta" style="margin-left:4px;">${esc(w.상태)}${w.저장 ? ' · 저장 ✓' : w.저장오류 ? ' · 저장 ✗' : ''}</span></button>`).join(단계형 ? '<span class="rel-link" title="뒤 소문항이 앞 소문항의 결과를 이어받습니다">→ 이어받기 →</span>' : '')}
       <button class="type-btn" ${창.진행 || 창.지금 === 창.목록.length - 1 ? 'disabled' : ''} onclick="창열기(${창.지금 + 1})">다음 ▶</button>
       ${!창.진행 && 창.목록.some(w => w.상태 !== '완료') ? '<button class="type-btn" onclick="자동진행()">남은 소문항 자동 진행</button>' : ''}
     </div>
-    <div class="c-meta" style="margin-top:6px;">소문항마다 독립 분석창입니다 — 논제 B · 참조 제시문 · 3단계 극성 기준이 소문항마다 따로 섭니다.
+    <div class="c-meta" style="margin-top:6px;">${창.지금 === -1
+      ? '<strong>전체</strong> — 소문항을 나누지 않고 문항 전체를 한 번에 본 분석입니다. 소문항을 가로지르는 단락 쌍의 추가 논제(6단계)가 여기서 섭니다.'
+      : '소문항마다 독립 분석창입니다 — 논제 B · 참조 제시문 · 3단계 극성 기준이 소문항마다 따로 섭니다.'}
       ${단계형 ? `<strong>단계형</strong> — ${창.목록.map(w => `(${esc(w.번호)})`).join(' → ')}: 뒤 소문항이 앞 소문항의 결과를 이어받습니다.` : ''}
       ${창.진행 ? `자동 진행 중 — (${esc(창.목록[창.지금].번호)}) ${esc(창.목록[창.지금].단계 || '')}. 끝나면 다음 소문항으로 넘어갑니다.` : ''}
       ${창.목록[창.지금] && 창.목록[창.지금].사유 ? `<span style="color:var(--warn);">${esc(창.목록[창.지금].사유)}</span>` : ''}</div>
@@ -1602,10 +1610,10 @@ function 창되살리기(목록) {
 
 /** 창 옮기기 — 진행 중에는 막는다 */
 function 창열기(i) {
-  if (창.진행 || i < 0 || i >= 창.목록.length || i === 창.지금) return;
+  if (창.진행 || i < -1 || i >= 창.목록.length || i === 창.지금 || (i === -1 && !전체있음())) return;
   창담기();
   창.지금 = i;
-  Object.assign(C, 빈C(), 창.목록[i].C || {});
+  Object.assign(C, 빈C(), (i === -1 ? C정리(창.전체) : 창.목록[i].C) || {});
   C3차례++;
   C전체그림();
   창바그림();
