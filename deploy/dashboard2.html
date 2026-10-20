@@ -71,6 +71,7 @@ tr.pick{cursor:pointer}
 .run-btn:hover{background:var(--teal-mid)}
 .run-btn:disabled{background:var(--muted);cursor:not-allowed}
 .rec-pull{margin-left:auto;padding:7px 14px;background:var(--teal);color:#fff;border:none;border-radius:var(--radius);font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap}
+#src-새로.locked textarea,#src-새로.locked input{opacity:.55;cursor:not-allowed}
 .fmt-hint{font-size:12px;color:var(--muted);margin:-8px 0 14px}
 .sub-q{border:1px solid var(--line);border-radius:var(--radius);padding:12px 14px;margin-bottom:12px}
 .sub-q h4{margin:0 0 8px;font-size:14px}
@@ -377,6 +378,20 @@ function 종류고르기(k) {
 function 종류그리기() {
   document.querySelectorAll('#in-kind button').forEach((b) => b.classList.toggle('on', b.dataset.v === 입력종류));
   document.querySelectorAll('#in-fmt button').forEach((b) => { b.style.display = !입력종류 || 종류of(b.dataset.v) === 입력종류 ? '' : 'none'; });
+  입력칸잠금();
+}
+/** [오종래 2026-10-20 확정] 종류(서술형 · 논술형)를 고르기 전에는 문항 입력란(새로 입력의 제시문 · 문항 · 배점 · 모범답안 · 소문항 칸 · 파일 올리기)을 잠근다 */
+function 입력칸잠금() {
+  const box = $('#src-새로');
+  if (!box) return;
+  const 열림 = !!입력종류;
+  box.querySelectorAll('textarea, input').forEach((el) => { el.disabled = !열림; });
+  box.querySelectorAll('.up-btn, #b2-add, [data-b2-del]').forEach((el) => { el.style.opacity = 열림 ? '' : '0.5'; el.style.pointerEvents = 열림 ? '' : 'none'; });
+  box.classList.toggle('locked', !열림);
+  let 알림 = $('#src-lock');
+  if (!알림) { 알림 = document.createElement('div'); 알림.id = 'src-lock'; 알림.className = 'fmt-hint'; 알림.style.margin = '0 0 10px'; box.prepend(알림); }
+  알림.textContent = 열림 ? '' : '위에서 문제 종류(서술형 · 논술형)를 먼저 고르세요 — 고르면 문항을 넣을 수 있습니다.';
+  알림.style.display = 열림 ? 'none' : '';
 }
 function 자동판별() {
   if (typeof HMOS형식판별 === 'undefined' || !$('#in-q') || !입력종류) return null;
@@ -744,6 +759,7 @@ function B2그리기() {
   el.querySelectorAll('[data-b2]').forEach((inp) => inp.addEventListener('input', () => { const [i, k] = inp.dataset.b2.split(':'); B2칸[+i][k] = inp.value; }));
   el.querySelectorAll('[data-b2-del]').forEach((b) => b.addEventListener('click', () => { B2칸.splice(+b.dataset.b2Del, 1); B2그리기(); }));
   $('#b2-add').addEventListener('click', () => { B2칸.push({ q: '', p: '', m: '', a: '' }); B2그리기(); });
+  if (typeof 입력칸잠금 === 'function') 입력칸잠금();
 }
 
 /** 채점 — 불러온 문항: 확정 루브릭 소문항 그대로 · 새 문항: /api/rubric → 소문항마다 엔진 채점 + 4축 대조 (단계서술은 소문항별 학생 답 · 합산) */

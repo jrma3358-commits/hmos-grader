@@ -660,6 +660,7 @@
   .reg-status { margin-top: 8px; font-size: 12px; color: var(--text-sub); }
   .reg-status.err { color: var(--Q); }
   #reg-input { min-height: 360px; max-height: 75vh; overflow-y: auto; white-space: pre-wrap; word-break: break-word; cursor: text; }
+  #reg-input:disabled { opacity: 0.55; cursor: not-allowed; }
   #reg-input:empty::before { content: attr(data-placeholder); color: var(--text-sub); pointer-events: none; }
   img.reg-fig { display: block; max-width: 100%; max-height: 360px; margin: 6px 0; border: 1px solid var(--border); border-radius: 4px; background: #fff; }
   .reg-figs { display: flex; flex-wrap: wrap; gap: 12px; margin: 12px 0 4px; }
@@ -870,7 +871,7 @@
         <div class="card-title" id="reg-title">논제 + 제시문</div>
         <textarea class="input-area" id="reg-input" oninput="형식자동()" style="min-height: 260px;" placeholder="논제와 제시문을 한꺼번에 붙여넣으세요. 순서는 상관없습니다.&#10;[가] …&#10;[나] …&#10;&#10;[문항 1] 제시문 [가], [나]를 참고하여 …&#10;(1-1) …설명하시오."></textarea>
         <div class="type-selector" style="margin-top: 12px;">
-          <label class="type-btn" style="cursor:pointer;">.txt 불러오기<input type="file" accept=".txt,text/plain" style="display:none;" onchange="txt불러오기(this)"></label>
+          <label class="type-btn" id="reg-txt-btn" style="cursor:pointer;">.txt 불러오기<input type="file" id="reg-txt" accept=".txt,text/plain" style="display:none;" onchange="txt불러오기(this)"></label>
           <button class="type-btn" onclick="샘플목록보기()">샘플 불러오기</button>
         </div>
         <div id="sample-list"></div>
@@ -2093,9 +2094,20 @@ function 형식고르기(코드) {
 //   객관식 → A-1 · 주관식 → A-2 · 서술형 → 수식·단위 s/h × 소문항 1/2 · 논술형 → 제시문 머리 × 수식 (C-2a · C-1a · C-2b).
 // 교사가 목록에서 형식을 고르면 그 형식을 지킨다(자동 판별은 알림에만). 글을 다 지우거나 종류를 다시 누르거나 「자동으로」를 누르면 다시 자동
 let 형식수동 = false;
+/** [오종래 2026-10-20 확정] 종류(객관식 · 주관식 · 서술형 · 논술형)를 고르기 전에는 문항 입력란(원문 칸 · .txt 불러오기)을 잠근다 */
+const 원문안내 = document.getElementById('reg-input').placeholder;
+function 입력칸잠금() {
+  const 열림 = !!종류, box = document.getElementById('reg-input');
+  box.disabled = !열림;
+  box.placeholder = 열림 ? 원문안내 : '위에서 문제 종류(객관식 · 주관식 · 서술형 · 논술형)를 먼저 고르세요 — 고르면 문항을 넣을 수 있습니다.';
+  document.getElementById('reg-txt').disabled = !열림;
+  document.getElementById('reg-txt-btn').style.opacity = 열림 ? '' : '0.5';
+  document.getElementById('reg-txt-btn').style.cursor = 열림 ? 'pointer' : 'not-allowed';
+}
 function 종류고르기(k) {
   종류 = HMOS형식판별.종류들[k] ? k : null;
   document.querySelectorAll('#c-kind .type-btn').forEach((b) => b.classList.toggle('selected', b.dataset.kind === 종류));
+  입력칸잠금();
   // 다른 종류의 형식이 골라져 있으면 비운다
   if ((C형식 || 넘길형식) && HMOS형식판별.종류of(C형식 || 넘길형식) !== 종류) { C형식 = null; 넘길형식 = null; }
   형식목록그리기();
@@ -2132,6 +2144,7 @@ function 자동알림() {
   return r;
 }
 자동알림();
+입력칸잠금();
 const 형식of = () => C형식;
 const 단계형of = () => !!(C형식들[C형식] && C형식들[C형식].단계형);
 const 제시문쓰는형식 = () => !C형식들[C형식] || C형식들[C형식].제시문;
@@ -2237,6 +2250,7 @@ function 샘플되살리기(d) {
     document.querySelectorAll('#c-kind .type-btn').forEach((b) => b.classList.toggle('selected', b.dataset.kind === 종류));
     C형식고르기(d.형식);
     형식목록그리기();
+    입력칸잠금();
   }
   형식수동 = !!C형식들[d.형식]; // 샘플에 저장된 형식을 지킨다
   document.getElementById('reg-input').value = 입력.원문 || '';

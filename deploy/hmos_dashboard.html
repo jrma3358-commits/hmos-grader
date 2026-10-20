@@ -668,6 +668,7 @@
   .reg-status { margin-top: 8px; font-size: 12px; color: var(--text-sub); }
   .reg-status.err { color: var(--Q); }
   #reg-input { min-height: 360px; max-height: 75vh; overflow-y: auto; white-space: pre-wrap; word-break: break-word; cursor: text; }
+  #reg-input.locked { opacity: 0.55; cursor: not-allowed; }
   #reg-input:empty::before { content: attr(data-placeholder); color: var(--text-sub); pointer-events: none; }
   img.reg-fig { display: block; max-width: 100%; max-height: 360px; margin: 6px 0; border: 1px solid var(--border); border-radius: 4px; background: #fff; }
   .reg-figs { display: flex; flex-wrap: wrap; gap: 12px; margin: 12px 0 4px; }
@@ -903,6 +904,15 @@
 
       <div class="card">
         <div class="c-meta" id="reg-current"></div>
+        <!-- 문제 종류 (오종래 2026-10-20 확정) — 교사가 먼저 고르면 그 안에서 형식을 자동 판별 (형식자동).
+             종류를 고르기 전에는 문항 입력(텍스트 · 이미지 · 파일)이 잠긴다 (입력칸잠금). ④ 불러오기는 저장된 형식을 가져오므로 열어 둔다 -->
+        <div class="card-title">문제 종류</div>
+        <div class="type-selector" id="reg-kind" style="margin-bottom: 12px;">
+          <button class="type-btn" data-kind="객관식" onclick="종류고르기('객관식')">객관식</button>
+          <button class="type-btn" data-kind="주관식" onclick="종류고르기('주관식')">주관식</button>
+          <button class="type-btn" data-kind="서술형" onclick="종류고르기('서술형')">서술형</button>
+          <button class="type-btn" data-kind="논술형" onclick="종류고르기('논술형')">논술형</button>
+        </div>
         <div class="reg-tabs">
           <button class="reg-tab active" data-src="text" onclick="showRegSrc('text')">① 텍스트</button>
           <button class="reg-tab" data-src="image" onclick="showRegSrc('image')">② 이미지</button>
@@ -926,14 +936,6 @@
           <div class="reg-status" id="reg-status-load"></div>
         </div>
 
-        <!-- 문제 종류 (오종래 2026-10-20 확정) — 교사가 먼저 고르면 그 안에서 형식을 자동 판별 (형식자동) -->
-        <div class="card-title">문제 종류</div>
-        <div class="type-selector" id="reg-kind" style="margin-bottom: 12px;">
-          <button class="type-btn" data-kind="객관식" onclick="종류고르기('객관식')">객관식</button>
-          <button class="type-btn" data-kind="주관식" onclick="종류고르기('주관식')">주관식</button>
-          <button class="type-btn" data-kind="서술형" onclick="종류고르기('서술형')">서술형</button>
-          <button class="type-btn" data-kind="논술형" onclick="종류고르기('논술형')">논술형</button>
-        </div>
         <div class="card-title" id="reg-title">문항 원문</div>
         <!-- 그림이 들어가는 편집기 — 글자는 [그림 n] 자리에 그림을 끼워 보이고, 꺼낼 때는 다시 [그림 n] 글자로 (regText) -->
         <div class="input-area" id="reg-input" contenteditable="true" spellcheck="false" onpaste="regPaste(event)" oninput="regInput()" data-placeholder="문항 원문을 붙여넣으세요.&#10;예) 4. 함수 f(x) = ... 가 실수 전체에서 연속일 때, 상수 a의 값은? [3점]"></div>
@@ -4441,6 +4443,7 @@ function 자동알림(m, r) {
   const el = document.getElementById('reg-form-auto');
   const 종류 = 문항종류(m);
   document.querySelectorAll('#reg-kind .type-btn').forEach(b => b.classList.toggle('selected', b.dataset.kind === 종류));
+  입력칸잠금(!!종류);
   if (!m) { el.innerHTML = ''; return; }
   if (!종류) { el.textContent = '문제 종류(객관식 · 주관식 · 서술형 · 논술형)를 먼저 고르세요 — 그 안에서 형식을 자동으로 고릅니다.'; return; }
   if (!r || !r.형식) { el.textContent = `${종류} — 문항 원문을 넣으면 형식을 자동으로 고릅니다.`; return; }
@@ -4448,6 +4451,17 @@ function 자동알림(m, r) {
   el.innerHTML = `자동 판별: <b>${esc(r.형식)}</b> ${esc((형식들[r.형식] || {}).이름 || '')} — ${esc(r.근거.join(' · '))}`
     + (다름 ? ` · 지금 형식 ${esc(m.형식)}${m.결과 ? ' (분석 결과가 있어 그대로)' : ''} <a href="#" onclick="형식자동(undefined, true); return false;">자동으로</a>` : '');
 }
+/** [오종래 2026-10-20 확정] 종류(객관식 · 주관식 · 서술형 · 논술형)를 고르기 전에는 문항 입력(텍스트 칸 · 이미지 · 파일)을 잠근다 */
+const 원문안내 = document.getElementById('reg-input').dataset.placeholder;
+function 입력칸잠금(열림) {
+  const box = document.getElementById('reg-input');
+  box.contentEditable = 열림 ? 'true' : 'false';
+  box.classList.toggle('locked', !열림);
+  box.dataset.placeholder = 열림 ? 원문안내 : '위에서 문제 종류(객관식 · 주관식 · 서술형 · 논술형)를 먼저 고르세요 — 고르면 문항을 넣을 수 있습니다.';
+  for (const id of ['reg-image', 'reg-file']) document.getElementById(id).disabled = !열림;
+}
+setTimeout(() => 자동알림(지금문항(), 자동판별of(지금문항())), 0); // 처음 열 때 — 문항 종류가 없으면 잠근 채로
+
 /** 0단계 종류 버튼 — 다른 종류의 형식이면 자동 판별로 바꾼다 */
 function 종류고르기(k) {
   const m = 지금문항();
