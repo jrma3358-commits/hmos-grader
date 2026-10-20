@@ -15,7 +15,7 @@
 import type { PathNode } from '../../fq/v2/graph.ts';
 import type { 조각결과 } from '../g1.ts';
 import { K핵심어 } from './f2.ts';
-import { answer_values, final_value, line_answer_values, solve_segments, student_answer_line } from '../solve_lines.ts';
+import { answer_list, answer_values, final_value, line_answer_values, solve_segments, student_answer_line, 최종값of } from '../solve_lines.ts';
 import { D혼동오류, named_remainder_values, remainder_points, verify_calculation, verify_definition, verify_discriminant, verify_equation, verify_remainder_chain, counting_line_value, verify_case_split, verify_case_split_line, verify_complement, verify_counting_factor, verify_end_pairs, verify_end_pairs_line, verify_counting_line, verify_division, verify_remainder_alternatives, wrote_same_permutation, verify_setup, verify_substitution, wrote_remainder, type 경로이름, type 다항식조건 } from '../multipath.ts';
 import type { 계열, 급소K, 조각, 파트 } from '../types.ts';
 
@@ -143,6 +143,13 @@ export function 봉인6_조각대조(학생답: string, 조각: 조각, 맥락: 
   if (조각.파트 === '답구하기' && 모범?.값.length) {
     const 줄 = student_answer_line(학생답);
     // [오종래 2026-10-16 q6 ①] 모범 답이 「∴」 없는 끝 값이면 학생 답도 마지막 줄 끝 수로 대조
+    // [오종래 2026-10-20 확정] 다중 답값 — 모범 값이 여럿(「따라서 … 값은 A, B, C이다」)이면 학생의 마지막 최종값 표지 줄을 「,」로 나눠 정규화해 집합으로 대조 (순서 무관)
+    if (모범.끝값 && 모범.값.length > 1) {
+      const 표지줄 = String(학생답 ?? '').split(/\r?\n/).map((l) => l.trim()).filter((l) => 최종값of(l) !== null).at(-1);
+      const 학생값 = 표지줄 ? answer_list(최종값of(표지줄)!) : [];
+      const 같음 = 학생값.length === 모범.값.length && 학생값.every((v, i) => v === 모범.값[i]);
+      return { 결과: 같음 ? 'O' : 'X', 근거: `모범 값 ${모범.값.join(', ')} · 학생 값 ${학생값.length ? 학생값.join(', ') : '없음'} (「${표지줄 ?? 줄}」) — ${같음 ? '일치' : '불일치'}`, 학생값: 학생값.length ? 학생값.join(', ') : '없음', 모범값: 모범.값.join(', ') };
+    }
     if (모범.끝값) {
       // 학생 끝 값 — 끝이 수인 마지막 「=」 줄 (「∴ α³+β³=(α+β)³+…」처럼 식으로 끝난 결론 줄은 건너뛴다, q6 학생 2)
       const 끝줄 = String(학생답 ?? '').split(/\r?\n/).map((l) => l.trim()).filter((l) => l.includes('=') && final_value(l) !== null).at(-1) ?? 줄;

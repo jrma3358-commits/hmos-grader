@@ -207,7 +207,7 @@ export function classify_math_lines(답안: string, 문항글?: string, 수리�
   const 최종i = 마지막(줄, (l) => 최종값of(l) !== null);
   if (최종i >= 0) {
     const 표지줄 = 줄[최종i];
-    out.답 = { 줄: 표지줄, 값: [최종값of(표지줄)!], 끝값: true };
+    out.답 = { 줄: 표지줄, 값: answer_list(최종값of(표지줄)!), 끝값: true };
     const 남김 = (x: string) => !표지줄.includes(x);
     Object.assign(out, { 근거대기: out.근거대기.filter(남김), 세우기: out.세우기.filter(남김), 풀기: out.풀기.filter(남김), 미분류: out.미분류.filter(남김) });
     return 수리논술 ? 세우기풀기가르기(out, 줄) : out;
@@ -285,9 +285,24 @@ function 대상값of(s: string): string | null {
   return /[0-9A-Za-z]/.test(x) ? x : null;
 }
 
-/** 최종값 표지 줄 [오종래 2026-10-20 확정] → 그 수(수로 맞춘 글자) · 수식·교점·좌표·방정식이면 그 글자, 아니면 null */
+/** 괄호 밖 쉼표가 있는가 — 「1, 2, 5^(1/4)」는 있다, 「(-2,-6)」은 없다 */
+const 밖쉼표 = (x: string) => /[,，]/.test(x.replace(/\([^()]*\)|\[[^\[\]]*\]|\{[^{}]*\}/g, ''));
+
+/**
+ * 다중 답값 [오종래 2026-10-20 확정] (중앙대 자연계 음함수2) — 「따라서 … 값은 A, B, C이다」처럼 답값이 여럿이면 괄호 밖 「,」로 나눠 각각 답값.
+ * 정규화 = 띄어쓰기 뺌 · 수는 수로 맞춤(1/2 = 0.5) · 겹침 뺌 · 정렬 — 순서가 달라도 같다. 표기가 다른 같은 값(5^(1/4) · ⁴√5)은 맞추지 않는다
+ */
+export function answer_list(값글: string): string[] {
+  const 조각 = String(값글 ?? '').split(/[,，](?![^(]*\))(?![^\[]*\])(?![^{]*\})/).map((v) => 수맞춤(v.replace(/\s+/g, ''))).filter(Boolean);
+  return [...new Set(조각)].sort();
+}
+
+/** 최종값 표지 줄 [오종래 2026-10-20 확정] → 그 수(수로 맞춘 글자) · 수식·교점·좌표·방정식이면 그 글자, 아니면 null. 답값이 여럿이면 쉼표로 이은 글자(answer_list로 나눈다) */
 export function 최종값of(줄: string): string | null {
   const s = String(줄 ?? '').trim().replace(/[−–]/g, '-');
+  // 「값은 1, 2, 3이다」 — 끝 수 하나(3)만 잡지 않게 여럿을 먼저 본다
+  const 여럿 = 수식값of(s) ?? 대상값of(s);
+  if (여럿 && 밖쉼표(여럿)) return 여럿;
   for (const re of 최종값꼴) {
     const m = s.match(re);
     if (m) return 수맞춤(m[1]);

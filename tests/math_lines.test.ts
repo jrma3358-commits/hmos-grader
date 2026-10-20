@@ -10,7 +10,7 @@ import { recognizeV2Analysis } from '../src/fq/pipeline.ts';
 import { derive_pieces, f2_input_from_v2 } from '../src/rubric/f2.ts';
 import { grade } from '../src/rubric/g1.ts';
 import { 봉인4b_게이트 } from '../src/rubric/sealed/g1.ts';
-import { answer_values, classify_math_lines, solve_segments, student_answer_line, 최종값of } from '../src/rubric/solve_lines.ts';
+import { answer_list, answer_values, classify_math_lines, solve_segments, student_answer_line, 최종값of } from '../src/rubric/solve_lines.ts';
 import type { 조각 } from '../src/rubric/types.ts';
 
 const q5 = '이차방정식 x²+2x-3=0의 두 근을 구하고, 풀이 과정을 서술하시오. [5점]';
@@ -294,5 +294,28 @@ describe('수리논술 풀기 순서 — 쉼표로 나뉜 줄도 모범답안 �
     const r = classify_math_lines('PA=(x+1)²+y²이다.\n양변을 미분하면 정리해 y=x²+1이다.\n1-x²-y²=0, 즉 x²+y²=1이고 x=2-1=1이다.\n그러므로 z=x+y이다.\n따라서 값은 3이다.', '', true);
     assert.deepEqual(r.세우기, ['PA=(x+1)²+y²이다.']);
     assert.equal(r.풀기.findIndex((l) => l.startsWith('1-x²-y²=0')) < r.풀기.findIndex((l) => l.startsWith('그러므로')), true);
+  });
+});
+
+// [오종래 2026-10-20 확정] 다중 답값 「,」 분리 · 순서 무관 (중앙대 자연계 음함수2)
+describe('answer_list · 다중 답값', () => {
+  it('괄호 밖 쉼표로 나누고 정규화·정렬', () => {
+    assert.deepEqual(answer_list('1, 2, 5^(1/4)'), ['1', '2', '5^(1/4)']);
+    assert.deepEqual(answer_list('2, 1/2, 1'), ['0.5', '1', '2']);
+    assert.deepEqual(answer_list('(-2,-6)'), ['(-2,-6)']);
+  });
+  it('「따라서 … 값은 A, B, C이다」 → 답값 셋 (끝 수 하나가 아니라)', () => {
+    const r = classify_math_lines('식을 정리하면 y=x이다.\n따라서 구하는 a의 값은 1, 2, 5^(1/4)이다.', '', true);
+    assert.deepEqual(r.답?.값, ['1', '2', '5^(1/4)']);
+    assert.deepEqual(answer_list(최종값of('따라서 a의 값은 1, 2, 3이다.')!), ['1', '2', '3']);
+  });
+});
+
+describe('다중 답값 채점 — 순서 무관 (2026-10-20)', () => {
+  const k = { 실체: 'a의 값', node: { id: 'n4', entity: 'a의 값', color: 'B', surface: '', switchId: '', index: 0 } } as any;
+  const 루브릭 = [{ id: '답구하기-1', 파트: '답구하기', 요소: null, 수행질: null, 확인물음: '', 충족조건: '', is_중심: false, node: null, 모범조각: '', 배점: 3, 모범답: { 줄: '따라서 구하는 a의 값은 1, 2, 5^(1/4)이다.', 값: ['1', '2', '5^(1/4)'], 끝값: true } }] as 조각[];
+  it('순서가 달라도 O · 하나 빠지면 X', () => {
+    assert.equal(grade('따라서 a의 값은 2, 5^(1/4), 1이다.', 루브릭, '', k, '수리').파트별.답구하기.조각별[0].결과, 'O');
+    assert.equal(grade('따라서 a의 값은 1, 2이다.', 루브릭, '', k, '수리').파트별.답구하기.조각별[0].결과, 'X');
   });
 });
