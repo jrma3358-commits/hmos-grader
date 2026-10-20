@@ -53,20 +53,40 @@ export function strip_passage_notes(텍스트: string): string {
     .trim();
 }
 
+/**
+ * 병렬 자료 표 [오종래 2026-10-20 확정] (숭실대 경상계열) — 제시문 안 〈자료 N〉·<자료 N>·[자료 N] 머리로 여는 단락.
+ * 제목 = 머리 뒤 「(단위…)」·줄 끝·「 - 」 앞까지 (「〈자료 1〉학생 성별 사용시간(단위: %)」 → 「학생 성별 사용시간」)
+ */
+const 자료머리 = /^[ \t]*[〈<\[][ \t]*자료[ \t]*(\d+)[ \t]*[〉>\]][ \t]*/;
+export function data_tables(단락글: readonly string[]): { 번호: string; 제목: string; 단락: number }[] {
+  return 단락글.flatMap((t, i) => {
+    const m = 자료머리.exec(t);
+    if (!m) return [];
+    const 제목 = t.slice(m[0].length).split(/\(\s*단위|\n|\s-\s/)[0].trim();
+    return [{ 번호: m[1], 제목: 제목 || `자료 ${m[1]}`, 단락: i }];
+  });
+}
+/** 논제가 부른 자료 번호 — 「[자료 N]」「〈자료 N〉」「<자료 N>」 (부른 차례, 겹침 없이) */
+export const data_calls = (글: string): string[] => [...new Set([...글.matchAll(/[〈<\[][ \t]*자료[ \t]*(\d+)[ \t]*[〉>\]]/g)].map((m) => m[1]))];
+
 /** 2단계 산출 — 소문항 하나 (엔진) */
 export interface 인식소문항 {
   번호: string | null;
   참조: string[];
   인식: V2Analysis;
+  /** 「[자료 N]」 호출을 찾을 글 — 소문항 본문 + 공통 발문 (2026-10-20). 없으면 인식한 본문만 */
+  호출글?: string;
 }
 
 export interface 단락연결 {
-  /** 제시문 기호 (기호 없는 단락이면 단락 순번 「#1」) */
+  /** 제시문 기호 (기호 없는 단락이면 단락 순번 「#1」). 자료 표는 「가-자료1」 */
   단락: string;
-  /** 단락 급소 실체 — 지정 연결이면 빈 글 (단락 급소가 서지 않았다) */
+  /** 단락 급소 실체 — 지정 연결이면 빈 글 (단락 급소가 서지 않았다). 자료 표는 표 제목 */
   단락급소: string;
-  /** 서두·말미 = 단락 급소로 이은 것 · 지정 = 논제가 기호로 그 단락을 짚은 것 (오종래 2026-10-15) */
-  자리: '서두' | '말미' | '지정';
+  /** 서두·말미 = 단락 급소로 이은 것 · 지정 = 논제가 기호로 그 단락을 짚은 것 (오종래 2026-10-15) · 자료 = 논제가 부른 자료 표 (2026-10-20) */
+  자리: '서두' | '말미' | '지정' | '자료';
+  /** 자료 표 단락 순번 (자리 「자료」일 때만) */
+  문단?: number;
 }
 
 /** 논제 급소 하나의 연결 */
@@ -96,11 +116,15 @@ export function align_passage(소문항들: 인식소문항[], passage: PassageR
   const 이름 = (i: number) => labels[i] ?? `#${i + 1}`;
   const 연결: 급소연결[] = [];
   const 원본: 정합엔진['소문항'] = [];
+  const 자료들 = data_tables(passage.paragraphs.map((p) => p.text));
 
   for (const s of 소문항들) {
     const c = connectPassage(s.인식, passage, s.참조);
     원본.push({ 번호: s.번호, 연결: c });
     const 덩어리들 = essay_pivot_chunks(s.인식.graph, s.인식.pivot);
+    // 병렬 자료 표 [오종래 2026-10-20 확정] — 논제가 「[자료 N]」을 부르면 그 자료 표가 이 소문항의 제시문 B (단락 급소 = 표 제목). 소문항 덩어리마다 잇는다
+    const 부른자료 = data_calls(s.호출글 ?? s.인식.question).flatMap((n) => 자료들.filter((x) => x.번호 === n))
+      .map((x): 단락연결 => ({ 단락: `${이름(x.단락)}-자료${x.번호}`, 단락급소: x.제목, 자리: '자료', 문단: x.단락 }));
     const 자리of = (id: string) => s.인식.graph.nodes.find((n) => n.id === id)?.index ?? -1;
     덩어리들.forEach((d, k) => {
       const 단락: 단락연결[] = [];
@@ -119,6 +143,7 @@ export function align_passage(소문항들: 인식소문항[], passage: PassageR
         const 이름i = 이름(l.paragraph);
         if (!단락.some((x) => x.단락 === 이름i)) 단락.push({ 단락: 이름i, 단락급소: '', 자리: '지정' });
       }
+      단락.push(...부른자료);
       연결.push({ 소문항: s.번호, 급소: clean(d.B.entity), 덩어리: d.실체, 노드: d.B.id, 단락 });
     });
   }

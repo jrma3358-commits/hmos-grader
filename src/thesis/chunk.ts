@@ -45,11 +45,37 @@ function 실체명사덩어리(nodes: PathNode[], 급소들: PathNode[]): 급소
 }
 
 /**
+ * 계산 문항 두 급소 [오종래 2026-10-20 확정] (숭실대 경상계열 문항 1) — 「몇 N인지」(결과) + 「계산 근거」(과정)가 함께 있으면 두 덩어리.
+ *   결과 = 「몇 N」 Q 바로 앞 B와 그 B 앞에 붙은 C (「30시간 이상인 여학생 몇 명」) — 앞 조건 B(「28,000명이」)는 넣지 않는다
+ *   과정 = 「계산 근거」 노드(「도」로 P가 되어도) — Q는 그 뒤 첫 Q
+ */
+const 몇re = /^몇\s*\S+$/;
+function 계산덩어리(nodes: PathNode[]): 급소덩어리[] | null {
+  const qi = nodes.findIndex((n) => n.color === 'Q' && 몇re.test(clean(n.entity)));
+  if (qi < 0) return null;
+  const gi = nodes.findIndex((n, i) => i > qi && /계산\s*근거/.test(clean(n.entity)));
+  if (gi < 0) return null;
+  let bi = qi - 1;
+  while (bi >= 0 && nodes[bi].color !== 'B') bi--;
+  if (bi < 0) return null;
+  const 앞C: PathNode[] = [];
+  for (let k = bi - 1; k >= 0 && nodes[k].color === 'C' && nodes[k].switchId !== 케이스분류; k--) 앞C.unshift(nodes[k]);
+  const 결과 = [...앞C.map((c) => clean(c.entity) + c.surface.trim()), clean(nodes[bi].entity), clean(nodes[qi].entity)].join(' ');
+  const 뒤Q = nodes.find((n, i) => i > gi && n.color === 'Q');
+  return [
+    { B: nodes[bi], C: 앞C, Q: [nodes[qi]], 실체: 결과 },
+    { B: nodes[gi], C: [], Q: 뒤Q ? [뒤Q] : [], 실체: clean(nodes[gi].entity) },
+  ];
+}
+
+/**
  * 논제 그래프 → 급소 덩어리들 (Q 앞 B+C). 덩어리가 하나도 서지 않으면 빈 배열.
  * 급소(엔진 analyze_pivot 결과)를 주고 그 급소가 실체 명사 B(서술 방향 제외 형식)면 그 급소로 덩어리를 세운다 (2026-10-20)
  */
 export function essay_pivot_chunks(graph: Pick<PathGraph, 'nodes'>, 급소?: PivotAnalysis): 급소덩어리[] {
   const nodes = [...graph.nodes].sort((a, b) => a.index - b.index);
+  const 계산 = 계산덩어리(nodes);
+  if (계산) return 계산;
   const 실체급소 = 급소?.ok ? (급소.pivots ?? [급소.pivot]).filter((p) => p.reason === '실체 명사 B').map((p) => p.node) : [];
   if (실체급소.length) return 실체명사덩어리(nodes, 실체급소);
   const 덩어리: 급소덩어리[] = [];

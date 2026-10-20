@@ -8,7 +8,7 @@ import { analyze_pivot, build_path_graph, describeCombination, recognizePassage 
 import type { V2Analysis } from '../src/fq/pipeline.ts';
 import type { SealedSwitch, SealedTable } from '../src/fq/sealed/schema.ts';
 import type { Color } from '../src/fq/types.ts';
-import { align_passage, background_passage, box_passages, strip_passage_notes } from '../src/thesis/align.ts';
+import { align_passage, background_passage, box_passages, data_calls, data_tables, strip_passage_notes } from '../src/thesis/align.ts';
 import { background_paragraphs } from '../src/thesis/background.ts';
 import { all_passages_required, passage_message } from '../src/thesis/message.ts';
 
@@ -145,5 +145,25 @@ describe('passage_message — 에피소드·상황형 제시문 메시지', () =
 describe('strip_passage_notes — 각주·주의사항 줄 (2026-10-20)', () => {
   it('「※」 줄과 〈주의사항〉 줄을 뺀다', () => {
     assert.equal(strip_passage_notes('본문이다.\n※ 양(+)의 상관 관계: 같은 방향\n\n〈주의사항: 제시문 [가]는 가상의 상황임〉'), '본문이다.');
+  });
+});
+
+// 상경계열 [오종래 2026-10-20 확정] (숭실대 경상계열 스마트폰)
+describe('data_tables · data_calls — 병렬 자료 표', () => {
+  it('〈자료 N〉 단락의 번호와 제목', () => {
+    assert.deepEqual(data_tables(['다음은 자료들이다.', '〈자료 1〉학생 성별 사용시간(단위: %) - 남학생: 41%', '〈자료 3〉학업 성취도별 사용시간 비율(단위: %)']), [
+      { 번호: '1', 제목: '학생 성별 사용시간', 단락: 1 },
+      { 번호: '3', 제목: '학업 성취도별 사용시간 비율', 단락: 2 },
+    ]);
+  });
+  it('논제가 부른 자료 번호', () => {
+    assert.deepEqual(data_calls('제시문 [가]의 [자료 1]과 [자료 2]를 참고하여'), ['1', '2']);
+  });
+});
+
+describe('passage_message — 「하지만 … 때문이다」 반론 원인', () => {
+  it('때문이다 앞 원인절', () => {
+    const m = passage_message('두 수치가 함께 증가했다. 하지만 전문가들은 신중해야 한다고 조언한다. 여름에는 기온이 높아져서 방문객의 수도 증가하기 때문이다.');
+    assert.deepEqual(m && [m.실체, m.근거], ['여름에는 기온이 높아져서 방문객의 수도 증가하기', '반론 원인']);
   });
 });
