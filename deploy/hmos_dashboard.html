@@ -3831,23 +3831,25 @@ const 다시그림8 = i => (i < 0 ? renderB4() : renderC8());
 const 다시그림9 = i => (i < 0 ? renderB5() : renderC9());
 
 // ── 서술형 B 4 루브릭 · 5 모범답안 (오종래 2026-10-14) — C 8·9단계와 같은 엔진 루브릭 · 학생 채점 · 모범답안 잇기 ──
-// 계열 「자동」 — 수학 문항은 수리, 그 밖은 인문사회국어 (엔진이 정함, 2026-10-16). 인문: 풀기 없음 · 답구하기 = 급소 경로 흔적. 제시문 = 소문항 공통발문의 대화·자료(공통자료),
+// 계열은 형식이 정한다 (B-s → 수리 · B-h → 인문사회국어, 서버 /api/rubric 계열형식, 2026-10-20). 형식이 없으면 「자동」. 인문: 풀기 없음 · 답구하기 = 급소 경로 흔적. 제시문 = 소문항 공통발문의 대화·자료(공통자료),
 // 세우기 = 「~의 방법으로」가 지목한 화자의 줄 (엔진 화자 지정). 루브릭은 현재 문항 자료(currentData.B루브릭)에 담겨 목록 저장에 같이 간다.
 function renderB4() {
   const box = document.getElementById('b-rubric');
   if (!currentData) { box.innerHTML = '<div class="card c-empty">1단계에서 분석하면 표시됩니다</div>'; return; }
   const h = currentData.B루브릭;
   const r = h && h.루브릭;
+  // 계열 표시 — 루브릭이 있으면 서버가 정한 계열, 없으면 형식으로 (B-s → 수리계산 · B-h → 인문사회국어, 오종래 2026-10-20)
+  const 수리 = (r && r.계열 ? r.계열 : HMOS형식.엔진계열(selectedForm)) === '수리';
   box.innerHTML = `<div class="card">
     <div class="card-title">${엔진배지}서술형 루브릭 — 엔진 조각</div>
-    <div class="c-meta">계열 인문사회국어 · 답구하기 = 급소 경로 흔적. 소문항 배점은 소문항의 「[N점]」(없으면 문항 「[총 N점]」, 그것도 없으면 10).
-      세우기 = 공통 자료(대화)에서 「~의 방법으로」가 지목한 화자의 줄.
+    <div class="c-meta">${수리 ? '계열 수리계산 · 충족 경계 완전 일치' : '계열 인문사회국어 · 답구하기 = 급소 경로 흔적'}. 소문항 배점은 소문항의 「[N점]」(없으면 문항 「[총 N점]」, 그것도 없으면 10).
+      ${수리 ? '' : '세우기 = 공통 자료(대화)에서 「~의 방법으로」가 지목한 화자의 줄.'}
       풀기 = 5 모범답안에서 세우기 이후 ~ 답구하기 이전의 줄 하나에 조각 하나 (5에서 「모범답안으로 루브릭 맞추기」) — 배점은 근거·세우기·답구하기 몫을 뺀 나머지를 풀기 단계 수로 나눔, 판정은 교사.</div>
     ${currentData.B루브릭생성중 ? `<div class="c-meta" style="margin-top:8px;">분석 시작과 함께 루브릭을 만드는 중입니다 — ${String((지금문항() || {}).모범답안 || '').trim() ? '등록창 모범답안을 줄바꿈으로 나눠 풀기 조각으로' : '모범답안이 없어 엔진 인식(5색·급소)으로 Claude가 모범답안을 쓰고 줄바꿈으로 풀기 조각으로'} (2~3분)</div>`
       : currentData.B루브릭오류 ? `<div class="flag-box" style="margin-top:8px;">자동 루브릭 생성 실패: ${esc(currentData.B루브릭오류)} — 아래 버튼으로 다시 만드세요</div>`
       : r ? '' : '<div class="c-meta" style="margin-top:8px;">아래 버튼을 눌러 루브릭을 생성하세요.</div>'}
     <button class="type-btn" id="b-gen" style="margin-top:8px;" onclick="genB()"${currentData.B루브릭생성중 ? ' disabled' : ''}>${r ? '루브릭 다시 생성' : '루브릭 생성'} (엔진 조각 → Claude 문장)</button>
-    ${r ? `<div class="c-meta" style="margin-top:12px;">파트 지수 2:3:2:2 (봉인④) · 파트 배점 ÷ 조각 수 · 충족 경계 급소 도달 · 엔진 ${esc(r.엔진 ? r.엔진.commit : '—')}</div>
+    ${r ? `<div class="c-meta" style="margin-top:12px;">파트 지수 2:3:2:2 (봉인④) · 파트 배점 ÷ 조각 수 · 충족 경계 ${수리 ? '완전 일치' : '급소 도달'} · 엔진 ${esc(r.엔진 ? r.엔진.commit : '—')}</div>
       ${r.소문항.map((s, j) => 루브릭소문항Html(s, -1, j)).join('')}` : ''}
   </div>`;
 }
