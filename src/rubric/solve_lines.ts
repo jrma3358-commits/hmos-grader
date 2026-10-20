@@ -273,14 +273,26 @@ function 수식값of(s: string): string | null {
   return x && !/[가-힣]/.test(x) && /[0-9eπ√]/.test(x) ? x : null;
 }
 
-/** 최종값 표지 줄 [오종래 2026-10-20 확정] → 그 수(수로 맞춘 글자) · 수식이면 식 글자, 아니면 null */
+/**
+ * 교점·좌표·방정식형 최종값 [오종래 2026-10-20 확정] (중앙대 자연계 접선넓이) — 「따라서 … 교점은 X이다」·「따라서 … 좌표는 X이다」·
+ * 「따라서 … 방정식은 X이다」. 「값은 X이다」(수식값)와 따로 본다. 값 = 띄어쓰기를 뺀 X 글자 (「(-2, -6)」 → 「(-2,-6)」). X에 수·문자가 없으면 아니다
+ */
+const 대상값꼴 = /^따라서[\s,，].*?(?:교점|좌표|방정식)[은는]\s*(.+?)\s*(?:이다|입니다)[.。]?$/;
+function 대상값of(s: string): string | null {
+  const m = s.match(대상값꼴);
+  if (!m) return null;
+  const x = m[1].replace(/\s+/g, '');
+  return /[0-9A-Za-z]/.test(x) ? x : null;
+}
+
+/** 최종값 표지 줄 [오종래 2026-10-20 확정] → 그 수(수로 맞춘 글자) · 수식·교점·좌표·방정식이면 그 글자, 아니면 null */
 export function 최종값of(줄: string): string | null {
   const s = String(줄 ?? '').trim().replace(/[−–]/g, '-');
   for (const re of 최종값꼴) {
     const m = s.match(re);
     if (m) return 수맞춤(m[1]);
   }
-  return 수식값of(s);
+  return 수식값of(s) ?? 대상값of(s);
 }
 
 /** 줄 끝 값 — 마지막 「=」 뒤가 수이면 그 수(1/2 = 0.5로 맞춘 글자), 아니면 null (2026-10-16 q6) */
