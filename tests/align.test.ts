@@ -8,7 +8,7 @@ import { analyze_pivot, build_path_graph, describeCombination, recognizePassage 
 import type { V2Analysis } from '../src/fq/pipeline.ts';
 import type { SealedSwitch, SealedTable } from '../src/fq/sealed/schema.ts';
 import type { Color } from '../src/fq/types.ts';
-import { align_passage, background_passage, box_passages } from '../src/thesis/align.ts';
+import { align_passage, background_passage, box_passages, strip_passage_notes } from '../src/thesis/align.ts';
 import { background_paragraphs } from '../src/thesis/background.ts';
 import { all_passages_required, passage_message } from '../src/thesis/message.ts';
 
@@ -139,5 +139,11 @@ describe('passage_message — 에피소드·상황형 제시문 메시지', () =
   it('「모두 활용하여」', () => {
     assert.equal(all_passages_required('제시문 [가], [나], [다]를 모두 활용하여 논하시오.'), true);
     assert.equal(all_passages_required('제시문 [가]를 참고하여 논하시오.'), false);
+  });
+});
+
+describe('strip_passage_notes — 각주·주의사항 줄 (2026-10-20)', () => {
+  it('「※」 줄과 〈주의사항〉 줄을 뺀다', () => {
+    assert.equal(strip_passage_notes('본문이다.\n※ 양(+)의 상관 관계: 같은 방향\n\n〈주의사항: 제시문 [가]는 가상의 상황임〉'), '본문이다.');
   });
 });

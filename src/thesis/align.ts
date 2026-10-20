@@ -40,6 +40,19 @@ export function box_passages<T extends { id: string; 텍스트: string }>(제시
   return { 보기: 제시문.filter((p) => p.id === '보기'), 제시문: 제시문.filter((p) => p.id !== '보기') };
 }
 
+/**
+ * 각주·주의사항 줄 떼기 [오종래 2026-10-20 확정] (숭실대 경상계열 스마트폰) — 제시문 분석(단락 급소·수렴 경로·메시지·루브릭 연결)에 넣지 않는다.
+ *   「※」로 시작하는 줄 (「※ 양(+)의 상관 관계: …」) · 「〈주의사항…〉」「<주의사항…>」 줄
+ */
+export function strip_passage_notes(텍스트: string): string {
+  return 텍스트
+    .replace(/\r\n?/g, '\n')
+    .split('\n')
+    .filter((줄) => !/^[ \t　]*※/.test(줄) && !/^[ \t　]*[〈<][ \t]*주의사항/.test(줄))
+    .join('\n')
+    .trim();
+}
+
 /** 2단계 산출 — 소문항 하나 (엔진) */
 export interface 인식소문항 {
   번호: string | null;

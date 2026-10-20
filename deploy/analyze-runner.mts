@@ -31,7 +31,7 @@ const { find_logic_markers } = await load('src/fq/logic_markers.ts');
 const { check_math_answer, check_human_answer } = await load('src/fq/answer_markers.ts');
 // 제시문 B 극성 — 논술 3단계 (오종래 2026-10-19). 표지 목록은 봉인 표지사전 「극성」, 찾기는 엔진 polarity_markers. Claude 판정 없음
 const { passage_polarity } = await load('src/fq/polarity_markers.ts');
-const { align_passage, background_passage, box_passages } = await load('src/thesis/align.ts');
+const { align_passage, background_passage, box_passages, strip_passage_notes } = await load('src/thesis/align.ts');
 // 배경 제시문 단락 실체 — 단락마다 실체 하나 = ② 세우기 조각 (오종래 2026-10-20 확정, 정의문 우선)
 const { background_paragraphs } = await load('src/thesis/background.ts');
 // 제시문 핵심 메시지 · 「모두 활용하여」 세우기 하한 (오종래 2026-10-20 확정)
@@ -267,7 +267,9 @@ try {
   if (!문항원문 && !req.논제) throw Object.assign(new Error('문항원문이 비어 있습니다'), { name: '입력오류' });
   if (!['A', 'B', 'C'].includes(파이프라인)) throw Object.assign(new Error(`파이프라인은 A·B·C 중 하나여야 합니다 (받은 값: ${req.파이프라인})`), { name: '입력오류' });
 
-  const 받은제시문: { id: string; 텍스트: string }[] | null = Array.isArray(req.제시문) ? req.제시문 : typeof req.제시문 === 'string' && req.제시문.trim() ? [{ id: '제시문', 텍스트: req.제시문 }] : null;
+  const 받은글: { id: string; 텍스트: string }[] | null = Array.isArray(req.제시문) ? req.제시문 : typeof req.제시문 === 'string' && req.제시문.trim() ? [{ id: '제시문', 텍스트: req.제시문 }] : null;
+  // 각주 「※」 줄 · 〈주의사항〉 줄은 제시문 분석에서 뺀다 (오종래 2026-10-20 확정, align.ts strip_passage_notes)
+  const 받은제시문 = 받은글 ? 받은글.map((p) => ({ ...p, 텍스트: strip_passage_notes(String(p.텍스트 ?? '')) })).filter((p) => p.텍스트) : null;
   // 〈보기〉 별도 배경 블록 (오종래 2026-10-20 확정) — id 「보기」는 제시문 정합·수렴·관계·루브릭 연결에서 빼고 C 2단계 상황 P로 싣는다 (align.ts box_passages)
   const 나눈제시문 = 받은제시문 ? box_passages(받은제시문) : { 보기: [], 제시문: [] };
   const 보기목록 = 나눈제시문.보기;
@@ -366,7 +368,7 @@ try {
       // 급소덩어리 — 논술 논제 급소 = Q 앞 B+C (오종래 2026-10-13). 급소(엔진 pivot)는 그대로 함께 싣는다
       소문항: 소문항.map((s: any) => ({
         번호: s.번호, 텍스트: s.텍스트, 공통발문: s.공통발문, 참조: s.참조, 분량배점: s.분량배점 || '',
-        ...(s.조건 ? { 조건: s.조건 } : {}), ...(s.이어받기 ? { 이어받기: s.이어받기 } : {}), ...(s.원문 ? { 원문: s.원문 } : {}), ...인식of(s.a),
+        ...(s.조건 ? { 조건: s.조건 } : {}), ...(s.이어받기 ? { 이어받기: s.이어받기 } : {}), ...(s.원문 ? { 원문: s.원문 } : {}), ...(s.문항 ? { 문항: s.문항 } : {}), ...인식of(s.a),
         급소덩어리: essay_pivot_chunks(s.a.graph, s.a.pivot).map((d: any) => ({ B: d.B.id, C: d.C.map((n: any) => n.id), Q: d.Q.map((n: any) => n.id), 실체: d.실체 })),
       })),
     };

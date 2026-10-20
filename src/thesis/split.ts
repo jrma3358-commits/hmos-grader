@@ -30,6 +30,8 @@ export interface 소문항 {
   이어받기?: { 번호: string | null; 표지: string; 대상: string };
   /** 조건 블록·표지를 떼기 전 본문 — 소문항 창 논제를 다시 세울 때 쓴다. 뗀 것이 있을 때만 */
   원문?: string;
+  /** 「[문항 N]」 소문항 (오종래 2026-10-20) — 문항 머리 앞 발문 · 문항 자신의 발문 줄. 소문항 창 논제를 다시 세울 때 쓴다 */
+  문항?: { 머리발문: string; 발문: string };
 }
 
 /**
@@ -71,6 +73,35 @@ function 참조of(text: string): string[] {
   return last ? designatedLabels(referenceGroup(last)) : [];
 }
 
+/** 「[문항 N]」 머리 — 줄 머리 (오종래 2026-10-20: C-1a에도 소문항 분리) */
+const MUNHANG = /(?:^|(?<=\n))[ \t]*\[문항[ \t]*(\d+)\][ \t]*/g;
+/** 「제시문 [가]」「제시문 [다], [라]」 — 뒤에 「를」이 없어도 (「제시문 [가]의 [자료 1]과」「제시문 [나]의 조사에서」) */
+const 제시문기호 = /제시문\s*((?:\[[가-하]\](?:\s*(?:[,·~∼～]|및|와|과)\s*(?=\[))?)+)/g;
+const 참조모두 = (text: string) => [...text.matchAll(제시문기호)].flatMap((m) => designatedLabels(m[1]));
+
+/**
+ * 「[문항 N]」마다 소문항 하나 [오종래 2026-10-20 확정 — C-2에만 쓰던 분리를 C-1a에도] (숭실대 경상계열 스마트폰).
+ * 번호 = 「N」. 문항 머리 뒤 첫 줄이 「…물음에 답하시오」면 그 문항의 발문 — 공통 발문(첫 문항 머리 앞 글)에 잇는다.
+ * 배점 = 문항 발문 줄 끝의 「(N점)」 → 소문항 분량배점 (본문 안 「(N점)」은 그대로 — 2026-10-19 규칙).
+ * 참조 = 문항 발문과 본문이 「제시문 [X]」로 짚은 기호 모두 (발문 → 본문 순)
+ * 문항 머리가 하나뿐이면 본문에 계단 「[1][2]」「(1)」이 없을 때만 (소문항 창 논제 — 창논제가 「[문항 N] 발문」 머리째 다시 넣는다)
+ */
+function 문항으로(text: string, heads: RegExpMatchArray[]): 소문항[] {
+  const 머리발문 = text.slice(0, heads[0].index!).trim().replace(/^문제[ \t]*\d+(?:[ \t]*[:：.]|[ \t]+)[ \t]*(?=\S)/, '');
+  return heads.flatMap((m, k) => {
+    const 몸 = text.slice(m.index! + m[0].length, heads[k + 1]?.index ?? text.length).trim();
+    const 줄 = 몸.split('\n');
+    const 발문있음 = 줄.length > 1 && /물음에\s*답하시오/.test(줄[0]);
+    const 점 = 발문있음 ? (줄[0].match(/[ \t]*\(\s*\d+(?:\.\d+)?\s*점\s*\)[ \t]*$/)?.[0] ?? '') : '';
+    const 발문 = 발문있음 ? 줄[0].slice(0, 줄[0].length - 점.length).trim() : '';
+    const body = 발문있음 ? 줄.slice(1).join('\n').trim() : 몸;
+    const 참조 = [...new Set([...참조모두(발문), ...참조모두(body)])];
+    const 공통발문 = [머리발문, 발문].filter(Boolean).join('\n');
+    return 계단으로({ 번호: m[1], 텍스트: body, 공통발문, 참조: 참조.length ? 참조 : 참조of(머리발문) })
+      .map((u) => ({ ...u, 분량배점: 점.trim(), 문항: { 머리발문, 발문 } }));
+  });
+}
+
 /**
  * 소문항 하나 → 계단들. 본문에 계단 번호 「(N)」가 없으면 그대로. 있으면 계단마다 한 단위 —
  * 번호 = 「N」(소문항 번호가 있으면 「소문항-N」), 첫 계단 앞 글(계단의 발문)은 공통 발문에 잇는다,
@@ -104,7 +135,7 @@ export function split_thesis(논제: string): 소문항[] {
     const 표지 = relay_marker(블록.텍스트);
     const 뗌 = 블록.조건.length > 0 || !!표지.이어받기;
     return {
-      ...u, 텍스트: 표지.텍스트, 공통발문: 발문.글, 분량배점: 본문.뗀것.join(' '),
+      ...u, 텍스트: 표지.텍스트, 공통발문: 발문.글, 분량배점: [u.분량배점 ?? '', ...본문.뗀것].filter(Boolean).join(' '),
       ...(블록.조건.length ? { 조건: 블록.조건 } : {}), ...(표지.이어받기 ? { 이어받기: 표지.이어받기 } : {}), ...(뗌 ? { 원문: 본문.글 } : {}),
     };
   });
@@ -113,6 +144,9 @@ export function split_thesis(논제: string): 소문항[] {
 function 나누기(논제: string): 소문항[] {
   const text = 논제.replace(/\r\n?/g, '\n');
   const items = [...text.matchAll(ITEM)];
+  // 「[문항 N]」 소문항 — 「(N-M)」 번호가 없을 때 (번호가 있으면 [문항 N]은 공통 발문 머리다)
+  const 문항머리 = [...text.matchAll(MUNHANG)];
+  if (!items.length && (문항머리.length > 1 || (문항머리.length === 1 && ![...text.matchAll(STEP)].length))) return 문항으로(text, 문항머리);
   if (!items.length) {
     // 「문제 N:」 머리줄 [오종래 2026-10-20 숭실대] — 소문항이 없으면 논제에서 뗀다 (실체가 아니다 — 「문제 2: 오늘날 …」의 B 「문제 2: 오늘날 민주주」)
     const t = text.trim().replace(/^문제[ \t]*\d+(?:[ \t]*[:：.]|[ \t]+)[ \t]*(?=\S)/, '');
