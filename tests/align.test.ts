@@ -10,6 +10,7 @@ import type { SealedSwitch, SealedTable } from '../src/fq/sealed/schema.ts';
 import type { Color } from '../src/fq/types.ts';
 import { align_passage, background_passage, box_passages } from '../src/thesis/align.ts';
 import { background_paragraphs } from '../src/thesis/background.ts';
+import { all_passages_required, passage_message } from '../src/thesis/message.ts';
 
 const sw = (id: string, markers: string[], color: Color, lexical?: string[]) =>
   ({ id, kind: '조사·어미', markers, intent: '', color, lexical }) as SealedSwitch;
@@ -109,8 +110,10 @@ describe('background_paragraphs — 단락마다 실체 하나', () => {
     ]);
     assert.match(r[0].문장, /^의사결정 과정에서 .*다수결 원칙은/);
   });
-  it('정의문도 논제 실체도 없으면 첫 문장 급소', () => {
-    assert.equal(background_paragraphs(글.split('\n\n')[0], [])[0].근거, '첫 문장 급소');
+  // [오종래 2026-10-20 확정] 단락 첫 문장 B 우선은 정의문이 있을 때만 — 없으면 핵심 메시지(message.ts: 결론 문장, 없으면 마지막 문장의 주어)
+  it('정의문도 논제 실체도 없으면 핵심 메시지 — 마지막 문장의 주어', () => {
+    const [p] = background_paragraphs(글.split('\n\n')[0], []);
+    assert.deepEqual([p.근거, p.실체], ['마지막 문장', '다수결 원칙']);
   });
 });
 
@@ -119,5 +122,22 @@ describe('box_passages — 〈보기〉 별도 배경 블록 (2026-10-20)', () =
     const r = box_passages([{ id: '보기', 텍스트: '쇼핑카트를 미는 순간' }, { id: '가', 텍스트: '…' }, { id: '나', 텍스트: '…' }]);
     assert.deepEqual(r.보기.map((p) => p.id), ['보기']);
     assert.deepEqual(r.제시문.map((p) => p.id), ['가', '나']);
+  });
+});
+
+// 제시문 핵심 메시지 · 「모두 활용하여」 [오종래 2026-10-20 확정] (논술가이드북 포장)
+describe('passage_message — 에피소드·상황형 제시문 메시지', () => {
+  it('결론 연결어로 여는 마지막 문장의 주어', () => {
+    const m = passage_message('사람들은 외모에 집착한다. 결국 몸의 사용가치는 사라졌다. 이제 육체는 한 개인이 가진 생산수단이 되었다.');
+    assert.deepEqual(m && [m.실체, m.근거], ['육체', '결론 문장']);
+    assert.match(m!.문장, /^이제 육체는/);
+  });
+  it('주어가 지시어면 정의꼴 문장(「…의 X다」)의 주어', () => {
+    const m = passage_message('컴퓨터게임에는 넘치는 마력이 있다. 사회적 제약이 많은 청소년들에게 사이버 공간은 억압이 최대한 배제된 자유의 세계다. 거기에는 \'불가능\'이 없어 보인다.');
+    assert.deepEqual(m && [m.실체, m.근거], ['사이버 공간', '정의꼴 문장']);
+  });
+  it('「모두 활용하여」', () => {
+    assert.equal(all_passages_required('제시문 [가], [나], [다]를 모두 활용하여 논하시오.'), true);
+    assert.equal(all_passages_required('제시문 [가]를 참고하여 논하시오.'), false);
   });
 });

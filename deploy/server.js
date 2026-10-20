@@ -633,12 +633,16 @@ async function 세우기거르기(소문항들,계열){
   const 기록=[];
   for(const s of 소문항들){
     // 배경 제시문 단락 실체(근거.배경)는 단락마다 하나라 거르지 않는다 (오종래 2026-10-20)
-    const 원본=(s.조각||[]).filter(c=>c.파트==='세우기'&&c.근거&&!c.근거.배경).map(c=>({entity:c.근거.단락급소,source:c.근거.단락,text:c.근거.문장}));
+    // 「모두 활용하여」 보장 조각(근거.보장 — 제시문마다 핵심 메시지 하나)도 거르지 않고, 남길 수 = max(급소 수, 제시문 수) (오종래 2026-10-20 확정)
+    const 꼴=c=>({entity:c.근거.단락급소,source:c.근거.단락,text:c.근거.문장});
+    const 보장=(s.조각||[]).filter(c=>c.파트==='세우기'&&c.근거&&c.근거.보장).map(꼴);
+    const 원본=(s.조각||[]).filter(c=>c.파트==='세우기'&&c.근거&&!c.근거.배경&&!c.근거.보장).map(꼴);
     const 급소수=s.급소수||1;
-    if(원본.length<=급소수){기록.push(null);continue;}
-    const f=await filterSeuwogiDetailed(원본,{keyword:s.급소.실체},급소수,'humanities',client);
+    const 남길수=보장.length?Math.max(급소수,보장.length)-보장.length:급소수;
+    if(원본.length<=남길수){기록.push(null);continue;}
+    const f=남길수>0?await filterSeuwogiDetailed(원본,{keyword:s.급소.실체},남길수,'humanities',client):{결과:[],방법:'보장 하한'};
     if(f.사유)console.warn('세우기 필터 실패 — 앞에서 급소 수만큼:',f.사유);
-    기록.push({원본,남김:f.결과,급소수,방법:f.방법,...(f.사유?{사유:f.사유}:{})});
+    기록.push({원본:[...보장,...원본],남김:[...보장,...f.결과],급소수,...(보장.length?{보장수:보장.length}:{}),방법:f.방법,...(f.사유?{사유:f.사유}:{})});
   }
   return 기록;
 }

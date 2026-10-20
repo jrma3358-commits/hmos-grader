@@ -34,6 +34,8 @@ const { passage_polarity } = await load('src/fq/polarity_markers.ts');
 const { align_passage, background_passage, box_passages } = await load('src/thesis/align.ts');
 // 배경 제시문 단락 실체 — 단락마다 실체 하나 = ② 세우기 조각 (오종래 2026-10-20 확정, 정의문 우선)
 const { background_paragraphs } = await load('src/thesis/background.ts');
+// 제시문 핵심 메시지 · 「모두 활용하여」 세우기 하한 (오종래 2026-10-20 확정)
+const { passage_message, all_passages_required } = await load('src/thesis/message.ts');
 const { essay_pivot_chunks } = await load('src/thesis/chunk.ts');
 const { 봉인14_6단계 } = await load('src/thesis/relate.ts');
 // 8단계 루브릭 — 엔진 F1~F5·문항평가 (src/rubric). GJ는 쓰지 않는다 (오종래 2026-10-14: GJ 검산 대신 조각 충족 여부)
@@ -154,6 +156,18 @@ function 루브릭작업(논제글: string, 계열: string, 총배점: number, �
         const 급소단락of = (번호: string | null) => 정합.연결.filter((x: any) => x.소문항 === 번호)
           .map((x: any) => ({ ...x, 단락: x.단락.map((d: any) => (d.자리 === '지정' ? { ...d, 단락급소: 지정실체(d.단락) } : d)) }));
         연결of = (번호) => link_sentences(단락들, 급소단락of(번호).flatMap((x: any) => x.단락), 극성of(번호));
+        // 「모두 활용하여」 (오종래 2026-10-20 확정) — 제시문마다 세우기 조각 최소 하나 = 그 제시문의 핵심 메시지 문장(message.ts).
+        //   근거.보장 — 서버 세우기 필터가 거르지 않고, 거를 때 제시문 수를 하한으로 둔다
+        const 기본연결of = 연결of;
+        연결of = (번호) => {
+          const 연결 = 기본연결of(번호) ?? [];
+          const s = 소문항들.find((x: any) => x.번호 === 번호);
+          if (!s || !all_passages_required(s.텍스트)) return 연결;
+          const 대상 = s.참조.length ? 제시문목록.filter((p) => s.참조.includes(p.id)) : 제시문목록;
+          const 보장 = 대상.flatMap((p) => { const m = passage_message(p.텍스트); return m ? [{ 단락: p.id, 단락급소: m.실체, 문장: m.문장, 보장: true }] : []; });
+          const 보장문장 = new Set(보장.map((x) => x.문장));
+          return [...보장, ...연결.filter((x: any) => !보장문장.has(x.문장))];
+        };
         단락연결of = (번호) => 급소단락of(번호).flatMap((x: any) => x.단락.map((d: any) => ({ 노드: x.노드, 단락: d.단락, 단락급소: d.단락급소 })));
       } catch (e) {
         연결멈춤 = 멈춤of(e);
@@ -419,6 +433,8 @@ try {
           단락: passage.paragraphs.map((p: any, i: number) => ({ label: p.label ?? null, 라벨: 라벨들[i] ?? `#${i + 1}`, 텍스트: p.text, 색: p.colors })),
           전체급소: passage.pivot ? { 실체: passage.pivot.node.entity, keyword: passage.pivot.keyword ?? '' } : null,
           flag: passage.flag ?? null,
+          // 제시문 핵심 메시지 (오종래 2026-10-20 확정) — 정의문 없는 에피소드·상황형도 결론 문장(주제문)에서. 3단계가 배경일 때 보인다
+          메시지: 제시문목록.map((p) => ({ id: p.id, ...(passage_message(p.텍스트) ?? { 실체: null, 문장: null, 근거: null }) })),
           // 수렴 경로 (오종래 2026-10-19) — 급소 B 여럿은 오류가 아니다. 경로 B들 → 수렴점(최종 입장)
           수렴경로: passage.convergence
             ? { 경로: passage.convergence.path.map((n: any) => n.entity.trim().replace(/^[\s,]+/, '')), 수렴점: passage.convergence.sink ? passage.convergence.sink.entity.trim().replace(/^[\s,]+/, '') : null, flag: passage.convergence.flag ?? null }
