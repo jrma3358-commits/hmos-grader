@@ -62,7 +62,14 @@ export type Evaluation = { ok: true; items: PivotEvaluation[] } | { ok: false; f
 
 const clean = (s: string) => s.trim().replace(/^[\s,]+/, '');
 const keywordOf = (p: Pivot) => clean(p.keyword ?? p.node.entity);
-const isDeictic = (s: string) => DEICTICS.includes(s.split(/\s+/)[0]);
+/** 지시 관형사 + 실체 명사 [오종래 2026-10-20 확정] — 「그 이유」「이 제도」「저 방식」은 통째로 내용(실체)이다. 「그」 단독·「그 것」은 지시어 */
+const 지시관형 = ['그', '이', '저'];
+const 의존명사 = ['것'];
+const isDeictic = (s: string) => {
+  const [첫, ...뒤] = s.trim().split(/\s+/);
+  if (지시관형.includes(첫) && 뒤.length) return 의존명사.includes(뒤.join(' '));
+  return DEICTICS.includes(첫);
+};
 
 /** 받침 유무로 조사를 고른다. 한글 음절이 아니면 둘 다 적는다 (generate.ts와 같다) */
 function josa(word: string, withFinal: string, withoutFinal: string): string {

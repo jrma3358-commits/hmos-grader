@@ -6,7 +6,7 @@ import { describe, it } from 'node:test';
 import type { Color } from '../src/fq/types.ts';
 import type { PathNode } from '../src/fq/v2/graph.ts';
 import { essay_pivot_chunks } from '../src/thesis/chunk.ts';
-import { recognizeV2Analysis } from '../src/fq/index.ts';
+import { evaluate_pivot, recognizeV2Analysis } from '../src/fq/index.ts';
 
 /** 길 순서 = 배열 순서 */
 const 길 = (...spec: [string, Color, string][]): { nodes: PathNode[] } => ({
@@ -81,5 +81,26 @@ describe('서술 방향 제외 급소 덩어리 (C-1a · 2026-10-20)', () => {
     const a = recognizeV2Analysis(t);
     assert.ok(a.pivot.ok);
     assert.equal(a.pivot.pivot.reason, '서술형태');
+  });
+});
+
+// 「민주주의」 어절 예외 · 「그 이유」 평가 [오종래 2026-10-20 확정] (숭실대 인문논술 다수결)
+describe('「민주주의」 어절 예외 · 지시 관형사 + 실체 명사 (2026-10-20)', () => {
+  const t = '오늘날 민주주의 사회는 다수결 원칙을 일반적인 의사결정 방식으로 채택하고 있다. 그 이유를 아래에 제시된 두 가지 의사결정 형태를 논박하는 방식으로 설명하시오.';
+  it('「민주주의」 안의 「의」는 기능표지가 아니다 — 「민주주」 조각이 서지 않는다', () => {
+    const a = recognizeV2Analysis(t, { 서술형: true });
+    assert.ok(!a.graph.nodes.some((n) => /민주주$/.test(n.entity.trim())));
+    assert.ok(a.graph.nodes.some((n) => n.entity.includes('민주주의')));
+  });
+  it('「민주주의를」 — 붙은 조사는 그대로 건다', () => {
+    const a = recognizeV2Analysis('민주주의를 설명하시오.');
+    assert.deepEqual(a.graph.nodes.map((n) => `${n.color}:${n.entity}`), ['B:민주주의', 'Q:설명하시오']);
+  });
+  it('「그 이유」 급소는 지시어가 아니다 — 평가 통과', () => {
+    const a = recognizeV2Analysis(t, { 서술형: true });
+    const ev = evaluate_pivot(a.pivot, a.graph);
+    assert.ok(ev.ok);
+    assert.equal(ev.items[0].coherence.deictic, false);
+    assert.equal(ev.items[0].verdict, '통과');
   });
 });
