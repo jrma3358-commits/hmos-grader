@@ -1836,10 +1836,24 @@ function renderC5() {
       <div class="card-title">정교화안</div>
       <div class="c-meta">진단마다 Claude가 정교화한 논제를 문장으로 씁니다 (명세서-2 §3). 근거는 엔진 진단 그대로이고, Claude는 진단마다 정해진 처방만 따릅니다.
         근거가 제시문에 없는 핵심은 표시만 — 교사 확인. 정교화안은 엔진에 다시 넣어 핵심을 확인합니다.</div>
+      ${제시문핵심Html()}
       ${생성대상 ? `${키워드칸('정교화')}<button class="type-btn" id="c5-btn" onclick="refineC()">정교화안 문장 생성 (${생성대상}건)</button>` : '<div class="c-meta">정교화할 곳이 없어 만들 정교화안이 없습니다</div>'}
       ${C.정교화 && C.정교화.키워드 ? `<div class="c-meta" style="margin-top:6px;">아래 정교화안은 키워드 「${esc(C.정교화.키워드)}」 방향으로 만들었습니다</div>` : ''}
     </div>
     ${결과}`;
+}
+
+// 제시문 핵심 한 줄 · 제시문 간 관계 (오종래 2026-10-21) — 키워드 입력창 위, 흐린 글씨. 엔진 값 그대로 (러너 단계.제시문.핵심요약:
+//   핵심 = 6단계 단락 급소 표기, 없으면 제시문 전체 급소 · 관계 = 봉인⑧ 유사·실증·대비). 제시문이 없거나 예전 분석이면 그리지 않는다
+function 제시문핵심Html() {
+  const r = C.분석 && C.분석.단계.제시문 && C.분석.단계.제시문.핵심요약;
+  if (!r || !r.핵심.length) return '';
+  const 핵심 = r.핵심.map(x => `[${esc(x.id)}] ${x.핵심.length ? x.핵심.map(esc).join(' · ') : '<span style="opacity:.7;">핵심이 서지 않음</span>'}`).join(' / ');
+  const 관계 = r.관계.length ? r.관계.map(x => `[${esc(x.a)}]↔[${esc(x.b)}]: ${esc(x.유형)}`).join(' · ') : '핵심이 선 제시문 쌍이 없음';
+  return `<div class="c-meta" style="margin-top:10px; opacity:.75; line-height:1.7;">
+    <div><strong>제시문 핵심</strong> ${핵심}</div>
+    <div><strong>제시문 관계</strong> ${관계}</div>
+  </div>`;
 }
 
 // 교사 방향 키워드 (오종래 2026-10-21) — 정교화 · 추가 논제 버튼 위. 비우면 엔진 진단·후보대로, 쓰면 그 방향으로 (/api/refine · /api/propose 키워드)
@@ -1905,6 +1919,7 @@ function renderC6() {
       <div class="c-meta">엔진이 단락 관계에서 유형을 정하고 논제 뼈대를 지었습니다. Claude는 뼈대의 실체·단락 기호를 그대로 두고 문장만 다듬습니다.
         다듬은 논제는 제시문과 함께 엔진에 다시 넣어 두 단락에 연결되는지 확인합니다.</div>
       ${g.추가후보.map(c => `<div class="c-row"><strong>${esc(c.유형)}</strong> ([${esc(c.단락[0])}]·[${esc(c.단락[1])}] ${esc(c.관계)}) — ${esc(c.뼈대)}</div>`).join('')}
+      ${제시문핵심Html()}
       ${g.추가후보.length ? `${키워드칸('추가')}<button class="type-btn" id="c6-btn" onclick="proposeC()">추가 논제 문장 생성 (${g.추가후보.length}건)</button>`
         : '<div class="c-meta">추가할 단락 쌍이 없습니다 — 모두 기존 논제에 들어 있거나 5단계 보완으로 넘어갔습니다</div>'}
       ${C.추가 && C.추가.키워드 ? `<div class="c-meta" style="margin-top:6px;">아래 추가 논제는 키워드 「${esc(C.추가.키워드)}」 방향으로 만들었습니다</div>` : ''}

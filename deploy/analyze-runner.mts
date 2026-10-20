@@ -42,6 +42,7 @@ const { background_paragraphs } = await load('src/thesis/background.ts');
 // 제시문 핵심 메시지 · 「모두 활용하여」 세우기 하한 (오종래 2026-10-20 확정)
 const { passage_message, all_passages_required, contrast_cause } = await load('src/thesis/message.ts');
 const { essay_pivot_chunks } = await load('src/thesis/chunk.ts');
+const { passage_cores } = await load('src/thesis/passage_core.ts');
 const { 봉인14_6단계 } = await load('src/thesis/relate.ts');
 // 8단계 루브릭 — 엔진 F1~F5·문항평가 (src/rubric). GJ는 쓰지 않는다 (오종래 2026-10-14: GJ 검산 대신 조각 충족 여부)
 const { derive_pieces, f2_input_from_v2, f2_input_inherit, has_question, common_question, link_sentences, thesis_polarity, speaker_lines } = await load('src/rubric/f2.ts');
@@ -512,6 +513,8 @@ try {
         out.단계.정합 = { 연결: 정합.연결, 사족: 정합.사족, 소문항: 정합.소문항.map((x: any) => ({ 번호: x.번호, 배경: x.연결.background, 범위밖: x.연결.outOfScope, 연결단락: [...new Set(x.연결.links.map((l: any) => 라벨들[l.paragraph] ?? `#${l.paragraph + 1}`))] })) };
         // 6단계 — 단락 급소 관계 → 6유형 뼈대 → 기존 논제와 비교 [봉인⑭, 오종래 2026-10-14]. 보완은 5단계로 넘긴다
         out.단계.관계 = 봉인14_6단계(정합, passage);
+        // 제시문 핵심 한 줄 · 제시문 간 관계(봉인⑧) — 5·6단계 키워드 입력창 위 (오종래 2026-10-21). 핵심은 6단계 단락 급소, 없으면 제시문 전체 급소
+        out.단계.제시문.핵심요약 = passage_cores(제시문목록, out.단계.관계?.급소단락 ?? []);
       } catch (e) {
         stop('제시문', 멈춤of(e));
       }
