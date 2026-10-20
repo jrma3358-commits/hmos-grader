@@ -242,3 +242,18 @@ describe('학생 6 — 근의 공식 대입 계산', () => {
     assert.deepEqual(r.학생풀기, ['x = (-2±√(2²-4×1×(-3))) / 2×1', '= (-2±√16) / 2', '= (-2±4) / 2']);
   });
 });
+
+// [오종래 2026-10-20 확정 안 A] 수리논술 C-2a·C-2b만 — 세우기(첫 식) → 풀기(이후 전개) → 답구하기(끝 값 줄)
+describe('classify_math_lines — 수리논술 세우기·풀기·답구하기', () => {
+  const 답안 = ['직선 y=m(x+1)은 Q(0,m)을 지난다.', 'y=m(x+1)을 x²+y²=1에 대입하면 정리해 (1+m²)x²+2m²x+m²-1=0이다.', 'f(m)/g(m)=2/(1+m)이다.', '따라서 구하는 값은 f(m)/g(m)=1이다.'].join('\n');
+  it('수리논술이면 첫 식 줄만 세우기, 이후는 풀기, 끝 값 줄은 답', () => {
+    const r = classify_math_lines(답안, '', true);
+    assert.deepEqual(r.세우기, ['직선 y=m(x+1)은 Q(0,m)을 지난다.']);
+    assert.equal(r.풀기.length, 2);
+    assert.ok(!r.풀기.includes('따라서 구하는 값은 f(m)/g(m)=1이다.'));
+    assert.deepEqual(r.답?.값, ['1']);
+  });
+  it('단답·서술형 수리는 그대로 — 식 줄 모두 세우기', () => {
+    assert.equal(classify_math_lines(답안).세우기.length, 4);
+  });
+});

@@ -164,8 +164,11 @@ export function line_answer_values(줄: string): string[] {
   });
 }
 
-/** @param 문항글 주면 — 「∴」 결론 말고도 문항 문자로 시작해 수로 끝나는 줄을 답 값에 더한다 (답이 둘인 문항, q7 ①) */
-export function classify_math_lines(답안: string, 문항글?: string): 수리줄나누기 {
+/**
+ * @param 문항글 주면 — 「∴」 결론 말고도 문항 문자로 시작해 수로 끝나는 줄을 답 값에 더한다 (답이 둘인 문항, q7 ①)
+ * @param 수리논술 C-2a·C-2b면 세우기 → 풀기 → 답구하기를 줄 차례로 가른다 (오종래 2026-10-20 확정, 세우기풀기가르기)
+ */
+export function classify_math_lines(답안: string, 문항글?: string, 수리논술 = false): 수리줄나누기 {
   const 줄 = String(답안 ?? '').split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
   const out: 수리줄나누기 = { 근거대기: [], 세우기: [], 풀기: [], 답: null, 미분류: [] };
   for (const 원줄 of 줄) {
@@ -214,7 +217,19 @@ export function classify_math_lines(답안: string, 문항글?: string): 수리�
     const v = 끝줄 ? final_value(끝줄) : null;
     if (끝줄 && v !== null) out.답 = { 줄: 끝줄, 값: [v], 끝값: true };
   }
-  return out;
+  return 수리논술 ? 세우기풀기가르기(out) : out;
+}
+
+/**
+ * 세우기 vs 풀기 — 수리논술 C-2a·C-2b만 [오종래 2026-10-20 확정 안 A] (논술가이드북 수리 극한).
+ *   세우기 = 핵심 개념·정의·조건을 수식으로 세우는 단계 · 풀기 = 세운 식을 연산으로 전개해 값을 드러내는 단계.
+ *   수식(등식) 줄이 여럿이면 처음 개념→식 변환 줄 = ② 세우기, 이후 연산 전개 줄 = ③ 풀기, 최종 값 도출 줄(끝 값 답 줄) = ④ 답구하기(세우기·풀기에서 뺀다).
+ *   단답·서술형 수리(q3~q7 줄 규칙 — 나란한 세우기 줄 둘, 「D=…>0」 세우기 등)는 그대로다
+ */
+function 세우기풀기가르기(out: 수리줄나누기): 수리줄나누기 {
+  const 답줄 = out.답?.끝값 ? out.답.줄 : null;
+  const 세우기 = out.세우기.filter((l) => l !== 답줄);
+  return { ...out, 세우기: 세우기.slice(0, 1), 풀기: [...세우기.slice(1), ...out.풀기.filter((l) => l !== 답줄)] };
 }
 
 /** 줄 끝 값 — 마지막 「=」 뒤가 수이면 그 수(1/2 = 0.5로 맞춘 글자), 아니면 null (2026-10-16 q6) */
