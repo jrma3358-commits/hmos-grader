@@ -951,7 +951,7 @@
         </div>
 
         <div class="card-title" style="margin-top: 16px;">출제의도 <span class="badge muted" id="reg-core-badge">선택</span></div>
-        <input type="text" id="reg-core" spellcheck="false" oninput="교사칸동기('핵심', this.value)" placeholder="예) 증가, 감소"
+        <input type="text" id="reg-core" spellcheck="false" oninput="교사칸동기('핵심', this.value)" placeholder="예) 증가, 감소 · 성취기준 [12화학I 01-04] (서술형 수리/인문 판별에 씀)"
           style="width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius); font: inherit;">
         <div class="c-meta" style="margin-top: 4px;" id="reg-core-hint">루브릭 화면에 참고로 표시됩니다 (선택)</div>
 
@@ -3888,10 +3888,13 @@ async function B루브릭요청(data, m, 모범답안) {
 
 /** 분석 시작과 함께 — 서술형 B는 1단계 인식 직후 4 루브릭·5 모범답안까지 만든다. 실패해도 인식 결과는 남긴다 (오종래 2026-10-16) */
 /** 서술형 B 형식을 엔진 판별로 맞춘다 (오종래 2026-10-20 확정) — 루브릭 계열(계산·수식 → 수리) × 소문항 수. 지금 문항에만 */
+//   [오종래 2026-10-20 확정] 과목명·성취기준 코드로 정한 수리/인문(s·h)은 엔진 계열로 바꾸지 않는다 — 소문항 수만 맞춘다
 function B형식맞춤(data) {
   const r = data && data.B루브릭 && data.B루브릭.루브릭;
   if (!r || !Array.isArray(r.소문항) || data !== currentData) return;
-  const 코드 = B형식of(r.계열, r.소문항.length);
+  const 판 = 자동판별of(지금문항());
+  const 정한계열 = 판 && 판.계열출처 && 판.계열출처 !== '수식' ? (판.계열 === 's' ? '수리' : '인문사회국어') : null;
+  const 코드 = B형식of(정한계열 || r.계열, r.소문항.length);
   if (selectedForm !== 코드 && 형식들[코드]) pickForm(코드);
 }
 
@@ -4384,6 +4387,8 @@ function 교사칸동기(칸, 값) {
     상태맞춤(m);
     if (m.상태 !== 전) 목록그리기();
   }
+  // 출제의도 칸의 성취기준 코드(「[12화학I 01-04]」)가 서술형 수리/인문을 정한다 (오종래 2026-10-20) · 정답은 단답 판별에
+  if (칸 === '핵심' || 칸 === '정답') 형식자동(m);
 }
 
 /** 편집 중 문항의 교사 입력 → 0단계 칸 */
@@ -4428,7 +4433,8 @@ function 원문동기() {
 // 종류 버튼 · 「자동으로」는 교사가 누른 것이라 결과가 있어도 바꾼다 (파이프라인이 바뀌면 지울지 묻는다)
 /** 문항의 종류 — 고른 종류, 없으면 형식에서 */
 const 문항종류 = m => (m && (m.종류 || HMOS형식판별.종류of(m.형식))) || null;
-const 자동판별of = m => { const 종류 = 문항종류(m); return 종류 ? HMOS형식판별.판별(m.원문 || '', { 종류, 정답: m.정답 }) : null; };
+// 서술형 수리/인문 (오종래 2026-10-20 확정): 출제의도 칸 · 원문의 성취기준 코드 → 없으면 수식·단위
+const 자동판별of = m => { const 종류 = 문항종류(m); return 종류 ? HMOS형식판별.판별(m.원문 || '', { 종류, 정답: m.정답, 성취기준: m.핵심 }) : null; };
 function 형식자동(m = 지금문항(), 되돌림) {
   if (!m || typeof HMOS형식판별 === 'undefined') return;
   if (되돌림) m.형식자동 = true;

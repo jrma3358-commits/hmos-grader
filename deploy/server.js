@@ -662,12 +662,12 @@ const 채점형식=req=>{
   const 글=typeof b.논제==='string'?b.논제:'';
   if(!글.trim())return null;
   const 제시문=Array.isArray(b.제시문)?b.제시문.map(p=>p&&typeof p==='object'?String(p.텍스트||''):String(p||'')).join('\n'):typeof b.제시문==='string'?b.제시문:'';
-  return 형식판별.채점형식으로(형식판별.판별(글,{제시문,총배점:b.총배점}).형식);
+  return 형식판별.채점형식으로(형식판별.판별(글,{제시문,총배점:b.총배점,성취기준:typeof b.핵심==='string'?b.핵심:''}).형식);
 };
-// POST /api/format {글, 제시문?, 총배점?, 정답?} → {형식, 단계, 근거, 계열?, 소문항?, 채점형식} — 화면이 판별을 서버에 물을 때
+// POST /api/format {글, 종류?, 과목?, 성취기준?, 제시문?, 총배점?, 정답?} → {형식, 단계, 근거, 계열?, 소문항?, 채점형식} — 화면이 판별을 서버에 물을 때
 app.post('/api/format',(req,res)=>{
-  const {글,제시문,총배점,정답}=req.body||{};
-  const r=형식판별.판별(String(글||''),{제시문:String(제시문||''),총배점,정답:String(정답||'')});
+  const {글,제시문,총배점,정답,종류,과목,성취기준}=req.body||{};
+  const r=형식판별.판별(String(글||''),{제시문:String(제시문||''),총배점,정답:String(정답||''),종류,과목:String(과목||''),성취기준:String(성취기준||'')});
   res.json({...r,채점형식:형식판별.채점형식으로(r.형식)});
 });
 
