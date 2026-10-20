@@ -130,19 +130,29 @@ app.get('/api/results/:file',(req,res)=>{ // :file = 검증 파일 이름 (.json
   res.type('application/json').send(fs.readFileSync(path.join(검증폴더,파일),'utf8'));
 });
 
-// ── 샘플 (오종래 2026-10-19) — 검증/샘플/<이름>.json. tools·dashboard 0단계 「샘플 불러오기」 ──
+// ── 샘플 (오종래 2026-10-19) — 검증/샘플/<형식>/<이름>.json. tools·dashboard 0단계 「샘플 불러오기」 ──
 // 목록·읽기는 GET이라 아래 접속 검사를 지나므로 여기서 쿠키를 본다. 저장(POST, 같은 이름이면 덮어쓰기)은 접속 검사를 거친다.
 // 이름은 공백을 떼고 글자·숫자·_·- 만 — 경로 문자로 폴더 밖을 열거나 쓰지 못하게
 const 샘플폴더=path.join(검증폴더,'샘플');
 const 샘플이름=s=>{const n=String(s||'').replace(/\.json$/i,'').replace(/\s+/g,'').replace(/[^0-9A-Za-z가-힣_-]/g,'').slice(0,80);return n||null;};
-const 샘플파일들=()=>{try{return fs.readdirSync(샘플폴더).filter(f=>f.endsWith('.json')).sort();}catch(_){return [];}};
+// 형식별 하위 폴더 (오종래 2026-10-20) — 검증/샘플/<형식>/<이름>.json. 이름은 폴더를 건너 하나뿐이라 화면은 이름만 주고받는다
+const 샘플형식폴더=['A-1','A-2','B-s1','B-s2','B-h1','B-h2','C-1a','C-2a','C-2b'];
+/** 이름 → 샘플폴더 기준 경로. 형식 폴더에 없는 옛 샘플(맨 위)도 읽는다 */
+const 샘플파일들=()=>{
+  const 표=new Map();
+  for(const 폴더 of ['',...샘플형식폴더]){
+    let 파일들=[];try{파일들=fs.readdirSync(path.join(샘플폴더,폴더)).filter(f=>f.endsWith('.json'));}catch(_){}
+    for(const f of 파일들){const n=f.replace(/\.json$/,'');if(!표.has(n))표.set(n,path.join(폴더,f));}
+  }
+  return new Map([...표].sort((a,b)=>a[0]<b[0]?-1:a[0]>b[0]?1:0));
+};
 app.get('/api/samples',(req,res)=>{
   res.setHeader('Cache-Control','no-store');
   if(!접속됨(req)){res.status(401).json({ok:false,error:접속만료});return;}
-  const 목록=샘플파일들().map(파일=>{
-    try{const j=JSON.parse(fs.readFileSync(path.join(샘플폴더,파일),'utf8'));
-      return {파일:파일.replace(/\.json$/,''),이름:j.이름||파일.replace(/\.json$/,''),형식:j.형식||null,문항명:(j.입력&&j.입력.문항명)||'',소문항:((j.결과&&j.결과.창)||[]).map(w=>w.번호),저장:j.저장||null};}
-    catch(_){return {파일:파일.replace(/\.json$/,''),이름:파일,오류:'JSON을 읽지 못함'};}
+  const 목록=[...샘플파일들()].map(([파일,경로])=>{
+    try{const j=JSON.parse(fs.readFileSync(path.join(샘플폴더,경로),'utf8'));
+      return {파일,이름:j.이름||파일,형식:j.형식||null,문항명:(j.입력&&j.입력.문항명)||'',소문항:((j.결과&&j.결과.창)||[]).map(w=>w.번호),저장:j.저장||null};}
+    catch(_){return {파일,이름:파일,오류:'JSON을 읽지 못함'};}
   });
   res.json({ok:true,목록});
 });
@@ -150,8 +160,9 @@ app.get('/api/samples/:name',(req,res)=>{
   res.setHeader('Cache-Control','no-store');
   if(!접속됨(req)){res.status(401).json({ok:false,error:접속만료});return;}
   const 이름=샘플이름(req.params.name);
-  if(!이름||!샘플파일들().includes(이름+'.json')){res.status(404).json({ok:false,error:'샘플이 없습니다'});return;}
-  res.type('application/json').send(fs.readFileSync(path.join(샘플폴더,이름+'.json'),'utf8'));
+  const 경로=이름&&샘플파일들().get(이름);
+  if(!경로){res.status(404).json({ok:false,error:'샘플이 없습니다'});return;}
+  res.type('application/json').send(fs.readFileSync(path.join(샘플폴더,경로),'utf8'));
 });
 
 // API도 접속 쿠키가 있어야 — 엔진(/analyze)·Claude 호출(/api/*) (2026-10-14).
@@ -1125,9 +1136,14 @@ app.post('/api/samples',(req,res)=>{
   if(!n){res.status(400).json({error:'샘플 이름은 글자 · 숫자 · _ · - 로만'});return;}
   const 결과=내용&&typeof 내용==='object'?내용.결과:null;
   if(!결과||!((결과.C&&결과.C.분석)||(결과.AB&&결과.AB.단계2)||(Array.isArray(결과.창)&&결과.창.some(w=>w&&w.C&&w.C.분석)))){res.status(400).json({error:'저장할 분석 결과가 없습니다 — 분석을 먼저 돌리세요'});return;}
-  try{fs.mkdirSync(샘플폴더,{recursive:true});fs.writeFileSync(path.join(샘플폴더,n+'.json'),JSON.stringify({...내용,종류:'HMOS 샘플',이름:n,저장:new Date().toISOString()})+'\n','utf8');}
+  // 형식 폴더에 둔다 (모르는 형식은 맨 위). 같은 이름이 다른 폴더에 있으면 옮긴다 — 이름은 하나뿐
+  const 폴더=샘플형식폴더.includes(내용.형식)?내용.형식:'';
+  const 경로=path.join(폴더,n+'.json');
+  const 옛경로=샘플파일들().get(n);
+  try{fs.mkdirSync(path.join(샘플폴더,폴더),{recursive:true});fs.writeFileSync(path.join(샘플폴더,경로),JSON.stringify({...내용,종류:'HMOS 샘플',이름:n,저장:new Date().toISOString()})+'\n','utf8');
+    if(옛경로&&옛경로!==경로)fs.unlinkSync(path.join(샘플폴더,옛경로));}
   catch(e){res.status(500).json({error:'샘플 저장 실패: '+e.message});return;}
-  res.json({ok:true,이름:n,파일:'검증/샘플/'+n+'.json'});
+  res.json({ok:true,이름:n,파일:'검증/샘플/'+경로.split(path.sep).join('/')});
 });
 
 // GET /api/axis-rubrics — 저장한 4축 루브릭 (탭7 채점 샘플). 읽기만, 쿠키는 /api/results와 같게 여기서 본다
