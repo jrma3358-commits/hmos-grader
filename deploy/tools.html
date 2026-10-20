@@ -1825,7 +1825,7 @@ function renderC5() {
       ${(r.점검 || []).length ? `<div class="flag-box">${r.점검.map(t => `<div>교사 확인 — ${esc(t)}</div>`).join('')}</div>` : ''}
       <div class="reading-box">${엔진배지}${재인식문장(r).map(t => `<p>${t}</p>`).join('')}</div>
       ${엔진원본Html(r.재인식)}
-    </div>`).join('') : '';
+    </div>`).join('') + (C.정교화.정교화.length ? '' : '<div class="card c-empty">엔진 진단에 정교화할 곳이 없어 정교화안을 만들지 않았습니다</div>') : '';
   document.getElementById('c5-body').innerHTML = `
     <div class="card">
       <div class="card-title">${엔진배지}정교화 진단</div>
@@ -1862,13 +1862,17 @@ const C키워드 = { 정교화: '', 추가: '' };
 const 키워드칸 = 몫 => `
   <div style="margin:10px 0 8px;">
     <div class="card-title" style="margin-bottom:4px;">방향 키워드 <span class="badge muted">선택</span></div>
-    <input type="text" value="${esc(C키워드[몫])}" oninput="C키워드['${몫}'] = this.value" spellcheck="false" placeholder="예) 비교 · 비판 · 원인 · 구체화 — 비우면 엔진 ${몫 === '정교화' ? '진단' : '후보'}대로"
-      style="width:100%; box-sizing:border-box; padding:8px 10px; border:1px solid var(--border); border-radius:var(--radius); font:inherit;">
+    <div style="display:flex; gap:8px; align-items:stretch;">
+      <input type="text" value="${esc(C키워드[몫])}" oninput="C키워드['${몫}'] = this.value" spellcheck="false" placeholder="예) 비교 · 비판 · 원인 · 구체화 — 비우면 엔진 ${몫 === '정교화' ? '진단' : '후보'}대로"
+        style="flex:1; min-width:0; box-sizing:border-box; padding:8px 10px; border:1px solid var(--border); border-radius:var(--radius); font:inherit;">
+      <!-- 입력창 옆 버튼 (오종래 2026-10-21) — 키워드 담아 /api/refine · /api/propose. 엔진 진단·후보가 0건이면 서버가 사유만 돌려준다 -->
+      <button class="type-btn" style="margin:0; white-space:nowrap;" onclick="${몫 === '정교화' ? 'refineC(this)' : 'proposeC(this)'}">${몫 === '정교화' ? '정교화' : '논제 생성'}</button>
+    </div>
   </div>`;
 const 키워드글 = 몫 => (C키워드[몫] || '').trim() ? { 키워드: C키워드[몫].trim() } : {};
 
-async function refineC() {
-  await withBusy(document.getElementById('c5-btn'), '정교화안 생성 중… (약 1분)', async () => {
+async function refineC(btn) {
+  await withBusy(btn || document.getElementById('c5-btn'),'정교화안 생성 중… (약 1분)', async () => {
     const 단계 = C.분석.단계;
     const { out } = await postJSON('/api/refine', { 논제: C.논제, 소문항: 단계.인식.소문항, 진단: 단계.정교화.진단, ...(C.제시문.length ? { 제시문: C.제시문 } : {}), ...키워드글('정교화') });
     if (out.error) { alert('정교화안 생성 실패: ' + out.error); return; }
@@ -1944,8 +1948,8 @@ function renderC6() {
   body.innerHTML = 관계카드 + 후보카드 + 결과;
 }
 
-async function proposeC() {
-  await withBusy(document.getElementById('c6-btn'), '추가 논제 생성 중… (약 1분)', async () => {
+async function proposeC(btn) {
+  await withBusy(btn || document.getElementById('c6-btn'),'추가 논제 생성 중… (약 1분)', async () => {
     const 단계 = C.분석.단계;
     const { out } = await postJSON('/api/propose', {
       논제: C.논제, 소문항: 단계.인식.소문항, 관계: 단계.관계,
