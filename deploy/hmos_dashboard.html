@@ -3868,7 +3868,8 @@ async function B루브릭요청(data, m, 모범답안) {
   const 제시문 = data.B입력 && data.B입력.제시문;
   const { out } = await postJSON('/api/rubric', {
     // 계열 「자동」 — 수학 문항이면 엔진이 수리로 (오종래 2026-10-16 수학 문항 계열 고정)
-    논제: data.문항원문, 계열: '자동', 총배점: 총 || 10, 이어받기: true, 서술형: true,
+    // 계열형식 — 서버가 형식으로 엔진 계열을 고정한다 (B-s → 수리 · B-h → 인문사회국어, 오종래 2026-10-20). 형식이 없으면 「자동」
+    논제: data.문항원문, 계열: '자동', 계열형식: selectedForm || undefined, 총배점: 총 || 10, 이어받기: true, 서술형: true,
     ...(제시문 ? { 제시문: [{ id: '제시문', 텍스트: 제시문 }] } : { 공통자료: true }),
     ...(모범답안 ? { 모범답안 } : { 자동답안: true }),
     ...교사,
@@ -4075,6 +4076,7 @@ async function genC(i, 맞추기 = false) {
   await withBusy(document.getElementById(맞추기 ? `c9-fit-${i}` : 'c8-btn-' + i), 모범답안 ? '엔진 조각 → 조각 문장 생성 중… (1~2분)' : '엔진 인식 → 모범답안 생성 → 조각 문장 생성 중… (2~3분)', async () => {
     const { out } = await postJSON('/api/rubric', {
       논제: x.텍스트, 계열, 총배점,
+      계열형식: selectedForm || undefined, // 서버가 형식으로 계열 고정 (C-2a·C-2b → 수리 · C-1a → 인문사회국어, 오종래 2026-10-20)
       ...(C.제시문.length ? { 제시문: C.제시문 } : {}),
       ...(모범답안 ? { 모범답안 } : { 자동답안: true }),
       ...(앞답안 ? { 앞답안 } : {}),

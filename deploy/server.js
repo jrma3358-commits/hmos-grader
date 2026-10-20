@@ -682,6 +682,10 @@ app.post('/api/rubric',async(req,res)=>{
   // 앞답안: 소문항 창 하나 — 엔진이 이어받기 표지(「[1-3]에서 구한」)를 읽은 소문항이면 가리킨 창의 모범답안 (자동답안이 앞 결과를 이어받는다, 오종래 2026-10-20)
   const {논제,계열:요청계열,총배점,제시문,공통자료,이어받기,모범답안,정답,핵심,자동답안,서술형,앞답안:요청앞답안,형식:요청형식}=req.body||{};
   let 계열=요청계열;
+  // [오종래 2026-10-20 확정] 형식이 엔진 계열을 정한다 — B-s1·B-s2·C-2a·C-2b → 수리 · B-h1·B-h2·C-1a → 인문사회국어 (「자동」·교사 고른 값 대신).
+  //   형식 = 계열형식(문항분석 형식 — 러너에 넘기지 않는다) · 형식 · gradeFormat(채점 대시보드) 차례로. 형식이 없으면 요청 계열 그대로
+  const 형식계열=형식판별.엔진계열(req.body.계열형식||요청형식||req.body.gradeFormat);
+  if(형식계열)계열=형식계열;
   const 글칸=x=>Array.isArray(x)?(x.some(v=>v!=null&&String(v).trim())?x.map(v=>v==null?null:String(v)):null):typeof x==='string'&&x.trim()?x:null;
   const t=String(논제||'').trim();
   if(!t){res.status(400).json({error:'확정 논제가 필요합니다'});return;}
