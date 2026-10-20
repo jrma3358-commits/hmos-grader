@@ -65,7 +65,7 @@ export function align_passage(소문항들: 인식소문항[], passage: PassageR
   for (const s of 소문항들) {
     const c = connectPassage(s.인식, passage, s.참조);
     원본.push({ 번호: s.번호, 연결: c });
-    const 덩어리들 = essay_pivot_chunks(s.인식.graph);
+    const 덩어리들 = essay_pivot_chunks(s.인식.graph, s.인식.pivot);
     const 자리of = (id: string) => s.인식.graph.nodes.find((n) => n.id === id)?.index ?? -1;
     덩어리들.forEach((d, k) => {
       const 단락: 단락연결[] = [];

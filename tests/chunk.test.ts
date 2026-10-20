@@ -6,6 +6,7 @@ import { describe, it } from 'node:test';
 import type { Color } from '../src/fq/types.ts';
 import type { PathNode } from '../src/fq/v2/graph.ts';
 import { essay_pivot_chunks } from '../src/thesis/chunk.ts';
+import { recognizeV2Analysis } from '../src/fq/index.ts';
 
 /** 길 순서 = 배열 순서 */
 const 길 = (...spec: [string, Color, string][]): { nodes: PathNode[] } => ({
@@ -64,5 +65,21 @@ describe('essay_pivot_chunks', () => {
 
   it('Q 앞에 B가 없으면 덩어리가 서지 않는다', () => {
     assert.deepEqual(요약(길(['p', 'P', '[가]'], ['c', 'C', '참고하여'], ['q', 'Q', '답하시오'])), []);
+  });
+});
+
+// 인문논술 C-1a 서술 방향 제외 [오종래 2026-10-20 확정] — 서술형 B 규칙 확장. 급소는 서술 방향 앞 실체 명사 (숭실대 인문논술 다수결)
+describe('서술 방향 제외 급소 덩어리 (C-1a · 2026-10-20)', () => {
+  const t = '오늘날 민주주의 사회는 다수결 원칙을 일반적인 의사결정 방식으로 채택하고 있다. 그 이유를 아래에 제시된 두 가지 의사결정 형태를 논박하는 방식으로 설명하시오.';
+  it('서술형 선택이면 급소 「그 이유」 · 덩어리도 「그 이유」 (「논박하는 방식으로」 ✕)', () => {
+    const a = recognizeV2Analysis(t, { 서술형: true });
+    assert.ok(a.pivot.ok);
+    assert.equal(a.pivot.pivot.node.entity, '그 이유');
+    assert.deepEqual(essay_pivot_chunks(a.graph, a.pivot).map((d) => d.실체), ['그 이유']);
+  });
+  it('선택이 없으면 예전대로 서술형태 급소', () => {
+    const a = recognizeV2Analysis(t);
+    assert.ok(a.pivot.ok);
+    assert.equal(a.pivot.pivot.reason, '서술형태');
   });
 });

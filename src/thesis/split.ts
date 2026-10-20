@@ -114,7 +114,8 @@ function 나누기(논제: string): 소문항[] {
   const text = 논제.replace(/\r\n?/g, '\n');
   const items = [...text.matchAll(ITEM)];
   if (!items.length) {
-    const t = text.trim();
+    // 「문제 N:」 머리줄 [오종래 2026-10-20 숭실대] — 소문항이 없으면 논제에서 뗀다 (실체가 아니다 — 「문제 2: 오늘날 …」의 B 「문제 2: 오늘날 민주주」)
+    const t = text.trim().replace(/^문제[ \t]*\d+(?:[ \t]*[:：.]|[ \t]+)[ \t]*(?=\S)/, '');
     return t ? 계단으로({ 번호: null, 텍스트: t, 공통발문: '', 참조: 참조of(t) }) : [];
   }
   const heads = [...text.matchAll(HEAD)].map((m) => m.index!);

@@ -992,6 +992,7 @@ const 제시문기호src = `${제시문앞src}(?:[\\[<(][가-하ㄱ-ㅎ][\\]>)]|
 
 /** 제시문 칸 → [{id, 텍스트}] — [가]·<가>·(가)·[I] 단락 머리로 나눈다(기호 바로 뒤가 공백·줄끝일 때만, splitRegistration과 같다). 머리가 없으면 한 덩어리 */
 function splitPassages(text) {
+  text = text.replace(/^[ \t]*[〈<][ \t]*제시문[ \t]*[〉>][ \t]*$/gm, ''); // 〈제시문〉 머리 줄 (2026-10-20)
   const heads = [...text.matchAll(new RegExp(`(?:^|\\n)\\s*${제시문앞src}(?:[\\[<(]([가-하ㄱ-ㅎ])[\\]>)]|\\[(${로마src})\\])(?:\\s+|$)`, 'g'))];
   if (!heads.length) return text.trim() ? [{ id: '제시문', 텍스트: text.trim() }] : [];
   // 기호 — 머리 괄호째 (「[가]」「(가)」). 수리논술에서 대괄호 [가]는 제시문, 괄호 (가)는 조건 (오종래 2026-10-20 서경대)
@@ -1019,11 +1020,25 @@ function 내려받기(내용, 머리) {
  * 수리 = 수리논술(C-2a, 오종래 2026-10-19) — 줄마다 제시문([I]·[가]…)과 논제([문항 N]·[2-1]·(2-1)·2-1.)로 갈라 담는다.
  *   논제 안에 선 (가)(나)(다) 조건 줄은 그 줄만 제시문 칸으로, 다음 줄부터 다시 논제다. 논제 앞 글(공통 발문)은 논제 칸에.
  */
+/** 논제 머리 — 줄 머리의 「문항 N」「[문항 N]」「[문제 N]」「[논제…]」「논제 N」「[N-M]」 (splitRegistration) */
+const 논제머리re = /(?:^|\n)[ \t]*(?:문항[ \t]*[·・.]?[ \t]*\d+|\[문항\s*\d+\]|\[문제\s*\d+\]|<문항\s*\d+>|【문항\s*\d+】|\[논제[^\]\n]*\]|<논제[^>\n]*>|논제\s*\d*\s*[.:)]?(?=\s)|\[\d+-\d+\])/;
+
 function splitRegistration(text, 수리 = false) {
   const 뺀것 = [];
   const 덜어 = 글 => { if (글.trim()) 뺀것.push(글.trim()); };
+  text = text.replace(/\r\n?/g, '\n');
+  // 〈제시문〉·<제시문> 머리 [오종래 2026-10-20 숭실대] — 그 줄 다음부터 제시문 (기호 없는 한 덩어리도 제시문 하나).
+  //   머리 앞 글은 논제, 머리 뒤에 논제 머리(「[문제 N]」 등)가 다시 서면 거기부터 논제
+  const 제시문머리줄 = /^[ \t]*[〈<][ \t]*제시문[ \t]*[〉>][ \t]*$/m.exec(text);
+  if (제시문머리줄) {
+    const 앞 = text.slice(0, 제시문머리줄.index), 뒤 = text.slice(제시문머리줄.index + 제시문머리줄[0].length);
+    const 논제뒤 = 논제머리re.exec(뒤);
+    const 논제 = [앞, 논제뒤 ? 뒤.slice(논제뒤.index) : ''].join('\n').trim();
+    const 제시문 = (논제뒤 ? 뒤.slice(0, 논제뒤.index) : 뒤).trim().replace(new RegExp(`\\n+(?=[ \\t]*(?:${제시문기호src})(?:\\s|$))`, 'g'), '\n\n');
+    return 논제 ? { 논제, 제시문, 뺀것 } : null;
+  }
   // 「논제:」「제시문:」「[논제]」「[제시문]」만 있는 줄은 머리말 — 본문에 넣지 않는다 (오종래 2026-10-15)
-  text = text.replace(/\r\n?/g, '\n').replace(/^[ \t]*[\[<【]?[ \t]*(?:논제|제시문)[ \t]*[\]>】]?[ \t]*[:：]?[ \t]*$/gm, m => { 덜어(m); return ''; });
+  text = text.replace(/^[ \t]*[\[<【]?[ \t]*(?:논제|제시문)[ \t]*[\]>】]?[ \t]*[:：]?[ \t]*$/gm, m => { 덜어(m); return ''; });
   let 논제 = '', 제시문 = '';
   if (수리) {
     const 제시문줄 = new RegExp(`^[ \\t]*(?:${제시문기호src})(?=\\s|$)`);
@@ -1055,7 +1070,7 @@ function splitRegistration(text, 수리 = false) {
     // 제시문 머리 = 줄 머리 기호 바로 뒤가 공백·줄끝일 때만 — 「(가)~(바)의」「(가), (다)를」은 논제 안의 지시다 (오종래 2026-10-15)
     // 논제 머리 「[문제 N]」 (연세대 인문논술, 오종래 2026-10-19) — 제시문보다 앞의 안내 줄 「※ 아래 제시문을 읽고…」는 뺀것으로
     const 제시문머리 = text.search(new RegExp(`(?:^|\\n)[ \\t]*(?:${제시문기호src})(?=\\s|$)`));
-    const 논제m = /(?:^|\n)[ \t]*(?:문항[ \t]*[·・.]?[ \t]*\d+|\[문항\s*\d+\]|\[문제\s*\d+\]|<문항\s*\d+>|【문항\s*\d+】|\[논제[^\]\n]*\]|<논제[^>\n]*>|논제\s*\d*\s*[.:)]?(?=\s)|\[\d+-\d+\])/.exec(text);
+    const 논제m = 논제머리re.exec(text);
     const 논제머리 = 논제m ? 논제m.index : -1;
     if (제시문머리 < 0) {
       논제 = text;
@@ -1102,6 +1117,8 @@ function 급소글(s) {
 async function postJSON(url, body) {
   // 수리논술 C-2 (오종래 2026-10-19) — 엔진 C 요청에 형식을 실어 러너가 제약 C · 이어달리기 규칙을 건다
   if (url === '/analyze' && body && body.파이프라인 === 'C' && typeof 형식of === 'function' && 형식of()) body = { 형식: 형식of(), ...body };
+  // 루브릭도 형식을 — 인문논술 C-1a는 서술 방향 제외 급소로 인식한다 (오종래 2026-10-20)
+  if (url === '/api/rubric' && body && typeof 형식of === 'function' && 형식of()) body = { 형식: 형식of(), ...body };
   const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   const out = await res.json().catch(() => ({ error: `응답을 읽지 못함 (${res.status})` }));
   return { status: res.status, out };

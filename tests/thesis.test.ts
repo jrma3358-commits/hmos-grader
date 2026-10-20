@@ -200,3 +200,13 @@ describe('split_thesis — 계단 (1)(2)(3)', () => {
     assert.deepEqual(split_thesis('함수 f(1)의 값을 설명하시오.').map((s) => s.번호), [null]);
   });
 });
+
+describe('split_thesis — 「문제 N:」 머리줄 (2026-10-20 숭실대)', () => {
+  it('소문항이 없으면 논제에서 뗀다', () => {
+    const [u] = split_thesis('문제 2: 그 이유를 설명하시오. (650±100자, 40점)');
+    assert.equal(u.텍스트, '그 이유를 설명하시오.');
+  });
+  it('「문제 3개를」 같은 말은 그대로', () => {
+    assert.equal(split_thesis('문제 3개를 고르시오.')[0].텍스트, '문제 3개를 고르시오.');
+  });
+});

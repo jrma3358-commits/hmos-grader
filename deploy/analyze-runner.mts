@@ -310,17 +310,20 @@ try {
     out.단계.소논제 = split_thesis(String(req.논제 ?? 문항원문)).map((s: any) => ({ 번호: s.번호, 텍스트: s.텍스트, 공통발문: s.공통발문, 참조: s.참조 }));
   } else if (req.작업 === '루브릭') {
     // ── 8단계 루브릭만 ── 인식·제시문·정교화는 다시 돌리지 않는다
+    // 서술 방향 제외 급소 — 서술형 B(req.서술형) · 인문논술 C-1a(req.형식, 2026-10-20)는 2단계 인식과 같은 규칙으로
     // 수학 문항은 수리로만 (오종래 2026-10-16) — 「자동」이면 엔진이 고르고, 인문사회국어로 수학 문항이 오면 계열오류
     const 계열 = resolve_subject(req.계열, String(req.논제 ?? 문항원문));
     const 총배점 = Number(req.총배점) > 0 ? Number(req.총배점) : 10;
-    out.단계.루브릭 = { 계열, 총배점, 소문항: 루브릭작업(String(req.논제 ?? 문항원문), 계열, 총배점, 제시문목록, !!req.공통자료, !!req.이어받기, req.모범답안 ?? [], req.정답 ?? '', req.핵심 ?? '', req.세우기남길 ?? null, !!req.서술형) };
+    out.단계.루브릭 = { 계열, 총배점, 소문항: 루브릭작업(String(req.논제 ?? 문항원문), 계열, 총배점, 제시문목록, !!req.공통자료, !!req.이어받기, req.모범답안 ?? [], req.정답 ?? '', req.핵심 ?? '', req.세우기남길 ?? null, !!req.서술형 || String(req.형식 ?? '') === 'C-1a') };
   } else if (파이프라인 === 'C') {
     // ── C·논술 (조립설명서 C·논술 9단계) — 논제를 먼저 읽는다. 1차 필터는 타지 않는다 (2026-10-13 확정 4) ──
     const 논제글 = String(req.논제 ?? 문항원문);
 
     // 2단계 — 소문항마다 따로 인식. 공통 발문은 떼어 낸다 (오종래 2026-10-13)
     const 물려줄참조: string[] = Array.isArray(req.참조) ? req.참조.map(String) : [];
-    const 소문항 = split_thesis(논제글).map((s: any) => ({ ...s, ...(!s.참조.length && 물려줄참조.length ? { 참조: 물려줄참조 } : {}), a: fq.recognizeV2Analysis(s.텍스트) }));
+    // 인문논술 C-1a 서술 방향 제외 (오종래 2026-10-20 확정) — 서술형 B와 같은 급소 규칙: 서술 방향(C-F)은 급소 후보가 아니고 실체 명사 B(「그 이유」)가 급소 (pivot.ts)
+    const 서술방향제외 = String(req.형식 ?? '') === 'C-1a';
+    const 소문항 = split_thesis(논제글).map((s: any) => ({ ...s, ...(!s.참조.length && 물려줄참조.length ? { 참조: 물려줄참조 } : {}), a: fq.recognizeV2Analysis(s.텍스트, { 서술형: 서술방향제외 }) }));
     if (!소문항.length) throw Object.assign(new Error('논제가 비어 있습니다'), { name: '입력오류' });
     // 상황 P (오종래 2026-10-15 ①(a)) — 대표 발문(공통 발문, 「(가)~(바)의 내용을 바탕으로 물음에 답하시오」)은 인식하지 않고
     //   P 블록 하나로 둔다. 소논제 그래프에는 붙이지 않는다 — 참조 범위만 소논제에 물려준다(split_thesis). 논제 전체 인식(옛 인식.전체)은 내지 않는다
@@ -336,7 +339,7 @@ try {
       소문항: 소문항.map((s: any) => ({
         번호: s.번호, 텍스트: s.텍스트, 공통발문: s.공통발문, 참조: s.참조, 분량배점: s.분량배점 || '',
         ...(s.조건 ? { 조건: s.조건 } : {}), ...(s.이어받기 ? { 이어받기: s.이어받기 } : {}), ...(s.원문 ? { 원문: s.원문 } : {}), ...인식of(s.a),
-        급소덩어리: essay_pivot_chunks(s.a.graph).map((d: any) => ({ B: d.B.id, C: d.C.map((n: any) => n.id), Q: d.Q.map((n: any) => n.id), 실체: d.실체 })),
+        급소덩어리: essay_pivot_chunks(s.a.graph, s.a.pivot).map((d: any) => ({ B: d.B.id, C: d.C.map((n: any) => n.id), Q: d.Q.map((n: any) => n.id), 실체: d.실체 })),
       })),
     };
 

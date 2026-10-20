@@ -13,7 +13,7 @@
 //   - B가 없는 구간의 Q(「무엇」 뒤 「설명하시오」)는 앞 덩어리의 형식 표지다 — 덩어리를 새로 세우지 않는다
 
 import type { PathGraph, PathNode } from '../fq/v2/graph.ts';
-import { 곁B, isIndirectQ, SUBJECT_MARKERS } from '../fq/v2/pivot.ts';
+import { 곁B, isIndirectQ, SUBJECT_MARKERS, type PivotAnalysis } from '../fq/v2/pivot.ts';
 
 export interface 급소덩어리 {
   B: PathNode;
@@ -29,9 +29,36 @@ const clean = (s: string) => s.trim().replace(/^[\s,，]+/, '');
 /** 케이스 분류 C 스위치 — 봉인 LS-52 「~에 따라」 */
 const 케이스분류 = 'LS-52';
 
-/** 논제 그래프 → 급소 덩어리들 (Q 앞 B+C). 덩어리가 하나도 서지 않으면 빈 배열 */
-export function essay_pivot_chunks(graph: Pick<PathGraph, 'nodes'>): 급소덩어리[] {
+/** 서술 방향 스위치 — 봉인 apply.formPivot (C-F 「논박하는 방식으로」「비교하여」…) */
+const 서술방향 = 'C-F';
+
+/**
+ * 실체 명사 급소 덩어리 [오종래 2026-10-20 확정] — 서술 방향을 급소에서 빼는 형식(서술형 B · 인문논술 C-1a)이면 엔진 급소(실체 명사 B)가 덩어리의 B다.
+ * 덩어리 C = B 바로 앞에 붙은 C들 + B와 그 Q 사이의 C들 — 서술 방향(C-F)·케이스 분류(LS-52)는 넣지 않는다
+ * (「그 이유를 아래에 제시된 두 가지 의사결정 형태를 논박하는 방식으로 설명하시오」 → 「그 이유」)
+ */
+function 실체명사덩어리(nodes: PathNode[], 급소들: PathNode[]): 급소덩어리[] {
+  const 넣을C = (n: PathNode) => n.color === 'C' && n.switchId !== 서술방향 && n.switchId !== 케이스분류;
+  return 급소들.flatMap((b) => {
+    const bi = nodes.findIndex((n) => n.id === b.id);
+    const qi = nodes.findIndex((n, i) => i > bi && n.color === 'Q');
+    if (bi < 0 || qi < 0) return [];
+    const 앞C: PathNode[] = [];
+    for (let k = bi - 1; k >= 0 && 넣을C(nodes[k]); k--) 앞C.unshift(nodes[k]);
+    const 뒤C = nodes.slice(bi + 1, qi).filter(넣을C);
+    const 길 = [...앞C, b, ...뒤C];
+    return [{ B: b, C: [...앞C, ...뒤C], Q: [nodes[qi]], 실체: 길.map((n) => clean(n.entity)).join(' · ') }];
+  });
+}
+
+/**
+ * 논제 그래프 → 급소 덩어리들 (Q 앞 B+C). 덩어리가 하나도 서지 않으면 빈 배열.
+ * 급소(엔진 analyze_pivot 결과)를 주고 그 급소가 실체 명사 B(서술 방향 제외 형식)면 그 급소로 덩어리를 세운다 (2026-10-20)
+ */
+export function essay_pivot_chunks(graph: Pick<PathGraph, 'nodes'>, 급소?: PivotAnalysis): 급소덩어리[] {
   const nodes = [...graph.nodes].sort((a, b) => a.index - b.index);
+  const 실체급소 = 급소?.ok ? (급소.pivots ?? [급소.pivot]).filter((p) => p.reason === '실체 명사 B').map((p) => p.node) : [];
+  if (실체급소.length) return 실체명사덩어리(nodes, 실체급소);
   const 덩어리: 급소덩어리[] = [];
   let from = 0;
   nodes.forEach((q, qi) => {
