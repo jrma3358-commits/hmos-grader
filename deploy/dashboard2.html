@@ -304,28 +304,44 @@ function 계열고르기(v) {
   입력계열 = v;
   try { localStorage.setItem('hmos-d2-field', v); } catch (_) {}
   document.querySelectorAll('#in-field button').forEach((b) => b.classList.toggle('on', b.dataset.v === v));
+  // 서술형 B를 고른 채 계열을 바꾸면 같은 소문항 수의 다른 계열 형식으로 (B-s1 ↔ B-h1, 2026-10-20)
+  if (typeof 서술형B === 'function' && 서술형B(입력형식)) return 형식고르기(B형식(v, 입력형식.endsWith('2')));
   입력칸보이기();
 }
 
-// 문제 형식 (오종래 2026-10-19) — B1 단문서술 · B2 단계서술 · C1 인문논술 · C2 수리논술. 계열을 고른 뒤 형식을 고르면 입력 칸이 형식에 맞게 바뀐다.
+// 문제 형식 (오종래 2026-10-19) — 서술형 B · C1 인문논술 · C2 수리논술.
+// [오종래 2026-10-20 확정] 서술형 B는 계열 × 소문항 수로 넷 — B-s1 수리·과학 · 소문항 1개 / B-s2 수리·과학 · 2개+ / B-h1 인문·사회 · 1개 / B-h2 인문·사회 · 2개+
+//   (옛 B1 단문서술 = 소문항 1개, B2 단계서술 = 소문항 2개+). 서술형 B를 고르면 계열도 그 형식에 맞춘다 계열을 고른 뒤 형식을 고르면 입력 칸이 형식에 맞게 바뀐다.
 //   형식값은 채점 API(/api/rubric · /api/grade)에 gradeFormat으로 보낸다. 형식별 채점 기준(프롬프트 글)은 확정 대기 — 서버는 받아서 결과에 돌려주기만
-const 형식들 = { B1: '단문서술', B2: '단계서술', C1: '인문논술', C2: '수리논술' };
+const 형식들 = { 'B-s1': '서술형 수리·과학 · 소문항 1개', 'B-s2': '서술형 수리·과학 · 소문항 2개+', 'B-h1': '서술형 인문·사회 · 소문항 1개', 'B-h2': '서술형 인문·사회 · 소문항 2개+', C1: '인문논술', C2: '수리논술' };
+const 서술형B = (v) => /^B-[sh][12]$/.test(v || '');
+/** 소문항 하나(B-s1·B-h1) · 소문항 여럿(B-s2·B-h2) */
+const 단문B = (v) => /^B-[sh]1$/.test(v || '');
+const 다문B = (v) => /^B-[sh]2$/.test(v || '');
+const B형식 = (계열, 다문) => `B-${계열 === '인문·사회' ? 'h' : 's'}${다문 ? 2 : 1}`;
+const 단문안내 = '문항 · 총배점 · 모범답안', 다문안내 = '소문항 (1)(2)(3)… 분리 입력 · 소문항별 배점 · 모범답안 · 학생 답안 — 소문항마다 채점해 합산합니다';
 const 형식안내 = {
-  B1: '문항 · 총배점 · 모범답안',
-  B2: '소문항 (1)(2)(3)… 분리 입력 · 소문항별 배점 · 모범답안 · 학생 답안 — 소문항마다 채점해 합산합니다',
+  'B-s1': 단문안내, 'B-h1': 단문안내,
+  'B-s2': 다문안내, 'B-h2': 다문안내,
   C1: '제시문(가·나·다…) · 논제 · 총배점 · 모범답안',
   C2: '제시문·조건(선택) · 논제 · 총배점 · 모범답안',
 };
 let 입력형식 = '';
-try { const v = localStorage.getItem('hmos-d2-format'); if (형식들[v]) 입력형식 = v; } catch (_) {}
+// 옛 B1·B2(이 브라우저에 남은 값)는 지금 계열의 새 형식으로
+try { let v = localStorage.getItem('hmos-d2-format'); if (v === 'B1' || v === 'B2') v = B형식(입력계열, v === 'B2'); if (형식들[v]) 입력형식 = v; } catch (_) {}
 function 형식고르기(v) {
   입력형식 = 형식들[v] ? v : '';
+  // 서술형 B는 형식에 계열이 들어 있다 — 계열 칸을 맞춘다
+  if (서술형B(입력형식)) {
+    const 계열 = 입력형식[2] === 'h' ? '인문·사회' : '수리·과학';
+    if (입력계열 !== 계열) { 입력계열 = 계열; try { localStorage.setItem('hmos-d2-field', 계열); } catch (_) {} document.querySelectorAll('#in-field button').forEach((b) => b.classList.toggle('on', b.dataset.v === 계열)); }
+  }
   try { localStorage.setItem('hmos-d2-format', 입력형식); } catch (_) {}
   document.querySelectorAll('#in-fmt button').forEach((b) => b.classList.toggle('on', b.dataset.v === 입력형식));
   document.querySelectorAll('#src-새로 [data-fmt]').forEach((el) => { el.style.display = el.dataset.fmt.split(' ').includes(입력형식) ? '' : 'none'; });
   $('#in-ps-label').textContent = 입력형식 === 'C1' ? '제시문 — (가) (나) (다) …' : '제시문 · 조건 (선택)';
-  $('#in-q-label').textContent = 입력형식 === 'B1' ? '문항' : '논제';
-  $('#in-st-wrap').style.display = 입력형식 === 'B2' && 문항방식 === '새로' ? 'none' : '';
+  $('#in-q-label').textContent = 단문B(입력형식) ? '문항' : '논제';
+  $('#in-st-wrap').style.display = 다문B(입력형식) && 문항방식 === '새로' ? 'none' : '';
   B2그리기();
   $('#in-fmt-hint').textContent = 입력형식 ? `${형식들[입력형식]} — ${형식안내[입력형식]}` : '문제 형식을 고르면 입력 칸이 나옵니다.';
   입력칸보이기();
@@ -368,7 +384,7 @@ function 입력칸그리기() {
       <div class="label">계열</div>
       <div class="field-pick" id="in-field"><button data-v="수리·과학">수리·과학</button><button data-v="인문·사회">인문·사회</button></div>
       <div class="label">문제 형식</div>
-      <div class="field-pick" id="in-fmt"><button data-v="B1">단문서술</button><button data-v="B2">단계서술</button><button data-v="C1">인문논술</button><button data-v="C2">수리논술</button></div>
+      <div class="field-pick" id="in-fmt"><button data-v="B-s1">B-s1 수리·과학 1개</button><button data-v="B-s2">B-s2 수리·과학 2개+</button><button data-v="B-h1">B-h1 인문·사회 1개</button><button data-v="B-h2">B-h2 인문·사회 2개+</button><button data-v="C1">인문논술</button><button data-v="C2">수리논술</button></div>
       <div class="fmt-hint" id="in-fmt-hint">문제 형식을 고르면 입력 칸이 나옵니다.</div>
       <div id="in-wait" style="display:none">
         <div class="label" style="margin-top:4px">탭2 4축 문항분석 (루브릭 저장용 · 기존)</div>
@@ -395,12 +411,12 @@ function 입력칸그리기() {
 
         <div id="src-새로" class="src-box">
           <div class="field" data-fmt="C1 C2"><div class="label"><span id="in-ps-label">제시문</span> ${파일칸('in-ps')}</div><textarea id="in-ps" style="min-height:180px" placeholder="(가)&#10;…&#10;&#10;(나)&#10;… — 「(가)」 「[가]」 머리 줄로 나눕니다"></textarea></div>
-          <div data-fmt="B1 C1 C2">
+          <div data-fmt="B-s1 B-h1 C1 C2">
             <div class="field"><div class="label"><span id="in-q-label">문항</span> ${파일칸('in-q')}</div><textarea id="in-q" placeholder="글을 붙이거나 파일(.txt · .docx · .pdf)을 올리세요. 예) a,a,b,c,d,e가 쓰인 6장 카드를 일렬로 나열할 때 양 끝이 모음이 오는 경우의 수를 구하고 풀이 과정을 서술하시오."></textarea></div>
             <div class="field"><div class="label">총배점</div><input id="in-p" type="number" min="0.1" step="0.1" value="5"></div>
             <div class="field"><div class="label">모범답안 ${파일칸('in-m')}</div><textarea id="in-m" placeholder="글을 붙이거나 파일(.txt · .docx · .pdf)을 올리세요"></textarea></div>
           </div>
-          <div data-fmt="B2" id="in-b2"></div>
+          <div data-fmt="B-s2 B-h2" id="in-b2"></div>
           <div class="field"><div class="label">정답 (검증용, 선택)</div><input id="in-a" placeholder="72가지"></div>
         </div>
 
@@ -432,7 +448,7 @@ function 방식고르기(v) {
   document.querySelectorAll('#in-src button').forEach((b) => b.classList.toggle('on', b.dataset.v === v));
   $('#src-분석').style.display = v === '분석' ? '' : 'none';
   $('#src-새로').style.display = v === '새로' ? '' : 'none';
-  if ($('#in-st-wrap')) $('#in-st-wrap').style.display = 입력형식 === 'B2' && v === '새로' ? 'none' : '';
+  if ($('#in-st-wrap')) $('#in-st-wrap').style.display = 다문B(입력형식) && v === '새로' ? 'none' : '';
   $('#in-run').textContent = v === '분석' ? '확정 루브릭으로 채점 →' : '루브릭 만들고 채점 →';
   if (v === '분석' && !분석.목록) 대시보드요청(true);
 }
@@ -597,7 +613,7 @@ function 분석단위() {
   });
   return out;
 }
-/** 고른 형식과 맞는 단위 — B1·B2는 B 서술형, C1·C2는 C 논술. 형식을 안 골랐거나 안내 줄(종류 없음)은 다 */
+/** 고른 형식과 맞는 단위 — B-s1·B-s2·B-h1·B-h2는 B 서술형, C1·C2는 C 논술. 형식을 안 골랐거나 안내 줄(종류 없음)은 다 */
 const 형식맞음 = (u) => !u.종류 || !입력형식 || (입력형식[0] === 'B' ? u.종류 === 'B 서술형' : u.종류 === 'C 논술');
 function 단위목록그리기() {
   const us = 분석단위().filter(형식맞음);
@@ -679,10 +695,10 @@ async function 새채점() {
     } catch (e) { st.textContent = '채점 실패: ' + e.message; } finally { btn.disabled = false; }
     return;
   }
-  // 형식마다 엔진 요청 — B2: 소문항을 「(1) … [N점]」 줄로 이어 붙이고 모범답안은 소문항 순서 배열(엔진이 소문항 「[N점]」을 배점으로 읽는다) ·
-  //   C1·C2: 제시문을 (가)(나) 머리로 나눠 함께 보낸다 (C1은 필수) · B1: 문항 하나
+  // 형식마다 엔진 요청 — B-s2·B-h2(소문항 2개+): 소문항을 「(1) … [N점]」 줄로 이어 붙이고 모범답안은 소문항 순서 배열(엔진이 소문항 「[N점]」을 배점으로 읽는다) ·
+  //   C1·C2: 제시문을 (가)(나) 머리로 나눠 함께 보낸다 (C1은 필수) · B-s1·B-h1: 문항 하나
   let 문항, 모범답안, 모범, 총배점, 제시문 = [], 소문항답 = null;
-  if (입력형식 === 'B2') {
+  if (다문B(입력형식)) {
     const 칸 = B2칸.map((x) => ({ q: x.q.trim(), p: Number(x.p), m: x.m.trim(), a: x.a.trim() })).filter((x) => x.q);
     if (!칸.length) { st.textContent = '소문항을 넣으세요'; return; }
     if (칸.some((x) => !(x.p > 0))) { st.textContent = '소문항마다 배점을 넣으세요'; return; }
