@@ -240,7 +240,12 @@ function 세우기풀기가르기(out: 수리줄나누기, 줄: string[]): 수�
   const 답줄 = out.답?.끝값 ? out.답.줄 : null;
   const 세우기 = out.세우기.filter((l) => l !== 답줄);
   // 풀기는 모범답안 줄 차례로 (세우기에서 옮긴 줄 · 줄 안 풀기 마디가 섞인다)
-  const 자리 = (x: string) => { const i = 줄.findIndex((l) => l.includes(x)); return i < 0 ? 줄.length : i; };
+  //   [오종래 2026-10-20 확정] 쉼표로 나뉘어 다시 이은 조각(마디를 뺀 나머지)은 원래 줄과 글자가 달라진다 — 첫 마디로 원래 줄을 찾는다
+  const 자리 = (x: string) => {
+    const 첫마디 = 마디들(x)[0] ?? x;
+    const i = 줄.findIndex((l) => l.includes(x) || l.includes(첫마디));
+    return i < 0 ? 줄.length : i;
+  };
   const 풀기 = [...세우기.slice(1), ...out.풀기.filter((l) => l !== 답줄)].map((x, k) => ({ x, k })).sort((a, b) => 자리(a.x) - 자리(b.x) || a.k - b.k).map((y) => y.x);
   return { ...out, 세우기: 세우기.slice(0, 1), 풀기 };
 }

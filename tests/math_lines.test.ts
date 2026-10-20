@@ -280,3 +280,11 @@ describe('최종값of · 최종값 표지 줄이 답', () => {
     assert.ok(!r.미분류.includes('따라서 구하는 값은 1이다.'));
   });
 });
+
+describe('수리논술 풀기 순서 — 쉼표로 나뉜 줄도 모범답안 차례 (2026-10-20)', () => {
+  it('마디를 뗀 나머지 조각도 원래 줄 자리에', () => {
+    const r = classify_math_lines('PA=(x+1)²+y²이다.\n양변을 미분하면 정리해 y=x²+1이다.\n1-x²-y²=0, 즉 x²+y²=1이고 x=2-1=1이다.\n그러므로 z=x+y이다.\n따라서 값은 3이다.', '', true);
+    assert.deepEqual(r.세우기, ['PA=(x+1)²+y²이다.']);
+    assert.equal(r.풀기.findIndex((l) => l.startsWith('1-x²-y²=0')) < r.풀기.findIndex((l) => l.startsWith('그러므로')), true);
+  });
+});
