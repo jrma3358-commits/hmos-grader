@@ -1889,7 +1889,7 @@ async function runAnalysis() {
   if (!q) { alert(isB ? '논제를 입력하세요.' : '문항 원문을 입력하세요.'); return; }
   if (!selectedType) { alert('문제 형식을 선택하세요.'); return; }
 
-  const body = { 문항원문: q, 파이프라인: selectedType.charAt(0) };
+  const body = { 문항원문: q, 파이프라인: selectedType.charAt(0), ...(selectedForm ? { 형식: selectedForm } : {}) };
   if (selectedType === 'C-논술') {
     const 논제 = document.getElementById('thesis-input').value.trim();
     const 제시문 = splitPassages(document.getElementById('passage-input').value);
@@ -4684,7 +4684,8 @@ async function 문항분석(원문, 파이프라인, m = null) {
     };
   }
   const 글 = 원문.trim();
-  const { out } = await postJSON('/analyze', { 문항원문: 글, 파이프라인: 파이프라인.charAt(0) });
+  // 형식 — 러너가 B 계열(봉인② 조각 구조 · 봉인⑪ 요소 결손)을 정한다 (B-s → 수리 · B-h → 인문사회국어, 2026-10-20)
+  const { out } = await postJSON('/analyze', { 문항원문: 글, 파이프라인: 파이프라인.charAt(0), ...(m && m.형식 ? { 형식: m.형식 } : {}) });
   if (!out.ok) throw new Error(분석실패글(out));
   const AB = fromEngine(out, 글, 파이프라인);
   // 서술형 B — 인식과 함께 4 루브릭 · 5 모범답안까지 (실패는 4 루브릭에 사유로 남긴다, 오종래 2026-10-16)

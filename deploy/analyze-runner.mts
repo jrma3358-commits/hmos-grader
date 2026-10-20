@@ -15,6 +15,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { createRequire } from 'node:module';
 
 const GRADER = process.env.HMOS_GRADER ?? join(import.meta.dirname, 'hmos-grader');
 const load = (p: string) => import(pathToFileURL(join(GRADER, p)).href);
@@ -24,6 +25,8 @@ const { make_screen } = await load('src/filter/confirm.ts');
 const { 봉인13_정교화진단 } = await load('src/filter/sealed/items.ts');
 // 봉인⑦ 이어달리기 표지 — 「(1)에서 구한」 · 「위에서 구한」이 있는 소문항만 앞 소문항을 이어받는다 (오종래 2026-10-20 확정)
 const { 이어달리기 } = await load('src/filter/sealed/stepwise.ts');
+// 형식 → 엔진 계열 (B-s → 수리 · B-h → 인문사회국어, 오종래 2026-10-20) — 서버와 같은 format-detect.js (러너 옆 파일)
+const 형식계열 = (형식: unknown): string | null => createRequire(import.meta.url)('./format-detect.js').엔진계열(형식);
 const { split_thesis } = await load('src/thesis/split.ts');
 // 수리논술 C-2 인식 규칙 — 제약 C · 이어달리기 · 「각각」 조각 조합 (오종래 2026-10-19 확정)
 const { math_constraints, block_constraints, relay_constraint, constraint_links } = await load('src/thesis/math_essay.ts');
@@ -549,7 +552,10 @@ try {
     // ② 1차 필터 → 확인화면. A·B는 소문항 번호 구조(detectType subType 단계형)면 계단식 단계형
     const 단계형 = fq.detectType(문항원문).subType === '단계형';
     // 파이프라인 A면 서술형 바탕→도달 관계 판정(봉인⑩)을 건너뛴다 — B 전용 (오종래 2026-10-16)
-    const 입력 = { 유형: 단계형 ? '계단식 단계형' : '단독문제', 텍스트: 문항원문, 파이프라인 };
+    // 계열 — 교사가 고른 형식이 정한다 (B-s → 수리 · B-h → 인문사회국어, format-detect 엔진계열). 형식이 없으면 「자동」(수학·과학 계산 문항이면 수리).
+    //   봉인② 조각 구조와 봉인⑪ 요소 결손이 이 계열로 센다 (오종래 2026-10-20 확정). A는 ⑪을 돌리지 않는다
+    const 계열 = 파이프라인 === 'B' ? (형식계열(req.형식) ?? resolve_subject('자동', 문항원문)) : undefined;
+    const 입력 = { 유형: 단계형 ? '계단식 단계형' : '단독문제', 텍스트: 문항원문, 파이프라인, ...(계열 ? { 계열 } : {}) };
     try {
       const 화면 = make_screen(입력);
       out.단계.필터 = { 유형: 입력.유형, 필터판정: 화면.필터판정, 급소: 화면.급소, 실체요약: 화면.실체요약, 선택지: 화면.선택지 };

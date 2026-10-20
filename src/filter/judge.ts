@@ -11,6 +11,7 @@ import { analyze_descriptive, type 급소불명거르기, type 서술형분석 }
 import { analyze_essay, type 논술문항, type 논술형분석 } from './essay.ts';
 import { 봉인10_관계적절, 봉인11_요소결손, 봉인12_중의성, 봉인13_정교화진단, 엔진단위 } from './sealed/items.ts';
 import type { 소문항 } from './sealed/stepwise.ts';
+import type { 계열 } from '../rubric/types.ts';
 import { analyze_stepwise } from './stepwise.ts';
 
 /** [오종래 2026-09-30] 논술형 제시문 상한 — 쌍 비교 수 n(n-1)/2 (§8) */
@@ -33,8 +34,9 @@ export interface 항목결과 {
  *   봉인⑩ 바탕→도달 관계 · 봉인⑦ 소문항 분리(계단식 단계형도 문항 전체 하나로 본다) · 봉인⑪ 요소 결손 · 봉인⑫ 중의성
  */
 export type 필터입력 =
-  | { 유형: '단독문제'; 텍스트: string; 파이프라인?: 'A' | 'B' }
-  | { 유형: '계단식 단계형'; 텍스트: string; 파이프라인?: 'A' | 'B' }
+  // 계열 — 형식이 정한다 (B-s → 수리 · B-h → 인문사회국어). 조각 구조(봉인②)와 요소 결손(봉인⑪)이 본다. 주지 않으면 수리 구조
+  | { 유형: '단독문제'; 텍스트: string; 파이프라인?: 'A' | 'B'; 계열?: 계열 }
+  | { 유형: '계단식 단계형'; 텍스트: string; 파이프라인?: 'A' | 'B'; 계열?: 계열 }
   | ({ 유형: '인문사회논술' } & 논술문항);
 
 export interface 필터판정 {
@@ -64,8 +66,8 @@ function 급소불명(r: 급소불명거르기): 필터판정 {
 
 /** 공통 뒷부분 — 요소 결손·중의성(봉인⑪⑫) → 정교화 필요(봉인⑬ 4갈래 진단. 필터에는 4단계가 없어 사족은 비워 넘긴다)
  *  서술형판정이 false(파이프라인 A)면 요소 결손(봉인⑪)·중의성(봉인⑫)을 돌리지 않는다 (오종래 2026-10-16) */
-function 공통항목(분석: 서술형분석 | 논술형분석, 앞: 항목결과[], 텍스트: string, 서술형판정 = true, 서술형 = false): 항목결과[] {
-  const 결손 = 서술형판정 ? 봉인11_요소결손(분석) : null;
+function 공통항목(분석: 서술형분석 | 논술형분석, 앞: 항목결과[], 텍스트: string, 서술형판정 = true, 서술형 = false, 계열?: 계열): 항목결과[] {
+  const 결손 = 서술형판정 ? 봉인11_요소결손(분석, 계열) : null;
   const 겹침 = 서술형판정 ? 봉인12_중의성(분석) : null;
   const 항목: 항목결과[] = [
     ...앞,
@@ -88,7 +90,7 @@ function 공통항목(분석: 서술형분석 | 논술형분석, 앞: 항목결�
 }
 
 /** 서술형(단독문제·계단식 소문항 하나) 판정 — 서술형판정이 false(파이프라인 A)면 관계 적절(봉인⑩)·요소 결손(봉인⑪)을 돌리지 않는다 */
-function judge_descriptive(r: 서술형분석 | 급소불명거르기, 텍스트: string, 서술형판정 = true, 서술형 = false): 필터판정 {
+function judge_descriptive(r: 서술형분석 | 급소불명거르기, 텍스트: string, 서술형판정 = true, 서술형 = false, 계열?: 계열): 필터판정 {
   if (r.판정 === '거르기') return 급소불명(r);
   // 봉인⑩ 보완 권장은 거르지 않고 재판정 — 교사가 다시 본다 (오종래 2026-10-20 확정)
   const 관계 = 서술형판정 ? 봉인10_관계적절(r.실체, r.k) : null;
@@ -98,7 +100,7 @@ function judge_descriptive(r: 서술형분석 | 급소불명거르기, 텍스트
       ? [{ 증상: '관계 적절', 판정: 관계.결과 === '연결 완료' ? '통과' : '재판정', 사유: `${관계.결과} — ${관계.근거} · ${r.실체.요약}` } as 항목결과]
       : []),
   ];
-  const 항목 = 공통항목(r, 앞, 텍스트, 서술형판정, 서술형);
+  const 항목 = 공통항목(r, 앞, 텍스트, 서술형판정, 서술형, 계열);
   return { 판정: 묶기(항목.map((x) => x.판정)), 항목, 분석: r };
 }
 
@@ -152,12 +154,12 @@ export function judge_item(입력: 필터입력): 필터판정 | 계단식필터
   switch (입력.유형) {
     case '단독문제':
       // 서술형 급소 규칙은 파이프라인 B라고 밝힌 입력에만 (오종래 2026-10-19)
-      return judge_descriptive(analyze_descriptive(입력.텍스트, 입력.파이프라인 === 'B'), 입력.텍스트, 입력.파이프라인 !== 'A', 입력.파이프라인 === 'B');
+      return judge_descriptive(analyze_descriptive(입력.텍스트, 입력.파이프라인 === 'B', 입력.계열), 입력.텍스트, 입력.파이프라인 !== 'A', 입력.파이프라인 === 'B', 입력.계열);
     case '계단식 단계형': {
       // A는 소문항 분리(봉인⑦)를 하지 않고 문항 전체를 단독문제처럼 하나로 본다 (오종래 2026-10-16)
       if (입력.파이프라인 === 'A') return judge_descriptive(analyze_descriptive(입력.텍스트), 입력.텍스트, false);
       const B = 입력.파이프라인 === 'B';
-      const 소문항 = analyze_stepwise(입력.텍스트, B).map((s) => ({ 소문항: s.소문항, 판정: judge_descriptive(s.결과, s.소문항.텍스트, true, B) }));
+      const 소문항 = analyze_stepwise(입력.텍스트, B, 입력.계열).map((s) => ({ 소문항: s.소문항, 판정: judge_descriptive(s.결과, s.소문항.텍스트, true, B, 입력.계열) }));
       return { 판정: 묶기(소문항.map((s) => s.판정.판정)), 소문항 };
     }
     case '인문사회논술':

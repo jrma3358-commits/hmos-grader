@@ -5,7 +5,7 @@
 import { recognizeV2Analysis } from '../fq/pipeline.ts';
 import type { PivotFailure } from '../fq/v2/pivot.ts';
 import { derive_pieces, f2_input_from_v2 } from '../rubric/f2.ts';
-import type { 급소K, 조각뼈대 } from '../rubric/types.ts';
+import type { 계열, 급소K, 조각뼈대 } from '../rubric/types.ts';
 import { summarize_substance, type 서술형실체 } from './substance.ts';
 
 export interface 급소불명거르기 {
@@ -27,11 +27,12 @@ export interface 서술형분석 {
  * 서술형문항분석(문항텍스트) → 실체 | 거르기(급소 불명)
  * @throws SealedError 봉인②가 비어 있을 때 (F2에서 그대로 올라온다)
  */
-export function analyze_descriptive(문항텍스트: string, 서술형 = false): 서술형분석 | 급소불명거르기 {
+export function analyze_descriptive(문항텍스트: string, 서술형 = false, 계열?: 계열): 서술형분석 | 급소불명거르기 {
   // 서술형 = 파이프라인 B — 서술형 급소 규칙(실체 명사 B, 서술 방식 C-F 제외, 오종래 2026-10-19)
   const 입력 = f2_input_from_v2(recognizeV2Analysis(문항텍스트, { 서술형 }));
   if (!입력.ok) return { 판정: '거르기', 증상: '급소 명확', 초석: 1, 실패: 입력 };
   const { 물음, k, 인식 } = 입력;
-  const 조각들 = derive_pieces(물음, k, 인식);
+  // 계열이 파트 구조를 가른다 (봉인②). 주지 않으면 수리 구조 — 봉인⑪ 요소 결손이 이 조각을 센다 (2026-10-20)
+  const 조각들 = derive_pieces(물음, k, 인식, 계열);
   return { 판정: null, k, 조각들, 실체: summarize_substance(k, 인식, 조각들) };
 }
