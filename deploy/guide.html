@@ -72,7 +72,7 @@ button{font-family:inherit}
 <main class="wrap">
   <div class="head"><h1 id="t-name"></h1><span class="total" id="t-total"></span><a class="open" id="t-open" target="_blank" rel="noopener">화면 열기 ↗</a></div>
   <div class="lead" id="t-lead"></div>
-  <div class="sample">샘플: 하나고 자연논술 lim</div>
+  <div class="sample" id="t-sample"></div>
   <div class="dots" id="dots"></div>
   <article class="card" id="card"></article>
   <div class="nav"><button class="prev" id="prev">← 이전</button><span class="pos" id="pos"></span><button class="next" id="next">다음 →</button></div>
@@ -82,7 +82,7 @@ button{font-family:inherit}
 // 카드 — 단계 · 제목 · 할 것(「버튼 이름」은 화면 그대로) · 멘트 · 시간(분). 시연 문항은 세 화면 모두 경우의 수(a,a,b,c,d,e 6장 카드 양 끝 모음, 정답 72가지)
 const 탭들 = [
   {
-    이름: '질문 설계 도구', 주소: 'https://hmos.hunminos.com/tools',
+    이름: '질문 설계 도구', 주소: 'https://hmos.hunminos.com/tools', 샘플: '하나고_인문논술_과거현재 C-1a',
     안내: '논제와 제시문을 엔진이 읽고, 정교화안 · 추가 논제를 만들어 교사가 확정합니다. 시연은 「논술 출제」 모드 — 「면접 출제」는 마지막 카드에서.',
     카드: [
       { 단계: '0', 제목: '문항 등록', 시간: 2,
@@ -115,7 +115,7 @@ const 탭들 = [
     ],
   },
   {
-    이름: '문항 분석', 주소: 'https://hmos.hunminos.com/dashboard',
+    이름: '문항 분석', 주소: 'https://hmos.hunminos.com/dashboard', 샘플: '하나고_인문논술_과거현재 C-1a',
     안내: '한 문항을 엔진이 읽고 루브릭 · 모범답안까지 만듭니다. 시연은 서술형 수리계산 · 소문항 1개(B-s1) 「수학_서술형_경우의수」 샘플 — 논술 형식은 단계 구성이 조금 다릅니다.',
     카드: [
       { 단계: '0', 제목: '문항 등록', 시간: 2,
@@ -142,7 +142,7 @@ const 탭들 = [
     ],
   },
   {
-    이름: '채점 대시보드', 주소: 'https://hmos.hunminos.com/dashboard2',
+    이름: '채점 대시보드', 주소: 'https://hmos.hunminos.com/dashboard2', 샘플: 'q3 학생1 (5.0/5.0)',
     안내: '학생 답안을 학생이 쓴 경로대로 채점합니다. AI는 학생 답을 단계로 나누기만 하고, O/X와 점수는 엔진이 정합니다. 시연은 같은 경우의 수 문항의 풀이1(정답) · 풀이2(오답).',
     카드: [
       { 단계: '①', 제목: '문항 입력', 시간: 2,
@@ -180,6 +180,7 @@ function 그리기() {
   $('#t-total').textContent = `카드 ${t.카드.length}장 · 약 ${t.카드.reduce((a, x) => a + x.시간, 0)}분`;
   $('#t-open').href = t.주소;
   $('#t-lead').textContent = t.안내;
+  $('#t-sample').textContent = `샘플: ${t.샘플}`;
   $('#dots').innerHTML = t.카드.map((x, i) => `<button class="dot${i === 장 ? ' on' : ''}" data-i="${i}" title="${esc(x.제목)}">${esc(x.단계)}</button>`).join('');
   document.querySelectorAll('#dots .dot').forEach((b) => b.addEventListener('click', () => 가기(탭, Number(b.dataset.i))));
   $('#card').innerHTML = `
