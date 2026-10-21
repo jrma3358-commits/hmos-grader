@@ -171,6 +171,23 @@ export function line_answer_values(줄: string): string[] {
  * @param 문항글 주면 — 「∴」 결론 말고도 문항 문자로 시작해 수로 끝나는 줄을 답 값에 더한다 (답이 둘인 문항, q7 ①)
  * @param 수리논술 C-2a·C-2b · 물리·과학 계산 문항이면 세우기 → 풀기 → 답구하기를 줄 차례로 가른다 (오종래 2026-10-20 확정, 세우기풀기가르기)
  */
+/**
+ * 확정된 정교화 계단 → 수리 줄 나누기 [오종래 2026-10-21 확정] — 계단이 루브릭 뼈대. 줄 분류(등호·표지)를 거치지 않고 자리로 정한다:
+ *   첫 계단 = ② 세우기 · 사이 계단 = ③ 풀기(계단 하나 = 조각 하나) · 마지막 계단(목적지 = 급소 Q) = ④ 답구하기.
+ *   답 값은 마지막 계단 글의 「x=값」들(answer_values), 없으면 classify_math_lines가 읽는 끝 값(「lim(…)=1/2」 → 0.5), 그것도 없으면 값 없이 그 글만
+ */
+export function stair_lines(계단: string[]): 수리줄나누기 {
+  const 줄 = 계단.map((l) => String(l ?? '').replace(/\s*\n\s*/g, ' ').trim()).filter(Boolean);
+  const out: 수리줄나누기 = { 근거대기: [], 세우기: [], 풀기: [], 답: null, 미분류: [] };
+  if (!줄.length) return out;
+  const 끝 = 줄[줄.length - 1];
+  const 값 = answer_values(끝);
+  out.답 = 값.length ? { 줄: 끝, 값 } : classify_math_lines(끝, '', true).답 ?? { 줄: 끝, 값: [] };
+  if (줄.length > 1) out.세우기.push(줄[0]);
+  out.풀기.push(...줄.slice(1, -1));
+  return out;
+}
+
 export function classify_math_lines(답안: string, 문항글?: string, 수리논술 = false): 수리줄나누기 {
   const 줄 = String(답안 ?? '').split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
   const out: 수리줄나누기 = { 근거대기: [], 세우기: [], 풀기: [], 답: null, 미분류: [] };

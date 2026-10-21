@@ -29,7 +29,7 @@ const { 이어달리기 } = await load('src/filter/sealed/stepwise.ts');
 const 형식계열 = (형식: unknown): string | null => createRequire(import.meta.url)('./format-detect.js').엔진계열(형식);
 const { split_thesis } = await load('src/thesis/split.ts');
 // 수리논술 C-2 인식 규칙 — 제약 C · 이어달리기 · 「각각」 조각 조합 (오종래 2026-10-19 확정)
-const { math_constraints, block_constraints, relay_constraint, constraint_links, math_symbols } = await load('src/thesis/math_essay.ts');
+const { math_constraints, block_constraints, relay_constraint, constraint_links, math_symbols, math_stairs } = await load('src/thesis/math_essay.ts');
 // 논리 펼치기 표지 — 인문 채점 3축 도달 조건 ② (오종래 2026-10-19). 표지 목록은 봉인 표지사전 「논리펼치기」, 찾기는 엔진 logic_markers
 const { find_logic_markers } = await load('src/fq/logic_markers.ts');
 // 답구하기 · 답표현하기 표지 — 채점 4축 (오종래 2026-10-19). 표지 목록은 봉인 표지사전, 찾기는 엔진 answer_markers
@@ -54,7 +54,7 @@ const { spread_piece } = await load('src/rubric/f6.ts');
 const { evaluate_item } = await load('src/rubric/item_eval.ts');
 // 서술형 B 교사 모범답안 — 세우기 이후 ~ 답구하기 이전 줄이 ③ 풀기 조각 (오종래 2026-10-16)
 // 수리 모범답안 줄 나누기 — 「~하면」 ① · 등식 ② · 「∴」 ④ 모범 값, 풀기 없음 (오종래 2026-10-16 q5)
-const { split_solve_lines, classify_math_lines } = await load('src/rubric/solve_lines.ts');
+const { split_solve_lines, classify_math_lines, stair_lines } = await load('src/rubric/solve_lines.ts');
 // 문항 등록창의 정답(검증) · 출제의도(루브릭 참고 표시만) · 모범답안 소문항 나누기 (오종래 2026-10-16)
 const { item_portion, verify_answer, verify_answer_values, sub_item_points } = await load('src/rubric/teacher_input.ts');
 // 수리 다경로 검증 — 문항의 이차방정식(원식)을 ② 세우기 줄 조각에 붙인다 (오종래 2026-10-16)
@@ -119,7 +119,7 @@ function 소문항배점(값: unknown, 수: number, 총배점: number): number[]
   return Array.from({ length: 수 }, (_, i) => (i < 수 - 1 ? 몫 : Math.round((총배점 - 몫 * (수 - 1)) * 100) / 100));
 }
 
-function 루브릭작업(논제글: string, 계열: string, 총배점: number, 제시문목록: { id: string; 텍스트: string }[] | null, 공통자료 = false, 이어받기 = false, 모범답안: unknown = [], 정답: unknown = '', 핵심: unknown = '', 세우기남길: unknown = null, 서술형 = false, 수리논술형식 = false, 요청소배점: unknown = null) {
+function 루브릭작업(논제글: string, 계열: string, 총배점: number, 제시문목록: { id: string; 텍스트: string }[] | null, 공통자료 = false, 이어받기 = false, 모범답안: unknown = [], 정답: unknown = '', 핵심: unknown = '', 세우기남길: unknown = null, 서술형 = false, 수리논술형식 = false, 요청소배점: unknown = null, 요청계단: unknown = null) {
   // 서술형 B 급소 (오종래 2026-10-19 확정) — 서술 방식(C-F)은 급소 후보가 아니고 실체 명사(배경·이유 등) B가 급소다 (pivot.ts)
   const 인식 = (글: string) => fq.recognizeV2Analysis(글, { 서술형 });
   // 출제의도는 급소를 고르거나 바꾸지 않는다 — 소문항 몫을 루브릭 화면 참고 정보로만 낸다 (오종래 2026-10-16, 급소 대체 제거)
@@ -253,7 +253,9 @@ function 루브릭작업(논제글: string, 계열: string, 총배점: number, �
       //   [오종래 2026-10-16 q5] 수리는 줄 나누기 규칙으로 바뀜 — 「~하면」 줄 ① · 등식 줄 ② · 「∴」 줄 ④ 모범 값 · 풀기 없음 (세우기=풀기)
       // 문항 글을 넘긴다 — 「∴」 말고도 문항 문자로 시작해 수로 끝나는 줄을 답 값에 (답이 둘인 문항, q7)
       // 수리논술 C-2a·C-2b는 세우기(첫 식) → 풀기(이후 전개) → 답구하기(끝 값 줄)로 가른다 (오종래 2026-10-20 확정 안 A)
-      const 수리줄 = 계열 === '수리' && 답안글.trim() ? classify_math_lines(답안글, 문항글, 수리논술형식) : null;
+      // 확정된 정교화 계단(소문항 차례, 교사 확정) — 있으면 계단이 루브릭 뼈대: 첫 계단 세우기 · 사이 풀기 · 목적지 답구하기 (2026-10-21 확정)
+      const 계단 = 수리논술형식 && Array.isArray(요청계단) && Array.isArray(요청계단[n]) && 요청계단[n].some((t: unknown) => String(t ?? '').trim()) ? 요청계단[n].map((t: unknown) => String(t ?? '')) : null;
+      const 수리줄 = 계단 ? stair_lines(계단) : 계열 === '수리' && 답안글.trim() ? classify_math_lines(답안글, 문항글, 수리논술형식) : null;
       if (수리줄) 뼈대 = derive_pieces(물음, k, { ...조각인식, 교사줄: 수리줄 }, 계열).map((c: any) => ({ ...c, 요소: judge_element(c, 계열) }));
       const 풀기구간 = 답안글.trim() && !수리줄 ? split_solve_lines(답안글, 뼈대) : null;
       if (풀기구간 && 풀기구간.풀기.length) {
@@ -387,7 +389,7 @@ try {
     const 총배점 = Number(req.총배점) > 0 ? Number(req.총배점) : 10;
     out.단계.루브릭 = { 계열, 총배점, 소문항: 루브릭작업(String(req.논제 ?? 문항원문), 계열, 총배점, 제시문목록, !!req.공통자료, !!req.이어받기, req.모범답안 ?? [], req.정답 ?? '', req.핵심 ?? '', req.세우기남길 ?? null, !!req.서술형 || String(req.형식 ?? '') === 'C-1a',
       // 세우기 → 풀기 → 답구하기 줄 가르기 — 수리논술 C-2 · 물리·과학 계산 문항 (오종래 2026-10-20 확정)
-      /^C-2/.test(String(req.형식 ?? '')) || (계열 === '수리' && is_science_calc(String(req.논제 ?? 문항원문), 답안모두)), req.소문항배점 ?? null) };
+      /^C-2/.test(String(req.형식 ?? '')) || (계열 === '수리' && is_science_calc(String(req.논제 ?? 문항원문), 답안모두)), req.소문항배점 ?? null, req.계단 ?? null) };
   } else if (파이프라인 === 'C') {
     // ── C·논술 (조립설명서 C·논술 9단계) — 논제를 먼저 읽는다. 1차 필터는 타지 않는다 (2026-10-13 확정 4) ──
     const 논제글 = String(req.논제 ?? 문항원문);
@@ -459,6 +461,8 @@ try {
         const 연결들 = u.제약.flatMap((c: any) => constraint_links(c.종류 === '제시문' ? [...노드글, ...얹힌이어] : 노드글, [c]));
         u.제약연결 = [...new Map(연결들.map((x: any) => [`${x.종류}|${x.출처}|${x.말}`, x])).values()];
         if (앞 && 앞 === 요청앞 && 요청앞제시문.length) u.이어받은제시문 = 요청앞제시문;
+        // 정교화 계단 [오종래 2026-10-21 확정] — 급소 = 목적지, B·C·D 노드를 D(「~이라 하자」)마다 계단으로, 계단마다 핵심어 제안 (tools 5단계)
+        if ((u.급소 ?? []).length) u.계단 = math_stairs(u.노드, u.급소);
       });
       out.단계.수리 = { 형식: String(req.형식), 제약묶음: 발문들.map((t) => ({ 공통발문: t, 제약: math_constraints(t, 제시문목록 ?? []) })) };
     }

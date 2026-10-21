@@ -11,7 +11,7 @@ import { derive_pieces, f2_input_from_v2 } from '../src/rubric/f2.ts';
 import { grade } from '../src/rubric/g1.ts';
 import { 봉인4b_게이트 } from '../src/rubric/sealed/g1.ts';
 import { is_science_calc, resolve_subject } from '../src/rubric/multipath.ts';
-import { answer_list, answer_values, final_value, classify_math_lines, solve_segments, student_answer_line, 최종값of } from '../src/rubric/solve_lines.ts';
+import { answer_list, answer_values, final_value, classify_math_lines, solve_segments, stair_lines, student_answer_line, 최종값of } from '../src/rubric/solve_lines.ts';
 import type { 조각 } from '../src/rubric/types.ts';
 
 const q5 = '이차방정식 x²+2x-3=0의 두 근을 구하고, 풀이 과정을 서술하시오. [5점]';
@@ -47,6 +47,30 @@ describe('(b) 수리 모범답안 줄 나누기', () => {
     assert.equal(cs[0].줄글, '(x+3)(x-1)=0');
     assert.match(cs[1].node!.entity, /두 근$/);
     assert.deepEqual(cs[1].모범답?.값, ['x=-3', 'x=1']);
+  });
+});
+
+// 정교화 계단 → 루브릭 뼈대 [오종래 2026-10-21 확정] — 첫 계단 세우기 · 사이 풀기 · 목적지 답구하기 (등호 없는 핵심어 계단도 자리로)
+describe('stair_lines — 확정된 계단이 루브릭 뼈대 (2026-10-21)', () => {
+  it('핵심어만 쓴 계단도 자리로 세우기 · 풀기 · 답', () => {
+    const r = stair_lines(['f(x) · g(x) · 근이 0,n', 'h(x) · 미분 · B_n', 'a_n · b_n', 'lim(a_n/nb_n)']);
+    assert.deepEqual(r.세우기, ['f(x) · g(x) · 근이 0,n']);
+    assert.deepEqual(r.풀기, ['h(x) · 미분 · B_n', 'a_n · b_n']);
+    assert.deepEqual(r.답, { 줄: 'lim(a_n/nb_n)', 값: [] });
+    assert.deepEqual(r.미분류, []);
+  });
+  it('목적지에 값이 있으면 답 값으로 · 2계단은 세우기 + 답', () => {
+    const r = stair_lines(['f(x)=x(x+n)(x-1)', 'lim(a_n/nb_n)=1/2']);
+    assert.deepEqual(r.세우기, ['f(x)=x(x+n)(x-1)']);
+    assert.deepEqual(r.풀기, []);
+    assert.deepEqual(r.답?.값, ['0.5']);
+  });
+  it('q5 계단 조각 — 세우기 · 풀기 · 답구하기 하나씩', () => {
+    const 입력 = f2_input_from_v2(recognizeV2Analysis(q5));
+    assert.ok(입력.ok);
+    const cs = derive_pieces(입력.물음, 입력.k, { ...입력.인식, 교사줄: stair_lines(['(x+3)(x-1)=0', 'x+3=0 또는 x-1=0', 'x=1 또는 x=-3']) }, '수리');
+    assert.deepEqual(cs.map((c) => c.파트), ['세우기', '풀기', '답구하기']);
+    assert.deepEqual(cs[2].모범답?.값, ['x=-3', 'x=1']);
   });
 });
 

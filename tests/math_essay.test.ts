@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { block_constraints, condition_blocks, constraint_links, math_constraints, math_symbols, piece_structure, relay_constraint, relay_marker } from '../src/thesis/math_essay.ts';
+import { block_constraints, condition_blocks, constraint_links, math_constraints, math_stairs, math_symbols, piece_structure, relay_constraint, relay_marker } from '../src/thesis/math_essay.ts';
 import { split_thesis } from '../src/thesis/split.ts';
 import { recognizeV2Analysis } from '../src/fq/index.ts';
 import { essay_pivot_chunks } from '../src/thesis/chunk.ts';
@@ -214,6 +214,35 @@ describe('math_symbols — 「f」 단독 제외 · 도함수 별개 (2026-10-21
   });
   it('Σ는 기호', () => {
     assert.deepEqual(math_symbols('Σk(n-k)'), ['Σ']);
+  });
+});
+
+// 정교화 계단 [오종래 2026-10-21 확정] — 급소 = 목적지, B·C·D 노드를 D(「~이라 하자」)마다 계단으로, 계단마다 새 수학 기호 + D 실체
+describe('math_stairs — 하나고 논제1 (1) (2026-10-21)', () => {
+  const 노드 = [
+    ['n0', 'B', 'n'], ['n1', 'B', '자연수'], ['n2', 'B', ', 실수'], ['n4', 'B', '정의된 최고차항의 계수'], ['n5', 'C', '각각 1'], ['n7', 'P', '삼차함수 f(x)와 이차함수 g(x)'],
+    ['n9', 'B', 'f(x)=0의 근이 0,-n'], ['n10', 'B', '포함하고, g(x)=0'], ['n11', 'D', '근이 0,n'], ['n12', 'B', '함수 h(x)={f(x),x≤0 / g(x),x>0}'], ['n13', 'B', '원점'],
+    ['n14', 'B', '미분가능'], ['n15', 'B', ', y=|h(x)|'], ['n16', 'P', '그래프'], ['n18', 'B', '직선 y=0'], ['n19', 'C', '으로 둘러싸'], ['n20', 'B', '두 영역 중'],
+    ['n22', 'B', 'y축 왼쪽의 내부 영역(경계 제외)'], ['n24', 'B', 'A_n, y축 오른쪽의 내부 영역(경계 제외)'], ['n25', 'D', 'B_n'], ['n27', 'B', 'A_n 및 B_n의 원소 중'],
+    ['n29', 'B', 'x좌표와 y좌표'], ['n30', 'C', '모두 정수'], ['n32', 'B', '점의 개수'], ['n33', 'D', '각각 a_n, b_n'], ['n34', 'B', 'lim(a_n/nb_n)의 값'], ['n37', 'Q', '구하고'],
+    ['n38', 'B', ', 그 근거'], ['n39', 'Q', '논술하시오'],
+  ].map(([id, 색, 실체]) => ({ id, 색, 실체 }));
+  const 급소 = [{ 노드: 'n34', 실체: 'lim(a_n/nb_n)의 값', keyword: 'lim(a_n/nb_n)' }, { 노드: 'n38', 실체: ', 그 근거', keyword: '그 근거' }];
+  const r = math_stairs(노드, 급소);
+  it('목적지 = 급소, 핵심어는 수학 기호 있는 keyword', () => {
+    assert.deepEqual(r.목적지, { 실체: ['lim(a_n/nb_n)의 값', '그 근거'], 핵심어: ['lim(a_n/nb_n)'] });
+  });
+  it('D마다 계단 셋 — P · Q · 급소 노드는 빠진다', () => {
+    assert.deepEqual(r.계단.map((c) => c.노드.at(-1)), ['n11', 'n25', 'n33']);
+    assert.ok(!r.계단.flatMap((c) => c.노드).some((id) => ['n7', 'n16', 'n34', 'n37', 'n38', 'n39'].includes(id)));
+  });
+  it('계단마다 새 수학 기호 + D 실체 (기호가 이미 다 있으면 D 실체는 뺀다)', () => {
+    assert.deepEqual(r.계단.map((c) => c.핵심어), [['f(x)', 'g(x)', '근이 0,n'], ['h(x)', '미분', 'B_n'], ['a_n', 'b_n']]);
+  });
+  it('D가 없으면 계단 하나', () => {
+    const s = math_stairs([{ id: 'a', 색: 'B', 실체: 'f(x)' }, { id: 'b', 색: 'B', 실체: '극한값' }, { id: 'q', 색: 'Q', 실체: '구하시오' }], [{ 노드: 'b', 실체: '극한값' }]);
+    assert.deepEqual(s.계단.map((c) => c.핵심어), [['f(x)']]);
+    assert.deepEqual(s.목적지.핵심어, ['극한값']);
   });
 });
 

@@ -200,3 +200,51 @@ export function constraint_links(노드실체: string[], 제약: 제약C[]): { �
   }
   return out;
 }
+
+export interface 계단 {
+  /** 이 계단의 노드 id (글 차례) */
+  노드: string[];
+  /** 노드 실체 (앞 쉼표 뗌) */
+  실체: string[];
+  /** 제안 핵심어 — 이 계단에서 처음 나온 수학 기호 + 계단을 닫은 D 실체 */
+  핵심어: string[];
+}
+
+/**
+ * 정교화 계단 [오종래 2026-10-21 확정] — 수리논술 C-2a · C-2b. 급소(Q 직전 B) = 목적지, 그 앞 B · C · D 노드를 글 차례대로 계단에 담는다.
+ *   계단 가르기: D 노드(「~이라 하자」「~이라 할 때」 — 새 대상을 정한다)가 계단 하나를 닫는다. 마지막 D 뒤 남은 노드는 마지막 계단.
+ *   P(무대) · Q · 급소 노드 · 첫 급소 뒤 노드는 계단에 넣지 않는다.
+ *   핵심어 제안: 계단 글의 수학 기호 중 앞 계단에 없던 것 + 계단을 닫은 D 실체(그 기호가 이미 다 들어 있으면 뺀다).
+ *   목적지 핵심어: 급소 keyword 중 수학 기호가 있는 것 (없으면 급소 keyword 전부).
+ * 교사가 계단 수 · 핵심어를 고쳐 확정하고, 확정된 계단이 루브릭 뼈대가 된다 (solve_lines stair_lines)
+ */
+export function math_stairs(
+  노드: { id: string; 색: string; 실체: string }[],
+  급소: { 노드: string; 실체: string; keyword?: string }[],
+): { 목적지: { 실체: string[]; 핵심어: string[] }; 계단: 계단[] } {
+  const 깨끗이 = (t: string) => String(t ?? '').trim().replace(/^[,，\s]+/, '');
+  const 급소id = new Set(급소.map((k) => k.노드));
+  const 첫급소 = 노드.findIndex((n) => 급소id.has(n.id));
+  const 앞노드 = (첫급소 >= 0 ? 노드.slice(0, 첫급소) : 노드).filter((n) => ['B', 'C', 'D'].includes(String(n.색).split(' ')[0]));
+  const 묶음: { id: string; 색: string; 실체: string }[][] = [];
+  let 지금: typeof 앞노드 = [];
+  for (const n of 앞노드) {
+    지금.push(n);
+    if (String(n.색).split(' ')[0] === 'D') { 묶음.push(지금); 지금 = []; }
+  }
+  if (지금.length) 묶음.push(지금);
+  const 본기호 = new Set<string>();
+  const 계단들 = 묶음.map((ns) => {
+    const 실체 = ns.map((n) => 깨끗이(n.실체));
+    const 새 = math_symbols(실체.join(' ')).filter((x) => !본기호.has(x));
+    새.forEach((x) => 본기호.add(x));
+    const D = ns.find((n) => String(n.색).split(' ')[0] === 'D');
+    const D글 = D ? 깨끗이(D.실체).replace(/^각각\s*/, '') : '';
+    const D기호 = D글 ? math_symbols(D글) : [];
+    const 핵심어 = [...새, ...(D글 && !(D기호.length && D기호.every((x) => 새.includes(x) || 본기호.has(x))) ? [D글] : [])];
+    return { 노드: ns.map((n) => n.id), 실체, 핵심어: [...new Set(핵심어)] };
+  });
+  const 열쇠 = 급소.map((k) => 깨끗이(k.keyword ?? k.실체)).filter(Boolean);
+  const 수학열쇠 = 열쇠.filter((k) => math_symbols(k).length);
+  return { 목적지: { 실체: 급소.map((k) => 깨끗이(k.실체)), 핵심어: [...new Set(수학열쇠.length ? 수학열쇠 : 열쇠)] }, 계단: 계단들 };
+}
