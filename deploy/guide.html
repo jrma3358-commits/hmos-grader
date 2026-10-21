@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HMOS — 시연 안내</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=Noto+Serif+KR:wght@400;600&display=swap" rel="stylesheet">
+<style>
+/* 시연 안내 (오종래 2026-10-21) — 상단 탭 3개(① 질문 설계 도구 ② 문항 분석 ③ 채점 대시보드) · 탭마다 단계 카드 (← → 버튼 · 방향키)
+   카드: 단계 번호 · 제목 · 화면에서 할 것 · 설명 멘트 · 소요 시간. 단계 이름과 버튼 이름은 각 화면(tools.html · hmos_dashboard.html · dashboard2.html) 그대로 */
+:root{--teal:#1A4A4A;--teal-mid:#2A6060;--gold:#C8A84B;--gold-lt:#F6EFD9;--ivory:#F7F5F0;--ivory-dk:#EDE9E1;--line:#DDD8CC;--muted:#6E6E73;--ink:#1C1C1E;--white:#fff}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Noto Sans KR',sans-serif;background:var(--ivory);color:var(--ink);min-height:100vh;display:flex;flex-direction:column;font-size:15px;line-height:1.6}
+button{font-family:inherit}
+.topbar{background:var(--teal);display:flex;align-items:center;gap:4px;padding:0 24px;min-height:58px;flex-wrap:wrap;position:sticky;top:0;z-index:10}
+.brand{font-family:'Noto Serif KR',serif;font-size:18px;font-weight:600;color:#fff;margin-right:24px;text-decoration:none;white-space:nowrap}
+.brand em{font-style:normal;color:var(--gold);font-size:12px;font-family:'Noto Sans KR',sans-serif;font-weight:300;margin-left:6px}
+.tab{display:flex;align-items:center;gap:8px;height:58px;padding:0 16px;border:none;background:transparent;color:rgba(255,255,255,.6);font-size:14px;border-bottom:3px solid transparent;cursor:pointer;white-space:nowrap}
+.tab:hover{color:#fff}
+.tab.on{color:#fff;border-bottom-color:var(--gold);font-weight:500}
+.tab .n{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;background:rgba(255,255,255,.14)}
+.tab.on .n{background:var(--gold);color:var(--teal);font-weight:700}
+.wrap{flex:1;width:100%;max-width:960px;margin:0 auto;padding:28px 24px 48px}
+.head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:6px}
+.head h1{font-family:'Noto Serif KR',serif;font-size:22px;color:var(--teal);font-weight:600}
+.head .total{font-size:13px;color:var(--muted)}
+.head a.open{margin-left:auto;font-size:13px;color:var(--teal);border:1.5px solid var(--teal);border-radius:6px;padding:5px 12px;text-decoration:none;white-space:nowrap}
+.head a.open:hover{background:var(--white)}
+.lead{font-size:14px;color:var(--muted);margin-bottom:18px}
+.dots{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+.dot{min-width:30px;height:28px;padding:0 8px;border-radius:14px;border:1.5px solid var(--line);background:var(--white);font-size:12.5px;color:var(--muted);cursor:pointer}
+.dot.on{border-color:var(--teal);background:var(--teal);color:#fff;font-weight:600}
+.card{background:var(--white);border:1px solid var(--line);border-radius:12px;padding:26px 30px;min-height:420px;display:flex;flex-direction:column;gap:18px;box-shadow:0 1px 2px rgba(0,0,0,.03)}
+.card-top{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.step{font-family:'Noto Serif KR',serif;font-size:15px;font-weight:600;color:var(--teal);background:var(--gold-lt);border:1.5px solid var(--gold);border-radius:8px;padding:4px 12px;white-space:nowrap}
+.card h2{font-family:'Noto Serif KR',serif;font-size:24px;font-weight:600;color:var(--ink);line-height:1.35}
+.time{margin-left:auto;font-size:13px;color:var(--teal);background:var(--ivory);border-radius:14px;padding:4px 12px;white-space:nowrap}
+.sec .label{font-size:12px;font-weight:700;color:var(--muted);letter-spacing:.04em;margin-bottom:6px}
+.sec ol,.sec ul{padding-left:20px;display:flex;flex-direction:column;gap:5px}
+.sec li{font-size:15px}
+.btnname{font-weight:600;color:var(--teal);white-space:nowrap}
+.say{border-left:4px solid var(--gold);background:var(--gold-lt);border-radius:0 8px 8px 0;padding:14px 18px;font-size:16px;line-height:1.7;color:#3D3215}
+.say::before{content:'멘트';display:block;font-size:11.5px;font-weight:700;color:#8A6A10;letter-spacing:.06em;margin-bottom:4px}
+.note{font-size:13px;color:var(--muted)}
+.nav{display:flex;align-items:center;gap:10px;margin-top:16px}
+.nav button{padding:11px 22px;border-radius:8px;border:none;font-size:14.5px;cursor:pointer}
+.prev{background:var(--ivory-dk);color:var(--ink)}
+.next{background:var(--teal);color:#fff;margin-left:auto}
+.nav button:disabled{opacity:.4;cursor:not-allowed}
+.pos{font-size:13px;color:var(--muted)}
+.keys{font-size:12px;color:var(--muted);text-align:center;margin-top:14px}
+@media (max-width:760px){
+  .topbar{flex-wrap:nowrap;overflow-x:auto;padding:0 16px}
+  .brand{margin-right:10px}
+  .tab{padding:0 10px;font-size:13px}
+  .wrap{padding:20px 16px 40px}
+  .card{padding:20px 18px;min-height:0}
+  .card h2{font-size:20px}
+  .time{margin-left:0}
+}
+</style>
+</head>
+<body>
+<nav class="topbar">
+  <a class="brand" href="/">HMOS <em>시연 안내</em></a>
+  <button class="tab" data-tab="0"><span class="n">1</span>질문 설계 도구</button>
+  <button class="tab" data-tab="1"><span class="n">2</span>문항 분석</button>
+  <button class="tab" data-tab="2"><span class="n">3</span>채점 대시보드</button>
+</nav>
+<main class="wrap">
+  <div class="head"><h1 id="t-name"></h1><span class="total" id="t-total"></span><a class="open" id="t-open" target="_blank" rel="noopener">화면 열기 ↗</a></div>
+  <div class="lead" id="t-lead"></div>
+  <div class="dots" id="dots"></div>
+  <article class="card" id="card"></article>
+  <div class="nav"><button class="prev" id="prev">← 이전</button><span class="pos" id="pos"></span><button class="next" id="next">다음 →</button></div>
+  <div class="keys">방향키 ← → 로 카드를 넘기고, 1 · 2 · 3 으로 탭을 바꿉니다.</div>
+</main>
+<script>
+// 카드 — 단계 · 제목 · 할 것(「버튼 이름」은 화면 그대로) · 멘트 · 시간(분). 시연 문항은 세 화면 모두 경우의 수(a,a,b,c,d,e 6장 카드 양 끝 모음, 정답 72가지)
+const 탭들 = [
+  {
+    이름: '질문 설계 도구', 주소: '/tools',
+    안내: '논제와 제시문을 엔진이 읽고, 정교화안 · 추가 논제를 만들어 교사가 확정합니다. 시연은 「논술 출제」 모드 — 「면접 출제」는 마지막 카드에서.',
+    카드: [
+      { 단계: '0', 제목: '문항 등록', 시간: 2,
+        할것: ['왼쪽에서 「논술 출제」를 고른다', '문제 형식을 차례로 고른다 — 종류 → 계열 → 소문항 수 · 제시문', '논제와 제시문을 붙여 넣거나 「샘플 불러오기」', '「등록 → 1단계」'],
+        멘트: '출제는 형식부터 정합니다. 형식을 고르면 엔진이 어떤 규칙으로 읽을지가 정해지고, 그다음에야 입력란이 열립니다.' },
+      { 단계: '1', 제목: '논제 + 제시문 입력', 시간: 1,
+        할것: ['나뉜 논제 · 제시문 칸을 확인하고 고친다', '문항명을 넣는다', '「분석 시작」'],
+        멘트: '엔진이 논제와 제시문을 나눠 받았는지 교사가 눈으로 확인하는 단계입니다. 여기서 고친 그대로 엔진이 분석합니다.', 덧: '제시문이 없는 형식이면 이 단계 이름이 「논제 입력」이고 3 · 4단계는 없습니다.' },
+      { 단계: '2', 제목: '논제 인식', 시간: 2,
+        할것: ['소문항마다 핵심 · 서술 방식 · 조건 · 배경을 읽는다', '소문항이 여럿이면 「◀ 이전」 「전체」 「다음 ▶」 · 「남은 소문항 자동 진행」'],
+        멘트: '엔진은 논제를 다섯 가지 색 — 대상 · 조건 · 상황 · 정의 · 질문 — 으로 읽고, 학생이 반드시 도달해야 할 급소를 잡습니다. AI가 짐작한 것이 아니라 기능표지 규칙으로 읽은 결과입니다.' },
+      { 단계: '3', 제목: '제시문 분석', 시간: 2,
+        할것: ['제시문마다 수렴 경로(B₁ → … → 최종 입장)와 극성(당김 · 밀침)을 본다', '단락 사이 관계도(6유형)를 본다', '필요하면 「제시문 수렴 경로 다시 추출」 · 「관계 다시 판정」'],
+        멘트: '제시문 하나하나가 어떤 결론으로 모이는지, 서로 비슷한지 대비되는지를 지도로 보여 줍니다. 논제를 다듬을 때 이 지도를 근거로 씁니다.' },
+      { 단계: '4', 제목: '연결 평가', 시간: 1,
+        할것: ['논제 핵심이 제시문 단락 어디와 닿는지 읽는다'],
+        멘트: '논제가 요구하는 것과 제시문이 주는 근거가 실제로 연결되는지 확인합니다. 연결이 약한 곳이 다음 단계의 정교화 대상이 됩니다.' },
+      { 단계: '5', 제목: '논제 정교화', 시간: 2,
+        할것: ['엔진이 짚은 정교화할 곳을 읽는다', '「정교화안 문장 생성 (N건)」'],
+        멘트: '고칠 자리는 엔진이 찾고, AI는 그 자리에 맞는 문장만 씁니다. 그래서 정교화안마다 왜 고치는지 근거가 붙어 있습니다.' },
+      { 단계: '6', 제목: '추가 논제 생성', 시간: 2,
+        할것: ['키워드를 넣고 「이 방향으로 논제 생성」 또는 「추가 논제 문장 생성 (N건)」', '마음에 드는 논제에 「선택」'],
+        멘트: '같은 제시문으로 다른 각도의 논제를 만들어 봅니다. 새 논제도 엔진이 다시 인식해 급소가 서는지 확인한 것만 남습니다.' },
+      { 단계: '7', 제목: '교사 확정', 시간: 1,
+        할것: ['쓸 논제를 고르고 고친다', '「선택한 논제 확정 → 엔진 재인식」', '「저장 (.json)」 또는 「문항분석으로 넘기기 →」'],
+        멘트: '마지막 결정은 교사가 합니다. 확정한 논제는 문항 분석 화면으로 그대로 넘겨 루브릭과 모범답안까지 이어 갑니다.' },
+      { 단계: '면접', 제목: '면접 출제 (덧)', 시간: 2,
+        할것: ['왼쪽에서 「면접 출제」 → 면접 유형 · 성적 분위를 고르고 자료를 올린다 · 「등록 완료 → 1단계 급소 추출」', '급소 확인 → 면접관 유형 다섯 칸 → 「면접 질문 생성」', '카드마다 「확정」 → 「확정한 질문 저장 (.json)」 · 「인쇄용 출력」'],
+        멘트: '같은 엔진이 생활기록부 같은 자료에서도 급소를 잡습니다. 질문은 그 급소에서만 나오고, 본질문마다 꼬리질문 두 개와 근거가 붙습니다.' },
+    ],
+  },
+  {
+    이름: '문항 분석', 주소: '/dashboard',
+    안내: '한 문항을 엔진이 읽고 루브릭 · 모범답안까지 만듭니다. 시연은 서술형 수리계산 · 소문항 1개(B-s1) 「수학_서술형_경우의수」 샘플 — 논술 형식은 단계 구성이 조금 다릅니다.',
+    카드: [
+      { 단계: '0', 제목: '문항 등록', 시간: 2,
+        할것: ['문제 형식을 고른다 — 서술형 → 수리계산 → 1개', '「샘플 불러오기」에서 「수학_서술형_경우의수」 (또는 「① 텍스트」로 문항 붙여 넣기)', '정답(필수) · 출제의도(선택)를 확인한다', '「분석 시작 →」'],
+        멘트: '정답은 채점 기준이 아니라 검증용입니다. 엔진이 만든 모범답안이 정답과 맞는지 확인하는 데만 씁니다.' },
+      { 단계: '1', 제목: '문항 입력', 시간: 1,
+        할것: ['문항 원문과 문제 형식을 확인한다', '「분석 시작」'],
+        멘트: '등록한 문항이 그대로 들어왔는지 확인하고 분석을 돌립니다.' },
+      { 단계: '2', 제목: '인식 결과', 시간: 2,
+        할것: ['핵심 · 서술 방식 · 조건 · 배경 문장을 읽는다', '「인식 한계 · 발견」을 본다'],
+        멘트: '이 문항의 급소는 「경우의 수」입니다. 「a,a,b,c,d,e」는 대상, 「양 끝이 모음」은 조건 — 엔진이 문장 속 기능표지로 이렇게 나눴습니다.' },
+      { 단계: '3', 제목: '문제 평가', 시간: 1,
+        할것: ['평가 결과(예: 「바르게 잡음」)와 근거 · 남은 점을 읽는다'],
+        멘트: '엔진이 이 문항을 제대로 잡았는지 스스로 평가한 결과입니다. 문제가 있으면 여기서 교사가 먼저 알게 됩니다.' },
+      { 단계: '4', 제목: '루브릭', 시간: 2,
+        할것: ['「루브릭 생성 (엔진 조각 → Claude 문장)」', '근거대기 · 세우기 · 풀기 · 답구하기 조각과 배점을 본다'],
+        멘트: '루브릭의 조각과 배점은 엔진이 정합니다. AI는 조각마다 교사가 읽을 문장만 붙입니다.' },
+      { 단계: '5', 제목: '모범답안', 시간: 2,
+        할것: ['「모범답안 잇기 (Claude)」', '인식 대조(급소 포함 · 인식 일치)를 본다 → 「교사 확정」'],
+        멘트: '조각 문장을 이어 한 편의 모범답안을 만들고, 조각 흔적이 빠짐없이 남았는지 엔진이 다시 대조합니다. 최종값 72가 정답과 맞는지도 여기서 확인됩니다.' },
+      { 단계: '6', 제목: '교사 확정', 시간: 1,
+        할것: ['확인 항목을 점검한다', '확정자 · 확정일을 넣고 「확정하기」'],
+        멘트: '확정한 문항은 채점 대시보드의 「문항분석에서 불러오기」에서 바로 쓸 수 있습니다.' },
+    ],
+  },
+  {
+    이름: '채점 대시보드', 주소: '/dashboard2',
+    안내: '학생 답안을 학생이 쓴 경로대로 채점합니다. AI는 학생 답을 단계로 나누기만 하고, O/X와 점수는 엔진이 정합니다. 시연은 같은 경우의 수 문항의 풀이1(정답) · 풀이2(오답).',
+    카드: [
+      { 단계: '①', 제목: '문항 입력', 시간: 2,
+        할것: ['문제 형식을 먼저 고른다 — 서술형 → 수리계산 → 1개', '경로를 고른다 — 「경로 1 · 문항분석에서 불러오기」(저장된 문항 · 채점 결과 목록) 또는 「경로 2 · 새로 입력」(문항 · 총배점 · 모범답안 · 정답)', '「문항분석 →」'],
+        멘트: '이미 분석해 둔 문항이면 불러오고, 처음 보는 문항이면 그 자리에서 넣습니다. 어느 쪽이든 같은 엔진 루브릭으로 채점합니다.' },
+      { 단계: '②', 제목: '문항분석', 시간: 2,
+        할것: ['「문항분석」 — 5색 노드 · 급소 → 루브릭 → 모범답안이 한 화면에', '확인하고 「답안 입력 →」'],
+        멘트: '채점 전에 무엇으로 채점하는지를 먼저 보여 줍니다. 급소, 조각, 배점, 모범답안 — 학생도 교사도 같은 기준을 봅니다.' },
+      { 단계: '③', 제목: '답안 입력', 시간: 1,
+        할것: ['학생 이름과 답안을 넣는다 (글 · 파일 · 손글씨 사진)', '「채점 →」 — 풀이1을 먼저'],
+        멘트: '풀이1은 같은 문자 a를 「÷2!」 대신 경우를 나눠 셌습니다. 모범답안과 다른 길입니다.' },
+      { 단계: '④', 제목: '채점 결과 — 풀이1 (다른 길, 정답)', 시간: 3,
+        할것: ['학생 경로 채점 점수 5.0 / 5.0과 4축 카드를 본다', '「학생 답안 루브릭 추출 대조표」 — 엔진 조각 · 학생 조각 · 일치 / 다경로 / 불일치', '조각마다 🔆 다경로 표시와 계산 검증 근거를 본다'],
+        멘트: '모범답안과 다른 길이어도 오답이 아닙니다. 학생이 간 길 안에서 계산이 맞는지를 엔진이 하나하나 검증합니다 — 4! = 24, 2 × 4! = 48, 24 + 48 = 72. 그래서 만점입니다.' },
+      { 단계: '④', 제목: '채점 결과 — 풀이2 (어디서 틀렸나)', 시간: 3,
+        할것: ['③으로 돌아가 풀이2를 넣고 「채점 →」', '세우기 「2×2=4」 · 풀기 「4×24=96」은 계산 O, 답구하기 96 ≠ 72는 X — 2.8 / 5.0', '「모범답안 같은 단계 값 3과 다름 — 교사 확인」 경고를 본다', '「채점 결과 저장」으로 검증/채점결과/에 남긴다'],
+        멘트: '계산은 모두 맞았지만, 양 끝 모음을 2 × 2 = 4로 세운 것이 틀렸습니다. 같은 것이 있는 순열을 놓친 거죠. 점수만이 아니라 무너진 지점이 정확히 어디인지를 보여 줍니다.' },
+      { 단계: '⑤', 제목: '교사 확정', 시간: 1,
+        할것: ['조각마다 엔진 판정을 확인하고 필요하면 O / X를 고친다', '「확정 내려받기 (JSON)」'],
+        멘트: '엔진은 근거를 남기고, 마지막 판정은 교사가 합니다. 고친 판정은 점수에 바로 다시 반영됩니다.' },
+    ],
+  },
+];
+
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+/** 「버튼 이름」을 굵게 */
+const 버튼 = (t) => esc(t).replace(/「([^」]+)」/g, '<span class="btnname">「$1」</span>');
+let 탭 = 0, 장 = 0;
+
+function 그리기() {
+  const t = 탭들[탭], c = t.카드[장];
+  document.querySelectorAll('.tab').forEach((b) => b.classList.toggle('on', Number(b.dataset.tab) === 탭));
+  $('#t-name').textContent = t.이름;
+  $('#t-total').textContent = `카드 ${t.카드.length}장 · 약 ${t.카드.reduce((a, x) => a + x.시간, 0)}분`;
+  $('#t-open').href = t.주소;
+  $('#t-lead').textContent = t.안내;
+  $('#dots').innerHTML = t.카드.map((x, i) => `<button class="dot${i === 장 ? ' on' : ''}" data-i="${i}" title="${esc(x.제목)}">${esc(x.단계)}</button>`).join('');
+  document.querySelectorAll('#dots .dot').forEach((b) => b.addEventListener('click', () => 가기(탭, Number(b.dataset.i))));
+  $('#card').innerHTML = `
+    <div class="card-top"><span class="step">${/^\d+$/.test(c.단계) ? c.단계 + '단계' : esc(c.단계)}</span><h2>${esc(c.제목)}</h2><span class="time">⏱ 약 ${c.시간}분</span></div>
+    <div class="sec"><div class="label">화면에서 할 것</div><ol>${c.할것.map((x) => `<li>${버튼(x)}</li>`).join('')}</ol></div>
+    <div class="say">${esc(c.멘트)}</div>
+    ${c.덧 ? `<div class="note">${버튼(c.덧)}</div>` : ''}`;
+  $('#prev').disabled = 탭 === 0 && 장 === 0;
+  $('#next').disabled = 탭 === 탭들.length - 1 && 장 === t.카드.length - 1;
+  $('#next').textContent = 장 === t.카드.length - 1 && 탭 < 탭들.length - 1 ? `${탭들[탭 + 1].이름} →` : '다음 →';
+  $('#pos').textContent = `${장 + 1} / ${t.카드.length}`;
+  history.replaceState(null, '', `#${탭 + 1}-${장 + 1}`);
+}
+function 가기(t, i) { 탭 = Math.max(0, Math.min(탭들.length - 1, t)); 장 = Math.max(0, Math.min(탭들[탭].카드.length - 1, i)); 그리기(); }
+/** 앞뒤 — 탭 끝에서 다음 탭 첫 카드로, 첫 카드에서 앞 탭 끝 카드로 */
+function 다음() { 장 < 탭들[탭].카드.length - 1 ? 가기(탭, 장 + 1) : 탭 < 탭들.length - 1 && 가기(탭 + 1, 0); }
+function 이전() { 장 > 0 ? 가기(탭, 장 - 1) : 탭 > 0 && 가기(탭 - 1, 탭들[탭 - 1].카드.length - 1); }
+
+document.querySelectorAll('.tab').forEach((b) => b.addEventListener('click', () => 가기(Number(b.dataset.tab), 0)));
+$('#next').addEventListener('click', 다음);
+$('#prev').addEventListener('click', 이전);
+document.addEventListener('keydown', (e) => {
+  if (e.target.closest?.('input, textarea')) return;
+  if (e.key === 'ArrowRight') 다음();
+  else if (e.key === 'ArrowLeft') 이전();
+  else if (['1', '2', '3'].includes(e.key)) 가기(Number(e.key) - 1, 0);
+});
+// 주소 #탭-카드 (예: #3-4) — 시연 중 새로 고쳐도 · 링크로 와도 그 카드로
+const 주소로 = () => { const m = location.hash.match(/^#(\d)-(\d+)$/); m ? 가기(Number(m[1]) - 1, Number(m[2]) - 1) : 그리기(); };
+window.addEventListener('hashchange', 주소로);
+주소로();
+</script>
+</body>
+</html>
