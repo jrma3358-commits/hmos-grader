@@ -300,6 +300,7 @@ function 보이기(j, 키, p) {
   기록키 = 키;
   기록준비 = p || null;
   지금소 = 0;
+  저장알림 = '';
   교사 = {};
   try { 교사 = JSON.parse(localStorage.getItem('hmos-d2-teacher:' + 키) || '{}'); } catch (_) {}
   교사대조 = {};
@@ -427,7 +428,7 @@ function 형식고르기(v) {
   if (!입력형식 && 문항방식) 방식고르기('');
   입력칸보이기();
   입력칸잠금();
-  if (분석.목록) 단위목록그리기();
+  if (분석.목록 || 저장결과.목록.length) 단위목록그리기();
 }
 /** 입력 칸은 늘 보인다 (형식을 다 고르기 전에는 잠김, 2026-10-20) — 인문·사회는 탭2 4축 문항분석 칸도 */
 function 입력칸보이기() {
@@ -576,6 +577,7 @@ function 방식고르기(v) {
   $('#in-run').textContent = v === '분석' ? '확정 루브릭으로 채점 →' : '분석한 루브릭으로 채점 →';
   답칸그리기();
   if (v === '분석' && !분석.목록) 대시보드요청(true);
+  if (v === '분석') 저장결과받기();
 }
 
 /** 지금 경로의 채점 준비 — ② 「문항분석」을 누른 뒤에만 (경로 1은 불러온 루브릭을 ②에 보인 뒤, 경로 2는 /api/rubric이 끝난 뒤) */
@@ -842,8 +844,34 @@ function 목록넣기(d, 출처) {
 }
 const 단위이름 = (u) => (u ? `(${u})` : '논제');
 const 모범글 = (s) => (s.답안 ? (s.답안.확정 ? s.답안.확정.글 : (s.답안.교사 ?? s.답안.글)) : '');
+// 저장된 채점 결과 (오종래 2026-10-21) — 검증/채점결과/ (/api/grade-results). 경로 1 목록에 그 루브릭을 단위로 보인다 — 같은 루브릭으로 다른 학생 채점 · 「결과 보기」로 ④
+const 저장결과 = { 목록: [] };
+async function 저장결과받기() {
+  try { 저장결과.목록 = (await 받기('/api/grade-results')).목록 || []; } catch (_) { 저장결과.목록 = []; }
+  단위목록그리기();
+}
+async function 저장결과열기(파일) {
+  try {
+    const j = await 받기('/api/grade-results/' + encodeURIComponent(파일.replace(/\.json$/, '')));
+    $('#rec-select').value = '';
+    보이기(j, '저장:' + 파일);
+    교사 = j.교사고침 || 교사; 교사대조 = j.대조고침 || 교사대조;
+    그리기();
+    탭(3);
+  } catch (e) { 칸알림('an', '저장된 채점 결과를 열지 못했습니다 — ' + e.message, true); }
+}
 function 분석단위() {
   const out = [];
+  for (const r of 저장결과.목록) {
+    if (!r.루브릭) continue;
+    const ss = r.루브릭.소문항 || [];
+    ss.forEach((s, j) => out.push({
+      key: `저장|${r.파일}|${j}`, m: { 이름: r.문항명, 정답: r.정답, 모범답안: r.모범답안 }, 이름: r.문항명, 라벨: ss.length > 1 ? 단위이름(s.번호) : '', s,
+      계열: r.루브릭.계열 || r.계열, 논제: r.문항, 종류: String(r.형식 || '')[0] === 'C' ? 'C 논술' : 'B 서술형', 파일: r.파일,
+      출처: `저장된 채점 결과 · ${r.학생 || '학생'} ${점(r.부분점수)}/${점(r.만점)} · ${String(r.저장 || '').slice(0, 10)}`,
+      상태: !s.조각 || !s.조각.length ? '조각 없음' : '준비',
+    }));
+  }
   (분석.목록 || []).forEach((m, mi) => {
     const 이름 = m.이름 || `문항 ${mi + 1}`, r = m.결과;
     const 넣기 = (key, 라벨, 루브릭, 논제, 종류) => (루브릭?.소문항 || []).forEach((s, j) => out.push({
@@ -871,13 +899,14 @@ function 단위목록그리기() {
     <tr><th></th><th>문항</th><th>급소</th><th>조각</th><th>만점</th><th>상태</th></tr>
     ${us.map((u) => `<tr class="${u.상태 === '준비' ? 'pick' : 'off'}">
       <td>${u.상태 === '준비' ? `<input type="radio" name="an-unit" value="${esc(u.key)}" ${분석.고른 === u.key ? 'checked' : ''}>` : ''}</td>
-      <td><b>${esc(u.이름)}</b> ${esc(u.라벨)}${u.종류 ? `<div class="muted" style="font-size:12px">${esc(u.종류)} · ${esc(u.계열 || '')}</div>` : ''}</td>
+      <td><b>${esc(u.이름)}</b> ${esc(u.라벨)}${u.종류 ? `<div class="muted" style="font-size:12px">${esc(u.종류)} · ${esc(u.계열 || '')}${u.출처 ? ' · ' + esc(u.출처) : ''}</div>` : ''}</td>
       <td>${급소글(u.s) ? '「' + esc(급소글(u.s).replace(/^[,，]\s*/, '')) + '」' : (u.s ? 급소미확인 : '—')}</td>
       <td>${u.s?.조각?.length ?? '—'}</td>
       <td>${u.s?.조각 ? 점(u.s.조각.reduce((a, c) => a + (Number(c.배점) || 0), 0)) : '—'}</td>
-      <td>${u.상태 === '준비' ? '<span class="tag">채점 가능</span>' : `<span class="muted" style="font-size:12px">${esc(u.상태)}</span>`}</td></tr>`).join('')}
+      <td>${u.상태 === '준비' ? '<span class="tag">채점 가능</span>' : `<span class="muted" style="font-size:12px">${esc(u.상태)}</span>`}${u.파일 ? ` <button class="ghost-btn" style="padding:3px 10px" data-open="${esc(u.파일)}">결과 보기</button>` : ''}</td></tr>`).join('')}
   </table></div><div id="an-pick"></div>` : '<div class="muted">문항이 없습니다</div>';
   document.querySelectorAll('#an-list input[name=an-unit]').forEach((r) => r.addEventListener('change', () => { 분석.고른 = r.value; 고른단위보기(); }));
+  document.querySelectorAll('#an-list [data-open]').forEach((b) => b.addEventListener('click', (e) => { e.preventDefault(); 저장결과열기(b.dataset.open); }));
   고른단위보기();
 }
 function 고른단위보기() {
@@ -886,7 +915,7 @@ function 고른단위보기() {
   // 경로 1 채점 준비 — 고른 단위의 확정 루브릭 소문항 하나 그대로
   const 옛준비 = 준비들.분석;
   if (옛준비 && 옛준비.키 === '분석:' + u?.key && 옛준비.s === u?.s) { 답칸그리기(); } // 같은 단위 — 분석 · 답 그대로
-  else { 준비버리기(옛준비); 준비들.분석 = u && u.상태 === '준비' ? { 키: '분석:' + u.key, s: u.s, 문항: u.논제, 계열: u.계열, 정답: String(u.m.정답 || ''), 모범답안: 모범글(u.s) || String(u.m.모범답안 || ''),
+  else { 준비버리기(옛준비); 준비들.분석 = u && u.상태 === '준비' ? { 키: '분석:' + u.key, s: u.s, 이름: u.이름 + (u.라벨 ? ' ' + u.라벨 : ''), 문항: u.논제, 계열: u.계열, 정답: String(u.m.정답 || ''), 모범답안: 모범글(u.s) || String(u.m.모범답안 || ''),
     루브릭: { 계열: u.계열, 총배점: u.s.조각.reduce((a, c) => a + (Number(c.배점) || 0), 0), 소문항: [u.s] }, 덧: { 논제: u.논제, 정답: String(u.m.정답 || ''), 모범답안: 모범글(u.s) || String(u.m.모범답안 || '') }, 소문항답: false } : null;
   답칸그리기(); }
   if (!el) return;
@@ -976,6 +1005,7 @@ async function 소문항채점하기(p, 소문항, 학생, 보내기, st, btn) {
       $('#rec-select').value = '';
     }
     기록.학생 = 학생;
+    저장알림 = ''; // 새 채점 — 저장 전
     기록.채점 = [...기록.채점.filter((x) => x.자리 !== j), g].sort((a, b) => a.자리 - b.자리);
     기록.학생답 = 소문항.map((x, i) => { const a = ($('#in-st-' + i)?.value || '').trim(); return a && 기록.채점.some((c) => c.자리 === i) ? `${소이름(x, i)} ${a}` : ''; }).filter(Boolean).join('\n\n');
     if (교사[자리(s, j)]) { delete 교사[자리(s, j)]; 저장교사(); } // 다시 채점한 소문항은 교사 고침을 지운다
@@ -1237,6 +1267,22 @@ function 합산Html() {
     </table></div></div>`;
 }
 
+/** 저장 문항명 기본값 — 경로 1은 고른 문항 이름, 경로 2는 문항 앞 글자 (글자 · 숫자 · _ · - 만) */
+const 저장이름 = () => String(기록준비?.이름 || String(기록?.문항 || '').split(/\n/)[0].slice(0, 24) || '문항').replace(/\s+/g, '_').replace(/[^0-9A-Za-z가-힣_-]/g, '').slice(0, 60) || '문항';
+let 저장알림 = '';
+async function 채점결과저장() {
+  const 이름 = ($('#save-name')?.value || '').trim();
+  if (!이름) { $('#save-st').textContent = '문항명을 넣으세요'; return; }
+  $('#save-run').disabled = true;
+  try {
+    const 내용 = { ...기록, 계열형식: 선택형식 || null, 화면: 'dashboard2', 교사고침: 교사, 대조고침: 교사대조 };
+    const r = await 받기('/api/grade-results', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ 문항명: 이름, 내용 }) });
+    저장알림 = `저장했습니다 — ${r.파일}`;
+    저장결과받기();
+  } catch (e) { 저장알림 = '저장 실패: ' + e.message; }
+  그리기3();
+}
+
 function 그리기3() {
   if (!$('#p3-axis')) { $('#p3').innerHTML = '<div class="sec-title">채점 결과</div><div id="p3-rec"></div><div id="p3-go" style="margin:4px 0 28px"></div><div id="p3-axis"></div>'; 그리기3축(); }
   // 채점된 조각이 있으면 아래에 「교사 확정 →」 (오종래 2026-10-21)
@@ -1245,6 +1291,14 @@ function 그리기3() {
   const 남은 = 여럿() ? [...ss.keys()].map((k) => (지금소 + 1 + k) % ss.length).find((k) => !채점됨(ss[k], k)) : undefined;
   $('#p3-go').innerHTML = 채점있음 && 남은 != null ? `<button class="run-btn" id="go-next">다음 소문항 ${esc(소이름(ss[남은], 남은))} →</button><span class="status">소문항을 모두 채점하면 전체 합산 뒤 교사 확정</span>`
     : 채점있음 ? '<button class="run-btn" id="go-t">교사 확정 →</button>' : '';
+  // 「채점 결과 저장」 (오종래 2026-10-21) — 검증/채점결과/<문항명>_<날짜>.json. 검증/ 폴더 결과 · 저장한 결과를 다시 연 것은 저장하지 않는다
+  if (채점있음 && !기록키.startsWith('파일:') && !기록키.startsWith('저장:')) {
+    $('#p3-go').insertAdjacentHTML('beforeend', `<div class="card" style="margin-top:14px"><h3>채점 결과 저장</h3>
+      <div class="row" style="align-items:flex-end"><div class="field" style="flex:2"><div class="label">문항명 → 검증/채점결과/문항명_날짜.json</div><input id="save-name" value="${esc(저장이름())}"></div>
+      <div class="field" style="flex:none"><button class="run-btn" id="save-run">채점 결과 저장</button></div></div>
+      <div class="status" id="save-st" style="margin-left:0">${esc(저장알림)}</div></div>`);
+    $('#save-run').addEventListener('click', 채점결과저장);
+  } else if (기록키.startsWith('저장:')) $('#p3-go').insertAdjacentHTML('beforeend', `<div class="muted" style="margin-top:10px;font-size:12px">저장된 채점 결과 — 검증/채점결과/${esc(기록키.slice(3))}</div>`);
   $('#go-t')?.addEventListener('click', () => 탭(6));
   $('#go-next')?.addEventListener('click', () => { 소고르기(남은); 탭(2); });
   if (!기록?.채점?.length) { $('#p3-rec').innerHTML = 비었음('③ 답안 입력에서 「채점 →」을 누르거나 위에서 저장된 채점 결과를 고르세요. 인문·사회 4축 채점은 아래에 있습니다.'); return; }

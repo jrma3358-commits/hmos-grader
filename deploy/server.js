@@ -1130,6 +1130,49 @@ app.post('/api/samples',(req,res)=>{
   res.json({ok:true,이름:n,파일:'검증/샘플/'+경로.split(path.sep).join('/')});
 });
 
+// ── 채점 결과 저장 (오종래 2026-10-21) — dashboard2 ④ 「채점 결과 저장」 → 검증/채점결과/<문항명>_<날짜 YYYYMMDD>.json
+//   같은 날 같은 문항명이 이미 있으면 _2 · _3 …을 붙인다 (덮어쓰지 않는다). 내용 = 채점 기록 그대로(문항 · 루브릭 · 학생 답 · 채점 · 4축) + 교사 고침
+//   GET은 목록 — 경로 1 「문항분석에서 불러오기」가 저장된 루브릭으로 다른 학생을 채점하고, 저장한 결과를 ④에서 다시 연다
+const 채점결과폴더=path.join(검증폴더,'채점결과');
+const 채점결과이름=f=>/^[0-9A-Za-z가-힣_-]{1,100}\.json$/.test(String(f||''))?String(f):null;
+app.post('/api/grade-results',(req,res)=>{
+  const {문항명,내용}=req.body||{};
+  const n=샘플이름(문항명);
+  if(!n){res.status(400).json({error:'문항명은 글자 · 숫자 · _ · - 로만'});return;}
+  if(!내용||typeof 내용!=='object'||!내용.루브릭||!Array.isArray(내용.채점)||!내용.채점.some(g=>g&&g.out&&g.out.조각별)){res.status(400).json({error:'저장할 채점 결과가 없습니다 — 채점을 먼저 하세요'});return;}
+  const 날짜=new Date(Date.now()+9*3600e3).toISOString().slice(0,10).replace(/-/g,''); // 한국 날짜
+  let 파일=`${n}_${날짜}.json`;
+  try{
+    fs.mkdirSync(채점결과폴더,{recursive:true});
+    for(let k=2;fs.existsSync(path.join(채점결과폴더,파일));k++)파일=`${n}_${날짜}_${k}.json`;
+    fs.writeFileSync(path.join(채점결과폴더,파일),JSON.stringify({...내용,종류:'HMOS 채점결과',문항명:n,저장:new Date().toISOString()},null,1)+'\n','utf8');
+  }catch(e){res.status(500).json({error:'채점 결과 저장 실패: '+e.message});return;}
+  res.json({ok:true,문항명:n,파일:'검증/채점결과/'+파일});
+});
+app.get('/api/grade-results',(req,res)=>{
+  res.setHeader('Cache-Control','no-store');
+  if(!접속됨(req)){res.status(401).json({ok:false,error:접속만료});return;}
+  let 파일들=[];
+  try{파일들=fs.readdirSync(채점결과폴더).filter(채점결과이름);}catch(_){}
+  const 목록=파일들.map(파일=>{
+    try{
+      const j=JSON.parse(fs.readFileSync(path.join(채점결과폴더,파일),'utf8'));
+      const gs=(j.채점||[]).filter(g=>g&&g.out&&g.out.조각별);
+      const 합=k=>Math.round(gs.reduce((a,g)=>a+Number(g.out[k]||0),0)*100)/100;
+      return {파일,문항명:j.문항명,저장:j.저장,학생:j.학생||'',형식:j.형식||null,계열:j.계열||'',문항:j.문항||'',정답:j.정답||'',모범답안:j.모범답안||'',부분점수:합('부분점수'),만점:합('만점'),루브릭:j.루브릭&&j.루브릭.out?{계열:j.루브릭.out.계열,총배점:j.루브릭.out.총배점,소문항:j.루브릭.out.소문항||[]}:null};
+    }catch(e){return {파일,오류:e.message};}
+  }).sort((a,b)=>String(b.저장||'').localeCompare(String(a.저장||'')));
+  res.json({ok:true,목록});
+});
+app.get('/api/grade-results/:file',(req,res)=>{
+  res.setHeader('Cache-Control','no-store');
+  if(!접속됨(req)){res.status(401).json({ok:false,error:접속만료});return;}
+  // .json을 떼고 부른다 — nginx가 .json으로 끝나는 주소를 막는다 (서버가 붙인다)
+  const 파일=채점결과이름(String(req.params.file||'').replace(/\.json$/,'')+'.json');
+  if(!파일||!fs.existsSync(path.join(채점결과폴더,파일))){res.status(404).json({error:'채점 결과 파일이 없습니다'});return;}
+  res.type('application/json').send(fs.readFileSync(path.join(채점결과폴더,파일),'utf8'));
+});
+
 // GET /api/axis-rubrics — 저장한 4축 루브릭 (탭7 채점 샘플). 읽기만, 쿠키는 /api/results와 같게 여기서 본다
 app.get('/api/axis-rubrics',(req,res)=>{
   res.setHeader('Cache-Control','no-store');
