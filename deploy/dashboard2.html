@@ -287,7 +287,7 @@ $('#rec-pull').addEventListener('click', () => {
 async function 열기(파일) {
   try {
     // .json을 떼고 부른다 — nginx가 .json으로 끝나는 주소를 막는다 (서버가 붙인다)
-    const j = await 받기('/api/results/' + encodeURIComponent(파일.replace(/\.json$/, '')));
+    const j = await 받기('/api/results/' + 파일.replace(/\.json$/, '').split('/').map(encodeURIComponent).join('/'));
     보이기(j, '파일:' + 파일);
   } catch (e) {
     $('#rec-info').innerHTML = `<span style="color:var(--no)">${esc(e.message)}</span>`;
@@ -852,7 +852,7 @@ async function 저장결과받기() {
 }
 async function 저장결과열기(파일) {
   try {
-    const j = await 받기('/api/grade-results/' + encodeURIComponent(파일.replace(/\.json$/, '')));
+    const j = await 받기('/api/grade-results/' + 파일.replace(/\.json$/, '').split('/').map(encodeURIComponent).join('/'));
     $('#rec-select').value = '';
     보이기(j, '저장:' + 파일);
     교사 = j.교사고침 || 교사; 교사대조 = j.대조고침 || 교사대조;
@@ -862,13 +862,17 @@ async function 저장결과열기(파일) {
 }
 function 분석단위() {
   const out = [];
-  for (const r of 저장결과.목록) {
-    if (!r.루브릭) continue;
-    const ss = r.루브릭.소문항 || [];
+  // [오종래 2026-10-21] 검증/채점결과/(dashboard2 저장 · q3 · 기타 폴더) — 문항명마다 한 묶음. 루브릭은 모범 기록, 없으면 가장 최근 것
+  const 묶음 = new Map();
+  for (const r of 저장결과.목록) if (r.루브릭) { if (!묶음.has(r.문항명)) 묶음.set(r.문항명, []); 묶음.get(r.문항명).push(r); }
+  for (const [이름, rs] of 묶음) {
+    const 대표 = rs.find((r) => /_모범[_.]/.test(r.파일)) || rs[0];
+    const ss = 대표.루브릭.소문항 || [];
+    const 폴더 = [...new Set(rs.map((r) => r.폴더).filter(Boolean))].join(' · ');
     ss.forEach((s, j) => out.push({
-      key: `저장|${r.파일}|${j}`, m: { 이름: r.문항명, 정답: r.정답, 모범답안: r.모범답안 }, 이름: r.문항명, 라벨: ss.length > 1 ? 단위이름(s.번호) : '', s,
-      계열: r.루브릭.계열 || r.계열, 논제: r.문항, 종류: String(r.형식 || '')[0] === 'C' ? 'C 논술' : 'B 서술형', 파일: r.파일,
-      출처: `저장된 채점 결과 · ${r.학생 || '학생'} ${점(r.부분점수)}/${점(r.만점)} · ${String(r.저장 || '').slice(0, 10)}`,
+      key: `저장|${이름}|${j}`, m: { 이름, 정답: 대표.정답, 모범답안: 대표.모범답안 }, 이름, 라벨: ss.length > 1 ? 단위이름(s.번호) : '', s,
+      계열: 대표.루브릭.계열 || 대표.계열, 논제: 대표.문항, 종류: String(대표.형식 || '')[0] === 'C' ? 'C 논술' : 'B 서술형', 결과들: rs,
+      출처: `저장된 채점 결과 ${rs.length}개${폴더 ? ' · 채점결과/' + 폴더 : ''}`,
       상태: !s.조각 || !s.조각.length ? '조각 없음' : '준비',
     }));
   }
@@ -903,10 +907,10 @@ function 단위목록그리기() {
       <td>${급소글(u.s) ? '「' + esc(급소글(u.s).replace(/^[,，]\s*/, '')) + '」' : (u.s ? 급소미확인 : '—')}</td>
       <td>${u.s?.조각?.length ?? '—'}</td>
       <td>${u.s?.조각 ? 점(u.s.조각.reduce((a, c) => a + (Number(c.배점) || 0), 0)) : '—'}</td>
-      <td>${u.상태 === '준비' ? '<span class="tag">채점 가능</span>' : `<span class="muted" style="font-size:12px">${esc(u.상태)}</span>`}${u.파일 ? ` <button class="ghost-btn" style="padding:3px 10px" data-open="${esc(u.파일)}">결과 보기</button>` : ''}</td></tr>`).join('')}
+      <td>${u.상태 === '준비' ? '<span class="tag">채점 가능</span>' : `<span class="muted" style="font-size:12px">${esc(u.상태)}</span>`}${u.결과들 ? `<div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap"><select data-results style="font-size:12.5px;padding:3px 6px;max-width:260px">${u.결과들.map((r) => `<option value="${esc(r.파일)}">${esc(r.학생 || r.파일)} · ${점(r.부분점수)}/${점(r.만점)} · ${esc(String(r.저장 || '').slice(0, 10))}</option>`).join('')}</select><button class="ghost-btn" style="padding:3px 10px" data-open>결과 보기</button></div>` : ''}</td></tr>`).join('')}
   </table></div><div id="an-pick"></div>` : '<div class="muted">문항이 없습니다</div>';
   document.querySelectorAll('#an-list input[name=an-unit]').forEach((r) => r.addEventListener('change', () => { 분석.고른 = r.value; 고른단위보기(); }));
-  document.querySelectorAll('#an-list [data-open]').forEach((b) => b.addEventListener('click', (e) => { e.preventDefault(); 저장결과열기(b.dataset.open); }));
+  document.querySelectorAll('#an-list [data-open]').forEach((b) => b.addEventListener('click', (e) => { e.preventDefault(); 저장결과열기(b.parentElement.querySelector('select[data-results]').value); }));
   고른단위보기();
 }
 function 고른단위보기() {
@@ -914,7 +918,7 @@ function 고른단위보기() {
   const el = $('#an-pick');
   // 경로 1 채점 준비 — 고른 단위의 확정 루브릭 소문항 하나 그대로
   const 옛준비 = 준비들.분석;
-  if (옛준비 && 옛준비.키 === '분석:' + u?.key && 옛준비.s === u?.s) { 답칸그리기(); } // 같은 단위 — 분석 · 답 그대로
+  if (옛준비 && 옛준비.키 === '분석:' + u?.key && (옛준비.s === u?.s || u.key.startsWith('저장|'))) { 답칸그리기(); } // 같은 단위 — 분석 · 답 그대로 (저장 목록은 다시 받으면 객체가 새로 생긴다)
   else { 준비버리기(옛준비); 준비들.분석 = u && u.상태 === '준비' ? { 키: '분석:' + u.key, s: u.s, 이름: u.이름 + (u.라벨 ? ' ' + u.라벨 : ''), 문항: u.논제, 계열: u.계열, 정답: String(u.m.정답 || ''), 모범답안: 모범글(u.s) || String(u.m.모범답안 || ''),
     루브릭: { 계열: u.계열, 총배점: u.s.조각.reduce((a, c) => a + (Number(c.배점) || 0), 0), 소문항: [u.s] }, 덧: { 논제: u.논제, 정답: String(u.m.정답 || ''), 모범답안: 모범글(u.s) || String(u.m.모범답안 || '') }, 소문항답: false } : null;
   답칸그리기(); }
@@ -1402,7 +1406,7 @@ function 내려받기() {
 //   정답 경로 = 모범 + 만점이면서 🔆 다경로가 있는 답 · 오류 경로 = 오류 이름 묶음마다 대표 하나 (같은 오류인 학생은 카드 아래에)
 const 학생번호 = (x) => Number((x.파일.match(/_학생(\d+)/) || [0, 0])[1]);
 function 샘플고르기() {
-  const 대상 = 목록.filter((x) => /^q[3-7]_(모범|학생\d+)(_최종)?_\d{8}\.json$/.test(x.파일));
+  const 대상 = 목록.filter((x) => /^q[3-7]_(모범|학생\d+)(_최종)?_\d{8}\.json$/.test(x.파일.split('/').pop()));
   const 키 = (f) => f.replace('_최종', '').replace(/_\d{8}\.json$/, '');
   const 최종 = new Set(대상.filter((x) => x.파일.includes('_최종')).map((x) => 키(x.파일)));
   return 대상.filter((x) => x.파일.includes('_최종') || !최종.has(키(x.파일)));

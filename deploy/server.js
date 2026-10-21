@@ -100,7 +100,13 @@ app.get('/tools.html',(req,res)=>res.redirect(302,'/tools'));
 // ── GET /api/results · /api/results/:파일 — 검증/ 폴더 채점 결과 JSON (dashboard2 탭3, 오종래 2026-10-17) ──
 // nginx가 .json 주소와 /hmos-grader 경로를 막아 API로 읽는다. 읽기만 한다. GET은 아래 접속 검사를 지나므로 여기서 쿠키를 본다
 const 검증폴더=path.join(process.env.HMOS_GRADER||GRADER,'검증');
-const 검증파일들=()=>{try{return fs.readdirSync(검증폴더).filter(f=>f.endsWith('.json')).sort();}catch(_){return [];}};
+// [오종래 2026-10-21] 채점 기록은 검증/채점결과/q3/ · 기타/ … 로 옮겼다 — 검증/ 맨 위와 채점결과/(맨 위 · 하위 폴더 한 겹)를 함께 읽는다. 파일 id = 검증/ 아래 경로 (「채점결과/q3/q3_학생1_20261017.json」)
+const json들=(폴더,앞='')=>{try{return fs.readdirSync(폴더,{withFileTypes:true}).filter(d=>d.isFile()&&d.name.endsWith('.json')).map(d=>앞+d.name);}catch(_){return [];}};
+const 검증파일들=()=>{
+  const 채점=path.join(검증폴더,'채점결과');
+  let 하위=[];try{하위=fs.readdirSync(채점,{withFileTypes:true}).filter(d=>d.isDirectory()).map(d=>d.name);}catch(_){}
+  return [...json들(검증폴더),...json들(채점,'채점결과/'),...하위.flatMap(d=>json들(path.join(채점,d),`채점결과/${d}/`))].sort();
+};
 app.get('/api/results',(req,res)=>{
   res.setHeader('Cache-Control','no-store');
   if(!접속됨(req)){res.status(401).json({ok:false,error:접속만료});return;}
@@ -112,18 +118,18 @@ app.get('/api/results',(req,res)=>{
       const 합=k=>j.채점.reduce((a,g)=>a+Number((g.out&&g.out[k])||0),0);
       // 조각 요약 · 문항 · 학생 답 앞부분 — 탭7 채점 샘플 카드 (2026-10-17). 판정 · 오류 · 다경로는 JSON(엔진 출력) 그대로
       const 조각=j.채점.flatMap(g=>((g.out&&g.out.조각별)||[]).map(c=>({번호:g.번호??null,id:c.조각id,파트:c.파트,결과:c.결과,득점:c.득점,배점:c.배점,...(c.오류?{오류:c.오류}:{}),...(c.다경로?{다경로:c.다경로,다경로식:c.다경로식||''}:{})})));
-      목록.push({파일,문항번호:(파일.match(/^q\d+/)||[''])[0],학생:j.학생||null,부분점수:Math.round(합('부분점수')*100)/100,만점:Math.round(합('만점')*100)/100,엔진:(j.채점[0]&&j.채점[0].out&&j.채점[0].out.엔진&&j.채점[0].out.엔진.commit)||null,
+      목록.push({파일,문항번호:(파일.split('/').pop().match(/^q\d+/)||[''])[0],학생:j.학생||null,부분점수:Math.round(합('부분점수')*100)/100,만점:Math.round(합('만점')*100)/100,엔진:(j.채점[0]&&j.채점[0].out&&j.채점[0].out.엔진&&j.채점[0].out.엔진.commit)||null,
         계열:(j.루브릭.out&&j.루브릭.out.계열)||j.계열||null, // 탭7 계열 묶음 (2026-10-17)
         문항:String(j.문항||'').slice(0,400),학생답:String(j.학생답||'').slice(0,400),조각});
     }catch(_){}
   }
   res.json({ok:true,목록});
 });
-app.get('/api/results/:file',(req,res)=>{ // :file = 검증 파일 이름 (.json 없이)
+app.get('/api/results/*file',(req,res)=>{ // file = 검증/ 아래 경로 (.json 없이, 「채점결과/q3/q3_학생1_20261017」)
   res.setHeader('Cache-Control','no-store');
   if(!접속됨(req)){res.status(401).json({ok:false,error:접속만료});return;}
   // 주소에는 .json을 붙이지 않는다 — nginx가 .json으로 끝나는 주소를 막는다 (이름만 받아 여기서 붙인다)
-  const 이름=String(req.params.file||'');
+  const 이름=[].concat(req.params.file||[]).join('/');
   const 파일=이름.endsWith('.json')?이름:이름+'.json';
   // 목록에 있는 이름만 — 경로 문자로 폴더 밖을 열지 못하게
   if(!검증파일들().includes(파일)){res.status(404).json({ok:false,error:'채점 결과 파일이 없습니다'});return;}
@@ -1135,6 +1141,11 @@ app.post('/api/samples',(req,res)=>{
 //   GET은 목록 — 경로 1 「문항분석에서 불러오기」가 저장된 루브릭으로 다른 학생을 채점하고, 저장한 결과를 ④에서 다시 연다
 const 채점결과폴더=path.join(검증폴더,'채점결과');
 const 채점결과이름=f=>/^[0-9A-Za-z가-힣_-]{1,100}\.json$/.test(String(f||''))?String(f):null;
+/** 채점결과/ 맨 위(dashboard2 저장) + 하위 폴더 한 겹(q3 · 기타 …) — id = 채점결과/ 아래 경로 */
+const 채점결과파일들=()=>{
+  let 하위=[];try{하위=fs.readdirSync(채점결과폴더,{withFileTypes:true}).filter(d=>d.isDirectory()&&/^[0-9A-Za-z가-힣_-]{1,40}$/.test(d.name)).map(d=>d.name);}catch(_){}
+  return [...json들(채점결과폴더).filter(채점결과이름),...하위.flatMap(d=>json들(path.join(채점결과폴더,d)).filter(채점결과이름).map(x=>`${d}/${x}`))];
+};
 app.post('/api/grade-results',(req,res)=>{
   const {문항명,내용}=req.body||{};
   const n=샘플이름(문항명);
@@ -1152,24 +1163,26 @@ app.post('/api/grade-results',(req,res)=>{
 app.get('/api/grade-results',(req,res)=>{
   res.setHeader('Cache-Control','no-store');
   if(!접속됨(req)){res.status(401).json({ok:false,error:접속만료});return;}
-  let 파일들=[];
-  try{파일들=fs.readdirSync(채점결과폴더).filter(채점결과이름);}catch(_){}
-  const 목록=파일들.map(파일=>{
+  const 목록=채점결과파일들().map(파일=>{
     try{
       const j=JSON.parse(fs.readFileSync(path.join(채점결과폴더,파일),'utf8'));
       const gs=(j.채점||[]).filter(g=>g&&g.out&&g.out.조각별);
       const 합=k=>Math.round(gs.reduce((a,g)=>a+Number(g.out[k]||0),0)*100)/100;
-      return {파일,문항명:j.문항명,저장:j.저장,학생:j.학생||'',형식:j.형식||null,계열:j.계열||'',문항:j.문항||'',정답:j.정답||'',모범답안:j.모범답안||'',부분점수:합('부분점수'),만점:합('만점'),루브릭:j.루브릭&&j.루브릭.out?{계열:j.루브릭.out.계열,총배점:j.루브릭.out.총배점,소문항:j.루브릭.out.소문항||[]}:null};
+      // 옛 채점 기록(q3 · 기타)은 문항명 · 저장이 없다 — 파일 이름 앞(q3)과 파일 날짜로
+      const 폴더=파일.includes('/')?파일.split('/')[0]:'';
+      const 앞=(파일.split('/').pop().match(/^q\d+/)||[''])[0];
+      return {파일,폴더,문항명:j.문항명||앞||폴더||파일,저장:j.저장||(j.재채점&&j.재채점.일시)||(()=>{try{return fs.statSync(path.join(채점결과폴더,파일)).mtime.toISOString();}catch(_){return '';}})(),학생:j.학생||'',형식:j.형식||null,계열:j.계열||'',문항:j.문항||'',정답:j.정답||'',모범답안:j.모범답안||'',부분점수:합('부분점수'),만점:합('만점'),루브릭:j.루브릭&&j.루브릭.out?{계열:j.루브릭.out.계열,총배점:j.루브릭.out.총배점,소문항:j.루브릭.out.소문항||[]}:null};
     }catch(e){return {파일,오류:e.message};}
   }).sort((a,b)=>String(b.저장||'').localeCompare(String(a.저장||'')));
   res.json({ok:true,목록});
 });
-app.get('/api/grade-results/:file',(req,res)=>{
+app.get('/api/grade-results/*file',(req,res)=>{
   res.setHeader('Cache-Control','no-store');
   if(!접속됨(req)){res.status(401).json({ok:false,error:접속만료});return;}
   // .json을 떼고 부른다 — nginx가 .json으로 끝나는 주소를 막는다 (서버가 붙인다)
-  const 파일=채점결과이름(String(req.params.file||'').replace(/\.json$/,'')+'.json');
-  if(!파일||!fs.existsSync(path.join(채점결과폴더,파일))){res.status(404).json({error:'채점 결과 파일이 없습니다'});return;}
+  // 목록에 있는 경로만 — 경로 문자로 폴더 밖을 열지 못하게
+  const 파일=[].concat(req.params.file||[]).join('/').replace(/\.json$/,'')+'.json';
+  if(!채점결과파일들().includes(파일)){res.status(404).json({error:'채점 결과 파일이 없습니다'});return;}
   res.type('application/json').send(fs.readFileSync(path.join(채점결과폴더,파일),'utf8'));
 });
 
