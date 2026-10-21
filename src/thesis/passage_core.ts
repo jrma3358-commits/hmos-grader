@@ -9,6 +9,8 @@
 //   4 제시문 간 관계 — 같은 소문항에 함께 걸린 제시문 쌍만 봉인⑧ 대조 (유사 → 실증 → 대비)
 //   적용 범위: 소문항 창이면 그 소문항만, 전체면 모든 소문항을 합쳐 (들어온 소문항 목록 그대로)
 // 엔진만 쓴다 (Claude 없음). 조사는 봉인 표지사전의 조사·어미 표지(노드 표지, 한두 글자)로 뗀다.
+//   [오종래 2026-10-21 확정] B 실체끼리 맞댈 때는 봉인 「B수렴」(「~으로」「~로」「~에」 — B 안에서 B로 종속·수렴하는 표지)도 뗀다.
+//   노드 표지가 아니라 노드 색은 그대로이고, C·P 노드 실체에는 쓰지 않는다 (「정책으로」 ↔ 「정책이」 → 「정책」)
 import { recognizeV2Analysis } from '../fq/pipeline.ts';
 import type { PathNode } from '../fq/v2/graph.ts';
 import { loadSealedTable } from '../fq/sealed/index.ts';
@@ -63,19 +65,28 @@ function 조사들(): string[] {
   return (조사목록 = [...out].sort((a, b) => b.length - a.length));
 }
 
-/** 어절 → 조사 뗀 줄기. 떼고 두 글자 이상 남을 때만 뗀다 (「국가」의 「가」는 그대로) */
-function 줄기(어절: string): string {
+/** 봉인 「B수렴」 꼬리 — 없으면 빈 목록 (B 실체 맞대기만 덜 뗀다) */
+let 수렴목록: string[] | undefined;
+function B수렴(): string[] {
+  if (수렴목록) return 수렴목록;
+  const t = (loadSealedTable() as unknown as Record<string, unknown>)['B수렴'];
+  const 표지 = Array.isArray(t) ? t.filter((m): m is string => typeof m === 'string').map((m) => m.replace(/^~/, '')).filter(Boolean) : [];
+  return (수렴목록 = 표지.sort((a, b) => b.length - a.length));
+}
+
+/** 어절 → 조사 뗀 줄기. 떼고 두 글자 이상 남을 때만 뗀다 (「국가」의 「가」는 그대로). B면 「B수렴」 표지도 뗀다 */
+function 줄기(어절: string, B = false): string {
   const w = 어절.replace(/^[^가-힣A-Za-z0-9]+|[^가-힣A-Za-z0-9)]+$/g, '');
-  const 조사 = 조사들().find((j) => w.endsWith(j) && w.length - j.length >= 2);
+  const 조사 = [...(B ? B수렴() : []), ...조사들()].sort((a, b) => b.length - a.length).find((j) => w.endsWith(j) && w.length - j.length >= 2);
   return 조사 ? w.slice(0, -조사.length) : w;
 }
 
 const 어절들 = (s: string) => clean(s).split(/\s+/).filter(Boolean);
 
 /** 논제 쪽 글과 제시문 노드 실체의 가장 긴 연속 겹침 (조사 뗀 줄기로) — 제시문 쪽 어절 [시작, 끝) */
-function 겹침(논제글: string, 실체: string): { 길이: number; 시작: number } | null {
-  const a = 어절들(논제글).map(줄기);
-  const b = 어절들(실체).map(줄기);
+function 겹침(논제글: string, 실체: string, B: boolean): { 길이: number; 시작: number } | null {
+  const a = 어절들(논제글).map((w) => 줄기(w, B));
+  const b = 어절들(실체).map((w) => 줄기(w, B));
   let best: { 길이: number; 시작: number } | null = null;
   for (let i = 0; i < a.length; i++) {
     for (let j = 0; j < b.length; j++) {
@@ -93,16 +104,18 @@ const 닿음 = (x: ReturnType<typeof 겹침>) => !!x && x.길이 >= 2;
 
 const 색순 = { B: 0, P: 1, C: 2, D: 3, Q: 4 } as Record<string, number>;
 
-/** 제시문 노드 가운데 논제 글에 가장 길게 닿은 것 — 길이 → 색(B → P → C) → 앞 순 */
+/** 제시문 노드 가운데 논제 글(논제 B · 급소 덩어리 — B 실체)에 가장 길게 닿은 것 — 길이 → 색(B → P → C) → 앞 순.
+ *  「B수렴」 표지는 제시문 노드도 B일 때만 뗀다 */
 function 닿은노드(논제글: string, 노드: readonly PathNode[]): { node: PathNode; 실체: string; 길이: number } | null {
   let best: { node: PathNode; 실체: string; 길이: number } | null = null;
   for (const n of 노드) {
     if (!n.color || n.color === 'Q') continue;
     const e = clean(n.entity);
-    const x = 겹침(논제글, e);
+    const B = n.color === 'B';
+    const x = 겹침(논제글, e, B);
     if (!x || !닿음(x)) continue;
     const 조각 = 어절들(e).slice(x.시작, x.시작 + x.길이);
-    조각[조각.length - 1] = 줄기(조각[조각.length - 1]);
+    조각[조각.length - 1] = 줄기(조각[조각.length - 1], B);
     const 후보 = { node: n, 실체: 조각.join(' '), 길이: x.길이 };
     if (!best || 후보.길이 > best.길이 || (후보.길이 === best.길이 && (색순[n.color] ?? 9) < (색순[best.node.color!] ?? 9))) best = 후보;
   }
