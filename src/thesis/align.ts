@@ -77,6 +77,8 @@ export interface 인식소문항 {
   인식: V2Analysis;
   /** 「[자료 N]」 호출을 찾을 글 — 소문항 본문 + 공통 발문 (2026-10-20). 없으면 인식한 본문만 */
   호출글?: string;
+  /** 앞 소논제에서 이어받아 이 소문항 노드에 얹힌 실체와 그 노드 — 4단계 열쇠에 더한다 (2026-10-21) */
+  이어열쇠?: { key: string; node: string }[];
 }
 
 export interface 단락연결 {
@@ -90,6 +92,8 @@ export interface 단락연결 {
   문단?: number;
   /** 급소가 아닌 논제 B로 닿은 단락이면 그 논제 B 실체 (오종래 2026-10-21) */
   논제B?: string;
+  /** 앞 소논제에서 이어받은 실체로 닿은 단락이면 그 실체 (오종래 2026-10-21) */
+  이어받기?: string;
 }
 
 /** 논제 급소 하나의 연결 */
@@ -131,7 +135,8 @@ export function align_passage(소문항들: 인식소문항[], passage: PassageR
   const 자료들 = data_tables(passage.paragraphs.map((p) => p.text));
 
   for (const s of 소문항들) {
-    const c = connectPassage(s.인식, passage, s.참조, 옵션.수리 ? 기호겹침 : undefined);
+    const c = connectPassage(s.인식, passage, s.참조, 옵션.수리 ? 기호겹침 : undefined, s.이어열쇠 ?? []);
+    const 이어실체 = new Set((s.이어열쇠 ?? []).map((k) => clean(k.key)));
     원본.push({ 번호: s.번호, 연결: c });
     const 덩어리들 = essay_pivot_chunks(s.인식.graph, s.인식.pivot);
     // 병렬 자료 표 [오종래 2026-10-20 확정] — 논제가 「[자료 N]」을 부르면 그 자료 표가 이 소문항의 제시문 B (단락 급소 = 표 제목). 소문항 덩어리마다 잇는다
@@ -146,10 +151,13 @@ export function align_passage(소문항들: 인식소문항[], passage: PassageR
       // 덩어리 구간 — 앞 덩어리의 마지막 Q 뒤 ~ 이 덩어리의 마지막 Q. 마지막 덩어리는 그 뒤 노드까지
       const 구간안 = (at: number) => at > 앞끝 && (at <= 끝 || k === 덩어리들.length - 1);
       c.pivots.forEach((pv, i) => {
-        if (pv && pv.questionNode === d.B.id) 단락.push({ 단락: 이름(i), 단락급소: clean(pv.entity), 자리: pv.place });
+        if (pv && pv.questionNode === d.B.id) 단락.push({ 단락: 이름(i), 단락급소: clean(pv.entity), 자리: pv.place, ...(이어실체.has(pv.key) ? { 이어받기: pv.key } : {}) });
         // 논제 B 연결 [오종래 2026-10-21 확정] — 급소가 아닌 논제 B(관련 정보)로 닿은 단락도 4단계 연결이다.
         //   그 논제 B가 선 덩어리 구간의 급소에 단다 (지정 연결과 같은 구간)
-        else if (pv && !급소B.has(pv.questionNode) && 구간안(자리of(pv.questionNode))) {
+        else if (pv && 이어실체.has(pv.key) && 구간안(자리of(pv.questionNode))) {
+          // 이어받은 실체로 닿은 단락 (2026-10-21) — 그 실체가 얹힌 노드의 덩어리 구간에
+          단락.push({ 단락: 이름(i), 단락급소: clean(pv.entity), 자리: pv.place, 이어받기: pv.key });
+        } else if (pv && !급소B.has(pv.questionNode) && 구간안(자리of(pv.questionNode))) {
           const 논제B = clean(s.인식.graph.nodes.find((n) => n.id === pv.questionNode)?.entity ?? pv.key);
           단락.push({ 단락: 이름(i), 단락급소: clean(pv.entity), 자리: pv.place, 논제B });
         }

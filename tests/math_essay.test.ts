@@ -215,3 +215,13 @@ describe('math_symbols — 「f」 단독 제외 · 도함수 별개 (2026-10-21
     assert.deepEqual(math_symbols('Σk(n-k)'), ['Σ']);
   });
 });
+
+// 이어받기 낱말 검침 제거 [오종래 2026-10-21 확정] — 함수 꼴이 없는 이어받기는 수학 기호 겹침만
+describe('constraint_links — 이어받기 낱말 제외 (2026-10-21)', () => {
+  it('「근거」 낱말만 겹치면 얹히지 않는다', () => {
+    assert.deepEqual(constraint_links(['분류하고 근거'], relay_constraint('1', ['근거'])), []);
+  });
+  it('함수 꼴 없는 이어받기도 수학 기호가 겹치면 얹힌다', () => {
+    assert.deepEqual(constraint_links(['lim(c_n)의 값'], relay_constraint('1', ['lim(a_n/nb_n)의 값'])), [{ 출처: '1', 종류: '이어받기', 말: 'lim' }]);
+  });
+});

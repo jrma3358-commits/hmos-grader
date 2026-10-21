@@ -371,10 +371,14 @@ export function passageLabels(paragraphs: PassageParagraph[]): (string | undefin
  * 논제가 참조 제시문을 밝혔으면(「제시문 [가], [나], [다]를 참고하여」) 그 단락만 연결 후보다 — keyword만으로는 논제별 참조 범위를 모른다.
  * `참조`를 넘기면 논제 글 대신 그 범위를 쓴다 — 공통 발문을 떼어 낸 소문항(thesis/split.ts)은 참조를 따로 들고 온다.
  * `match`는 단락 B와 논제 열쇠가 닿는가 — 기본은 글자 포함(contains). 수리 형식은 수학 기호 겹침을 넘긴다 (오종래 2026-10-21 확정)
+ * `extraKeys`는 논제 밖에서 온 열쇠 — 앞 소논제에서 이어받아 이 논제 노드에 얹힌 실체(「함수 h(x)=…」)와 그 노드 (오종래 2026-10-21 확정).
+ *   논제 자신의 열쇠 뒤에 둔다
  */
-export function connectPassage(question: V2Analysis, passage: PassageRecognition, 참조?: string[], match: KeyMatch = contains): PassageConnection {
+export function connectPassage(question: V2Analysis, passage: PassageRecognition, 참조?: string[], match: KeyMatch = contains, extraKeys: { key: string; node: string }[] = []): PassageConnection {
   const exceptions = passage.keyExceptions;
-  const keys = questionKeys(question).filter((k) => !exceptions.includes(k.key));
+  const own = questionKeys(question);
+  const keys = [...own, ...extraKeys.filter((k) => !own.some((x) => x.key === clean(k.key))).map((k) => ({ key: clean(k.key), node: k.node }))]
+    .filter((k) => k.key && !exceptions.includes(k.key));
   const scope = 참조?.length ? 참조 : referencedLabels(question.question);
   const labels = passageLabels(passage.paragraphs);
   const inScope = (i: number) => !scope || (labels[i] !== undefined && scope.includes(labels[i]!));

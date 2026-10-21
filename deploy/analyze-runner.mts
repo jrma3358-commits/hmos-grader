@@ -450,6 +450,12 @@ try {
         //   이어받기 · 설정 · 조건 연결은 이 소문항 노드만 본다 (이어받기 실체가 제 자신에 닿지 않게)
         const 노드글 = u.노드.map((n: any) => String(n.실체));
         const 얹힌이어 = u.제약.filter((c: any) => c.종류 === '이어받기' && constraint_links(노드글, [c]).length).map((c: any) => c.실체);
+        // 4단계 열쇠 (2026-10-21 확정) — 얹힌 이어받기 실체와 그것이 얹힌 노드 (그 노드의 덩어리에 단락이 이어진다)
+        const 이어열쇠 = u.제약.filter((c: any) => c.종류 === '이어받기').flatMap((c: any) => {
+          const n = u.노드.find((x: any) => constraint_links([String(x.실체)], [c]).length);
+          return n ? [{ key: String(c.실체), node: String(n.id) }] : [];
+        });
+        if (이어열쇠.length) u.이어열쇠 = 이어열쇠;
         const 연결들 = u.제약.flatMap((c: any) => constraint_links(c.종류 === '제시문' ? [...노드글, ...얹힌이어] : 노드글, [c]));
         u.제약연결 = [...new Map(연결들.map((x: any) => [`${x.종류}|${x.출처}|${x.말}`, x])).values()];
         if (앞 && 앞 === 요청앞 && 요청앞제시문.length) u.이어받은제시문 = 요청앞제시문;
@@ -504,7 +510,7 @@ try {
         //   (사회논술 샘플: 소논제마다 돌리면 관계 9 → 1, 추가 후보 3 → 0)
         // 수리 형식(C-2a·C-2b)은 단락 B ↔ 논제 열쇠를 수학 기호로 맞댄다 (오종래 2026-10-21 확정) — 인문논술은 글자 그대로
         const 수리정합 = /^C-2/.test(String(req.형식 ?? ''));
-        const 소논제정합 = 소문항.map((s: any) => align_passage([{ 번호: s.번호, 참조: s.참조, 인식: s.a, 호출글: [s.공통발문, s.텍스트].filter(Boolean).join('\n') }], passage, { 수리: 수리정합 }));
+        const 소논제정합 = 소문항.map((s: any, i: number) => align_passage([{ 번호: s.번호, 참조: s.참조, 인식: s.a, 호출글: [s.공통발문, s.텍스트].filter(Boolean).join('\n'), 이어열쇠: out.단계.인식.소문항[i]?.이어열쇠 ?? [] }], passage, { 수리: 수리정합 }));
         const 정합 = {
           연결: 소논제정합.flatMap((x: any) => x.연결),
           사족: 소논제정합.flatMap((x: any) => x.사족),

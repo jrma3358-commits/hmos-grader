@@ -850,8 +850,12 @@
         <!-- C · 논술: 필터가 논제와 제시문을 따로 받는다 -->
         <div id="essay-inputs" style="display:none; margin-top: 16px;">
           <div id="reg-notice"></div>
-          <div class="card-title">논제</div>
+          <div class="card-title" id="thesis-title">논제</div>
+          <div class="type-selector" id="thesis-tabs" style="display:none;"></div>
+          <div class="c-meta sub-guide" id="thesis-guide" style="display:none; margin-bottom: 6px;"></div>
           <textarea class="input-area" id="thesis-input" style="min-height: 90px;" placeholder="논제만 붙여넣으세요.&#10;예) [문항 1] 제시문 [가], [나], [다]를 참고하여 …&#10;(1-1) …설명하시오." onchange="소논제미리보기()"></textarea>
+          <textarea class="input-area" id="thesis-input-2" style="min-height: 90px; display:none;"></textarea>
+          <textarea class="input-area" id="thesis-input-3" style="min-height: 90px; display:none;"></textarea>
           <div id="thesis-split"></div>
           <div id="passage-block">
           <div class="card-title" style="margin-top: 12px;">제시문</div>
@@ -909,6 +913,8 @@
         <!-- 문제 형식 [오종래 2026-10-20 확정] — 자동 판별 없음. 교사가 1 종류 → 2 계열 → 3 소문항 수(서술형) · 제시문(논술형)을 차례로 고른다
              (단계 버튼 = /format-detect.js 형식선택). 다 고르기 전에는 문항 입력(텍스트 · 이미지 · 파일)이 잠긴다 (입력칸잠금). ④ 불러오기는 저장된 형식을 가져오므로 열어 둔다 -->
         <div id="reg-steps" style="margin-bottom: 12px;"></div>
+        <!-- 소논제 · 문제 수 [오종래 2026-10-21 확정 — tools와 같다] — 논술형(제시문 있음)은 소논제 수, 서논술형(제시문 없음)은 문제 수. 2 · 3개면 칸 따로(탭) -->
+        <div id="c-thesis-count" style="display:none; margin-bottom: 12px;"></div>
         <div class="reg-tabs">
           <button class="reg-tab active" data-src="text" onclick="showRegSrc('text')">① 텍스트</button>
           <button class="reg-tab" data-src="image" onclick="showRegSrc('image')">② 이미지</button>
@@ -935,6 +941,18 @@
         <div class="card-title" id="reg-title">문항 원문</div>
         <!-- 그림이 들어가는 편집기 — 글자는 [그림 n] 자리에 그림을 끼워 보이고, 꺼낼 때는 다시 [그림 n] 글자로 (regText) -->
         <div class="input-area" id="reg-input" contenteditable="true" spellcheck="false" onpaste="regPaste(event)" oninput="regInput()" data-placeholder="문항 원문을 붙여넣으세요.&#10;예) 4. 함수 f(x) = ... 가 실수 전체에서 연속일 때, 상수 a의 값은? [3점]"></div>
+        <!-- 소논제 · 문제 칸 따로 (2026-10-21) — 논술형은 제시문 한 칸(공유) + 소논제 탭, 서논술형은 문제 탭 -->
+        <div id="reg-multi" style="display:none;">
+          <div id="reg-passage-box">
+            <div class="card-title">제시문 <span class="c-meta" style="font-weight:400;">— 소논제가 함께 씁니다</span></div>
+            <textarea class="input-area" id="reg-passage" style="min-height: 200px;" oninput="소논제동기()" placeholder="제시문을 [가] [나] … 라벨과 함께 붙여넣으세요.&#10;[가] …&#10;[나] …"></textarea>
+          </div>
+          <div class="type-selector" id="reg-sub-tabs" style="margin-top: 12px;"></div>
+          <div class="c-meta sub-guide" style="margin-bottom: 6px;"></div>
+          <textarea class="input-area" id="reg-thesis-1" style="min-height: 120px;" oninput="소논제동기()"></textarea>
+          <textarea class="input-area" id="reg-thesis-2" style="min-height: 120px; display:none;" oninput="소논제동기()"></textarea>
+          <textarea class="input-area" id="reg-thesis-3" style="min-height: 120px; display:none;" oninput="소논제동기()"></textarea>
+        </div>
 
         <!-- 교사 입력 (오종래 2026-10-16) — A: 정답(필수, 검증용) · 출제의도(선택) / B·C: 출제의도(필수), 정답(선택, 검증용) / B: 모범답안(선택).
              소문항이 여럿이면 줄 머리 (1) (2) -->
@@ -1717,7 +1735,7 @@ const 논술단계 = 제시문 => 제시문
   : [[0, '문항 등록'], [1, '논제 입력'], [2, '논제 인식'], ['p', '문제 평가'], [8, '루브릭'], [9, '모범답안'], [7, '교사 확정']];
 형식들['C-1a'] = { 이름: '논리서술논술 · 제시문 있음', 파이프라인: 'C-논술', 계열: '인문사회국어', 제시문: true, 단계: 논술단계(true) };
 형식들['C-2a'] = { 이름: '수리계산논술 · 제시문 있음 (이어달리기)', 파이프라인: 'C-논술', 계열: '수리', 제시문: true, 단계: 논술단계(true) };
-형식들['C-2b'] = { 이름: '수리계산논술 · 제시문 없음', 파이프라인: 'C-논술', 계열: '수리', 제시문: false, 단계: 논술단계(false) };
+형식들['C-2b'] = { 이름: '서논술형 (수리계산논술 · 제시문 없음)', 파이프라인: 'C-논술', 계열: '수리', 제시문: false, 단계: 논술단계(false) }; // 제시문 없음 → 서논술형 (오종래 2026-10-21, tools와 같다)
 document.getElementById('form-select').innerHTML = '<option value="">— 문제 형식 선택 —</option>'
   + Object.entries(형식들).map(([k, f]) => `<option value="${k}">${k} · ${f.이름}</option>`).join('');
 
@@ -1761,6 +1779,7 @@ function 형식칸맞춤() {
       ? '논제와 제시문을 한 번에 넣으세요 — 등록하면 1단계에서 논제·제시문으로 나눈 결과를 확인합니다'
       : '논제를 넣으세요 — 등록하면 1단계 논제 입력으로 넘어갑니다';
   }
+  소논제칸그림(); // 소논제 · 문제 수 (2026-10-21)
   document.getElementById('pipeline-display').textContent = f ? f.이름 : '— 문제 형식 미선택';
   document.getElementById('type-display').textContent = f ? `${selectedForm} · 엔진 ${f.파이프라인}` : '문항 유형 선택 필요';
 }
@@ -2729,6 +2748,21 @@ function registerReg() {
 
 /** C — 나눠서 1단계 두 칸에 넣고 1단계로 */
 function registerC() {
+  // 소논제 · 문제 2 · 3개 (2026-10-21) — 칸 그대로 1단계로 (나누지 않는다)
+  if (다논제()) {
+    const 논제들 = [1, 2, 3].slice(0, 논제수).map(n => 대논제떼기(document.getElementById('reg-thesis-' + n).value));
+    const 제 = 칸이름() === '소논제' ? document.getElementById('reg-passage').value.trim() : '';
+    if (칸이름() === '소논제' && !제) { alert('제시문을 넣으세요.'); return; }
+    const 빈 = 논제들.findIndex(t => !t);
+    if (빈 >= 0) { 논제탭고르기(빈); alert(`${칸이름()} (${빈 + 1}) 칸이 비었습니다 — 탭 (1)~(${논제수})를 모두 채우세요.`); return; }
+    if (!필수칸있나()) return;
+    ['thesis-input', 'thesis-input-2', 'thesis-input-3'].forEach((id, i) => { document.getElementById(id).value = 논제들[i] || ''; });
+    document.getElementById('passage-input').value = 제;
+    document.getElementById('reg-notice').innerHTML = '';
+    markCDone(0);
+    showCStep(1);
+    return;
+  }
   const 글 = regText();
   if (!글.trim()) { alert('논제와 제시문을 넣으세요.'); return; }
   if (!필수칸있나()) return;
@@ -2816,6 +2850,27 @@ async function runC() {
   if (!논제) { alert('논제를 입력하세요.'); return; }
   const 제시문칸 = 제시문없는논술() ? '' : document.getElementById('passage-input').value;
   const 제시문 = splitPassages(제시문칸);
+  창.논제별 = false;
+  // 소논제 · 문제 2 · 3개 (오종래 2026-10-21 확정) — 탭마다 창, 차례로 자동 진행해 루브릭까지. 소논제는 앞 소논제를 이어받는다(자동진행 · 소논제앞of)
+  const 논제들 = 논제칸들();
+  if (논제들.length > 1) {
+    const 빈 = 논제들.findIndex(t => !t);
+    if (빈 >= 0) { 논제탭고르기(빈); alert(`${칸이름()} (${빈 + 1}) 칸이 비었습니다 — 탭 (1)~(${논제들.length})를 모두 채우세요.`); return; }
+    const 창글들 = 논제들.map((t, i) => 창논제글(대논제떼기(t), i));
+    const 전체글 = 창글들.join('\n\n');
+    창.차례++;
+    Object.assign(창, { 진행: false, 지금: 0, 전체: null, 논제별: true });
+    창.목록 = 창글들.map((t, i) => ({ 번호: String(i + 1), 논제: t, 상태: '대기', 단계: '', 사유: '', C: { ...빈C(), 논제: t, 제시문 } }));
+    Object.assign(C, 빈C(), 창.목록[0].C);
+    resetCDone();
+    목록완료({ C: 합친C(), 창: 창.목록, 입력: { 논제: 전체글, 제시문: 제시문칸, 논제들 } }, 전체글 + (제시문칸.trim() ? '\n\n' + 제시문칸.trim() : ''));
+    C전체그림();
+    markCDone(1, 2, 'p');
+    if (제시문.length) markCDone(3, 4);
+    showCStep(2);
+    자동진행();
+    return;
+  }
   const 글 = 논제 + (제시문칸.trim() ? '\n\n' + 제시문칸.trim() : '');
   await withBusy(document.getElementById('run-btn'), '엔진 분석 중…', async () => {
     let out;
@@ -2869,7 +2924,8 @@ const 합친C = () => ({ ...(창.전체 || C결과()), 확정: 창.목록.flatMa
 const 문항명of = () => ((지금문항() || {}).이름 || '문항');
 /** 소문항 창 — 저장 내용의 형식 · 수리논술(C-2a·C-2b) 단계형 이어받기 표시 (tools와 같다, 2026-10-19) */
 const 형식of = () => selectedForm;
-const 단계형of = () => /^C-2/.test(selectedForm || '');
+// 탭 창 — 소논제는 이어받기 표시(이어달리기, 2026-10-21), 서논술형 문제는 서로 독립이라 표시 없음
+const 단계형of = () => (!창.논제별 || 칸이름() === '소논제') && /^C-2/.test(selectedForm || '');
 
 // ── 샘플 — dashboard 쪽 (문항 목록의 문항 하나 = 샘플 하나) ──
 const 샘플입력 = () => { const m = 지금문항() || {}; return { 원문: m.원문 || '', 논제: document.getElementById('thesis-input').value.trim(), 제시문: document.getElementById('passage-input').value, 문항명: m.이름 || '' }; };
@@ -2908,8 +2964,10 @@ async function 창후처리(w, 단계) {
   단계('8단계 원 논제 확정 (엔진 재인식)');
   const 원 = C후보목록().filter(x => x.id.startsWith('o:'));
   const 확정 = [];
+  // 소논제 이어달리기 (2026-10-21) — 확정 재인식에도 앞 소논제를 함께 (창 분석과 같은 제약 C)
+  const 앞소문항 = 창.논제별 ? 소논제앞of(창.지금) : null;
   for (const x of 원) {
-    const { out } = await postJSON('/analyze', { 파이프라인: 'C', 논제: x.텍스트.trim(), ...(C.제시문.length ? { 제시문: C.제시문 } : {}) });
+    const { out } = await postJSON('/analyze', { 파이프라인: 'C', 논제: x.텍스트.trim(), ...(C.제시문.length ? { 제시문: C.제시문 } : {}), ...(앞소문항 ? { 앞소문항 } : {}) });
     if (!out.ok) throw new Error('원 논제 확정 실패 — ' + ((out.error && out.error.사유) || '알 수 없음'));
     확정.push({ 출처: x.출처, 텍스트: x.텍스트.trim(), 분석: out, 루브릭: null });
   }
@@ -3217,12 +3275,23 @@ function 제약Html(s) {
 
 /** 3단계 (수리) — 제약 C 목록 · 조각 조합 · 소문항 이어달리기 */
 function 수리3단계Html() {
-  const 묶음 = 수리of().제약묶음 || [];
   const 소 = C.분석.단계.인식.소문항;
+  // 공통 발문이 없는 소논제(0단계 탭, 2026-10-21)는 엔진 제약묶음이 비어 있다 — 소문항에 얹힌 엔진 제약(이어받기 빼고, 출처마다 하나)으로 (tools와 같다)
+  const 얹힌 = [...new Map(소.flatMap(s => (s.제약 || []).filter(c => c.종류 !== '이어받기')).map(c => [`${c.종류}:${c.출처}`, c])).values()];
+  const 묶음 = (수리of().제약묶음 || []).length ? 수리of().제약묶음 : 얹힌.length ? [{ 제약: 얹힌 }] : [];
   // 사슬 — 첫 소문항이 이어받은 앞 결과(소문항 창이면 앞 창 결과)부터
   const 이어 = 소.length ? (소[0].제약 || []).filter(c => c.종류 === '이어받기') : [];
+  // 소논제 이어달리기 (2026-10-21) — 앞 소논제에서 이어받은 B 노드(제약 C) · 얹힘 · 연결 제시문
+  const 이어C = 이어.filter(c => c.B노드);
+  const 이어연결 = 소.flatMap(s => (s.제약연결 || []).filter(x => x.종류 === '이어받기'));
+  const 이어제시문 = 소.flatMap(s => s.이어받은제시문 || []);
+  const 이어받은줄 = (이어C.length || 이어제시문.length) ? `<div class="c-meta" style="margin-top:8px; line-height:1.7;">
+      ${이어C.length ? `<div><strong>이어받은 제약 C</strong> ${이어C.map(c => `(${esc(c.출처)}) 「${esc(c.실체)}」`).join(' · ')}</div>` : ''}
+      ${이어연결.length ? `<div><strong>이 소문항에 얹힘</strong> ${[...new Set(이어연결.map(x => x.말))].map(m => `「${esc(m)}」`).join(' · ')}</div>` : ''}
+      ${이어제시문.length ? `<div><strong>이어받은 제시문 연결</strong> ${이어제시문.map(x => `[${esc(x.출처)}] 「${esc(x.말)}」 (${esc(x.앞번호)}에서)`).join(' · ')}</div>` : ''}
+    </div>` : '';
   const 사슬 = 소.length ? `<div class="rel-row">${[
-    ...이어.map(c => `<span class="rel-node"><b>(${esc(c.출처)}) 결과</b>${esc(c.실체)}</span>`),
+    ...이어.filter(c => !c.B노드).map(c => `<span class="rel-node"><b>(${esc(c.출처)}) 결과</b>${esc(c.실체)}</span>`),
     ...소.map(s => `<span class="rel-node"><b>(${esc(s.번호)})</b>${esc(급소글텍스트(s))}</span>`),
   ].join('<span class="rel-link">──<span>이어받기</span>──▶</span>')}</div>` : '';
   return 묶음.map(g => `<div class="card">
@@ -3233,6 +3302,7 @@ function 수리3단계Html() {
       <div class="card-title">${엔진배지}소문항 이어달리기</div>
       <div class="c-meta" style="margin-bottom:8px;">앞 소문항 결과(급소 B)가 다음 소문항의 제약 C로 넘어갑니다.</div>
       ${사슬}
+      ${이어받은줄}
     </div>`;
 }
 const 급소글텍스트 = s => ((s.급소덩어리 && s.급소덩어리.length ? s.급소덩어리 : s.급소 || []).map(d => displayEntity(d.실체)).join(' · ') || '급소 없음');
@@ -3347,7 +3417,9 @@ function 창바그림() {
       <button class="type-btn" ${창.진행 || 창.지금 === 창.목록.length - 1 ? 'disabled' : ''} onclick="창열기(${창.지금 + 1})">다음 ▶</button>
       ${!창.진행 && 창.목록.some(w => w.상태 !== '완료') ? '<button class="type-btn" onclick="자동진행()">남은 소문항 자동 진행</button>' : ''}
     </div>
-    <div class="c-meta" style="margin-top:6px;">소문항마다 독립 분석창입니다 — 논제 B · 참조 제시문 · 3단계 극성 기준이 소문항마다 따로 섭니다.
+    <div class="c-meta" style="margin-top:6px;">${!창.논제별 ? '소문항마다 독립 분석창입니다 — 논제 B · 참조 제시문 · 3단계 극성 기준이 소문항마다 따로 섭니다.'
+      : 칸이름() === '소논제' ? `소논제마다 분석창입니다 — 0단계 탭 (1)~(${창.목록.length})에 따로 넣은 소논제를 차례로 분석하고, 뒤 소논제는 앞 소논제의 급소 · B 노드 · 연결 제시문을 이어받습니다.`
+      : `문제마다 독립 분석창입니다 — 0단계 탭 (1)~(${창.목록.length})에 따로 넣은 문제를 하나씩 분석합니다 (앞 문제를 이어받지 않습니다).`}
       ${단계형 ? `<strong>단계형</strong> — ${창.목록.map(w => `(${esc(w.번호)})`).join(' → ')}: 뒤 소문항이 앞 소문항의 결과를 이어받습니다.` : ''}
       ${창.진행 ? `자동 진행 중 — (${esc(창.목록[창.지금].번호)}) ${esc(창.목록[창.지금].단계 || '')}. 끝나면 다음 소문항으로 넘어갑니다.` : ''}
       ${창.목록[창.지금] && 창.목록[창.지금].사유 ? `<span style="color:var(--warn);">${esc(창.목록[창.지금].사유)}</span>` : ''}</div>
@@ -3444,7 +3516,8 @@ async function 자동진행() {
       try {
         단계(w, '2단계 논제 인식 (엔진)');
         // 이어달리기 — 앞 창의 급소 B를 함께 보낸다 (러너가 수리논술 C-2 · 인문논술 C-1a 연속 소문항일 때 제약 C로 얹는다, 2026-10-20)
-        const 앞소문항 = 앞소문항of(i), 앞소문항들 = 앞소문항들of(i);
+        // 탭 창(소논제 · 문제 2 · 3개, 2026-10-21) — 소논제는 앞 소논제의 급소 · B 노드 · 연결 제시문(소논제앞of), 서논술형 문제는 독립
+        const 앞소문항 = 창.논제별 ? 소논제앞of(i) : 앞소문항of(i), 앞소문항들 = 창.논제별 ? [] : 앞소문항들of(i);
         const { out } = await postJSON('/analyze', { 파이프라인: 'C', 논제: w.논제, ...(C.제시문.length ? { 제시문: C.제시문 } : {}), ...(앞소문항 ? { 앞소문항 } : {}), ...(앞소문항들.length ? { 앞소문항들 } : {}) });
         if (차례 !== 창.차례) return;
         if (!out.ok) throw new Error('엔진 분석 실패 — ' + ((out.error && (out.error.사유 || out.error)) || '알 수 없음'));
@@ -3502,7 +3575,7 @@ function renderC4() {
     // 지정 = 논제가 기호로 짚은 단락 — 단락 급소 실체가 없어 「[나] (지정)」으로 (오종래 2026-10-15)
     if (x.단락.length) return [...new Set(x.단락.map(d => d.자리 === '지정'
       ? `${주어} 제시문 [${esc(d.단락)}] (지정)과 연결됩니다.`
-      : `${주어} 제시문 [${esc(d.단락)}]의 「${esc(d.단락급소)}」${과와(d.단락급소)} 연결됩니다.`))];
+      : `${주어} 제시문 [${esc(d.단락)}]의 「${esc(d.단락급소)}」${과와(d.단락급소)} 연결됩니다.${d.이어받기 ? ` <span class="c-meta">(앞 소논제에서 이어받은 「${esc(d.이어받기)}」로)</span>` : ''}`))];
     const s = 소문항들.find(s => s.번호 === x.소문항);
     const 범위 = s && s.참조 && s.참조.length ? s.참조 : 단락들;
     return [`${주어} 제시문 ${범위.map(l => `[${esc(l)}]`).join('·')}${과와(범위[범위.length - 1])} 연결되지 않습니다.`];
@@ -4160,8 +4233,10 @@ const 지금답안 = s => (s.답안 ? (s.답안.교사 ?? s.답안.글) : '');
 /** 지금 창 소문항이 이어받기 표지로 가리킨 창(번호 없으면 바로 앞 창)의 모범답안 — 없으면 빈 글 (2026-10-20) */
 function 이어받을답안() {
   const u = C.분석 && C.분석.단계 && C.분석.단계.인식 && C.분석.단계.인식.소문항[0];
-  if (!u || !u.이어받기) return '';
-  const 번호 = u.이어받기.번호 ?? (창.목록[창.지금 - 1] || {}).번호;
+  // 소논제 이어달리기 (2026-10-21) — 탭 창의 소논제는 표지 없이도 바로 앞 소논제의 모범답안을 앞 결과로
+  const 소논제이어 = 창.논제별 && 칸이름() === '소논제' && 창.지금 > 0;
+  if (!u || (!u.이어받기 && !소논제이어)) return '';
+  const 번호 = 소논제이어 && !u.이어받기 ? 창.목록[창.지금 - 1].번호 : u.이어받기.번호 ?? (창.목록[창.지금 - 1] || {}).번호;
   const w = 창.목록.find((x, k) => k < 창.지금 && x.번호 === 번호);
   const 답 = w && w.C ? (w.C.확정 || []).flatMap(x => (x.루브릭 ? x.루브릭.소문항 : [])).map(지금답안).find(t => t && t.trim()) : '';
   return 답 || '';
@@ -4462,7 +4537,110 @@ function 입력칸잠금(열림) {
   box.dataset.placeholder = 열림 ? 원문안내 : '위에서 문제 형식을 1단계부터 차례로 고르세요 — 다 고르면 문항을 넣을 수 있습니다.';
   for (const id of ['reg-image', 'reg-file']) document.getElementById(id).disabled = !열림;
 }
-형식단계 = HMOS형식.형식선택(document.getElementById('reg-steps'), { 줄: 'type-selector', 버튼: 'type-btn', 고름: 'selected', 이름표: 'card-title', 바뀜: 형식단계바뀜 });
+형식단계 = HMOS형식.형식선택(document.getElementById('reg-steps'), { 줄: 'type-selector', 버튼: 'type-btn', 고름: 'selected', 이름표: 'card-title', 바뀜: 형식단계바뀜,
+  표시: { '제시문 없음': '제시문 없음 (서논술형)', '제시문 있음': '제시문 있음 (논술형)' } });
+
+// ── 소논제 · 문제 칸 따로 [오종래 2026-10-21 확정 — tools와 같다] ──
+// 논술형(제시문 있음 C-1a · C-2a): 소논제 수 1 · 2 · 3 → 제시문 한 칸(공유) + 소논제 탭 (1)(2)(3), 분석은 소논제마다 창 · 뒤 소논제가 앞 소논제를 이어받는다(이어달리기).
+// 서논술형(제시문 없음 C-2b): 문제 수 1 · 2 · 3 → 문제 탭, 문제마다 독립 창. 1개는 예전 그대로(원문 한 칸).
+// 문항마다 m.소논제수 · m.소논제들 · m.제시문글 — m.원문은 그 칸들을 이어 붙인 글(목록 상태 · 저장용)
+var 논제수 = 1, 논제탭 = 0; // var — 형식칸맞춤이 페이지 초기화 중(이 줄 앞)에 불려도 읽히게
+function C형식인가() { return !!(형식들[selectedForm] && 형식들[selectedForm].파이프라인 === 'C-논술'); }
+function 다논제() { return 논제수 > 1 && C형식인가(); }
+function 칸이름() { return 제시문없는논술() ? '문제' : '소논제'; }
+function 칸안내() {
+  return 칸이름() === '소논제'
+    ? '소논제 내용만 입력하세요 — 대논제 번호([논제 1] 등)는 빼고, 제시문은 위 칸을 함께 씁니다.'
+    : '문제 내용만 입력하세요 — 문제마다 따로 분석합니다.';
+}
+/** 대논제 머리(「[논제 1]」「<논제 1>」「논제 1.」) — 소논제 칸 맨 앞에 붙여 넣었으면 뗀다 */
+const 대논제떼기 = t => String(t || '').replace(/^\s*(?:[\[<【]\s*논제\s*\d+\s*[\]>】]|논제\s*\d+\s*[.:)])\s*/, '').trim();
+/** 분석에 넣는 소논제 글 — 「(n)」 번호가 없으면 붙인다 (엔진이 소문항 번호를 읽는다). 서논술형 문제는 그대로 */
+const 창논제글 = (t, i) => (칸이름() === '소논제' && !/^\s*\(\s*\d+\s*\)/.test(t) ? `(${i + 1}) ${t}` : t);
+/** 0단계 칸 → 문항 (소논제 · 문제 칸에 칠 때마다) */
+function 소논제동기() {
+  const m = 지금문항();
+  if (!m || 목록.전환중) return;
+  m.소논제수 = 논제수;
+  m.소논제들 = [1, 2, 3].slice(0, 논제수).map(n => document.getElementById('reg-thesis-' + n).value);
+  m.제시문글 = 칸이름() === '소논제' ? document.getElementById('reg-passage').value : '';
+  m.원문 = [m.제시문글.trim(), ...m.소논제들.map((t, i) => 대논제떼기(t) && 창논제글(대논제떼기(t), i))].filter(Boolean).join('\n\n');
+  const 전 = m.상태;
+  상태맞춤(m);
+  if (m.상태 !== 전) 목록그리기();
+}
+/** 문항 → 0단계 칸 (문항을 열 때) */
+function 소논제칸채움(m) {
+  논제수 = (m && m.소논제수) || 1;
+  논제탭 = 0;
+  document.getElementById('reg-passage').value = (m && m.제시문글) || '';
+  [1, 2, 3].forEach(n => { document.getElementById('reg-thesis-' + n).value = (m && m.소논제들 && m.소논제들[n - 1]) || ''; });
+  소논제칸그림();
+}
+function 논제수고르기(n) {
+  논제수 = n;
+  논제탭 = Math.min(논제탭, n - 1);
+  소논제칸그림();
+  if (n > 1) 소논제동기();
+  else { const m = 지금문항(); if (m && !목록.전환중) m.소논제수 = 1; }
+}
+function 논제탭고르기(i) { 논제탭 = i; 소논제칸그림(); }
+/** 수 단추 · 탭 · 칸 보이기 — 0단계 · 1단계 */
+function 소논제칸그림() {
+  const el = document.getElementById('c-thesis-count');
+  const 보임 = C형식인가();
+  el.style.display = 보임 ? '' : 'none';
+  el.innerHTML = 보임 ? `<div class="card-title">4단계 · ${칸이름()} 수</div><div class="type-selector">${[1, 2, 3].map(n =>
+    `<button type="button" class="type-btn${n === 논제수 ? ' selected' : ''}" onclick="논제수고르기(${n})">${n}개</button>`).join('')}</div>
+    <div class="c-meta" style="margin-top:4px;">${논제수 > 1 ? `${칸이름() === '소논제' ? '제시문은 한 칸, ' : ''}${칸이름()}는 탭 (1)~(${논제수})에 하나씩 넣으세요 — ${칸이름() === '소논제' ? '뒤 소논제는 앞 소논제를 이어받습니다.' : '문제마다 따로 분석합니다.'}` : `${칸이름()}가 하나면 예전처럼 한 칸에 넣으세요.`}</div>` : '';
+  const 다 = 다논제();
+  document.getElementById('reg-input').style.display = 다 ? 'none' : '';
+  document.getElementById('reg-multi').style.display = 다 ? '' : 'none';
+  const 탭 = 다 ? [...Array(논제수).keys()].map(i => `<button type="button" class="type-btn${i === 논제탭 ? ' selected' : ''}" onclick="논제탭고르기(${i})">(${i + 1})</button>`).join('') : '';
+  document.getElementById('reg-sub-tabs').innerHTML = 탭;
+  document.getElementById('thesis-tabs').innerHTML = 탭;
+  document.getElementById('thesis-tabs').style.display = 다 ? '' : 'none';
+  document.getElementById('thesis-guide').style.display = 다 ? '' : 'none';
+  document.getElementById('thesis-split').style.display = 다 ? 'none' : '';
+  document.querySelectorAll('.sub-guide').forEach(g => { g.textContent = 칸안내(); });
+  document.getElementById('reg-passage-box').style.display = 칸이름() === '소논제' ? '' : 'none';
+  [1, 2, 3].forEach(n => {
+    const 보일 = n - 1 === (다 ? 논제탭 : 0);
+    const r = document.getElementById('reg-thesis-' + n);
+    r.style.display = 보일 ? '' : 'none';
+    r.placeholder = `(${n}) ${칸안내()}`;
+    const t = document.getElementById(n === 1 ? 'thesis-input' : 'thesis-input-' + n);
+    t.style.display = 보일 ? '' : 'none';
+    if (다) t.placeholder = `(${n}) ${칸안내()}`;
+  });
+  document.getElementById('thesis-title').textContent = 다 ? 칸이름() : '논제';
+}
+/** 1단계 논제 칸들 — 다논제면 탭 칸마다, 아니면 한 칸 */
+const 논제칸들 = () => (다논제() ? ['thesis-input', 'thesis-input-2', 'thesis-input-3'].slice(0, 논제수) : ['thesis-input'])
+  .map(id => document.getElementById(id).value.trim());
+
+/**
+ * 소논제 이어달리기 [오종래 2026-10-21 확정 — tools 소논제앞of와 같다] — 앞 소논제 분석(a)의 급소 · B 노드 실체 전부 · 연결 제시문.
+ * 어느 B 노드를 제약 C로 얹을지는 엔진(러너)이 고른다
+ */
+function 소논제앞꼴(a) {
+  const 소 = (a && a.단계 && a.단계.인식 && a.단계.인식.소문항) || [];
+  if (!소.length) return null;
+  const 급소들 = s => (s.급소덩어리 && s.급소덩어리.length ? s.급소덩어리 : s.급소 || []).map(d => displayEntity(d.실체));
+  const 제시문 = new Map();
+  for (const s of 소) {
+    for (const x of s.제약연결 || []) if (x.종류 === '제시문' && !제시문.has(x.출처)) 제시문.set(x.출처, { 출처: x.출처, 말: x.말 });
+    for (const x of s.이어받은제시문 || []) if (!제시문.has(x.출처)) 제시문.set(x.출처, { 출처: x.출처, 말: x.말 });
+  }
+  for (const x of (a.단계.정합 && a.단계.정합.소문항) || []) for (const l of x.연결단락 || []) if (!제시문.has(l)) 제시문.set(l, { 출처: l, 말: '4단계 연결' });
+  return {
+    번호: 소[0].번호, 급소: 소.flatMap(급소들), 참조: 소[0].참조 || [], 자료: 소[0].자료 || [],
+    B노드: 소.flatMap(s => (s.노드 || []).filter(n => String(n.색 || '').split(' ')[0] === 'B').map(n => displayEntity(n.실체))),
+    제시문: [...제시문.values()],
+  };
+}
+/** 창 i의 앞 소논제 — 탭 창이고 소논제일 때만 (서논술형 문제는 독립) */
+const 소논제앞of = i => (창.논제별 && 칸이름() === '소논제' && i > 0 && 창.목록[i - 1].C ? 소논제앞꼴(창.목록[i - 1].C.분석) : null);
 setTimeout(형식단계맞춤, 0); // 처음 열 때 — 지금 문항의 형식으로 (없으면 잠근 채)
 
 /** 파이프라인을 바꾸면 편집 중 문항에 — 결과가 있으면 지워지므로 묻는다. 그만두면 false */
@@ -4545,15 +4723,20 @@ function 문항열기(id) {
     regInput();
     교사칸채움(m);
     pickType(m.파이프라인, m.형식);
+    소논제칸채움(m); // 소논제 · 문제 칸 (2026-10-21)
     화면비우기();
     const r = 맞는결과(m);
+    창.논제별 = false;
     if (r && r.C) {
       목록.보이는결과 = r;
       // 옛 결과(3단계 수렴 경로 이전)는 제시문급소가 없다 — 3단계에 「다시 추출」 버튼이 뜬다. 끝나지 않은 추출도 같다
       Object.assign(C, C정리(r.C));
       // 소문항 창 (2026-10-19) — 창 목록을 되살리고 첫 창을 보인다. 결과.C는 전체 분석
-      if (r.창) { 창.전체 = r.C; 창되살리기(r.창); }
-      document.getElementById('thesis-input').value = (r.입력 && r.입력.논제) || (창.전체 || C).논제;
+      // 탭 창(소논제 · 문제 2 · 3개, 2026-10-21)은 전체 분석이 없다 — 창.논제별
+      if (r.창) { 창.전체 = (r.입력 && r.입력.논제들) ? null : r.C; 창되살리기(r.창); 창.논제별 = !!(r.입력 && r.입력.논제들); }
+      const 칸들 = r.입력 && Array.isArray(r.입력.논제들) ? r.입력.논제들 : null;
+      ['thesis-input-2', 'thesis-input-3'].forEach((id, i) => { document.getElementById(id).value = 칸들 ? 칸들[i + 1] || '' : ''; });
+      document.getElementById('thesis-input').value = 칸들 ? 칸들[0] : (r.입력 && r.입력.논제) || (창.전체 || C).논제;
       document.getElementById('passage-input').value = (r.입력 && r.입력.제시문) || '';
       뺀것알림(r.뺀것);
       renderRegFigs(m.원문);
@@ -4679,6 +4862,25 @@ const 분석실패글 = out => '분석 실패: ' + ((out.error && out.error.사�
 
 /** 문항 하나 분석 — C는 논제·제시문을 자동으로 나눠 엔진에. 실패하면 사유를 담아 throw */
 async function 문항분석(원문, 파이프라인, m = null) {
+  // 소논제 · 문제 2 · 3개 (2026-10-21) — 탭마다 엔진 분석(소논제는 앞 소논제 이어받기). 루브릭은 문항을 열어 「남은 소문항 자동 진행」으로
+  if (파이프라인 === 'C-논술' && m && m.소논제수 > 1) {
+    const 소논제 = !제시문없는논술(m.형식);
+    const 제시문 = 소논제 ? splitPassages(m.제시문글 || '') : [];
+    const 글들 = (m.소논제들 || []).slice(0, m.소논제수).map(대논제떼기);
+    if (글들.length < m.소논제수 || 글들.some(t => !t)) throw new Error(`${소논제 ? '소논제' : '문제'} 칸이 비었습니다 — 0단계 탭을 모두 채우세요`);
+    const 창글들 = 글들.map((t, i) => (소논제 && !/^\s*\(\s*\d+\s*\)/.test(t) ? `(${i + 1}) ${t}` : t));
+    const 창들 = [];
+    let 앞 = null;
+    for (const [i, t] of 창글들.entries()) {
+      const 앞소문항 = 소논제 && 앞 ? 소논제앞꼴(앞) : null;
+      const { out } = await postJSON('/analyze', { 형식: m.형식, 파이프라인: 'C', 논제: t, ...(제시문.length ? { 제시문 } : {}), ...(앞소문항 ? { 앞소문항 } : {}) });
+      if (!out.ok) throw new Error(`(${i + 1}) ` + 분석실패글(out));
+      창들.push({ 번호: String(i + 1), 논제: t, 상태: '대기', 단계: '', 사유: '', C: { ...빈C(), 논제: t, 제시문, 분석: out } });
+      앞 = out;
+    }
+    const 전체글 = 창글들.join('\n\n');
+    return { C: { ...빈C(), 논제: 전체글, 제시문 }, 창: 창들, 입력: { 논제: 전체글, 제시문: m.제시문글 || '', 논제들: 글들 } };
+  }
   if (파이프라인 === 'C-논술') {
     // 제시문 없는 논술(C-2b)은 원문 전체가 논제
     const 나눔 = m && 제시문없는논술(m.형식) ? { 논제: 원문.trim(), 제시문: '', 뺀것: [] } : splitRegistration(원문, /^C-2/.test((m && m.형식) || ''));
@@ -4837,6 +5039,12 @@ async function 목록불러오기(input) {
     const 형식 = 형식들[x.형식] ? x.형식 : 'C-1a';
     const m = 새문항({ 파이프라인: 형식들[형식].파이프라인, 형식, 원문: x.원문 });
     if (typeof x.이름 === 'string' && x.이름.trim()) m.이름 = x.이름.trim();
+    // 소논제 · 문제 칸 따로 (2026-10-21) — 형식 · 수 · 제시문 · 칸마다 글 그대로
+    if (Number(x.소논제수) > 1 && Array.isArray(x.소논제들)) {
+      m.소논제수 = Math.min(3, Number(x.소논제수));
+      m.소논제들 = x.소논제들.slice(0, m.소논제수).map(String);
+      m.제시문글 = typeof x.제시문 === 'string' ? x.제시문 : '';
+    }
     상태맞춤(m);
     return m;
   });

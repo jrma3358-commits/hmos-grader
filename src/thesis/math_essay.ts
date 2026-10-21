@@ -183,6 +183,12 @@ export function constraint_links(노드실체: string[], 제약: 제약C[]): { �
     }
     // 이어받기 표지의 대상(「함수 f(x)」)은 그 함수 꼴로, 아니면 앞 급소 글로
     const 열쇠 = c.구조?.완성 ? [c.구조.완성] : c.대상 && 함수들(c.대상).length ? 함수들(c.대상) : 함수들(c.종류 === '이어받기' ? c.실체 : c.텍스트);
+    // 이어받기는 낱말로 잇지 않는다 [오종래 2026-10-21 확정] — 함수 꼴이 없으면 수학 기호 겹침만 (「근거」 같은 낱말 겹침 제거)
+    if (c.종류 === '이어받기' && !열쇠.length) {
+      const 같은 = math_symbols(c.실체).filter((x) => 글기호.includes(x));
+      if (같은.length) out.push({ 출처: c.출처, 종류: c.종류, 말: 같은.join(' · ') });
+      continue;
+    }
     const 말 = (열쇠.length ? 열쇠 : [c.실체]).find((k) => k && 글.includes(k));
     if (말) out.push({ 출처: c.출처, 종류: c.종류, 말 });
   }
