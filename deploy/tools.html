@@ -1844,12 +1844,13 @@ function renderC5() {
 }
 
 // 제시문 핵심 한 줄 · 제시문 간 관계 (오종래 2026-10-21) — 키워드 입력창 위, 흐린 글씨. 엔진 값 그대로 (러너 단계.제시문.핵심요약:
-//   핵심 = 6단계 단락 급소 표기, 없으면 제시문 전체 급소 · 관계 = 봉인⑧ 유사·실증·대비). 제시문이 없거나 예전 분석이면 그리지 않는다
+//   논제 먼저 — 봉인⑨ 역할(표적·관계·도구) · 요구에 닿는 제시문 부분(급소면 논제 덩어리, 논제 B면 제시문 쪽 실체) ·
+//   관계 = 같은 소문항에 함께 걸린 쌍만 봉인⑧ 유사·실증·대비). 제시문이 없거나 예전 분석이면 그리지 않는다
 function 제시문핵심Html() {
   const r = C.분석 && C.분석.단계.제시문 && C.분석.단계.제시문.핵심요약;
   if (!r || !r.핵심.length) return '';
-  const 핵심 = r.핵심.map(x => `[${esc(x.id)}] ${x.핵심.length ? x.핵심.map(esc).join(' · ') : '<span style="opacity:.7;">핵심이 서지 않음</span>'}`).join(' / ');
-  const 관계 = r.관계.length ? r.관계.map(x => `[${esc(x.a)}]↔[${esc(x.b)}]: ${esc(x.유형)}`).join(' · ') : '핵심이 선 제시문 쌍이 없음';
+  const 핵심 = r.핵심.map(x => `[${esc(x.id)}] ${x.핵심.length ? `${x.역할 ? esc(x.역할) + ' · ' : ''}${x.핵심.map(esc).join(' · ')}` : '<span style="opacity:.7;">도구 — 논제가 짚은 부분 없음</span>'}`).join(' / ');
+  const 관계 = r.관계.length ? r.관계.map(x => `${x.소문항 ? `(${esc(x.소문항)}) ` : ''}[${esc(x.a)}]↔[${esc(x.b)}]: ${esc(x.유형)}`).join(' · ') : '같은 소문항에 함께 걸린 제시문 쌍이 없음';
   return `<div class="c-meta" style="margin-top:10px; opacity:.75; line-height:1.7;">
     <div><strong>제시문 핵심</strong> ${핵심}</div>
     <div><strong>제시문 관계</strong> ${관계}</div>

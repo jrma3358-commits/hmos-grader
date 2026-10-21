@@ -514,26 +514,38 @@ try {
         out.단계.정합 = { 연결: 정합.연결, 사족: 정합.사족, 소문항: 정합.소문항.map((x: any) => ({ 번호: x.번호, 배경: x.연결.background, 범위밖: x.연결.outOfScope, 연결단락: [...new Set(x.연결.links.map((l: any) => 라벨들[l.paragraph] ?? `#${l.paragraph + 1}`))] })) };
         // 6단계 — 단락 급소 관계 → 6유형 뼈대 → 기존 논제와 비교 [봉인⑭, 오종래 2026-10-14]. 보완은 5단계로 넘긴다
         out.단계.관계 = 봉인14_6단계(정합, passage);
-        // 제시문 핵심 한 줄 · 제시문 간 관계(봉인⑧) — 5·6단계 키워드 입력창 위 (오종래 2026-10-21). 핵심은 6단계 단락 급소, 없으면 제시문 전체 급소
-        out.단계.제시문.핵심요약 = passage_cores(제시문목록, out.단계.관계?.급소단락 ?? []);
-        // 논제 요구(봉인⑨) — 키워드 방향 논제의 근거 (오종래 2026-10-21). 소문항마다 요구 종류·부른 제시문, 쌍의 ⑧ 관계는 핵심요약.관계에서
-        //   관계·표적은 쌍에 ⑧ 관계가 하나라도 서면 성립, 도구는 늘 성립 (filter/essay.ts 연결점과 같은 꼴). 봉인이 비면 논제요구만 비우고 잇는다
+        // 제시문 핵심 (오종래 2026-10-21 확정) — 논제가 먼저다: 소문항 급소·논제 B → 봉인⑨ 요구(표적·관계·도구) → 그 요구에 닿는 제시문 부분(깃발)
+        //   → 같은 소문항에 함께 걸린 쌍만 ⑧ 관계. 제시문 전체 급소로 돌아가지 않는다 (passage_core.ts)
+        const 글of = (s: any) => [s.공통발문, s.텍스트].filter(Boolean).join('\n');
+        const ids = 제시문목록.map((p) => p.id);
+        // 논제 요구(봉인⑨) — 소문항마다 요구 종류·부른 제시문. 봉인이 비면 논제요구만 비우고, 핵심은 부른 제시문 전부를 도구로 보고 잇는다
+        let 요구들: any[][];
         try {
-          const ids = 제시문목록.map((p) => p.id);
-          const 관계of = (a: string, b: string) => out.단계.제시문.핵심요약.관계.filter((x: any) => (x.a === a && x.b === b) || (x.a === b && x.b === a)).map((x: any) => x.유형);
-          out.단계.제시문.논제요구 = 소문항.map((s: any) => ({
+          요구들 = 소문항.map((s: any) => 봉인9_논제요구(null, ids, 글of(s)));
+        } catch (e) {
+          out.단계.제시문.논제요구오류 = (e as Error).message;
+          요구들 = 소문항.map(() => [{ 종류: '도구', 제시문: ids, 표지: null, 문장: '' }]);
+        }
+        out.단계.제시문.핵심요약 = passage_cores(제시문목록, out.단계.관계?.급소단락 ?? [], 소문항.map((s: any, i: number) => ({
+          번호: s.번호 ?? null,
+          텍스트: 글of(s),
+          급소: [...new Set(정합.연결.filter((x: any) => x.소문항 === s.번호).map((x: any) => String(x.급소)))],
+          요구: 요구들[i],
+        })));
+        // 쌍의 ⑧ 관계 — 관계·표적은 그 소문항이 붙든 쌍에 ⑧ 관계가 하나라도 서면 성립, 도구는 늘 성립 (filter/essay.ts 연결점과 같은 꼴)
+        if (!out.단계.제시문.논제요구오류) {
+          const 관계of = (번호: any, a: string, b: string) => out.단계.제시문.핵심요약.관계.filter((x: any) => x.소문항 === (번호 ?? null) && ((x.a === a && x.b === b) || (x.a === b && x.b === a))).map((x: any) => x.유형);
+          out.단계.제시문.논제요구 = 소문항.map((s: any, i: number) => ({
             번호: s.번호,
-            요구: 봉인9_논제요구(null, ids, [s.공통발문, s.텍스트].filter(Boolean).join('\n')).map((r: any) => {
+            요구: 요구들[i].map((r: any) => {
               if (r.종류 === '도구') return { ...r, 쌍: [], 성립: true };
               const 짝 = r.제시문.length > 1
                 ? r.제시문.flatMap((a: string, i: number) => r.제시문.slice(i + 1).map((b: string) => [a, b]))
                 : r.제시문.flatMap((a: string) => ids.filter((b) => b !== a).map((b) => [a, b]));
-              const 쌍 = 짝.map(([a, b]: string[]) => ({ a, b, 실제: [...new Set(관계of(a, b))] }));
+              const 쌍 = 짝.map(([a, b]: string[]) => ({ a, b, 실제: [...new Set(관계of(s.번호, a, b))] }));
               return { ...r, 쌍, 성립: 쌍.some((x: any) => x.실제.length) ? true : null };
             }),
           }));
-        } catch (e) {
-          out.단계.제시문.논제요구오류 = (e as Error).message;
         }
       } catch (e) {
         stop('제시문', 멈춤of(e));
