@@ -1626,8 +1626,8 @@ async function 샘플덮어쓰기() {
 // 창 하나가 끝나면 검증/<문항명>_<번호>.json 으로 자동 저장 (/api/subq-save) — 창 막대에 저장 완료 표시.
 // 페이지마다 따로 둘 것: C전체그림() (C 단계 화면을 다시 그린다) · 창후처리() (창 하나의 마지막 자동 단계, 없으면 그만)
 //   · 문항명of() (저장 파일 이름 앞부분). 있으면 쓰는 것: 형식of() (C-1a…, 저장 내용) · 단계형of() (수리논술 이어받기 표시)
-const C열쇠 = ['논제', '제시문', '분석', '제시문급소', '극성', '관계도', '정교화', '추가', '방향', '후보', '확정'];
-const 빈C = () => ({ 논제: '', 제시문: [], 분석: null, 제시문급소: [], 극성: null, 관계도: null, 정교화: null, 추가: null, 방향: null, 후보: [], 확정: [] });
+const C열쇠 = ['논제', '제시문', '분석', '제시문급소', '극성', '관계도', '정교화', '추가', '방향', '단계형', '후보', '확정'];
+const 빈C = () => ({ 논제: '', 제시문: [], 분석: null, 제시문급소: [], 극성: null, 관계도: null, 정교화: null, 추가: null, 방향: null, 단계형: null, 후보: [], 확정: [] });
 const 창 = { 목록: [], 지금: 0, 진행: false, 차례: 0 };
 const C떼기 = () => Object.fromEntries(C열쇠.map(k => [k, C[k]]));
 
@@ -1768,7 +1768,7 @@ async function 자동진행() {
         const { out } = await postJSON('/analyze', { 파이프라인: 'C', 논제: w.논제, ...(C.제시문.length ? { 제시문: C.제시문 } : {}), ...(앞소문항 ? { 앞소문항 } : {}), ...(앞소문항들.length ? { 앞소문항들 } : {}) });
         if (차례 !== 창.차례) return;
         if (!out.ok) throw new Error('엔진 분석 실패 — ' + ((out.error && (out.error.사유 || out.error)) || '알 수 없음'));
-        Object.assign(C, { 분석: out, 제시문급소: [], 극성: null, 관계도: null, 정교화: null, 추가: null, 방향: null, 후보: [], 확정: [] });
+        Object.assign(C, { 분석: out, 제시문급소: [], 극성: null, 관계도: null, 정교화: null, 추가: null, 방향: null, 단계형: null, 후보: [], 확정: [] });
         C전체그림();
         if (C.제시문.length && !수리of()) {
           단계(w, '3단계 제시문 수렴 경로 · 극성 · 관계');
@@ -1927,7 +1927,90 @@ function renderC5() {
       ${생성대상 ? `<button class="type-btn" id="c5-btn" onclick="refineC()">정교화안 문장 생성 (${생성대상}건)</button>` : '<div class="c-meta">정교화할 곳이 없어 만들 정교화안이 없습니다</div>'}
     </div>
     ${결과}
-    ${방향칸()}`;
+    ${수리논술of() ? 단계형칸() : 방향칸()}`;
+}
+
+// ── 자연논술 정교화 단계형 [오종래 2026-10-21 확정] — C-2a · C-2b는 키워드 입력창 대신 단계 수(2~5) · 단계마다 「핵심 조건·식」 ──
+// 단계 n의 글 = 모범답안 n번째 줄. /api/rubric(모범답안)에 넘기면 엔진이 수리논술 줄 나누기(첫 식 세우기 → 이후 전개 풀기 → 끝 값 줄 답구하기,
+// classify_math_lines)로 줄마다 조각을 내고 배점한다 — 단계별 루브릭은 엔진, AI는 조각 문장만. C-1a는 키워드 입력창 그대로
+const 수리논술of = () => /^C-2/.test(C형식 || '');
+const 단계수들 = [2, 3, 4, 5];
+const 단계형기본 = () => ({ 수: 3, 줄: ['', '', '', '', ''], 루브릭: null });
+function 단계형칸() {
+  const d = C.단계형 || (C.단계형 = 단계형기본());
+  const r = d.루브릭;
+  return `
+    <div class="card">
+      <div class="card-title">${엔진배지}단계형 정교화</div>
+      <div class="c-meta">풀이를 몇 단계로 나눌지 고르고, 단계마다 그 단계의 핵심 조건·식을 한 줄로 쓰세요. 엔진이 단계 줄마다 루브릭 조각(세우기 · 풀기 · 답구하기)과 배점을 냅니다 —
+        첫 단계는 첫 식, 마지막 단계는 답 값이 되도록 쓰면 엔진이 그대로 가릅니다.</div>
+      <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:10px;">
+        <span class="c-meta" style="align-self:center; margin:0 4px 0 0;">단계 수 선택</span>
+        ${단계수들.map(n => `<button class="type-btn${d.수 === n ? ' selected' : ''}" style="margin:0;" onclick="단계수고르기(${n})">${n}단계</button>`).join('')}
+      </div>
+      ${d.줄.slice(0, d.수).map((t, i) => `
+        <div style="margin-top:10px;">
+          <div class="c-meta" style="margin:0 0 4px;"><strong>${i + 1}단계</strong> 이 단계에서 핵심 조건·식</div>
+          <textarea class="c-step" rows="2" spellcheck="false" oninput="C.단계형.줄[${i}] = this.value" placeholder="이 단계에서 핵심 조건·식"
+            style="width:100%; box-sizing:border-box; padding:8px 10px; border:1px solid var(--border); border-radius:var(--radius); font:inherit; resize:vertical;">${esc(t)}</textarea>
+        </div>`).join('')}
+      <button class="type-btn" id="c5-step-btn" style="margin-top:10px;" onclick="단계루브릭C(this)">단계별 루브릭 생성</button>
+    </div>
+    ${r ? 단계루브릭Html(r) : ''}`;
+}
+
+function 단계수고르기(n) {
+  const d = C.단계형 || (C.단계형 = 단계형기본());
+  document.querySelectorAll('.c-step').forEach((x, i) => { d.줄[i] = x.value; }); // 그리기 전 입력 남기기
+  d.수 = n;
+  renderC5();
+}
+
+/** 단계 줄 i가 엔진 줄 나누기에서 어느 파트로 갔는가 */
+function 단계파트(줄나누기, t) {
+  if (!줄나누기) return '';
+  const 같은 = xs => (xs || []).some(x => String(typeof x === 'string' ? x : JSON.stringify(x)).includes(t.trim()));
+  if (같은(줄나누기.근거대기)) return '근거대기';
+  if (같은(줄나누기.세우기)) return '세우기';
+  if (같은(줄나누기.풀기)) return '풀기';
+  if (줄나누기.답 && JSON.stringify(줄나누기.답).includes(JSON.stringify(t.trim()).slice(1, -1))) return '답구하기';
+  if (같은(줄나누기.미분류)) return '미분류';
+  return '';
+}
+
+function 단계루브릭Html(r) {
+  return r.소문항.filter(s => s.조각 && s.조각.length).map(s => `
+    <div class="card">
+      <div class="card-title">${엔진배지}단계별 루브릭${r.소문항.length > 1 ? ' · ' + esc(단위이름(s.번호)) : ''}</div>
+      <div class="reading-box">${C.단계형.보낸줄.map((t, i) => { const p = 단계파트(s.줄나누기, t); return `<p>${i + 1}단계 「${esc(t)}」 → ${p ? `<strong>${esc(p)}</strong>` : '조각 없음'}</p>`; }).join('')}</div>
+      <div class="c-table-wrap"><table style="width:100%; margin-top:8px; border-collapse:collapse; font-size:13px;">
+        <tr><th style="text-align:left; padding:4px 6px; white-space:nowrap;">파트</th><th style="text-align:left; padding:4px 6px;">실체</th><th style="text-align:right; padding:4px 6px; white-space:nowrap;">배점</th><th style="text-align:left; padding:4px 6px;">${AI배지}조각 문장</th></tr>
+        ${s.조각.map(c => `<tr style="border-top:1px solid var(--border);"><td style="padding:4px 6px; white-space:nowrap;">${esc(c.파트)}</td><td style="padding:4px 6px;">${esc(c.실체 || '')}</td><td style="text-align:right; padding:4px 6px;">${esc(String(c.배점 ?? ''))}</td><td style="padding:4px 6px;">${esc(c.표현 || '')}</td></tr>`).join('')}
+      </table></div>
+      <div class="c-meta" style="margin-top:6px;">총 ${esc(String(r.총배점))}점 · 조각 ${s.조각.length}개${s.충족 ? ` · 조각 문장 충족 ${s.충족.충족수}/${s.충족.조각수}` : ''}</div>
+      ${엔진원본Html(s)}
+    </div>`).join('');
+}
+
+async function 단계루브릭C(btn) {
+  const d = C.단계형;
+  document.querySelectorAll('.c-step').forEach((x, i) => { d.줄[i] = x.value; });
+  const 줄 = d.줄.slice(0, d.수).map(t => t.replace(/\s*\n\s*/g, ' ').trim());
+  const 빈 = 줄.findIndex(t => !t);
+  if (빈 >= 0) { alert(`${빈 + 1}단계 핵심 조건·식을 쓰세요`); return; }
+  if (btn.disabled) return;
+  // 배점 — 논제의 「(N점)」, 없으면 10 (dashboard 창 루브릭과 같다)
+  const 총배점 = Number((C.논제.match(/\((\d+(?:\.\d+)?)\s*점\)/) || [])[1] || 10);
+  await withBusy(btn, '엔진 단계별 루브릭 → 조각 문장 생성 중… (1~2분)', async () => {
+    const { out } = await postJSON('/api/rubric', {
+      논제: C.논제, 계열: '수리', 계열형식: C형식, 총배점, 모범답안: 줄.join('\n'),
+      ...(C.제시문.length ? { 제시문: C.제시문 } : {}),
+    });
+    if (out.error) { alert('단계별 루브릭 생성 실패: ' + out.error); return; }
+    d.보낸줄 = 줄;
+    d.루브릭 = out;
+    renderC5();
+  });
 }
 
 // 제시문 핵심 한 줄 · 제시문 간 관계 (오종래 2026-10-21) — 키워드 입력창 위, 흐린 글씨. 엔진 값 그대로 (러너 단계.제시문.핵심요약:
@@ -2192,7 +2275,7 @@ async function confirmC() {
 // ── 화면 · 타입 ──
 let 타입 = null;
 
-const C = { 논제: '', 제시문: [], 분석: null, 제시문급소: [], 극성: null, 관계도: null, 정교화: null, 추가: null, 방향: null, 후보: [], 확정: [] };
+const C = { 논제: '', 제시문: [], 분석: null, 제시문급소: [], 극성: null, 관계도: null, 정교화: null, 추가: null, 방향: null, 단계형: null, 후보: [], 확정: [] };
 
 const C화면 = {
   2: { 제목: '논제 인식', 도구: 'make', 설명: '엔진 — 소문항마다 핵심 · 서술 방식 · 조건 · 배경을 문장으로. 공통 발문은 떼어 내고 인식합니다' },
@@ -2474,7 +2557,7 @@ async function runC() {
   await withBusy(document.getElementById('run-btn'), '엔진 분석 중…', async () => {
     const { out } = await postJSON('/analyze', { 파이프라인: 'C', 논제, ...(제시문.length ? { 제시문 } : {}) });
     if (!out.ok) { alert('분석 실패: ' + ((out.error && (out.error.사유 || out.error)) || '알 수 없음')); return; }
-    Object.assign(C, { 논제, 제시문, 분석: out, 제시문급소: [], 극성: null, 관계도: null, 정교화: null, 추가: null, 방향: null, 후보: [], 확정: [] });
+    Object.assign(C, { 논제, 제시문, 분석: out, 제시문급소: [], 극성: null, 관계도: null, 정교화: null, 추가: null, 방향: null, 단계형: null, 후보: [], 확정: [] });
     document.querySelectorAll('#nav-essay .nav-item:not([data-step="0"])').forEach(b => b.classList.remove('done'));
     // 소문항이 둘 이상이면 소문항 창 — 차례로 자동 진행 (오종래 2026-10-19). 기다리지 않는다
     출제기본이름 = '';
@@ -2562,7 +2645,7 @@ function 확정저장() {
     종류: 'HMOS 출제 논제', 버전: 1,
     원논제: C.논제, 제시문: C.제시문,
     확정: C.확정.map(x => ({ 출처: x.출처, 논제: x.텍스트, 급소: x.분석.단계.인식.소문항.map(s => ({ 번호: s.번호, 급소: 급소글(s).replace(/<[^>]+>/g, '') })) })),
-    정교화: C.정교화, 추가: C.추가, 방향: C.방향,
+    정교화: C.정교화, 추가: C.추가, 방향: C.방향, ...(C.단계형 ? { 단계형: C.단계형 } : {}),
   }, '출제논제');
 }
 
