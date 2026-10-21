@@ -8,6 +8,8 @@
 //   4. 점수는 코드가 — 파트 배점(엔진 루브릭)을 그 파트의 학생 단계 수로 나눈다. 최종 확정은 교사(⑤ 교사 확정)
 //   5. [오종래 2026-10-21 확정] 파트에 학생 조각이 없는데 최종 답구하기가 정답과 일치하면 — 그 파트는 엔진 조각 판정(G1, 답 전체를 본 판정)으로 복원해
 //      조각마다 점수를 준다 (「답은 맞으나 풀이 조각 없음 — 엔진 복원」). 답이 틀리면 그 파트는 「단계 없음」 X 그대로
+//   6. [오종래 2026-10-21 확정] 세우기 · 풀기 단계는 화살표(→ · ⇒) 앞 글을 떼고 계산식만 양변 검증한다 — 「[a] v v v v [e] → 4!=24」는 「4!=24」.
+//      계산식이 읽히면 Claude가 고른 대응 조각과 상관없이 계산으로 판정한다 (대응 조각의 엔진 판정은 계산식이 없을 때만)
 import { counting_line_value, verify_calculation } from './multipath.ts';
 import { final_value } from './solve_lines.ts';
 
@@ -84,6 +86,9 @@ function 단계값(글: string): string | null {
   return 끝 ? 끝[1] : null;
 }
 
+/** 화살표 앞 글 떼기 — 줄에 화살표 뒤 「=」 계산식이 있으면 마지막 화살표까지 뗀다 (「[a] v v v v [e] → 4!=24」 → 「4!=24」, 2026-10-21) */
+const 화살표뗌 = (글: string) => String(글 ?? '').split(/\r?\n/).map((l) => l.replace(/^.*[→⇒](?=[^→⇒]*=)/, '')).join('\n');
+
 /** 정답 글의 값 — 「72가지」 → 72. 수가 없으면 null */
 function 정답값of(정답: string | null | undefined): string | null {
   const m = String(정답 ?? '').replace(/[−–]/g, '-').match(/-?\d+(?:\.\d+)?/);
@@ -115,7 +120,8 @@ export function grade_student_path(단계들: 학생단계[], 조각들: 경로�
     내단계.forEach((d, i) => {
       const 배점 = 배점들[i];
       const 모범조각 = 조각들.find((c) => c.id === d.대응) ?? null;
-      const 계산 = verify_calculation(d.글);
+      // 세우기 · 풀기는 화살표 앞 글을 떼고 계산식만 (오종래 2026-10-21 확정)
+      const 계산 = verify_calculation(파트 === '세우기' || 파트 === '풀기' ? 화살표뗌(d.글) : d.글);
       const 학생값 = 단계값(d.글);
       const 짝글 = 계산.짝.map((p) => `${p.왼}=${p.오른}${p.같음 ? '' : ' ✗'}`).join(' · ');
       const 경로 = d.다경로 ? { 다경로: '학생 경로', 다경로까닭: d.까닭 } : {};
