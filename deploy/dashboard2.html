@@ -22,6 +22,7 @@ button{font-family:inherit}
 .tab.active{color:#fff;border-bottom-color:var(--gold);font-weight:500}
 .tab-num{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;background:rgba(255,255,255,.12)}
 .tab.active .tab-num{background:var(--gold);color:var(--teal)}
+.tab.off{color:rgba(255,255,255,.25);cursor:not-allowed}
 .recbar{background:var(--white);border-bottom:1px solid var(--line);padding:10px 24px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
 .recbar label{font-size:12px;color:var(--muted)}
 .recbar select{padding:6px 10px;border:1px solid var(--line);border-radius:var(--radius);font-family:inherit;font-size:13px;min-width:280px;max-width:100%;background:var(--white)}
@@ -183,11 +184,14 @@ th{font-size:11.5px;color:var(--muted);font-weight:600;background:var(--ivory)}
   <a class="brand" href="/">HMOS <em>채점 대시보드</em></a>
   <button class="tab active" data-tab="1"><span class="tab-num">1</span>문항 입력</button>
   <button class="tab" data-tab="2"><span class="tab-num">2</span>문항분석</button>
-  <button class="tab" data-tab="3"><span class="tab-num">3</span>채점 결과</button>
-  <button class="tab" data-tab="4"><span class="tab-num">4</span>루브릭</button>
-  <button class="tab" data-tab="5"><span class="tab-num">5</span>모범답안</button>
-  <button class="tab" data-tab="6"><span class="tab-num">6</span>교사 확정</button>
-  <button class="tab" data-tab="7"><span class="tab-num">7</span>채점 샘플</button>
+  <!-- 탭 순서 (오종래 2026-10-21): ① 문항 입력 ② 문항분석 ③ 답안 입력 ④ 채점 결과 ⑤ 루브릭 ⑥ 모범답안 ⑦ 교사 확정 (+ 채점 샘플).
+       data-tab은 패널 id(p + 값) — 보이는 번호만 바꾸고 패널 id는 그대로 둔다 (③ 답안 입력 = pans) -->
+  <button class="tab off" data-tab="ans" id="tab-ans" disabled title="문항분석이 끝나면 열립니다"><span class="tab-num">3</span>답안 입력</button>
+  <button class="tab" data-tab="3"><span class="tab-num">4</span>채점 결과</button>
+  <button class="tab" data-tab="4"><span class="tab-num">5</span>루브릭</button>
+  <button class="tab" data-tab="5"><span class="tab-num">6</span>모범답안</button>
+  <button class="tab" data-tab="6"><span class="tab-num">7</span>교사 확정</button>
+  <button class="tab" data-tab="7"><span class="tab-num">8</span>채점 샘플</button>
 </nav>
 <div class="recbar">
   <label for="rec-select">채점 결과</label>
@@ -198,6 +202,7 @@ th{font-size:11.5px;color:var(--muted);font-weight:600;background:var(--ivory)}
 <div class="content">
   <section class="panel active" id="p1"></section>
   <section class="panel" id="p2"></section>
+  <section class="panel" id="pans"></section>
   <section class="panel" id="p3"></section>
   <section class="panel" id="p4"></section>
   <section class="panel" id="p5"></section>
@@ -221,6 +226,7 @@ const 색이름 = { B: '대상', C: '제약', P: '상황', D: '정의', Q: '질�
 const 파트들 = ['근거대기', '세우기', '풀기', '답구하기'];
 
 function 탭(n) {
+  if (String(n) === 'ans' && $('#tab-ans')?.disabled) n = 1; // ③ 답안 입력은 문항분석 뒤에만
   document.querySelectorAll('.tab').forEach((b) => b.classList.toggle('active', b.dataset.tab === String(n)));
   document.querySelectorAll('.panel').forEach((p) => p.classList.toggle('active', p.id === 'p' + n));
   try { localStorage.setItem('hmos-d2-tab', String(n)); } catch (_) {}
@@ -464,15 +470,20 @@ function 입력칸그리기() {
           <button class="run-btn" id="in-an-run">문항분석 →</button><span class="status" id="in-an-st"></span>
           <div id="in-an-out"></div>
         </div>
-
-        <div id="in-ans" class="src-box">
-          <div class="label" id="in-ans-label">학생 답안 입력</div>
-          <div class="field"><div class="label">학생 이름</div><input id="in-n" placeholder="학생 1"></div>
-          <div id="in-st-box"></div>
-          <button class="run-btn" id="in-run">채점 →</button><span class="status" id="in-status"></span>
-        </div>
+        <button class="run-btn" id="in-go-ans" style="display:none">③ 답안 입력 →</button>
       </div>
     </div>`;
+  // ③ 답안 입력 탭 (오종래 2026-10-21) — 학생 이름 · 학생 답안 · 채점. 지금 경로의 채점 준비가 서야 탭이 열린다
+  $('#pans').innerHTML = `
+    <div class="sec-title">답안 입력</div>
+    <div class="sec-sub" id="in-ans-sub"></div>
+    <div id="in-ans-q"></div>
+    <div class="card" id="in-ans">
+      <div class="field"><div class="label">학생 이름</div><input id="in-n" placeholder="학생 1"></div>
+      <div id="in-st-box"></div>
+      <button class="run-btn" id="in-run">채점 →</button><span class="status" id="in-status"></span>
+    </div>`;
+  $('#in-go-ans').addEventListener('click', () => 탭('ans'));
   $('#in-run').addEventListener('click', 새채점);
   $('#in-an-run').addEventListener('click', 새문항분석);
   // 경로 2 — 문항분석 뒤 문항 · 모범답안 · 정답을 고치면 분석을 다시 해야 학생 답안 칸이 열린다
@@ -510,11 +521,17 @@ function 답칸그리기() {
   if (!el) return;
   const p = 준비들[문항방식];
   const 옛 = Object.fromEntries([...el.querySelectorAll('textarea')].map((t) => [t.id, t.value]));
-  $('#in-ans-label').textContent = (문항방식 === '분석' ? '②' : '③') + ' 학생 답안 입력';
   $('#in-run').disabled = !p;
+  // ③ 탭은 채점 준비가 있을 때만 — 없어지면 보고 있던 ③에서 ①로
+  $('#tab-ans').disabled = !p;
+  $('#tab-ans').classList.toggle('off', !p);
+  $('#in-go-ans').style.display = p ? '' : 'none';
+  if (!p && $('#pans').classList.contains('active')) 탭(1);
+  $('#in-ans-sub').textContent = 문항방식 === '분석' ? '경로 1 — ①에서 고른 문항의 확정 루브릭으로 채점합니다.' : '경로 2 — ② 문항분석에서 만든 루브릭으로 채점합니다.';
+  $('#in-ans-q').innerHTML = p ? `<div class="card"><h3>채점할 문항</h3><div class="pre">${esc(p.문항)}</div>
+    <div class="muted" style="margin-top:8px;font-size:12px">${(p.루브릭.소문항 || []).map((s) => `${s.번호 ? '(' + esc(s.번호) + ') ' : ''}급소 「${esc(s.급소?.실체 || '—')}」 · 조각 ${s.조각?.length || 0}개 · ${점(s.배점 ?? (s.조각 || []).reduce((a, c) => a + (Number(c.배점) || 0), 0))}점`).join('<br>')}</div></div>` : '';
   if (!p) {
-    el.innerHTML = `<div class="fmt-hint" style="margin:0 0 12px">${문항방식 === '분석' ? '위 ①에서 채점할 문항(소문항)을 고르면 학생 답안을 넣을 수 있습니다.' : '먼저 ②「문항분석 →」을 누르세요 — 5색 · 급소 · 루브릭 · 모범답안이 나온 뒤 학생 답안을 넣습니다.'}</div>`
-      + Object.entries(옛).map(([id, v]) => `<textarea id="${esc(id)}" hidden>${esc(v)}</textarea>`).join(''); // 쓰던 답은 숨겨 둔다
+    el.innerHTML = Object.entries(옛).map(([id, v]) => `<textarea id="${esc(id)}" hidden>${esc(v)}</textarea>`).join(''); // 쓰던 답은 숨겨 둔다
     return;
   }
   const 칸들 = p.소문항답 ? (p.루브릭.소문항 || []).map((s, j) => ({ id: 'in-st-' + j, 이름: `학생 답안 — (${s.번호 ?? j + 1})`, 예: `학생이 (${s.번호 ?? j + 1})번에 쓴 답` }))
@@ -569,7 +586,7 @@ async function 새문항분석() {
       논제: 문항, 계열: 엔진계열(), 총배점, 이어받기: true, ...(제시문.length ? { 제시문 } : { 공통자료: true }),
       모범답안: 모범, 정답: 정답 || undefined, gradeFormat: 입력형식 }) });
     준비들.새로 = { 키: '새', 문항, 계열: 루브릭.계열, 정답, 모범답안, 루브릭, 덧: { 논제: 문항, ...(제시문.length ? { 제시문 } : {}) }, 소문항답: 다문 };
-    st.textContent = '문항분석 끝 — 아래 ③에 학생 답안을 넣으세요 (자세히는 탭2 · 탭4 · 탭5)';
+    st.textContent = '문항분석 끝 — ③ 답안 입력 탭에서 학생 답안을 넣으세요 (자세히는 ② 문항분석 · ⑤ 루브릭 · ⑥ 모범답안)';
     $('#rec-select').value = '';
     보이기({ 학생: '', 문항, 계열: 루브릭.계열, 형식: 입력형식, 정답, 모범답안, 학생답: '', 루브릭: { status: 200, out: 루브릭 }, 채점: [] }, '새분석:' + Date.now());
     분석요약그리기();
@@ -842,7 +859,7 @@ async function 새채점() {
       st.textContent = `채점 중… ${s.번호 ? '(' + s.번호 + ') ' : ''}엔진 조각 · 4축 대조`;
       채점.push(await 소문항채점(보내기, s, 답, p.루브릭.계열 || p.계열, p.덧));
     }
-    st.textContent = '채점 끝 — 탭3에서 보세요';
+    st.textContent = '채점 끝 — ④ 채점 결과에서 보세요';
     $('#rec-select').value = '';
     const 답글 = 답들 ? 답들.map((a, i) => a ? `(${소문항[i].번호 ?? i + 1}) ${a}` : '').filter(Boolean).join('\n\n') : 학생답;
     보이기({ 학생, 문항: p.문항, 계열: p.루브릭.계열 || p.계열, 형식: 입력형식, 정답: p.정답, 모범답안: p.모범답안, 학생답: 답글, 루브릭: { status: 200, out: p.루브릭 }, 채점 }, p.키 + ':' + Date.now());
@@ -918,7 +935,7 @@ async function 문항분석() {
     축결과 = await 받기('/api/axis-rubric', { method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 문항, 제시문: 제시문나누기($('#hu-p').value), 총배점, 이름: $('#hu-name').value.trim() }) });
     그리기2축();
-    $('#ax-st').textContent = `저장 끝 — 검증/${축결과.파일} · 탭7에서도 보입니다`;
+    $('#ax-st').textContent = `저장 끝 — 검증/${축결과.파일} · ⑧ 채점 샘플에서도 보입니다`;
     축목록받기();
   } catch (e) { st.textContent = '분석 실패: ' + e.message; btn.disabled = false; }
 }
@@ -1020,7 +1037,7 @@ function 그리기3축상세() {
 
 function 그리기3() {
   if (!$('#p3-axis')) { $('#p3').innerHTML = '<div class="sec-title">채점 결과</div><div id="p3-rec"></div><div id="p3-axis"></div>'; 그리기3축(); }
-  if (!기록) { $('#p3-rec').innerHTML = 비었음('검증/ 폴더의 채점 결과를 고르거나 탭1에서 새로 채점하세요. 인문·사회 4축 채점은 아래에 있습니다.'); return; }
+  if (!기록) { $('#p3-rec').innerHTML = 비었음('검증/ 폴더의 채점 결과를 고르거나 ① 문항 입력에서 새로 채점하세요. 인문·사회 4축 채점은 아래에 있습니다.'); return; }
   $('#p3-rec').innerHTML = '<div class="sec-sub">판정 · 값 · 다경로 · 오류 이름은 모두 엔진 출력입니다. 조각마다 판단근거 전체를 보입니다.</div>' + 소문항들().map((s, i) => {
     const g = 채점of(s, i);
     if (!g || !g.out || !g.out.조각별) return `<div class="card">${s.번호 ? `<h3>소문항 (${esc(s.번호)})</h3>` : ''}<div class="muted">${esc(g?.건너뜀 || g?.out?.error || '채점 없음')}</div></div>`;
@@ -1167,7 +1184,7 @@ function 샘플카드(x, 갈래, 같은) {
     어디 = [...X, ...U].map((c) => `${자리(c)} ${esc(c.파트)} ${점(c.득점)}/${점(c.배점)}${c.오류 ? ' · ' + esc(c.오류) : c.결과 === '판정불가' ? ' · 판정불가' : ''}`).join('<br>');
   }
   const 꼴 = 갈래 === 'ok' ? (다.length ? 'multi-path' : 'ok') : 'no';
-  return `<div class="sample ${꼴}" data-file="${esc(x.파일)}" title="눌러서 탭3에서 보기">
+  return `<div class="sample ${꼴}" data-file="${esc(x.파일)}" title="눌러서 ④ 채점 결과에서 보기">
     <div class="sample-head"><span class="who">${esc(누구(x))}</span><span class="sc">${점(x.부분점수)} <small>/ ${점(x.만점)}</small></span></div>
     <div class="path-name">${경로}</div>
     ${어디 ? `<div class="where">${어디}</div>` : ''}
@@ -1182,7 +1199,7 @@ function 그리기7() {
   const 고른 = 샘플고르기().filter((x) => x.계열 === '수리');
   const 문항들 = [...new Set(고른.map((x) => x.문항번호))].sort((a, b) => a.localeCompare(b, 'ko', { numeric: true }));
   const 수리 = 문항들.length ? 문항들.map((q) => 문항묶음(q, 고른)).join('') : 비었음('검증/ 폴더에 수리 계열 q3~q7 채점 결과가 없습니다.');
-  $('#p7').innerHTML = '<div class="sec-title">채점 샘플</div><div class="sec-sub">대표 답안입니다. 검증/ 폴더 채점 결과 JSON에서 바로 읽습니다. 카드를 누르면 탭3에서 조각별로 볼 수 있습니다.</div>'
+  $('#p7').innerHTML = '<div class="sec-title">채점 샘플</div><div class="sec-sub">대표 답안입니다. 검증/ 폴더 채점 결과 JSON에서 바로 읽습니다. 카드를 누르면 ④ 채점 결과에서 조각별로 볼 수 있습니다.</div>'
     + `<div class="field-lane"><span class="fname">수리 계열</span><span class="fsub">${문항들.map(esc).join(' · ')}</span></div>${수리}`
     + `<div class="field-lane" style="margin-top:36px"><span class="fname">인문·사회 계열</span><span class="fsub">4축 루브릭 ${축목록.length}개 · 학생 답안 채점 준비 중</span></div>
        ${축목록.length ? `<div class="samples">${축목록.map(축카드).join('')}</div>` : '<div class="wait">탭2 「문항분석 →」으로 만든 4축 루브릭이 이 자리에 들어옵니다.</div>'}`;
