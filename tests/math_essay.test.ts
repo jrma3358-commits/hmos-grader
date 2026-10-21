@@ -201,9 +201,17 @@ describe('math_symbols — 아래첨자 (2026-10-21)', () => {
   });
 });
 
-// 「f」 한 글자는 기호가 아니다 [오종래 2026-10-21 확정] — f(x)·f(a)·f'(x) 꼴만
-describe('math_symbols — 「f」 단독 제외 (2026-10-21)', () => {
-  it('「f」 단독은 빠지고 함수 꼴만 기호', () => {
-    assert.deepEqual(math_symbols("함수 f 와 f(x), f(a), f'(x)"), ['f(x)', 'f(a)']);
+// 「f」 한 글자는 기호가 아니다 [오종래 2026-10-21 확정] — f(x)·f(a)·f'(x) 꼴만. f'(x)·f''(x)는 f(x)와 별개 기호
+describe('math_symbols — 「f」 단독 제외 · 도함수 별개 (2026-10-21)', () => {
+  it('「f」 단독은 빠지고 함수 꼴만 기호, f\'(x)·f\'\'(x)는 따로', () => {
+    assert.deepEqual(math_symbols("함수 f 와 f(x), f(a), f'(x), f''(x)"), ['f(x)', 'f(a)', "f'(x)", "f''(x)"]);
+  });
+  it('f\'(x)만 있는 제시문은 f(x) 노드에 얹히지 않는다', () => {
+    const 제약 = math_constraints('[논제 1]', [{ id: '가', 기호: '[가]', 텍스트: "f'(x)>0이면 증가한다" }]);
+    assert.deepEqual(constraint_links(['함수 f(x)'], 제약), []);
+    assert.deepEqual(constraint_links(["f'(x)의 부호"], 제약), [{ 출처: '가', 종류: '제시문', 말: "f'(x)" }]);
+  });
+  it('Σ는 기호', () => {
+    assert.deepEqual(math_symbols('Σk(n-k)'), ['Σ']);
   });
 });

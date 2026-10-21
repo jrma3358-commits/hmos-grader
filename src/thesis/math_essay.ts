@@ -157,7 +157,8 @@ export function math_symbols(t: string): string[] {
   for (const [이름, re] of 기호들) { const m = re.exec(t); if (m) 자리.push([m.index, 이름]); }
   // 아래첨자 「aₙ」은 「a_n」과 같은 기호
   for (const re of 꼴들) for (const m of t.matchAll(re)) 자리.push([m.index!, m[0].startsWith('P(') ? m[0] + ')' : m[0].replace('ₙ', '_n')]);
-  for (const m of t.matchAll(함수꼴)) 자리.push([m.index!, m[0].replace("'", '')]);
+  // 도함수 f'(x)·f''(x)는 f(x)와 별개 기호 [오종래 2026-10-21 확정] — 프라임을 떼지 않는다 (함수들()의 이어받기 열쇠와 다르다)
+  for (const m of t.matchAll(/[A-Za-z]'{0,2}\([A-Za-z]\)/g)) 자리.push([m.index!, m[0]]);
   // 긴 용어 먼저 — 「정적분」이 있으면 「적분」은 같은 자리라 따로 세지 않는다
   for (const w of [...용어들].sort((a, b) => b.length - a.length)) {
     for (const m of t.matchAll(new RegExp(w, 'g'))) if (!자리.some(([i, x]) => 용어들.includes(x) && i <= m.index! && m.index! < i + x.length)) 자리.push([m.index!, w]);
