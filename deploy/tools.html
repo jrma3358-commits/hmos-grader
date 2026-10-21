@@ -2332,7 +2332,7 @@ function 논제수칸그림() {
   el.style.display = 보임 ? '' : 'none';
   el.innerHTML = 보임 ? `<div class="card-title">4단계 · ${칸이름()} 수</div><div class="type-selector">${[1, 2, 3].map(n =>
     `<button type="button" class="type-btn${n === 논제수 ? ' selected' : ''}" onclick="논제수고르기(${n})">${n}개</button>`).join('')}</div>
-    <div class="c-meta" style="margin-top:4px;">${논제수 > 1 ? `${칸이름() === '소논제' ? '제시문은 한 칸, ' : ''}${칸이름()}는 탭 (1)~(${논제수})에 하나씩 넣으세요 — ${칸이름()}마다 따로 분석합니다.` : `${칸이름()}가 하나면 예전처럼 한 칸에 넣으세요.`}</div>` : '';
+    <div class="c-meta" style="margin-top:4px;">${논제수 > 1 ? `${칸이름() === '소논제' ? '제시문은 한 칸, ' : ''}${칸이름()}는 탭 (1)~(${논제수})에 하나씩 넣으세요 — ${칸이름() === '소논제' ? '뒤 소논제는 앞 소논제를 이어받습니다.' : '문제마다 따로 분석합니다.'}` : `${칸이름()}가 하나면 예전처럼 한 칸에 넣으세요.`}</div>` : '';
   // 0단계 · 1단계 탭 — 지금 탭 칸만 보인다
   const 탭 = 다논제() ? [...Array(논제수).keys()].map(i => `<button type="button" class="type-btn${i === 논제탭 ? ' selected' : ''}" onclick="논제탭고르기(${i})">(${i + 1})</button>`).join('') : '';
   document.getElementById('reg-tabs').innerHTML = 탭;
