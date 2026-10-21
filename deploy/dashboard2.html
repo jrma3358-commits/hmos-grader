@@ -1155,7 +1155,7 @@ function 대조표Html(s, o, k) {
   const 순서 = (p) => 파트들.indexOf(p);
   const 줄들 = [];
   const 쓴 = new Set();
-  for (const x of o.조각별.filter((x) => x.글 || x.복원)) { // 엔진 복원 줄도 (답은 맞으나 풀이 조각 없음, 2026-10-21)
+  for (const x of o.조각별.filter((x) => x.글 || x.엔진전체)) { // 근거대기 — 엔진 전체 답안 판정 줄도 (2026-10-21)
     const e = (s.조각 || []).find((c) => c.id === x.대응) || null;
     if (e) 쓴.add(e.id);
     줄들.push({ 키: x.조각id, e, x });
@@ -1167,8 +1167,8 @@ function 대조표Html(s, o, k) {
   }
   줄들.sort((a, b) => 순서((a.x || a.e).파트) - 순서((b.x || b.e).파트));
   const 대신 = (e) => 줄들.some((r) => r.x?.다경로 && r.x.파트 === e.파트);
-  const 자동 = ({ e, x }) => !x ? (대신(e) ? '다경로' : '불일치') : x.복원 ? (x.결과 === 'O' ? '일치' : '불일치') : x.다경로 ? '다경로' : !e || x.결과 === 'X' || x.같은단계 === '불일치' ? '불일치' : '일치';
-  const 까닭 = ({ e, x }) => !x ? (대신(e) ? '학생이 이 파트를 다른 경로로 대신함' : '학생 답에 같은 단계 없음') : x.복원 ? `답은 맞으나 풀이 조각 없음 — 엔진 복원 (엔진 ${x.결과})` : x.다경로 ? (x.다경로까닭 || 'AI가 다른 경로로 표시') : !e ? '같은 단계 엔진 조각 없음' : x.결과 === 'X' ? '엔진 X — ' + x.판단근거 : x.같은단계 === '불일치' ? `같은 단계 값 다름 (학생 ${x.학생값} · 모범 ${x.모범값})` : x.같은단계 === '일치' ? `같은 단계 값 ${x.모범값} 일치` : '같은 단계 · 엔진 O';
+  const 자동 = ({ e, x }) => !x ? (대신(e) ? '다경로' : '불일치') : x.엔진전체 ? (x.결과 === 'O' ? '일치' : x.결과 === 'X' ? '불일치' : '다경로') : x.다경로 ? '다경로' : !e || x.결과 === 'X' || x.같은단계 === '불일치' ? '불일치' : '일치';
+  const 까닭 = ({ e, x }) => !x ? (대신(e) ? '학생이 이 파트를 다른 경로로 대신함' : '학생 답에 같은 단계 없음') : x.엔진전체 ? `엔진 전체 답안 판정 (엔진 ${x.결과})` : x.다경로 ? (x.다경로까닭 || 'AI가 다른 경로로 표시') : !e ? '같은 단계 엔진 조각 없음' : x.결과 === 'X' ? '엔진 X — ' + x.판단근거 : x.같은단계 === '불일치' ? `같은 단계 값 다름 (학생 ${x.학생값} · 모범 ${x.모범값})` : x.같은단계 === '일치' ? `같은 단계 값 ${x.모범값} 일치` : '같은 단계 · 엔진 O';
   const 모범줄 = (c) => c.줄글 || c.풀기글 || (c.모범답 ? c.모범답.줄 : '') || c.실체 || '';
   const 고침 = 교사대조[k] || {};
   return `<div class="label" style="margin-top:14px">학생 답안 루브릭 추출 대조표</div>
@@ -1176,7 +1176,7 @@ function 대조표Html(s, o, k) {
     <div class="tbl-wrap"><table class="match-tbl"><tr><th>엔진 루브릭 조각</th><th>학생 답안에서 추출된 조각</th><th>대조 결과</th></tr>
     ${줄들.map((r) => { const a = 자동(r), v = 고침[r.키] || a; return `<tr>
       <td>${r.e ? `<b>${esc(r.e.id)}</b> · ${esc(r.e.파트)} · ${점(r.e.배점)}점<div class="mt-line">${esc(모범줄(r.e))}</div>` : '<span class="muted">— (모범답안에 없는 단계)</span>'}</td>
-      <td>${r.x ? `${표지(r.x.결과).replace('class="mark', 'style="display:inline-flex;width:22px;height:22px;font-size:12px;vertical-align:middle;margin-right:6px" class="mark')}<b>${esc(r.x.조각id)}</b><div class="mt-line">${r.x.글 ? `「${esc(r.x.글)}」` : '— 풀이 조각 없음 (엔진 복원)'}</div>` : '<span class="muted">— 학생 답에 없음</span>'}</td>
+      <td>${r.x ? `${표지(r.x.결과).replace('class="mark', 'style="display:inline-flex;width:22px;height:22px;font-size:12px;vertical-align:middle;margin-right:6px" class="mark')}<b>${esc(r.x.조각id)}</b><div class="mt-line">${r.x.글 ? `「${esc(r.x.글)}」` : '— 근거대기 줄 없음 (엔진이 답 전체에서 판정)'}</div>` : '<span class="muted">— 학생 답에 없음</span>'}</td>
       <td><select data-m="${esc(k)}|${esc(r.키)}" data-auto="${a}">${['일치', '다경로', '불일치'].map((t) => `<option${t === v ? ' selected' : ''}>${t}</option>`).join('')}</select><span class="mt-tag ${v}">${v}</span>${v !== a ? ` <span class="changed">고침 (자동 ${a})</span>` : ''}<div class="mt-line">${esc(까닭(r))}</div></td></tr>`; }).join('')}
     </table></div>`;
 }
@@ -1188,7 +1188,7 @@ function 조각카드(x) {
     ? `<div class="vals ${x.결과 === 'O' ? 'same' : x.결과 === 'X' ? 'diff' : ''}"><div class="val s"><span class="k">학생 값</span><span class="v">${esc(x.학생값 ?? '—')}</span></div><div class="val"><span class="k">모범 값</span><span class="v">${esc(x.모범값 ?? '—')}</span></div></div>` : '';
   const 다 = x.다경로 ? `<div class="multi"><div class="h">🔆 다경로 — ${esc(x.다경로)}</div>${x.다경로식 ? `<div>식 <code>${esc(x.다경로식)}</code></div>` : ''}${x.다경로까닭 ? `<div class="muted" style="color:#5A4A1A">${esc(x.다경로까닭)}</div>` : ''}</div>` : '';
   // 학생 경로 채점 — 단계 글(학생 답 그대로) · 같은 단계 모범 조각 (2026-10-21)
-  const 글 = x.글 !== undefined ? `<div class="ans" style="max-height:none;margin-top:8px">${x.글 ? esc(x.글) : `<span class="muted">${x.복원 ? '풀이 조각 없음 — 답이 맞아 엔진 판정으로 복원' : '학생 답에 이 파트 단계가 없음'}</span>`}</div>` : '';
+  const 글 = x.글 !== undefined ? `<div class="ans" style="max-height:none;margin-top:8px">${x.글 ? esc(x.글) : `<span class="muted">${x.엔진전체 ? '근거대기 줄을 따로 쓰지 않음 — 엔진이 답 전체에서 판정' : '학생 답에 이 파트 단계가 없음'}</span>`}</div>` : '';
   return `<div class="piece">
     <div class="piece-head">${표지(x.결과)}<span class="pid">${esc(x.조각id)}</span><span class="part">${esc(x.파트)}${x.요소 ? ' · ' + esc(x.요소) : ''}${x.대응 ? ' · 모범 ' + esc(x.대응) : ''}</span><span class="pts"><b>${점(x.득점)}</b> / ${점(x.배점)}</span></div>
     <div class="errline">${오류 ? `<span class="ename">${esc(오류)}</span>` : ''}<span class="why">${esc(오류 && 설명.startsWith(오류) ? 설명.slice(오류.length).replace(/^\s*[(—-]\s*/, '').replace(/\)\s*$/, '') : 설명)}</span></div>
