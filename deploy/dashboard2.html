@@ -235,7 +235,6 @@ function 탭(n) {
   if (String(n) === '6' && $('#tab-t')?.disabled) n = 3; // ⑤ 교사 확정은 모든 소문항 채점 뒤 한 번
   document.querySelectorAll('.tab').forEach((b) => b.classList.toggle('active', b.dataset.tab === String(n)));
   document.querySelectorAll('.panel').forEach((p) => p.classList.toggle('active', p.id === 'p' + n));
-  try { localStorage.setItem('hmos-d2-tab', String(n)); } catch (_) {}
   소탭그리기();
 }
 document.querySelectorAll('.tab').forEach((b) => b.addEventListener('click', () => 탭(b.dataset.tab)));
@@ -264,7 +263,7 @@ async function 목록받기() {
     `<optgroup label="${esc(k)}">${묶음[k].map((x) => `<option value="${esc(x.파일)}">${esc(x.학생 || x.파일)} · ${점(x.부분점수)}/${점(x.만점)} · ${esc(x.파일)}</option>`).join('')}</optgroup>`).join('');
   그리기7();
   let 처음 = '';
-  try { 처음 = new URLSearchParams(location.search).get('f') || localStorage.getItem('hmos-d2-file') || ''; } catch (_) {}
+  try { 처음 = new URLSearchParams(location.search).get('f') || ''; } catch (_) {}
   if (처음 && 목록.some((x) => x.파일 === 처음)) { sel.value = 처음; 열기(처음); }
 }
 $('#rec-select').addEventListener('change', (e) => e.target.value && 열기(e.target.value));
@@ -281,7 +280,6 @@ async function 열기(파일) {
     // .json을 떼고 부른다 — nginx가 .json으로 끝나는 주소를 막는다 (서버가 붙인다)
     const j = await 받기('/api/results/' + encodeURIComponent(파일.replace(/\.json$/, '')));
     보이기(j, '파일:' + 파일);
-    try { localStorage.setItem('hmos-d2-file', 파일); } catch (_) {}
   } catch (e) {
     $('#rec-info').innerHTML = `<span style="color:var(--no)">${esc(e.message)}</span>`;
   }
@@ -368,10 +366,8 @@ const 비었음 = (글) => `<div class="empty">${글}</div>`;
 // ── 탭1 문항 입력 ── 지금 기록의 문항 · 학생 답 + 새로 채점 (엔진 /api/rubric → /api/grade)
 // 계열 (오종래 2026-10-17): 수리·과학 = 지금 엔진 그대로(계열 「수리」로 보낸다) · 인문·사회 = 준비 중 안내만
 let 입력계열 = '수리·과학';
-try { if (localStorage.getItem('hmos-d2-field') === '인문·사회') 입력계열 = '인문·사회'; } catch (_) {}
 function 계열고르기(v) {
   입력계열 = v;
-  try { localStorage.setItem('hmos-d2-field', v); } catch (_) {}
   document.querySelectorAll('#in-field button').forEach((b) => b.classList.toggle('on', b.dataset.v === v));
   // 서술형 B를 고른 채 계열을 바꾸면 같은 소문항 수의 다른 계열 형식으로 (B-s1 ↔ B-h1, 2026-10-20)
   if (typeof 서술형B === 'function' && 서술형B(입력형식)) return 형식고르기(B형식(v, 입력형식.endsWith('2')));
@@ -395,21 +391,18 @@ const 형식안내 = {
   C1: '제시문(가·나·다…) · 논제 · 총배점 · 모범답안',
   C2: '제시문·조건(선택) · 논제 · 총배점 · 모범답안',
 };
+// [오종래 2026-10-21] 페이지를 처음 열면 형식 · 경로 · 입력이 모두 빈 채로 — 이 브라우저에 남은 형식 · 탭 · 쓰던 글을 되살리지 않는다
 let 입력형식 = '';
-// 옛 B1·B2(이 브라우저에 남은 값)는 지금 계열의 새 형식으로
-try { let v = localStorage.getItem('hmos-d2-format'); if (v === 'B1' || v === 'B2') v = B형식(입력계열, v === 'B2'); if (형식들[v]) 입력형식 = v; } catch (_) {}
 /** 계열 칸만 맞춘다 (형식은 그대로) */
 function 계열맞춤(계열) {
   if (입력계열 === 계열) return;
   입력계열 = 계열;
-  try { localStorage.setItem('hmos-d2-field', 계열); } catch (_) {}
   document.querySelectorAll('#in-field button').forEach((b) => b.classList.toggle('on', b.dataset.v === 계열));
 }
 function 형식고르기(v) {
   입력형식 = 형식들[v] ? v : '';
   // 서술형 B는 형식에 계열이 들어 있다 — 계열 칸을 맞춘다
   if (서술형B(입력형식)) 계열맞춤(입력형식[2] === 'h' ? '인문·사회' : '수리·과학');
-  try { localStorage.setItem('hmos-d2-format', 입력형식); } catch (_) {}
   document.querySelectorAll('#in-fmt button').forEach((b) => b.classList.toggle('on', b.dataset.v === 입력형식));
   // 형식을 다 고르기 전에는 다문 칸만 빼고 다 보인다 (잠긴 채로 — 입력칸잠금)
   document.querySelectorAll('#src-새로 [data-fmt]').forEach((el) => { const fs = el.dataset.fmt.split(' '); el.style.display = (입력형식 ? fs.includes(입력형식) : !fs.includes('B-s2')) ? '' : 'none'; });
@@ -417,7 +410,10 @@ function 형식고르기(v) {
   $('#in-q-label').textContent = 단문B(입력형식) || !입력형식 ? '문항' : '논제';
   새준비지우기();
   B2그리기();
-  $('#in-fmt-hint').textContent = 입력형식 ? `${형식들[입력형식]} — ${형식안내[입력형식]}` : '문제 형식을 1단계부터 차례로 고르세요 — 다 고르면 문항 입력란이 열립니다.';
+  $('#in-fmt-hint').textContent = 입력형식 ? `${형식들[입력형식]} — ${형식안내[입력형식]}` : '문제 형식을 1단계부터 차례로 고르세요 — 다 고르면 경로를 고릅니다.';
+  // 경로 버튼은 형식을 다 고른 뒤에만 — 형식을 풀면 고른 경로도 푼다
+  $('#in-path').style.display = 입력형식 ? '' : 'none';
+  if (!입력형식 && 문항방식) 방식고르기('');
   입력칸보이기();
   입력칸잠금();
   if (분석.목록) 단위목록그리기();
@@ -425,19 +421,16 @@ function 형식고르기(v) {
 /** 입력 칸은 늘 보인다 (형식을 다 고르기 전에는 잠김, 2026-10-20) — 인문·사회는 탭2 4축 문항분석 칸도 */
 function 입력칸보이기() {
   $('#in-form').style.display = '';
-  $('#in-wait').style.display = 입력형식 && 입력계열 === '인문·사회' ? '' : 'none';
+  $('#in-wait').style.display = 입력형식 && 입력계열 === '인문·사회' && 문항방식 === '새로' ? '' : 'none';
 }
 
 // 형식 선택 [오종래 2026-10-20 확정] — 자동 판별 없음. 교사가 1 종류(서술형 · 논술형) → 2 계열 → 3 소문항 수 / 제시문을 차례로 고른다
 //   (단계 버튼 = /format-detect.js 형식선택, 문항분석 · 질문 설계 도구와 같다). 고른 형식 = 문항분석 형식(B-s1 … C-2a · C-2b) → 채점 형식(C-1a → C1 · C-2a·C-2b → C2).
 //   계열 칸은 고른 형식에서 (B-s · C-2 → 수리·과학, B-h · C-1a → 인문·사회). 고른 형식 그대로 서버에 계열형식으로 보낸다 (서버가 엔진 계열을 고정)
 let 선택형식 = '';
-try { const v = localStorage.getItem('hmos-d2-pick'); if (HMOS형식.채점형식으로(v) === 입력형식 && 입력형식) 선택형식 = v; } catch (_) {}
-if (!선택형식 && 입력형식) 선택형식 = 입력형식 === 'C1' ? 'C-1a' : 입력형식 === 'C2' ? 'C-2a' : 입력형식;
 let 형식단계 = null;
 function 형식단계바뀜(형식) {
   선택형식 = 형식 || '';
-  try { localStorage.setItem('hmos-d2-pick', 선택형식); } catch (_) {}
   const 엔진 = HMOS형식.엔진계열(선택형식);
   if (엔진) 계열맞춤(엔진 === '수리' ? '수리·과학' : '인문·사회');
   형식고르기(HMOS형식.채점형식으로(선택형식) || '');
@@ -462,7 +455,7 @@ function 입력칸잠금() {
 // 두 경로 (오종래 2026-10-21): 경로 1 문항분석에서 불러오기 = 분석된 문항 선택 → 학생 답안 입력 → 채점 ·
 //   경로 2 새로 입력 = 문항 · 모범답안 · 정답 입력 → 문항분석(/api/rubric — 5색 · 급소 · 루브릭 · 모범답안) → 학생 답안 입력 → 채점.
 //   학생 답안 칸은 경로마다 채점 준비(준비들)가 서야 열린다. 채점 뒤는 기존 탭 순서 (3 채점 결과 → 4 루브릭 → 5 모범답안 → 6 교사 확정)
-let 문항방식 = '새로';
+let 문항방식 = ''; // '' = 아직 경로를 안 고름 · '분석' 경로 1 · '새로' 경로 2
 const 분석 = { 목록: null, 출처: '', 고른: '' };
 /** 채점 준비 — 경로마다 { 키, 문항, 계열, 정답, 모범답안, 루브릭(out), 덧(/api/axis-grade 논제 · 제시문), 소문항답(소문항마다 학생 답 칸) } */
 const 준비들 = { 분석: null, 새로: null };
@@ -492,7 +485,7 @@ function 입력칸그리기() {
     <div class="card"><h3>새로 채점</h3>
       <div class="label">문제 형식 <span class="muted" style="font-weight:400">— 차례로 고르세요. 채점 대시보드는 서술형 · 논술형만 (객관식 · 주관식은 문항 분석에서)</span></div>
       <div id="in-steps"></div>
-      <div class="fmt-hint" id="in-fmt-hint">문제 형식을 1단계부터 차례로 고르세요 — 다 고르면 문항 입력란이 열립니다.</div>
+      <div class="fmt-hint" id="in-fmt-hint">문제 형식을 1단계부터 차례로 고르세요 — 다 고르면 경로를 고릅니다.</div>
       <div id="in-wait" style="display:none">
         <div class="label" style="margin-top:4px">탭2 4축 문항분석 (루브릭 저장용 · 기존)</div>
         <div class="sec-sub" style="margin:4px 0 12px">제시문과 문항을 넣은 뒤 <b>탭2 「문항분석 →」</b>을 누르세요. 엔진이 5색 · 급소 K를 읽고, 4축 루브릭을 만들어 검증/ 폴더에 저장합니다. (학생 답안 채점은 준비 중)</div>
@@ -504,8 +497,11 @@ function 입력칸그리기() {
         </div>
       </div>
       <div id="in-form">
-        <div class="label">경로</div>
-        <div class="field-pick small" id="in-src"><button data-v="분석">경로 1 · 문항분석에서 불러오기</button><button data-v="새로">경로 2 · 새로 입력</button></div>
+        <div id="in-path" style="display:none">
+          <div class="label">경로</div>
+          <div class="field-pick small" id="in-src"><button data-v="분석">경로 1 · 문항분석에서 불러오기</button><button data-v="새로">경로 2 · 새로 입력</button></div>
+          <div class="fmt-hint" id="in-path-hint">경로를 고르세요 — 경로 1은 문항분석에서 분석해 둔 문항을 불러오고, 경로 2는 문항을 새로 넣습니다.</div>
+        </div>
 
         <div id="src-분석" class="src-box">
           <div class="label">분석된 문항 선택</div>
@@ -522,13 +518,13 @@ function 입력칸그리기() {
           <div class="field" data-fmt="C1 C2"><div class="label"><span id="in-ps-label">제시문</span> ${파일칸('in-ps')}</div><textarea id="in-ps" style="min-height:180px" placeholder="(가)&#10;…&#10;&#10;(나)&#10;… — 「(가)」 「[가]」 머리 줄로 나눕니다"></textarea></div>
           <div data-fmt="B-s1 B-h1 C1 C2">
             <div class="field"><div class="label"><span id="in-q-label">문항</span> ${파일칸('in-q')}</div><textarea id="in-q" placeholder="글을 붙이거나 파일(.txt · .docx · .pdf)을 올리세요. 예) a,a,b,c,d,e가 쓰인 6장 카드를 일렬로 나열할 때 양 끝이 모음이 오는 경우의 수를 구하고 풀이 과정을 서술하시오."></textarea></div>
-            <div class="field"><div class="label">총배점</div><input id="in-p" type="number" min="0.1" step="0.1" value="5"></div>
+            <div class="field"><div class="label">총배점</div><input id="in-p" type="number" min="0.1" step="0.1" placeholder="5"></div>
             <div class="field"><div class="label">모범답안 ${파일칸('in-m')}</div><textarea id="in-m" placeholder="글을 붙이거나 파일(.txt · .docx · .pdf)을 올리세요"></textarea></div>
           </div>
           <div data-fmt="B-s2 B-h2" id="in-b2"></div>
           <div class="field"><div class="label">정답 (검증용, 선택)</div><input id="in-a" placeholder="72가지"></div>
         </div>
-        <button class="run-btn" id="in-go-an">문항분석 →</button><span class="status" id="in-go-st"></span>
+        <div id="in-go" style="display:none"><button class="run-btn" id="in-go-an">문항분석 →</button><span class="status" id="in-go-st"></span></div>
       </div>
     </div>`;
   // ③ 답안 입력 탭 (오종래 2026-10-21) — 학생 이름 · 학생 답안 · 채점. 지금 경로의 채점 준비가 서야 탭이 열린다
@@ -548,11 +544,6 @@ function 입력칸그리기() {
   형식단계 = HMOS형식.형식선택($('#in-steps'), { 종류들: ['서술형', '논술형'], 줄: 'field-pick', 버튼: '', 고름: 'on', 이름표: 'label', 바뀜: 형식단계바뀜 });
   document.querySelectorAll('#in-src button').forEach((b) => b.addEventListener('click', () => 방식고르기(b.dataset.v)));
   document.querySelectorAll('#in-form input[data-for], #in-wait input[data-for]').forEach((inp) => inp.addEventListener('change', () => 파일넣기(inp)));
-  for (const id of ['hu-p', 'hu-q', 'hu-pt', 'hu-name']) { // 쓰던 글은 이 브라우저에 남긴다
-    const el = $('#' + id);
-    try { const v = localStorage.getItem('hmos-d2-' + id); if (v != null) el.value = v; } catch (_) {}
-    el.addEventListener('input', () => { try { localStorage.setItem('hmos-d2-' + id, el.value); } catch (_) {} });
-  }
   document.querySelectorAll('#in-form input[data-photo]').forEach((inp) => inp.addEventListener('change', () => 사진넣기(inp)));
   $('#an-pull').addEventListener('click', () => 대시보드요청());
   $('#an-file').addEventListener('change', 목록파일열기);
@@ -567,6 +558,10 @@ function 방식고르기(v) {
   document.querySelectorAll('#in-src button').forEach((b) => b.classList.toggle('on', b.dataset.v === v));
   $('#src-분석').style.display = v === '분석' ? '' : 'none';
   $('#src-새로').style.display = v === '새로' ? '' : 'none';
+  // 경로를 고르기 전에는 입력창 · 「문항분석 →」을 숨긴다 (오종래 2026-10-21)
+  $('#in-go').style.display = v ? '' : 'none';
+  $('#in-path-hint').style.display = v ? 'none' : '';
+  입력칸보이기();
   $('#in-run').textContent = v === '분석' ? '확정 루브릭으로 채점 →' : '분석한 루브릭으로 채점 →';
   답칸그리기();
   if (v === '분석' && !분석.목록) 대시보드요청(true);
@@ -623,6 +618,7 @@ function 새준비지우기(알림) {
 function 분석으로() {
   const st = $('#in-go-st');
   if (!입력형식) { st.textContent = '문제 형식을 고르세요'; return; }
+  if (!문항방식) { st.textContent = '경로를 고르세요'; return; }
   if (문항방식 === '분석' && !준비들.분석) { st.textContent = '채점할 문항(소문항)을 고르세요'; return; }
   if (문항방식 === '새로' && !(다문B(입력형식) ? B2칸.some((x) => x.q.trim()) : $('#in-q').value.trim())) { st.textContent = '문항을 넣으세요'; return; }
   st.textContent = '';
@@ -637,6 +633,7 @@ function 분석으로() {
 function 문항분석하기() {
   if (문항방식 === '새로') return 새문항분석();
   const st = $('#in-an-st'), p = 준비들.분석;
+  if (!문항방식) { st.textContent = '① 문항 입력에서 형식과 경로를 고르세요'; return; }
   if (!p) { st.textContent = '① 문항 입력에서 분석된 문항을 고르세요'; return; }
   p.분석기록 = { 학생: '', 문항: p.문항, 계열: p.계열, 형식: 입력형식, 정답: p.정답, 모범답안: p.모범답안, 학생답: '', 루브릭: { status: 200, out: p.루브릭 }, 채점: [] };
   p.보임 = true;
@@ -666,7 +663,8 @@ async function 새문항분석() {
     문항 = $('#in-q').value.trim();
     모범답안 = $('#in-m').value.trim();
     모범 = 모범답안 || undefined;
-    총배점 = Number($('#in-p').value) || 5;
+    총배점 = Number($('#in-p').value);
+    if (!(총배점 > 0)) { st.textContent = '① 문항 입력에 총배점을 넣으세요'; return; }
     if (입력형식 === 'C1' || 입력형식 === 'C2') 제시문 = 제시문나누기($('#in-ps').value);
     if (입력형식 === 'C1' && !제시문.length) { st.textContent = '논리서술논술은 ① 문항 입력에 제시문을 넣으세요'; return; }
   }
@@ -1389,7 +1387,6 @@ function 문항묶음(q, 고른) {
 
 // ── 시작 ──
 그리기();
-try { const t = localStorage.getItem('hmos-d2-tab'); if (t) 탭(t); } catch (_) {}
 목록받기().then(축목록받기).then(축채점받기);
 </script>
 </body>
