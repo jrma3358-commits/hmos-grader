@@ -141,7 +141,9 @@ export function passage_cores(
   for (const s of 소문항) {
     for (const p of 제시문) {
       // 2 요구 — 이 소문항이 이 제시문을 부르지 않으면 보지 않는다
-      const 요구 = s.요구.find((r) => r.제시문.includes(p.id));
+      //   공통 발문(도구)과 소문항 문장(표적 등)이 같은 제시문을 함께 부르면 표적 → 관계 → 도구 (봉인⑨ 순서) 가운데 앞의 것
+      const 부른 = s.요구.filter((r) => r.제시문.includes(p.id));
+      const 요구 = (['표적', '관계', '도구'] as 요구종류[]).map((k) => 부른.find((r) => r.종류 === k)).find(Boolean);
       if (!요구) continue;
       const ns = 노드.get(p.id)!;
       // 3 닿는 부분 — 4단계 연결 단락 급소 → 급소 덩어리 어절 겹침 → 논제 B 어절 겹침
