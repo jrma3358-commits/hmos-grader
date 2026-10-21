@@ -194,3 +194,9 @@ describe('constraint_links — 제시문 수학 기호 (2026-10-21)', () => {
     assert.deepEqual(math_symbols('n이 자연수 x'), []);
   });
 });
+
+describe('math_symbols — 아래첨자 (2026-10-21)', () => {
+  it('aₙ은 a_n과 같은 기호', () => {
+    assert.deepEqual(math_symbols('lim aₙ'), ['lim', 'a_n']);
+  });
+});

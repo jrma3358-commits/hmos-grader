@@ -311,6 +311,8 @@ function referencedLabels(question: string): string[] | undefined {
 const clean = (s: string) => s.trim().replace(/^[\s,]+/, '');
 /** keyword 포함 (원칙 ②) — 한쪽이 다른 쪽을 품는다. 품기는 쪽은 두 글자 이상 (한 글자 조각은 어디에나 들어 있다) */
 export const contains = (a: string, b: string) => (b.length >= 2 && a.includes(b)) || (a.length >= 2 && b.includes(a));
+/** 단락 B 실체(a)와 논제 열쇠(b)가 닿는가 */
+export type KeyMatch = (a: string, b: string) => boolean;
 
 /**
  * 논제 방향의 열쇠 — 논제 급소 keyword가 먼저, 관련 정보(논제의 다른 B 노드 실체)가 다음 (원칙 ②).
@@ -340,13 +342,14 @@ function paragraphPivot(
   keys: { key: string; node: string }[],
   prev: ParagraphPivot | null,
   exceptions: string[],
+  match: KeyMatch,
 ): ParagraphPivot | null {
   const resolve = (n: PathNode) => (isDeictic(n.entity) && prev ? { entity: prev.entity, deixis: clean(n.entity) } : { entity: clean(n.entity) });
   for (const { key, node } of keys) {
     for (const [place, nodes] of [['서두', p.head], ['말미', p.tail]] as const) {
       for (const n of nodes) {
         const r = resolve(n);
-        if (!exceptions.includes(r.entity) && contains(r.entity, key)) return { node: n, ...r, place, key, questionNode: node };
+        if (!exceptions.includes(r.entity) && match(r.entity, key)) return { node: n, ...r, place, key, questionNode: node };
       }
     }
   }
@@ -367,8 +370,9 @@ export function passageLabels(paragraphs: PassageParagraph[]): (string | undefin
  * 급소가 없는 단락은 배경지식 단락이다. 기호·지정 연결은 급소와 따로 본다.
  * 논제가 참조 제시문을 밝혔으면(「제시문 [가], [나], [다]를 참고하여」) 그 단락만 연결 후보다 — keyword만으로는 논제별 참조 범위를 모른다.
  * `참조`를 넘기면 논제 글 대신 그 범위를 쓴다 — 공통 발문을 떼어 낸 소문항(thesis/split.ts)은 참조를 따로 들고 온다.
+ * `match`는 단락 B와 논제 열쇠가 닿는가 — 기본은 글자 포함(contains). 수리 형식은 수학 기호 겹침을 넘긴다 (오종래 2026-10-21 확정)
  */
-export function connectPassage(question: V2Analysis, passage: PassageRecognition, 참조?: string[]): PassageConnection {
+export function connectPassage(question: V2Analysis, passage: PassageRecognition, 참조?: string[], match: KeyMatch = contains): PassageConnection {
   const exceptions = passage.keyExceptions;
   const keys = questionKeys(question).filter((k) => !exceptions.includes(k.key));
   const scope = 참조?.length ? 참조 : referencedLabels(question.question);
@@ -376,7 +380,7 @@ export function connectPassage(question: V2Analysis, passage: PassageRecognition
   const inScope = (i: number) => !scope || (labels[i] !== undefined && scope.includes(labels[i]!));
   const outOfScope = passage.paragraphs.flatMap((_, i) => (inScope(i) ? [] : [i]));
   const pivots: (ParagraphPivot | null)[] = [];
-  passage.paragraphs.forEach((p, i) => pivots.push(inScope(i) ? paragraphPivot(p, keys, pivots.at(-1) ?? null, exceptions) : null));
+  passage.paragraphs.forEach((p, i) => pivots.push(inScope(i) ? paragraphPivot(p, keys, pivots.at(-1) ?? null, exceptions, match) : null));
 
   const links: PassageLink[] = [];
   const add = (kind: PassageLinkKind, paragraph: number, questionNode: string) => {
@@ -397,7 +401,7 @@ export function connectPassage(question: V2Analysis, passage: PassageRecognition
   pivots.forEach((pv, i) => pv && add('급소', i, pv.questionNode));
 
   const wholeKey = passage.pivot && clean(passage.pivot.keyword ?? passage.pivot.node.entity);
-  const wholeMatches = wholeKey !== undefined && keys.length ? keys.some((k) => contains(wholeKey, k.key)) : undefined;
+  const wholeMatches = wholeKey !== undefined && keys.length ? keys.some((k) => match(wholeKey, k.key)) : undefined;
   const background = pivots.flatMap((pv, i) => (pv || !inScope(i) ? [] : [i]));
   return { pivots, links, wholeMatches, background, ...(scope && { scope }), outOfScope };
 }

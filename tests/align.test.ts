@@ -189,3 +189,17 @@ describe('align_passage — 논제 B 연결 (2026-10-21)', () => {
     assert.deepEqual(r.사족, []);
   });
 });
+
+// 수리 형식 4단계 기호 연결 [오종래 2026-10-21 확정] — C-2a·C-2b는 단락 B ↔ 논제 열쇠를 수학 기호로, 인문논술은 글자 그대로
+describe('align_passage — 수리 기호 연결 (2026-10-21)', () => {
+  const 수리제시문 = recognizePassage('[가] 접선를 y=f(x)\n\n[나] 극한값를 lim(a_n/b_n)=lim a_n/lim b_n\n\n[다] 기댓값를 E(X)=x1p1', table);
+  it('수리 — 논제 급소 lim(a_n/nb_n)이 [나] lim으로 닿는다, [다]는 배경', () => {
+    const r = align_passage([{ 번호: '1', 참조: [], 인식: 인식('lim(a_n/nb_n)를 설명하시오.') }], 수리제시문, { 수리: true });
+    assert.deepEqual(r.연결[0].단락.map((d) => d.단락), ['나']);
+    assert.deepEqual(r.소문항[0].연결.background, [0, 2]);
+  });
+  it('글자 그대로(인문논술)면 lim(a_n/nb_n)은 닿지 않는다', () => {
+    const r = align_passage([{ 번호: '1', 참조: [], 인식: 인식('lim(a_n/nb_n)를 설명하시오.') }], 수리제시문);
+    assert.deepEqual(r.사족, [{ 소문항: '1', 급소: 'lim(a_n/nb_n)' }]);
+  });
+});

@@ -15,6 +15,7 @@
 
 import type { V2Analysis } from '../fq/pipeline.ts';
 import { essay_pivot_chunks } from './chunk.ts';
+import { math_symbols } from './math_essay.ts';
 import { connectPassage, passageLabels, type PassageConnection, type PassageRecognition } from '../fq/v2/passage.ts';
 import type { 사족노드 } from '../filter/sealed/items.ts';
 
@@ -112,8 +113,17 @@ export interface 정합엔진 {
 
 const clean = (s: string) => s.trim().replace(/^[\s,，]+/, '');
 
-/** 4단계 엔진 — 논제 급소마다 이어진 단락 급소, 이어진 단락이 없는 급소는 사족 */
-export function align_passage(소문항들: 인식소문항[], passage: PassageRecognition): 정합엔진 {
+/** 수학 기호 겹침 — 단락 B와 논제 열쇠에 같은 수학 기호(lim·접선·f(x)·E(X) …)가 있으면 닿는다 */
+const 기호겹침 = (a: string, b: string) => {
+  const 열쇠 = math_symbols(b);
+  return 열쇠.length > 0 && math_symbols(a).some((x) => 열쇠.includes(x));
+};
+
+/**
+ * 4단계 엔진 — 논제 급소마다 이어진 단락 급소, 이어진 단락이 없는 급소는 사족.
+ * 수리 형식(C-2a·C-2b)은 단락 B와 논제 열쇠를 글자 대신 수학 기호로 맞댄다 [오종래 2026-10-21 확정]. 인문논술은 글자 그대로
+ */
+export function align_passage(소문항들: 인식소문항[], passage: PassageRecognition, 옵션: { 수리?: boolean } = {}): 정합엔진 {
   const labels = passageLabels(passage.paragraphs);
   const 이름 = (i: number) => labels[i] ?? `#${i + 1}`;
   const 연결: 급소연결[] = [];
@@ -121,7 +131,7 @@ export function align_passage(소문항들: 인식소문항[], passage: PassageR
   const 자료들 = data_tables(passage.paragraphs.map((p) => p.text));
 
   for (const s of 소문항들) {
-    const c = connectPassage(s.인식, passage, s.참조);
+    const c = connectPassage(s.인식, passage, s.참조, 옵션.수리 ? 기호겹침 : undefined);
     원본.push({ 번호: s.번호, 연결: c });
     const 덩어리들 = essay_pivot_chunks(s.인식.graph, s.인식.pivot);
     // 병렬 자료 표 [오종래 2026-10-20 확정] — 논제가 「[자료 N]」을 부르면 그 자료 표가 이 소문항의 제시문 B (단락 급소 = 표 제목). 소문항 덩어리마다 잇는다
