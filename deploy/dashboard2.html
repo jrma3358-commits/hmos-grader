@@ -184,14 +184,11 @@ th{font-size:11.5px;color:var(--muted);font-weight:600;background:var(--ivory)}
   <a class="brand" href="/">HMOS <em>채점 대시보드</em></a>
   <button class="tab active" data-tab="1"><span class="tab-num">1</span>문항 입력</button>
   <button class="tab" data-tab="2"><span class="tab-num">2</span>문항분석</button>
-  <!-- 탭 순서 (오종래 2026-10-21): ① 문항 입력 ② 문항분석 ③ 답안 입력 ④ 채점 결과 ⑤ 루브릭 ⑥ 모범답안 ⑦ 교사 확정 (+ 채점 샘플).
-       data-tab은 패널 id(p + 값) — 보이는 번호만 바꾸고 패널 id는 그대로 둔다 (③ 답안 입력 = pans) -->
+  <!-- 탭 순서 (오종래 2026-10-21 확정): ① 문항 입력 ② 문항분석(5색 · 급소 · 루브릭 · 모범답안) ③ 답안 입력 ④ 채점 결과 ⑤ 교사 확정.
+       옛 루브릭 · 모범답안 · 채점 샘플 탭은 ②에 합쳤다. data-tab은 패널 id(p + 값) — 보이는 번호만 차례로, 패널 id는 그대로 (③ = pans · ④ = p3 · ⑤ = p6) -->
   <button class="tab off" data-tab="ans" id="tab-ans" disabled title="문항분석이 끝나면 열립니다"><span class="tab-num">3</span>답안 입력</button>
   <button class="tab" data-tab="3"><span class="tab-num">4</span>채점 결과</button>
-  <button class="tab" data-tab="4"><span class="tab-num">5</span>루브릭</button>
-  <button class="tab" data-tab="5"><span class="tab-num">6</span>모범답안</button>
-  <button class="tab" data-tab="6"><span class="tab-num">7</span>교사 확정</button>
-  <button class="tab" data-tab="7"><span class="tab-num">8</span>채점 샘플</button>
+  <button class="tab" data-tab="6"><span class="tab-num">5</span>교사 확정</button>
 </nav>
 <div class="recbar">
   <label for="rec-select">채점 결과</label>
@@ -204,10 +201,7 @@ th{font-size:11.5px;color:var(--muted);font-weight:600;background:var(--ivory)}
   <section class="panel" id="p2"></section>
   <section class="panel" id="pans"></section>
   <section class="panel" id="p3"></section>
-  <section class="panel" id="p4"></section>
-  <section class="panel" id="p5"></section>
   <section class="panel" id="p6"></section>
-  <section class="panel" id="p7"></section>
 </div>
 
 <script src="/format-detect.js"></script>
@@ -216,6 +210,7 @@ th{font-size:11.5px;color:var(--muted);font-weight:600;background:var(--ivory)}
 let 목록 = [];
 let 기록 = null;
 let 기록키 = '';
+let 기록준비 = null; // 지금 기록을 만든 채점 준비 (준비들.분석 · 준비들.새로) — 검증/ 파일이면 null
 let 교사 = {}; // 소문항 자리 → { 조각id: 'O'|'X'|'판정불가' } — 엔진 판정과 다를 때만
 
 const $ = (s) => document.querySelector(s);
@@ -227,6 +222,7 @@ const 파트들 = ['근거대기', '세우기', '풀기', '답구하기'];
 
 function 탭(n) {
   if (String(n) === 'ans' && $('#tab-ans')?.disabled) n = 1; // ③ 답안 입력은 문항분석 뒤에만
+  if (!document.getElementById('p' + n)) n = 1; // 없앤 탭(옛 루브릭 · 모범답안 · 채점 샘플)을 기억한 브라우저
   document.querySelectorAll('.tab').forEach((b) => b.classList.toggle('active', b.dataset.tab === String(n)));
   document.querySelectorAll('.panel').forEach((p) => p.classList.toggle('active', p.id === 'p' + n));
   try { localStorage.setItem('hmos-d2-tab', String(n)); } catch (_) {}
@@ -280,9 +276,11 @@ async function 열기(파일) {
   }
 }
 
-function 보이기(j, 키) {
+/** 기록 보이기 — p = 이 기록을 만든 채점 준비 (검증/ 파일이면 없음) */
+function 보이기(j, 키, p) {
   기록 = j;
   기록키 = 키;
+  기록준비 = p || null;
   교사 = {};
   try { 교사 = JSON.parse(localStorage.getItem('hmos-d2-teacher:' + 키) || '{}'); } catch (_) {}
   그리기();
@@ -299,7 +297,13 @@ function 그리기() {
   const 축들4 = (기록?.채점 || []).map((g) => g.축).filter((a) => a && !a.error);
   const 축합 = 축들4.length ? `<span class="score">4축 ${점(축들4.reduce((a, x) => a + x.부분점수, 0))} / ${점(축들4.reduce((a, x) => a + x.만점, 0))}</span>` : '';
   $('#rec-info').innerHTML = 기록 ? `<span>${esc(기록.학생 || '학생')}</span>${축합}<span class="score">${축합 ? '엔진 ' : ''}${점(총)} / ${점(만)}</span><span class="muted">계열 ${esc(기록.계열 || '')}${기록.형식 && 형식들[기록.형식] ? ` · ${형식들[기록.형식]}` : ''}${엔진 ? ` · 엔진 ${esc(엔진)}` : ''}</span>` : '';
-  그리기1(); 그리기2(); 그리기3(); 그리기4(); 그리기5(); 그리기6();
+  그리기1(); 그리기2(); 그리기3(); 그리기6();
+}
+/** 보이던 기록을 비운다 (새 문항으로 넘어감) */
+function 기록비우기() {
+  기록 = null; 기록키 = ''; 기록준비 = null; 교사 = {};
+  $('#rec-select').value = '';
+  그리기();
 }
 
 const 비었음 = (글) => `<div class="empty">${글}</div>`;
@@ -409,8 +413,8 @@ const 준비들 = { 분석: null, 새로: null };
 function 그리기1() {
   // 입력 칸은 처음 한 번만 그린다 — 기록을 바꿔도 쓰던 글 · 고른 문항이 남는다
   if (!$('#in-form')) 입력칸그리기();
-  // 경로 2 문항분석만 끝난 기록은 「② 문항분석」 칸이 보인다
-  $('#p1-now').innerHTML = 기록 && !기록키.startsWith('새분석:') ? `
+  // 검증/ 파일 기록만 — 경로 1 · 2로 만든 기록은 ② · ④에서 본다
+  $('#p1-now').innerHTML = 기록 && !기록준비 ? `
     <div class="card"><h3>지금 보는 문항</h3><div class="pre">${esc(기록.문항)}</div>
       <div class="grid2" style="margin-top:14px">
         <div><div class="label">학생 답안 — ${esc(기록.학생 || '')}</div><div class="pre" style="background:var(--ivory);padding:10px 12px;border-radius:6px">${esc(기록.학생답)}</div></div>
@@ -426,7 +430,7 @@ const 파일칸 = (id, 사진) => `<span class="up">
 function 입력칸그리기() {
   $('#p1').innerHTML = `
     <div class="sec-title">문항 입력</div>
-    <div class="sec-sub">위에서 저장된 채점 결과를 고르거나, 아래 두 경로로 채점하세요 — 경로 1 분석된 문항 선택 → 학생 답안 → 채점 · 경로 2 문항 · 모범답안 · 정답 입력 → 문항분석 → 학생 답안 → 채점.</div>
+    <div class="sec-sub">형식을 고르고, 경로 1(문항분석에서 불러오기) 또는 경로 2(새로 입력)로 문항을 넣은 뒤 「문항분석 →」을 누르세요. 저장된 채점 결과는 위에서 고릅니다.</div>
     <div id="p1-now"></div>
     <div class="card"><h3>새로 채점</h3>
       <div class="label">문제 형식 <span class="muted" style="font-weight:400">— 차례로 고르세요. 채점 대시보드는 서술형 · 논술형만 (객관식 · 주관식은 문항 분석에서)</span></div>
@@ -447,7 +451,7 @@ function 입력칸그리기() {
         <div class="field-pick small" id="in-src"><button data-v="분석">경로 1 · 문항분석에서 불러오기</button><button data-v="새로">경로 2 · 새로 입력</button></div>
 
         <div id="src-분석" class="src-box">
-          <div class="label">① 분석된 문항 선택</div>
+          <div class="label">분석된 문항 선택</div>
           <div class="row" style="align-items:center;gap:10px;margin-bottom:10px">
             <button class="ghost-btn" id="an-pull">열린 대시보드에서 가져오기</button>
             <label class="ghost-btn" style="display:inline-block">「목록 저장」 파일 열기<input type="file" id="an-file" accept=".json,application/json" hidden></label>
@@ -457,7 +461,7 @@ function 입력칸그리기() {
         </div>
 
         <div id="src-새로" class="src-box">
-          <div class="label">① 문항 · 모범답안 · 정답 입력</div>
+          <div class="label">문항 · 총배점 · 모범답안 · 정답 입력</div>
           <div class="field" data-fmt="C1 C2"><div class="label"><span id="in-ps-label">제시문</span> ${파일칸('in-ps')}</div><textarea id="in-ps" style="min-height:180px" placeholder="(가)&#10;…&#10;&#10;(나)&#10;… — 「(가)」 「[가]」 머리 줄로 나눕니다"></textarea></div>
           <div data-fmt="B-s1 B-h1 C1 C2">
             <div class="field"><div class="label"><span id="in-q-label">문항</span> ${파일칸('in-q')}</div><textarea id="in-q" placeholder="글을 붙이거나 파일(.txt · .docx · .pdf)을 올리세요. 예) a,a,b,c,d,e가 쓰인 6장 카드를 일렬로 나열할 때 양 끝이 모음이 오는 경우의 수를 구하고 풀이 과정을 서술하시오."></textarea></div>
@@ -466,11 +470,8 @@ function 입력칸그리기() {
           </div>
           <div data-fmt="B-s2 B-h2" id="in-b2"></div>
           <div class="field"><div class="label">정답 (검증용, 선택)</div><input id="in-a" placeholder="72가지"></div>
-          <div class="label" style="margin-top:6px">② 문항분석 — 5색 · 급소 · 루브릭 · 모범답안</div>
-          <button class="run-btn" id="in-an-run">문항분석 →</button><span class="status" id="in-an-st"></span>
-          <div id="in-an-out"></div>
         </div>
-        <button class="run-btn" id="in-go-ans" style="display:none">③ 답안 입력 →</button>
+        <button class="run-btn" id="in-go-an">문항분석 →</button><span class="status" id="in-go-st"></span>
       </div>
     </div>`;
   // ③ 답안 입력 탭 (오종래 2026-10-21) — 학생 이름 · 학생 답안 · 채점. 지금 경로의 채점 준비가 서야 탭이 열린다
@@ -483,9 +484,8 @@ function 입력칸그리기() {
       <div id="in-st-box"></div>
       <button class="run-btn" id="in-run">채점 →</button><span class="status" id="in-status"></span>
     </div>`;
-  $('#in-go-ans').addEventListener('click', () => 탭('ans'));
   $('#in-run').addEventListener('click', 새채점);
-  $('#in-an-run').addEventListener('click', 새문항분석);
+  $('#in-go-an').addEventListener('click', 분석으로);
   // 경로 2 — 문항분석 뒤 문항 · 모범답안 · 정답을 고치면 분석을 다시 해야 학생 답안 칸이 열린다
   $('#src-새로').addEventListener('input', () => 새준비지우기('문항이 바뀌었습니다 — 「문항분석 →」을 다시 누르세요'));
   형식단계 = HMOS형식.형식선택($('#in-steps'), { 종류들: ['서술형', '논술형'], 줄: 'field-pick', 버튼: '', 고름: 'on', 이름표: 'label', 바뀜: 형식단계바뀜 });
@@ -515,17 +515,20 @@ function 방식고르기(v) {
   if (v === '분석' && !분석.목록) 대시보드요청(true);
 }
 
-/** 학생 답안 칸 — 지금 경로의 채점 준비가 서야 열린다. 소문항 2개+(B-s2 · B-h2) 새로 입력은 분석된 소문항마다 칸 하나 */
+/** 지금 경로의 채점 준비 — ② 「문항분석」을 누른 뒤에만 (경로 1은 불러온 루브릭을 ②에 보인 뒤, 경로 2는 /api/rubric이 끝난 뒤) */
+const 분석된준비 = () => (준비들[문항방식]?.보임 ? 준비들[문항방식] : null);
+
+/** 학생 답안 칸 — 지금 경로의 문항분석이 끝나야 열린다. 소문항 2개+(B-s2 · B-h2) 새로 입력은 분석된 소문항마다 칸 하나 */
 function 답칸그리기() {
   const el = $('#in-st-box');
   if (!el) return;
-  const p = 준비들[문항방식];
+  const p = 분석된준비();
   const 옛 = Object.fromEntries([...el.querySelectorAll('textarea')].map((t) => [t.id, t.value]));
   $('#in-run').disabled = !p;
-  // ③ 탭은 채점 준비가 있을 때만 — 없어지면 보고 있던 ③에서 ①로
+  // ③ 탭 · ② 「답안 입력 →」은 문항분석 뒤에만 — 분석이 지워지면 보고 있던 ③에서 ①로
   $('#tab-ans').disabled = !p;
   $('#tab-ans').classList.toggle('off', !p);
-  $('#in-go-ans').style.display = p ? '' : 'none';
+  if ($('#in-go-ans')) $('#in-go-ans').disabled = !p;
   if (!p && $('#pans').classList.contains('active')) 탭(1);
   $('#in-ans-sub').textContent = 문항방식 === '분석' ? '경로 1 — ①에서 고른 문항의 확정 루브릭으로 채점합니다.' : '경로 2 — ② 문항분석에서 만든 루브릭으로 채점합니다.';
   $('#in-ans-q').innerHTML = p ? `<div class="card"><h3>채점할 문항</h3><div class="pre">${esc(p.문항)}</div>
@@ -541,27 +544,58 @@ function 답칸그리기() {
   el.querySelectorAll('input[data-photo]').forEach((inp) => inp.addEventListener('change', () => 사진넣기(inp)));
 }
 
+/** 준비 하나를 버린다 — 그 준비로 만든 기록(분석 · 채점)이 보이고 있으면 함께 비운다 */
+function 준비버리기(p) {
+  if (p && 기록준비 === p) 기록비우기();
+}
 /** 경로 2 채점 준비를 지운다 (문항 · 형식이 바뀜) */
 function 새준비지우기(알림) {
-  if (!준비들.새로) return;
+  const p = 준비들.새로;
+  if (!p) return;
   준비들.새로 = null;
-  if ($('#in-an-out')) $('#in-an-out').innerHTML = '';
+  준비버리기(p);
   if (알림 && $('#in-an-st')) $('#in-an-st').textContent = 알림;
+  답칸그리기();
+}
+
+/** ① 「문항분석 →」 — 넣은 것만 확인하고 ②로 넘어간다 (분석은 ② 「문항분석」). 이 경로의 분석이 아직 없으면 ②를 비워 둔다 */
+function 분석으로() {
+  const st = $('#in-go-st');
+  if (!입력형식) { st.textContent = '문제 형식을 고르세요'; return; }
+  if (문항방식 === '분석' && !준비들.분석) { st.textContent = '채점할 문항(소문항)을 고르세요'; return; }
+  if (문항방식 === '새로' && !(다문B(입력형식) ? B2칸.some((x) => x.q.trim()) : $('#in-q').value.trim())) { st.textContent = '문항을 넣으세요'; return; }
+  st.textContent = '';
+  const p = 분석된준비();
+  if (!p) { if (기록준비 || 기록) 기록비우기(); }
+  else if (기록준비 !== p) 보이기(p.분석기록, p.키 + ':분석', p);
+  $('#in-an-st').textContent = p ? '' : (문항방식 === '분석' ? '「문항분석」을 누르면 불러온 확정 루브릭(5색 · 급소 · 루브릭 · 모범답안)을 보입니다.' : '「문항분석」을 누르면 엔진이 5색 · 급소를 읽고 루브릭 · 모범답안을 만듭니다.');
+  탭(2);
+}
+
+/** ② 「문항분석」 — 경로 1: 불러온 확정 루브릭을 그대로 보인다 (엔진을 다시 돌리지 않는다) · 경로 2: /api/rubric */
+function 문항분석하기() {
+  if (문항방식 === '새로') return 새문항분석();
+  const st = $('#in-an-st'), p = 준비들.분석;
+  if (!p) { st.textContent = '① 문항 입력에서 분석된 문항을 고르세요'; return; }
+  p.분석기록 = { 학생: '', 문항: p.문항, 계열: p.계열, 형식: 입력형식, 정답: p.정답, 모범답안: p.모범답안, 학생답: '', 루브릭: { status: 200, out: p.루브릭 }, 채점: [] };
+  p.보임 = true;
+  보이기(p.분석기록, p.키 + ':분석', p);
+  st.textContent = '불러온 확정 루브릭입니다 (엔진을 다시 돌리지 않음) — 확인한 뒤 아래 「답안 입력 →」';
   답칸그리기();
 }
 
 /** 경로 2 ② 문항분석 — /api/rubric 한 번 (엔진 5색 · 급소 → 조각 루브릭 · 조각 문장 모범답안). 학생 답안은 아직 보내지 않는다 */
 async function 새문항분석() {
-  const st = $('#in-an-st'), btn = $('#in-an-run');
-  if (!입력형식) { st.textContent = '문제 형식을 고르세요'; return; }
+  const st = $('#in-an-st'), btn = $('#an2-run');
+  if (!입력형식) { st.textContent = '① 문항 입력에서 문제 형식을 고르세요'; return; }
   // 형식마다 엔진 요청 — B-s2·B-h2(소문항 2개+): 소문항을 「(1) … [N점]」 줄로 이어 붙이고 모범답안은 소문항 순서 배열(엔진이 소문항 「[N점]」을 배점으로 읽는다) ·
   //   C1·C2: 제시문을 (가)(나) 머리로 나눠 함께 보낸다 (C1은 필수) · B-s1·B-h1: 문항 하나
   let 문항, 모범답안, 모범, 총배점, 제시문 = [];
   const 다문 = 다문B(입력형식);
   if (다문) {
     const 칸 = B2칸.map((x) => ({ q: x.q.trim(), p: Number(x.p), m: x.m.trim() })).filter((x) => x.q);
-    if (!칸.length) { st.textContent = '소문항을 넣으세요'; return; }
-    if (칸.some((x) => !(x.p > 0))) { st.textContent = '소문항마다 배점을 넣으세요'; return; }
+    if (!칸.length) { st.textContent = '① 문항 입력에 소문항을 넣으세요'; return; }
+    if (칸.some((x) => !(x.p > 0))) { st.textContent = '① 문항 입력에 소문항마다 배점을 넣으세요'; return; }
     문항 = 칸.map((x, i) => `(${i + 1}) ${x.q.replace(/\s*[\[(]\s*\d+(?:\.\d+)?\s*점\s*[\])]\s*$/, '')} [${x.p}점]`).join('\n');
     모범 = 칸.some((x) => x.m) ? 칸.map((x) => x.m || null) : undefined;
     모범답안 = 칸.map((x, i) => x.m ? `(${i + 1}) ${x.m}` : '').filter(Boolean).join('\n\n');
@@ -572,45 +606,26 @@ async function 새문항분석() {
     모범 = 모범답안 || undefined;
     총배점 = Number($('#in-p').value) || 5;
     if (입력형식 === 'C1' || 입력형식 === 'C2') 제시문 = 제시문나누기($('#in-ps').value);
-    if (입력형식 === 'C1' && !제시문.length) { st.textContent = '논리서술논술은 제시문을 넣으세요'; return; }
+    if (입력형식 === 'C1' && !제시문.length) { st.textContent = '논리서술논술은 ① 문항 입력에 제시문을 넣으세요'; return; }
   }
-  if (!문항) { st.textContent = '문항을 넣으세요'; return; }
+  if (!문항) { st.textContent = '① 문항 입력에 문항을 넣으세요'; return; }
   const 정답 = $('#in-a').value.trim();
   btn.disabled = true;
-  준비들.새로 = null;
-  $('#in-an-out').innerHTML = '';
-  답칸그리기();
+  새준비지우기();
+  if (기록) 기록비우기();
   try {
     st.textContent = '문항분석 중… (엔진 5색 · 급소 → 루브릭 · 모범답안)';
     const 루브릭 = await 받기('/api/rubric', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
       논제: 문항, 계열: 엔진계열(), 총배점, 이어받기: true, ...(제시문.length ? { 제시문 } : { 공통자료: true }),
       모범답안: 모범, 정답: 정답 || undefined, gradeFormat: 입력형식 }) });
-    준비들.새로 = { 키: '새', 문항, 계열: 루브릭.계열, 정답, 모범답안, 루브릭, 덧: { 논제: 문항, ...(제시문.length ? { 제시문 } : {}) }, 소문항답: 다문 };
-    st.textContent = '문항분석 끝 — ③ 답안 입력 탭에서 학생 답안을 넣으세요 (자세히는 ② 문항분석 · ⑤ 루브릭 · ⑥ 모범답안)';
+    const p = { 키: '새', 문항, 계열: 루브릭.계열, 정답, 모범답안, 루브릭, 덧: { 논제: 문항, ...(제시문.length ? { 제시문 } : {}) }, 소문항답: 다문, 보임: true,
+      분석기록: { 학생: '', 문항, 계열: 루브릭.계열, 형식: 입력형식, 정답, 모범답안, 학생답: '', 루브릭: { status: 200, out: 루브릭 }, 채점: [] } };
+    준비들.새로 = p;
     $('#rec-select').value = '';
-    보이기({ 학생: '', 문항, 계열: 루브릭.계열, 형식: 입력형식, 정답, 모범답안, 학생답: '', 루브릭: { status: 200, out: 루브릭 }, 채점: [] }, '새분석:' + Date.now());
-    분석요약그리기();
+    보이기(p.분석기록, '새:분석:' + Date.now(), p);
+    st.textContent = '문항분석 끝 — 확인한 뒤 아래 「답안 입력 →」';
     답칸그리기();
   } catch (e) { st.textContent = '문항분석 실패: ' + e.message; } finally { btn.disabled = false; }
-}
-
-/** 경로 2 문항분석 요약 — 소문항마다 급소 · 5색 조합 · 조각 수 · 조각 문장 모범답안 (엔진 출력 그대로) */
-function 분석요약그리기() {
-  const p = 준비들.새로, el = $('#in-an-out');
-  if (!el || !p) return;
-  el.innerHTML = (p.루브릭.소문항 || []).map((s) => {
-    const 노드 = s.인식?.노드 || [];
-    return `<div class="sub-q" style="margin-top:12px">
-      ${s.번호 ? `<h4>소문항 (${esc(s.번호)}) · ${점(s.배점)}점</h4>` : `<h4>배점 ${점(s.배점)}점</h4>`}
-      <div class="pivot" style="margin-bottom:10px"><div class="t">급소 (K)</div><div class="e">${s.급소?.실체 ? esc(s.급소.실체) : '<span class="muted">급소 없음</span>'}</div>${s.멈춤 ? `<div class="muted" style="margin-top:6px;font-size:12px">멈춤: ${esc(s.멈춤)}</div>` : ''}</div>
-      <div class="label">5색</div>
-      <div style="margin-bottom:8px">${['B', 'C', 'P', 'D', 'Q'].map((c) => { const n = 노드.filter((x) => x.색 === c).length; return n ? `<span class="chip" style="background:${색[c]}">${c} ${색이름[c]} ${n}</span>` : ''; }).join('') || '<span class="muted">노드 없음</span>'}</div>
-      <div class="label">루브릭</div>
-      <div style="margin-bottom:8px;font-size:13px">${s.조각?.length ? `조각 ${s.조각.length}개 · ${파트들.map((pt) => { const xs = s.조각.filter((c) => c.파트 === pt); return xs.length ? `${pt} ${xs.length}` : ''; }).filter(Boolean).join(' · ')}` : '<span style="color:var(--no)">조각 없음 — 이 소문항은 채점하지 않습니다</span>'}</div>
-      <div class="label">모범답안 (조각 문장)</div>
-      <div class="pre" style="font-size:13px">${esc(s.모범답안 || '—')}</div>
-    </div>`;
-  }).join('');
 }
 
 // ── 파일 → 글 ── .txt 그대로 (utf-8, 아니면 euc-kr) · .docx 본문 글자 · .pdf는 /api/ocr로 옮겨 적기
@@ -795,9 +810,11 @@ function 고른단위보기() {
   const u = 분석단위().find((x) => x.key === 분석.고른);
   const el = $('#an-pick');
   // 경로 1 채점 준비 — 고른 단위의 확정 루브릭 소문항 하나 그대로
-  준비들.분석 = u && u.상태 === '준비' ? { 키: '분석:' + u.key, 문항: u.논제, 계열: u.계열, 정답: String(u.m.정답 || ''), 모범답안: 모범글(u.s) || String(u.m.모범답안 || ''),
+  const 옛준비 = 준비들.분석;
+  if (옛준비 && 옛준비.키 === '분석:' + u?.key && 옛준비.s === u?.s) { 답칸그리기(); } // 같은 단위 — 분석 · 답 그대로
+  else { 준비버리기(옛준비); 준비들.분석 = u && u.상태 === '준비' ? { 키: '분석:' + u.key, s: u.s, 문항: u.논제, 계열: u.계열, 정답: String(u.m.정답 || ''), 모범답안: 모범글(u.s) || String(u.m.모범답안 || ''),
     루브릭: { 계열: u.계열, 총배점: u.s.조각.reduce((a, c) => a + (Number(c.배점) || 0), 0), 소문항: [u.s] }, 덧: { 논제: u.논제 }, 소문항답: false } : null;
-  답칸그리기();
+  답칸그리기(); }
   if (!el) return;
   el.innerHTML = u ? `<div class="grid2" style="margin-top:12px">
       <div><div class="label">논제 — ${esc(u.이름)} ${esc(u.라벨)}</div><div class="pre" style="background:var(--ivory);padding:10px 12px;border-radius:6px">${esc(u.논제 || '')}</div></div>
@@ -841,8 +858,8 @@ function B2그리기() {
 /** 채점 — 두 경로 같은 길 (2026-10-21): 지금 경로의 채점 준비(경로 1 확정 루브릭 소문항 · 경로 2 문항분석 루브릭) → 소문항마다 엔진 채점 + 4축 대조 (단계서술은 소문항별 학생 답 · 합산) */
 async function 새채점() {
   const st = $('#in-status'), btn = $('#in-run');
-  const p = 준비들[문항방식];
-  if (!p) { st.textContent = 문항방식 === '분석' ? '채점할 문항(소문항)을 고르세요' : '먼저 「문항분석 →」을 누르세요'; return; }
+  const p = 분석된준비();
+  if (!p) { st.textContent = '먼저 ② 문항분석을 끝내세요'; return; }
   const 학생 = $('#in-n').value.trim() || '새 학생';
   const 보내기 = (url, body) => 받기(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   const 소문항 = p.루브릭.소문항 || [];
@@ -862,7 +879,7 @@ async function 새채점() {
     st.textContent = '채점 끝 — ④ 채점 결과에서 보세요';
     $('#rec-select').value = '';
     const 답글 = 답들 ? 답들.map((a, i) => a ? `(${소문항[i].번호 ?? i + 1}) ${a}` : '').filter(Boolean).join('\n\n') : 학생답;
-    보이기({ 학생, 문항: p.문항, 계열: p.루브릭.계열 || p.계열, 형식: 입력형식, 정답: p.정답, 모범답안: p.모범답안, 학생답: 답글, 루브릭: { status: 200, out: p.루브릭 }, 채점 }, p.키 + ':' + Date.now());
+    보이기({ 학생, 문항: p.문항, 계열: p.루브릭.계열 || p.계열, 형식: 입력형식, 정답: p.정답, 모범답안: p.모범답안, 학생답: 답글, 루브릭: { status: 200, out: p.루브릭 }, 채점 }, p.키 + ':' + Date.now(), p);
     탭(3);
   } catch (e) { st.textContent = '채점 실패: ' + e.message; } finally { btn.disabled = false; }
 }
@@ -935,29 +952,58 @@ async function 문항분석() {
     축결과 = await 받기('/api/axis-rubric', { method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 문항, 제시문: 제시문나누기($('#hu-p').value), 총배점, 이름: $('#hu-name').value.trim() }) });
     그리기2축();
-    $('#ax-st').textContent = `저장 끝 — 검증/${축결과.파일} · ⑧ 채점 샘플에서도 보입니다`;
+    $('#ax-st').textContent = `저장 끝 — 검증/${축결과.파일} · 아래 「채점 샘플」에서도 보입니다`;
     축목록받기();
   } catch (e) { st.textContent = '분석 실패: ' + e.message; btn.disabled = false; }
 }
 
-// ── 탭2 인식 결과 ── 5색 노드 · 조합 · 급소 (엔진 인식 그대로)
+// ── ② 문항분석 (오종래 2026-10-21 확정) ── 「문항분석」 → 1 5색 노드 · 급소 2 루브릭 3 모범답안 (엔진 출력 그대로) → 「답안 입력 →」.
+//   옛 루브릭 · 모범답안 · 채점 샘플 탭은 여기로 합쳤다 — 인문·사회 4축 루브릭(저장용)과 채점 샘플은 맨 아래 접는 칸
 function 그리기2() {
-  if (!$('#p2-axis')) { $('#p2').innerHTML = '<div class="sec-title">문항분석 · 인식 결과</div><div id="p2-axis"></div><div id="p2-rec"></div>'; 그리기2축(); }
-  if (!기록) { $('#p2-rec').innerHTML = 비었음('채점 결과를 고르면 엔진 인식(5색 · 급소)이 여기 나옵니다.'); return; }
-  $('#p2-rec').innerHTML = '<div class="sec-sub" style="margin-top:20px">지금 보는 채점 결과 — 엔진이 문항에서 읽은 5색 노드와 급소입니다.</div>' + 소문항들().map((s) => {
+  if (!$('#p2-rec')) {
+    $('#p2').innerHTML = `<div class="sec-title">문항분석</div>
+      <div class="sec-sub">① 문항 입력의 문항을 엔진이 읽습니다 — 1 5색 노드 · 급소 → 2 루브릭 → 3 모범답안. 판정 · 값은 모두 엔진 출력입니다.</div>
+      <div class="card"><button class="run-btn" id="an2-run">문항분석</button><span class="status" id="in-an-st"></span></div>
+      <div id="p2-rec"></div>
+      <div style="margin:4px 0 28px"><button class="run-btn" id="in-go-ans" disabled>답안 입력 →</button></div>
+      <details class="card" id="p2-axis-box"><summary class="label" style="cursor:pointer;margin:0">인문·사회 4축 루브릭 (저장용 · 기존)</summary><div id="p2-axis" style="margin-top:12px"></div></details>
+      <details class="card" id="p7-box"><summary class="label" style="cursor:pointer;margin:0">채점 샘플 — 검증/ 폴더 대표 답안</summary><div id="p7" style="margin-top:12px"></div></details>`;
+    $('#an2-run').addEventListener('click', 문항분석하기);
+    $('#in-go-ans').addEventListener('click', () => 탭('ans'));
+    그리기2축();
+    답칸그리기();
+  }
+  if (!기록) { $('#p2-rec').innerHTML = 비었음('「문항분석」을 누르면 5색 노드 · 급소 · 루브릭 · 모범답안이 여기 나옵니다. 저장된 채점 결과를 위에서 골라도 됩니다.'); return; }
+  const out = 기록.루브릭?.out || {};
+  $('#p2-rec').innerHTML = `<div class="sec-sub">계열 ${esc(out.계열 || 기록.계열 || '')} · 총배점 ${점(out.총배점)}${기록.형식 && 형식들[기록.형식] ? ` · ${형식들[기록.형식]}` : ''}${out.엔진?.commit ? ` · 엔진 ${esc(out.엔진.commit)}` : ''}</div>` + 소문항들().map((s) => {
     const 노드 = s.인식?.노드 || [];
     const 급소 = s.급소 || {};
     const 쓴색 = [...new Set(노드.map((n) => n.색))];
+    const v = s.정답검증;
     return `<div class="card">
-      ${s.번호 ? `<h3>소문항 (${esc(s.번호)})</h3>` : ''}
+      ${s.번호 ? `<h3>소문항 (${esc(s.번호)}) · ${점(s.배점)}점</h3>` : `<h3>배점 ${점(s.배점)}점</h3>`}
+      <div class="label">1 5색 노드 · 급소</div>
       <div class="pivot"><div class="t">급소 (K)</div><div class="e">${급소.실체 ? esc(급소.실체) : '<span class="muted">급소 없음</span>'}</div>${s.멈춤 ? `<div class="muted" style="margin-top:6px;font-size:12px">멈춤: ${esc(s.멈춤)}</div>` : ''}</div>
-      <div class="label">조합</div>
-      <div style="margin-bottom:12px">${(s.인식?.조합 || []).map((c) => `<span class="chip" style="background:${색[c] || '#888'}">${esc(c)} ${esc(색이름[c] || '')}</span>`).join('') || '<span class="muted">—</span>'}</div>
-      <div class="label">5색 노드 (나온 차례)</div>
+      <div style="margin-bottom:10px">${(s.인식?.조합 || []).map((c) => `<span class="chip" style="background:${색[c] || '#888'}">${esc(c)} ${esc(색이름[c] || '')}</span>`).join('') || '<span class="muted">조합 —</span>'}</div>
       <div class="node-list">${노드.map((n) => `<div class="node${급소.실체 && n.실체 === 급소.실체 ? ' key' : ''}"><b style="background:${색[n.색] || '#888'}">${esc(n.색)}</b>${esc(n.실체)}</div>`).join('') || '<span class="muted">노드 없음</span>'}</div>
-      <div style="margin-top:12px;font-size:12px" class="muted">${['B', 'C', 'P', 'D', 'Q'].map((c) => `${c} ${색이름[c]} ${노드.filter((n) => n.색 === c).length}`).join(' · ')}${쓴색.some((c) => !색[c]) ? ' · 기타 ' + 쓴색.filter((c) => !색[c]).join(',') : ''}</div>
+      <div style="margin-top:10px;font-size:12px" class="muted">${['B', 'C', 'P', 'D', 'Q'].map((c) => `${c} ${색이름[c]} ${노드.filter((n) => n.색 === c).length}`).join(' · ')}${쓴색.some((c) => !색[c]) ? ' · 기타 ' + 쓴색.filter((c) => !색[c]).join(',') : ''}</div>
+
+      <div class="label" style="margin-top:20px">2 루브릭</div>
+      <div class="tbl-wrap"><table>
+        <tr><th>조각</th><th>파트</th><th>배점</th><th>실체 · 모범 줄</th><th>충족조건</th></tr>
+        ${(s.조각 || []).map((c) => `<tr><td><b>${esc(c.id)}</b>${c.is_중심 ? ' <span class="tag" style="font-size:11px">중심</span>' : ''}</td><td>${esc(c.파트)}${c.요소 ? ' · ' + esc(c.요소) : ''}</td><td>${점(c.배점)}</td><td>${esc(c.줄글 || c.풀기글 || c.실체 || (c.모범답 ? c.모범답.줄 : '') || '—')}</td><td>${esc(c.충족조건 || '')}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">조각 없음 — 이 소문항은 채점하지 않습니다</td></tr>'}
+      </table></div>
+      ${s.물음 ? `<div style="margin-top:10px;font-size:12.5px" class="muted">${파트들.filter((p) => s.물음[p]).map((p) => `<div><b style="color:var(--ink)">${p}</b> — ${esc(s.물음[p])}</div>`).join('')}</div>` : ''}
+
+      <div class="label" style="margin-top:20px">3 모범답안 — 조각 문장으로 이은 모범답안</div>
+      <div class="pre">${esc(s.모범답안 || '—')}</div>
+      ${s.충족 ? `<div class="muted" style="margin-top:8px;font-size:12px">조각 문장 충족 ${s.충족.충족수}/${s.충족.조각수}</div>` : ''}
+      ${v ? `<div class="${v.결과 === '일치' ? 'tag' : 'tag no'}" style="display:inline-block;margin-top:8px">정답 검증 · ${esc(v.결과)} — ${esc(v.사유 || '')}</div>` : ''}
     </div>`;
-  }).join('');
+  }).join('') + `<div class="grid2">
+      <div class="card"><h3>교사 모범답안</h3><div class="pre">${esc(기록.모범답안 || '—')}</div><div class="muted" style="margin-top:8px;font-size:12px">채점 견본 — 판정에는 루브릭 조각만 씁니다</div></div>
+      <div class="card"><h3>정답 (검증용)</h3><div class="pre">${esc(기록.정답 || '—')}</div></div>
+    </div>`;
 }
 
 // ── 탭3 채점 결과 ── 조각별 O/X · 오류 이름 · 설명 한 줄 · 학생 값 vs 모범 값 · 🔆 다경로 · 총점 0.1
@@ -1036,8 +1082,11 @@ function 그리기3축상세() {
 }
 
 function 그리기3() {
-  if (!$('#p3-axis')) { $('#p3').innerHTML = '<div class="sec-title">채점 결과</div><div id="p3-rec"></div><div id="p3-axis"></div>'; 그리기3축(); }
-  if (!기록) { $('#p3-rec').innerHTML = 비었음('검증/ 폴더의 채점 결과를 고르거나 ① 문항 입력에서 새로 채점하세요. 인문·사회 4축 채점은 아래에 있습니다.'); return; }
+  if (!$('#p3-axis')) { $('#p3').innerHTML = '<div class="sec-title">채점 결과</div><div id="p3-rec"></div><div id="p3-go" style="margin:4px 0 28px"></div><div id="p3-axis"></div>'; 그리기3축(); }
+  // 채점된 조각이 있으면 아래에 「교사 확정 →」 (오종래 2026-10-21)
+  $('#p3-go').innerHTML = (기록?.채점 || []).some((g) => g.out?.조각별) ? '<button class="run-btn" id="go-t">교사 확정 →</button>' : '';
+  $('#go-t')?.addEventListener('click', () => 탭(6));
+  if (!기록?.채점?.length) { $('#p3-rec').innerHTML = 비었음('③ 답안 입력에서 「채점 →」을 누르거나 위에서 저장된 채점 결과를 고르세요. 인문·사회 4축 채점은 아래에 있습니다.'); return; }
   $('#p3-rec').innerHTML = '<div class="sec-sub">판정 · 값 · 다경로 · 오류 이름은 모두 엔진 출력입니다. 조각마다 판단근거 전체를 보입니다.</div>' + 소문항들().map((s, i) => {
     const g = 채점of(s, i);
     if (!g || !g.out || !g.out.조각별) return `<div class="card">${s.번호 ? `<h3>소문항 (${esc(s.번호)})</h3>` : ''}<div class="muted">${esc(g?.건너뜀 || g?.out?.error || '채점 없음')}</div></div>`;
@@ -1058,39 +1107,6 @@ function 그리기3() {
   }).join('');
 }
 
-// ── 탭4 루브릭 ── 조각 · 배점 · 충족조건 (엔진 루브릭)
-function 그리기4() {
-  if (!기록) { $('#p4').innerHTML = '<div class="sec-title">루브릭</div>' + 비었음('채점 결과를 고르면 루브릭이 나옵니다.'); return; }
-  const out = 기록.루브릭?.out || {};
-  $('#p4').innerHTML = `<div class="sec-title">루브릭</div><div class="sec-sub">계열 ${esc(out.계열 || '')} · 총배점 ${점(out.총배점)}${out.엔진?.commit ? ` · 엔진 ${esc(out.엔진.commit)}` : ''}</div>` + 소문항들().map((s) => `
-    <div class="card">
-      ${s.번호 ? `<h3>소문항 (${esc(s.번호)}) · ${점(s.배점)}점</h3>` : `<h3>배점 ${점(s.배점)}점</h3>`}
-      <div class="tbl-wrap"><table>
-        <tr><th>조각</th><th>파트</th><th>배점</th><th>실체 · 모범 줄</th><th>충족조건</th></tr>
-        ${(s.조각 || []).map((c) => `<tr><td><b>${esc(c.id)}</b>${c.is_중심 ? ' <span class="tag" style="font-size:11px">중심</span>' : ''}</td><td>${esc(c.파트)}${c.요소 ? ' · ' + esc(c.요소) : ''}</td><td>${점(c.배점)}</td><td>${esc(c.줄글 || c.풀기글 || c.실체 || (c.모범답 ? c.모범답.줄 : '') || '—')}</td><td>${esc(c.충족조건 || '')}</td></tr>`).join('')}
-      </table></div>
-      ${s.물음 ? `<div style="margin-top:12px" class="muted">${파트들.filter((p) => s.물음[p]).map((p) => `<div><b style="color:var(--ink)">${p}</b> — ${esc(s.물음[p])}</div>`).join('')}</div>` : ''}
-    </div>`).join('');
-}
-
-// ── 탭5 모범답안 ── 교사 모범답안 · 조각 문장으로 이은 모범답안 · 정답 검증
-function 그리기5() {
-  if (!기록) { $('#p5').innerHTML = '<div class="sec-title">모범답안</div>' + 비었음('채점 결과를 고르면 모범답안이 나옵니다.'); return; }
-  $('#p5').innerHTML = `<div class="sec-title">모범답안</div><div class="sec-sub">교사 모범답안은 채점 견본이고, 판정에는 루브릭 조각만 씁니다.</div>
-    <div class="grid2">
-      <div class="card"><h3>교사 모범답안</h3><div class="pre">${esc(기록.모범답안 || '—')}</div></div>
-      <div class="card"><h3>정답 (검증용)</h3><div class="pre">${esc(기록.정답 || '—')}</div></div>
-    </div>` + 소문항들().map((s) => {
-    const v = s.정답검증;
-    return `<div class="card">
-      <h3>${s.번호 ? `소문항 (${esc(s.번호)}) — ` : ''}조각 문장으로 이은 모범답안</h3>
-      <div class="pre">${esc(s.모범답안 || '—')}</div>
-      ${s.충족 ? `<div class="muted" style="margin-top:10px;font-size:12px">조각 문장 충족 ${s.충족.충족수}/${s.충족.조각수}</div>` : ''}
-      ${v ? `<div class="${v.결과 === '일치' ? 'tag' : 'tag no'}" style="display:inline-block;margin-top:10px">정답 검증 · ${esc(v.결과)} — ${esc(v.사유 || '')}</div>` : ''}
-    </div>`;
-  }).join('');
-}
-
 // ── 탭6 교사 확정 ── 조각 판정을 교사가 확정 · 고친다. 점수는 엔진 게이트 사슬 · 상한비로 다시 센다 (엔진 g1 집계 · /dashboard 채점집계와 같은 계산)
 function 재집계(o, 고침) {
   const 조각 = o.조각별.map((x) => ({ ...x, 판정: 고침[x.조각id] ?? x.결과 }));
@@ -1107,7 +1123,7 @@ function 재집계(o, 고침) {
 function 저장교사() { try { localStorage.setItem('hmos-d2-teacher:' + 기록키, JSON.stringify(교사)); } catch (_) {} }
 
 function 그리기6() {
-  if (!기록) { $('#p6').innerHTML = '<div class="sec-title">교사 확정</div>' + 비었음('채점 결과를 고르면 교사가 조각 판정을 확정할 수 있습니다.'); return; }
+  if (!(기록?.채점 || []).some((g) => g.out?.조각별)) { $('#p6').innerHTML = '<div class="sec-title">교사 확정</div>' + 비었음('④ 채점 결과가 나오면 교사가 조각 판정을 검토 · 수정 · 확정할 수 있습니다.'); return; }
   $('#p6').innerHTML = '<div class="sec-title">교사 확정</div><div class="sec-sub">엔진 판정을 확인하고, 판정불가 조각은 O/X로 정하세요. 고친 판정은 이 브라우저에만 남고, 「확정 내려받기」로 JSON 파일을 받습니다. 원본 채점 결과는 바뀌지 않습니다.</div>' + 소문항들().map((s, i) => {
     const g = 채점of(s, i);
     if (!g?.out?.조각별) return '';
@@ -1212,6 +1228,7 @@ function 그리기7() {
     if (!j) return;
     축결과 = { 파일: j.파일, 루브릭: j };
     그리기2축();
+    $('#p2-axis-box').open = true;
     탭(2);
   }));
 }
