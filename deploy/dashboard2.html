@@ -23,6 +23,13 @@ button{font-family:inherit}
 .tab-num{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;background:rgba(255,255,255,.12)}
 .tab.active .tab-num{background:var(--gold);color:var(--teal)}
 .tab.off{color:rgba(255,255,255,.25);cursor:not-allowed}
+.subbar{background:var(--ivory-dk);border-bottom:1px solid var(--line);padding:8px 24px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.subbar .sl{font-size:12px;color:var(--muted);margin-right:4px}
+.subbar button{border:1.5px solid var(--teal);background:var(--white);color:var(--teal);border-radius:16px;padding:5px 14px;font-size:13px;cursor:pointer;display:inline-flex;gap:6px;align-items:baseline}
+.subbar button.on{background:var(--teal);color:#fff;font-weight:600}
+.subbar button small{font-size:11px;opacity:.8}
+.subbar .sum{margin-left:auto;font-size:13px;color:var(--teal);font-weight:600}
+@media (max-width:760px){.subbar{padding-left:16px;padding-right:16px}}
 .recbar{background:var(--white);border-bottom:1px solid var(--line);padding:10px 24px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
 .recbar label{font-size:12px;color:var(--muted)}
 .recbar select{padding:6px 10px;border:1px solid var(--line);border-radius:var(--radius);font-family:inherit;font-size:13px;min-width:280px;max-width:100%;background:var(--white)}
@@ -188,7 +195,7 @@ th{font-size:11.5px;color:var(--muted);font-weight:600;background:var(--ivory)}
        옛 루브릭 · 모범답안 · 채점 샘플 탭은 ②에 합쳤다. data-tab은 패널 id(p + 값) — 보이는 번호만 차례로, 패널 id는 그대로 (③ = pans · ④ = p3 · ⑤ = p6) -->
   <button class="tab off" data-tab="ans" id="tab-ans" disabled title="문항분석이 끝나면 열립니다"><span class="tab-num">3</span>답안 입력</button>
   <button class="tab" data-tab="3"><span class="tab-num">4</span>채점 결과</button>
-  <button class="tab" data-tab="6"><span class="tab-num">5</span>교사 확정</button>
+  <button class="tab" data-tab="6" id="tab-t"><span class="tab-num">5</span>교사 확정</button>
 </nav>
 <div class="recbar">
   <label for="rec-select">채점 결과</label>
@@ -196,6 +203,8 @@ th{font-size:11.5px;color:var(--muted);font-weight:600;background:var(--ivory)}
   <div class="recinfo" id="rec-info"></div>
   <button class="rec-pull" id="rec-pull" title="문항 분석(/dashboard)에서 확정한 루브릭을 탭1에 연결합니다">문항분석에서 불러오기 →</button>
 </div>
+<!-- 소문항 탭 (오종래 2026-10-21) — 소문항 2개 이상일 때 ② · ③ · ④에서 소문항 하나씩 -->
+<div class="subbar" id="subbar" style="display:none"></div>
 <div class="content">
   <section class="panel active" id="p1"></section>
   <section class="panel" id="p2"></section>
@@ -223,9 +232,11 @@ const 파트들 = ['근거대기', '세우기', '풀기', '답구하기'];
 function 탭(n) {
   if (String(n) === 'ans' && $('#tab-ans')?.disabled) n = 1; // ③ 답안 입력은 문항분석 뒤에만
   if (!document.getElementById('p' + n)) n = 1; // 없앤 탭(옛 루브릭 · 모범답안 · 채점 샘플)을 기억한 브라우저
+  if (String(n) === '6' && $('#tab-t')?.disabled) n = 3; // ⑤ 교사 확정은 모든 소문항 채점 뒤 한 번
   document.querySelectorAll('.tab').forEach((b) => b.classList.toggle('active', b.dataset.tab === String(n)));
   document.querySelectorAll('.panel').forEach((p) => p.classList.toggle('active', p.id === 'p' + n));
   try { localStorage.setItem('hmos-d2-tab', String(n)); } catch (_) {}
+  소탭그리기();
 }
 document.querySelectorAll('.tab').forEach((b) => b.addEventListener('click', () => 탭(b.dataset.tab)));
 
@@ -281,14 +292,46 @@ function 보이기(j, 키, p) {
   기록 = j;
   기록키 = 키;
   기록준비 = p || null;
+  지금소 = 0;
   교사 = {};
   try { 교사 = JSON.parse(localStorage.getItem('hmos-d2-teacher:' + 키) || '{}'); } catch (_) {}
   그리기();
 }
 
 const 소문항들 = () => (기록?.루브릭?.out?.소문항 || []);
-const 채점of = (s, i) => (기록?.채점 || []).find((g) => (g.번호 ?? null) === (s.번호 ?? null)) || (기록?.채점 || [])[i];
+// 채점 항목 — 소문항별 채점(자리 = 소문항 차례)은 자리로, 검증/ 파일은 번호 · 차례로
+const 채점of = (s, i) => { const xs = 기록?.채점 || []; return xs.find((g) => g.자리 === i) || (xs.some((g) => g.자리 != null) ? null : xs.find((g) => (g.번호 ?? null) === (s.번호 ?? null)) || xs[i]) || null; };
 const 자리 = (s, i) => String(s.번호 ?? i);
+
+// 소문항별 흐름 (오종래 2026-10-21) — 소문항 2개 이상이면 ② · ③ · ④를 소문항 탭 (1)(2)(3)으로 하나씩: 문항분석 → 루브릭 → 답안 입력 → 채점 결과.
+//   엔진 문항분석은 문항 전체를 한 번 (앞 소문항 이어받기 그대로), 보이기 · 답안 · 채점은 소문항마다. 다 채점되면 ④에 전체 합산, ⑤ 교사 확정은 그 뒤 한 번
+let 지금소 = 0;
+const 여럿 = () => 소문항들().length >= 2;
+/** ② · ④에 그릴 소문항 [s, i] — 소문항이 여럿이면 지금 소문항 하나 */
+const 보일소 = () => 소문항들().map((s, i) => [s, i]).filter(([, i]) => !여럿() || i === 지금소);
+/** 채점됨 — 조각이 없는 소문항은 채점할 것이 없어 끝난 것으로 */
+const 채점됨 = (s, i) => !!채점of(s, i) || !(s.조각 || []).length;
+const 다채점됨 = () => 소문항들().length > 0 && 소문항들().every(채점됨);
+const 소이름 = (s, i) => `(${s.번호 ?? i + 1})`;
+function 소고르기(i) {
+  지금소 = i;
+  그리기2(); 그리기3(); 답칸그리기(); 소탭그리기();
+}
+/** 소문항 탭 줄 — ② · ③ · ④에서만, 소문항마다 채점 상태 · 맨 끝에 합산 */
+function 소탭그리기() {
+  const el = $('#subbar');
+  if (!el) return;
+  const 지금탭 = document.querySelector('.tab.active')?.dataset.tab;
+  const 보임 = 기록 && 여럿() && ['2', 'ans', '3'].includes(지금탭);
+  el.style.display = 보임 ? '' : 'none';
+  if (!보임) return;
+  const ss = 소문항들();
+  const 합 = ss.reduce((a, s, i) => a + Number(채점of(s, i)?.out?.부분점수 || 0), 0), 만 = ss.reduce((a, s) => a + Number(s.배점 || 0), 0);
+  el.innerHTML = '<span class="sl">소문항</span>' + ss.map((s, i) => { const g = 채점of(s, i);
+    return `<button data-i="${i}" class="${i === 지금소 ? 'on' : ''}">${esc(소이름(s, i))} <small>${g?.out?.조각별 ? `${점(g.out.부분점수)}/${점(g.out.만점)}` : !(s.조각 || []).length ? '조각 없음' : '채점 전'}</small></button>`; }).join('')
+    + `<span class="sum">${다채점됨() ? `전체 합산 ${점(합)} / ${점(만)}` : `채점 ${ss.filter(채점됨).length}/${ss.length}`}</span>`;
+  el.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => 소고르기(Number(b.dataset.i))));
+}
 
 function 그리기() {
   const 총 = (기록?.채점 || []).reduce((a, g) => a + Number(g.out?.부분점수 || 0), 0);
@@ -298,7 +341,15 @@ function 그리기() {
   const 축합 = 축들4.length ? `<span class="score">4축 ${점(축들4.reduce((a, x) => a + x.부분점수, 0))} / ${점(축들4.reduce((a, x) => a + x.만점, 0))}</span>` : '';
   // 분석만 끝난 기록(채점 없음)은 점수 대신 「채점 전」
   $('#rec-info').innerHTML = 기록 ? `<span>${esc(기록.학생 || '학생')}</span>${축합}${(기록.채점 || []).length ? `<span class="score">${축합 ? '엔진 ' : ''}${점(총)} / ${점(만)}</span>` : '<span class="muted">채점 전</span>'}<span class="muted">계열 ${esc(기록.계열 || '')}${기록.형식 && 형식들[기록.형식] ? ` · ${형식들[기록.형식]}` : ''}${엔진 ? ` · 엔진 ${esc(엔진)}` : ''}</span>` : '';
+  if (지금소 >= 소문항들().length) 지금소 = 0;
+  // ⑤ 교사 확정 — 소문항이 여럿이면 모두 채점한 뒤에만
+  const 잠금 = !!기록 && 여럿() && !다채점됨();
+  $('#tab-t').disabled = 잠금;
+  $('#tab-t').classList.toggle('off', 잠금);
+  $('#tab-t').title = 잠금 ? '모든 소문항을 채점하면 열립니다' : '';
   그리기1(); 그리기2(); 그리기3(); 그리기6();
+  if (잠금 && $('#p6').classList.contains('active')) 탭(3);
+  소탭그리기();
 }
 /** 보이던 기록을 비운다 (새 문항으로 넘어감) */
 function 기록비우기() {
@@ -532,15 +583,19 @@ function 답칸그리기() {
   if ($('#in-go-ans')) $('#in-go-ans').disabled = !p;
   if (!p && $('#pans').classList.contains('active')) 탭(1);
   $('#in-ans-sub').textContent = 문항방식 === '분석' ? '경로 1 — ①에서 고른 문항의 확정 루브릭으로 채점합니다.' : '경로 2 — ② 문항분석에서 만든 루브릭으로 채점합니다.';
-  $('#in-ans-q').innerHTML = p ? `<div class="card"><h3>채점할 문항</h3><div class="pre">${esc(p.문항)}</div>
-    <div class="muted" style="margin-top:8px;font-size:12px">${(p.루브릭.소문항 || []).map((s) => `${s.번호 ? '(' + esc(s.번호) + ') ' : ''}급소 「${esc(s.급소?.실체 || '—')}」 · 조각 ${s.조각?.length || 0}개 · ${점(s.배점 ?? (s.조각 || []).reduce((a, c) => a + (Number(c.배점) || 0), 0))}점`).join('<br>')}</div></div>` : '';
+  // 소문항이 여럿이면 지금 소문항(소문항 탭) 하나만 — 답 칸은 모두 두고 지금 것만 보인다 (쓰던 답 유지)
+  const ps = p?.루브릭.소문항 || [], 여러칸 = ps.length >= 2;
+  if ($('#in-go-ans')) $('#in-go-ans').textContent = 여러칸 && ps[지금소] ? `${소이름(ps[지금소], 지금소)} 답안 입력 →` : '답안 입력 →';
+  $('#in-run').textContent = 여러칸 && ps[지금소] ? `${소이름(ps[지금소], 지금소)} 채점 →` : 문항방식 === '분석' ? '확정 루브릭으로 채점 →' : '분석한 루브릭으로 채점 →';
+  $('#in-ans-q').innerHTML = p ? `<div class="card"><h3>채점할 문항${여러칸 ? ' — 소문항 ' + esc(소이름(ps[지금소], 지금소)) : ''}</h3><div class="pre">${esc(여러칸 ? (p.문항.split(/\n/).find((l) => l.startsWith(소이름(ps[지금소], 지금소))) || p.문항) : p.문항)}</div>
+    <div class="muted" style="margin-top:8px;font-size:12px">${(여러칸 ? [ps[지금소]] : ps).map((s) => `${s.번호 ? '(' + esc(s.번호) + ') ' : ''}급소 「${esc(s.급소?.실체 || '—')}」 · 조각 ${s.조각?.length || 0}개 · ${점(s.배점 ?? (s.조각 || []).reduce((a, c) => a + (Number(c.배점) || 0), 0))}점`).join('<br>')}</div></div>` : '';
   if (!p) {
     el.innerHTML = Object.entries(옛).map(([id, v]) => `<textarea id="${esc(id)}" hidden>${esc(v)}</textarea>`).join(''); // 쓰던 답은 숨겨 둔다
     return;
   }
-  const 칸들 = p.소문항답 ? (p.루브릭.소문항 || []).map((s, j) => ({ id: 'in-st-' + j, 이름: `학생 답안 — (${s.번호 ?? j + 1})`, 예: `학생이 (${s.번호 ?? j + 1})번에 쓴 답` }))
+  const 칸들 = 여러칸 ? ps.map((s, j) => ({ id: 'in-st-' + j, 숨김: j !== 지금소, 이름: `학생 답안 — (${s.번호 ?? j + 1})`, 예: `학생이 (${s.번호 ?? j + 1})번에 쓴 답` }))
     : [{ id: 'in-st', 이름: '학생 답안', 예: '글을 붙이거나, 파일(.txt · .docx · .pdf) 또는 손글씨 사진(.jpg · .png, 2장까지)을 올리세요. 사진은 글자로 옮겨 적어 이 칸에 넣습니다 — 사진과 대조해 고친 뒤 채점하세요.' }];
-  el.innerHTML = 칸들.map((c) => `<div class="field"><div class="label">${esc(c.이름)} ${파일칸(c.id, true)}</div><textarea id="${c.id}" placeholder="${esc(c.예)}">${esc(옛[c.id] || '')}</textarea></div>`).join('');
+  el.innerHTML = 칸들.map((c) => `<div class="field"${c.숨김 ? ' style="display:none"' : ''}><div class="label">${esc(c.이름)} ${파일칸(c.id, true)}</div><textarea id="${c.id}" placeholder="${esc(c.예)}">${esc(옛[c.id] || '')}</textarea></div>`).join('');
   el.querySelectorAll('input[data-for]').forEach((inp) => inp.addEventListener('change', () => 파일넣기(inp)));
   el.querySelectorAll('input[data-photo]').forEach((inp) => inp.addEventListener('change', () => 사진넣기(inp)));
 }
@@ -611,6 +666,7 @@ async function 새문항분석() {
   }
   if (!문항) { st.textContent = '① 문항 입력에 문항을 넣으세요'; return; }
   const 정답 = $('#in-a').value.trim();
+  if (기록준비 && 기록준비 === 준비들.새로 && (기록?.채점 || []).length && !confirm('다시 분석하면 채점한 소문항 결과가 지워집니다. 계속할까요?')) return;
   btn.disabled = true;
   새준비지우기();
   if (기록) 기록비우기();
@@ -864,6 +920,7 @@ async function 새채점() {
   const 학생 = $('#in-n').value.trim() || '새 학생';
   const 보내기 = (url, body) => 받기(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   const 소문항 = p.루브릭.소문항 || [];
+  if (소문항.length >= 2) return 소문항채점하기(p, 소문항, 학생, 보내기, st, btn);
   const 답들 = p.소문항답 ? 소문항.map((_, j) => ($('#in-st-' + j)?.value || '').trim()) : null;
   const 학생답 = 답들 ? '' : ($('#in-st')?.value || '').trim();
   if (답들 ? !답들.some(Boolean) : !학생답) { st.textContent = 답들 ? '소문항별 학생 답안을 넣으세요' : '학생 답안을 넣으세요'; return; }
@@ -881,6 +938,31 @@ async function 새채점() {
     $('#rec-select').value = '';
     const 답글 = 답들 ? 답들.map((a, i) => a ? `(${소문항[i].번호 ?? i + 1}) ${a}` : '').filter(Boolean).join('\n\n') : 학생답;
     보이기({ 학생, 문항: p.문항, 계열: p.루브릭.계열 || p.계열, 형식: 입력형식, 정답: p.정답, 모범답안: p.모범답안, 학생답: 답글, 루브릭: { status: 200, out: p.루브릭 }, 채점 }, p.키 + ':' + Date.now(), p);
+    탭(3);
+  } catch (e) { st.textContent = '채점 실패: ' + e.message; } finally { btn.disabled = false; }
+}
+
+/** 소문항별 채점 (오종래 2026-10-21) — 지금 소문항 하나만 엔진 조각 + 4축. 기록은 그 준비의 채점 기록 하나에 소문항마다 쌓는다 (다시 채점하면 그 소문항만 바꾼다) */
+async function 소문항채점하기(p, 소문항, 학생, 보내기, st, btn) {
+  const j = 지금소, s = 소문항[j], 이름 = 소이름(s, j);
+  if (!(s.조각 || []).length) { st.textContent = `${이름}은 조각이 없어 채점하지 않습니다`; return; }
+  const 답 = ($('#in-st-' + j)?.value || '').trim();
+  if (!답) { st.textContent = `${이름} 학생 답안을 넣으세요`; return; }
+  btn.disabled = true;
+  try {
+    st.textContent = `채점 중… ${이름} 엔진 조각 · 4축 대조`;
+    const g = { ...(await 소문항채점(보내기, s, 답, p.루브릭.계열 || p.계열, p.덧)), 자리: j };
+    // 이 준비의 첫 채점이면 분석 기록을 본떠 새 채점 기록을 연다 (분석 기록은 ②로 돌아갈 때 다시 쓰므로 그대로 둔다)
+    if (기록준비 !== p || 기록 === p.분석기록) {
+      기록 = { ...p.분석기록, 채점: [] }; 기록키 = p.키 + ':' + Date.now(); 기록준비 = p; 교사 = {};
+      $('#rec-select').value = '';
+    }
+    기록.학생 = 학생;
+    기록.채점 = [...기록.채점.filter((x) => x.자리 !== j), g].sort((a, b) => a.자리 - b.자리);
+    기록.학생답 = 소문항.map((x, i) => { const a = ($('#in-st-' + i)?.value || '').trim(); return a && 기록.채점.some((c) => c.자리 === i) ? `${소이름(x, i)} ${a}` : ''; }).filter(Boolean).join('\n\n');
+    if (교사[자리(s, j)]) { delete 교사[자리(s, j)]; 저장교사(); } // 다시 채점한 소문항은 교사 고침을 지운다
+    st.textContent = 다채점됨() ? '모든 소문항 채점 끝 — ④에서 전체 합산을 보고 교사 확정으로' : `${이름} 채점 끝 — ④ 채점 결과에서 보세요`;
+    그리기();
     탭(3);
   } catch (e) { st.textContent = '채점 실패: ' + e.message; } finally { btn.disabled = false; }
 }
@@ -976,7 +1058,9 @@ function 그리기2() {
   }
   if (!기록) { $('#p2-rec').innerHTML = 비었음('「문항분석」을 누르면 5색 노드 · 급소 · 루브릭 · 모범답안이 여기 나옵니다. 저장된 채점 결과를 위에서 골라도 됩니다.'); return; }
   const out = 기록.루브릭?.out || {};
-  $('#p2-rec').innerHTML = `<div class="sec-sub">계열 ${esc(out.계열 || 기록.계열 || '')} · 총배점 ${점(out.총배점)}${기록.형식 && 형식들[기록.형식] ? ` · ${형식들[기록.형식]}` : ''}${out.엔진?.commit ? ` · 엔진 ${esc(out.엔진.commit)}` : ''}</div>` + 소문항들().map((s) => {
+  $('#p2-rec').innerHTML = `<div class="sec-sub">계열 ${esc(out.계열 || 기록.계열 || '')} · 총배점 ${점(out.총배점)}${기록.형식 && 형식들[기록.형식] ? ` · ${형식들[기록.형식]}` : ''}${out.엔진?.commit ? ` · 엔진 ${esc(out.엔진.commit)}` : ''}</div>`
+    + (여럿() ? `<div class="fmt-hint" style="margin:0 0 12px">소문항 ${esc(소이름(소문항들()[지금소], 지금소))} — 위 소문항 탭에서 하나씩 봅니다. 엔진 문항분석은 문항 전체를 한 번에 합니다 (앞 소문항 이어받기).</div>` : '')
+    + 보일소().map(([s]) => {
     const 노드 = s.인식?.노드 || [];
     const 급소 = s.급소 || {};
     const 쓴색 = [...new Set(노드.map((n) => n.색))];
@@ -1082,15 +1166,36 @@ function 그리기3축상세() {
   </div>`;
 }
 
+/** ④ 전체 합산 — 소문항마다 엔진 · 4축 점수, 다 채점되면 합산 (엔진 출력 그대로 더하기만) */
+function 합산Html() {
+  const ss = 소문항들();
+  const 줄 = ss.map((s, i) => ({ s, i, g: 채점of(s, i) }));
+  const 합 = (f) => 줄.reduce((a, x) => a + Number(f(x) || 0), 0);
+  const 다 = 다채점됨();
+  return `<div class="card"><h3>${다 ? '전체 합산' : `소문항별 채점 — ${ss.filter(채점됨).length}/${ss.length}`}</h3>
+    <div class="tbl-wrap"><table><tr><th>소문항</th><th>급소</th><th>엔진</th><th>4축</th><th></th></tr>
+    ${줄.map(({ s, i, g }) => `<tr${i === 지금소 ? ' style="background:var(--gold-lt)"' : ''}><td><b>${esc(소이름(s, i))}</b></td><td>${esc(s.급소?.실체 || '—')}</td>
+      <td>${g?.out?.조각별 ? `${점(g.out.부분점수)} / ${점(g.out.만점)}` : `<span class="muted">${!(s.조각 || []).length ? '조각 없음' : '채점 전'}</span>`}</td>
+      <td>${g?.축 && !g.축.error ? `${점(g.축.부분점수)} / ${점(g.축.만점)}` : '—'}</td>
+      <td>${i === 지금소 ? '' : `<button class="ghost-btn" style="padding:3px 10px" data-sum="${i}">보기</button>`}</td></tr>`).join('')}
+    ${다 ? `<tr><td colspan="2"><b>합계</b></td><td><b>${점(합((x) => x.g?.out?.부분점수))} / ${점(합((x) => x.s.배점))}</b></td><td><b>${줄.some((x) => x.g?.축 && !x.g.축.error) ? `${점(합((x) => !x.g?.축?.error && x.g?.축?.부분점수))} / ${점(합((x) => !x.g?.축?.error && x.g?.축?.만점))}` : '—'}</b></td><td></td></tr>` : ''}
+    </table></div></div>`;
+}
+
 function 그리기3() {
   if (!$('#p3-axis')) { $('#p3').innerHTML = '<div class="sec-title">채점 결과</div><div id="p3-rec"></div><div id="p3-go" style="margin:4px 0 28px"></div><div id="p3-axis"></div>'; 그리기3축(); }
   // 채점된 조각이 있으면 아래에 「교사 확정 →」 (오종래 2026-10-21)
-  $('#p3-go').innerHTML = (기록?.채점 || []).some((g) => g.out?.조각별) ? '<button class="run-btn" id="go-t">교사 확정 →</button>' : '';
+  //   소문항이 여럿이면 다 채점될 때까지 「다음 소문항 (k) →」(② 문항분석부터), 다 채점되면 「교사 확정 →」
+  const ss = 소문항들(), 채점있음 = (기록?.채점 || []).some((g) => g.out?.조각별);
+  const 남은 = 여럿() ? [...ss.keys()].map((k) => (지금소 + 1 + k) % ss.length).find((k) => !채점됨(ss[k], k)) : undefined;
+  $('#p3-go').innerHTML = 채점있음 && 남은 != null ? `<button class="run-btn" id="go-next">다음 소문항 ${esc(소이름(ss[남은], 남은))} →</button><span class="status">소문항을 모두 채점하면 전체 합산 뒤 교사 확정</span>`
+    : 채점있음 ? '<button class="run-btn" id="go-t">교사 확정 →</button>' : '';
   $('#go-t')?.addEventListener('click', () => 탭(6));
+  $('#go-next')?.addEventListener('click', () => { 소고르기(남은); 탭(2); });
   if (!기록?.채점?.length) { $('#p3-rec').innerHTML = 비었음('③ 답안 입력에서 「채점 →」을 누르거나 위에서 저장된 채점 결과를 고르세요. 인문·사회 4축 채점은 아래에 있습니다.'); return; }
-  $('#p3-rec').innerHTML = '<div class="sec-sub">판정 · 값 · 다경로 · 오류 이름은 모두 엔진 출력입니다. 조각마다 판단근거 전체를 보입니다.</div>' + 소문항들().map((s, i) => {
+  $('#p3-rec').innerHTML = (여럿() ? 합산Html() : '') + '<div class="sec-sub">판정 · 값 · 다경로 · 오류 이름은 모두 엔진 출력입니다. 조각마다 판단근거 전체를 보입니다.</div>' + 보일소().map(([s, i]) => {
     const g = 채점of(s, i);
-    if (!g || !g.out || !g.out.조각별) return `<div class="card">${s.번호 ? `<h3>소문항 (${esc(s.번호)})</h3>` : ''}<div class="muted">${esc(g?.건너뜀 || g?.out?.error || '채점 없음')}</div></div>`;
+    if (!g || !g.out || !g.out.조각별) return `<div class="card">${s.번호 ? `<h3>소문항 (${esc(s.번호)})</h3>` : ''}<div class="muted">${esc(g?.건너뜀 || g?.out?.error || (!(s.조각 || []).length ? '조각 없음 — 채점하지 않는 소문항' : '채점 전 — ③ 답안 입력에서 이 소문항을 채점하세요'))}</div></div>`;
     const o = g.out;
     return `<div class="card">
       ${s.번호 ? `<h3>소문항 (${esc(s.번호)})</h3>` : ''}
@@ -1106,6 +1211,7 @@ function 그리기3() {
       ${(o.경고 || []).filter((w) => !o.조각별.some((x) => x.오류 && w.endsWith(x.오류))).map((w) => `<div class="warn">⚠ ${esc(w)}</div>`).join('')}
     </div>`;
   }).join('');
+  document.querySelectorAll('#p3-rec [data-sum]').forEach((b) => b.addEventListener('click', () => 소고르기(Number(b.dataset.sum))));
 }
 
 // ── 탭6 교사 확정 ── 조각 판정을 교사가 확정 · 고친다. 점수는 엔진 게이트 사슬 · 상한비로 다시 센다 (엔진 g1 집계 · /dashboard 채점집계와 같은 계산)
