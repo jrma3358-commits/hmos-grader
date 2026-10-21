@@ -145,18 +145,24 @@ export const relay_constraint = (앞번호: string, 앞급소: string[], 대상:
  * 기본 수학 기호 세트 [오종래 2026-10-21 확정] — 봉인 목록이 서기 전까지의 기본값. 제시문 제약 연결의 열쇠.
  * 기호(lim·Σ·∫·sin·cos·tan·θ·log·√)는 그 이름, 꼴(E(X)·P(X=…)·S'·a_n·f(x))은 글에 나온 그대로, 용어는 그 낱말.
  * 한 글자 변수(n·x)는 넣지 않는다 — 수리 문항이면 어디에나 있다
+ * 추가 [오종래 2026-10-21 확정]: h(x)·g(x)(함수 꼴로 이미 잡힘) · cosθ · S₁·S₂·O₁·O₂ · αⁿ·βⁿ · Lₙ · X·Y·Z
+ *   cosθ는 cos·θ와 함께 따로 하나 더 · 아래첨자·윗첨자는 S_1 · α^n · L_n 꼴로 맞춘다 · X·Y·Z는 홀로 선 것만 (E(X)·P(X=…) 안은 그 꼴로)
  */
 const 기호들: [string, RegExp][] = [
   ['lim', /lim/], ['Σ', /[Σ∑]/], ['∫', /∫/], ['sin', /sin/], ['cos', /cos/], ['tan', /tan/], ['θ', /θ/], ['log', /log|ln(?![a-z])/], ['√', /√/],
 ];
-const 꼴들 = [/[EV]\([A-Z]\)/g, /P\([A-Z](?=\s*[=<>≤≥)])/g, /(?<![A-Za-z])[A-Z]'(?!\()/g, /(?<![A-Za-z])[a-z](?:_n|ₙ)/g];
+const 꼴들 = [
+  /[EV]\([A-Z]\)/g, /P\([A-Z](?=\s*[=<>≤≥)])/g, /(?<![A-Za-z])[A-Z]'(?!\()/g, /(?<![A-Za-z])[a-z](?:_n|ₙ)/g,
+  /cos\s?θ/g, /(?<![A-Za-z])[SO](?:_[12]|[₁₂])(?![0-9])/g, /[αβ](?:\^n|ⁿ)/g, /(?<![A-Za-z])L(?:_n|ₙ)/g, /(?<![A-Za-z(])[XYZ](?![A-Za-z'(])/g,
+];
+const 꼴맞춤 = (x: string) => x.replace(/\s/g, '').replace('ₙ', '_n').replace('₁', '_1').replace('₂', '_2').replace('ⁿ', '^n');
 const 용어들 = ['접선', '미분', '도함수', '극한', '수열', '급수', '정적분', '적분', '곡선', '기울기', '넓이', '부피', '정사영', '확률', '기댓값', '분산', '표준편차', '확률변수', '벡터', '내적'];
 /** 글 속 수학 기호 — 나온 차례, 겹침 없이 */
 export function math_symbols(t: string): string[] {
   const 자리: [number, string][] = [];
   for (const [이름, re] of 기호들) { const m = re.exec(t); if (m) 자리.push([m.index, 이름]); }
-  // 아래첨자 「aₙ」은 「a_n」과 같은 기호
-  for (const re of 꼴들) for (const m of t.matchAll(re)) 자리.push([m.index!, m[0].startsWith('P(') ? m[0] + ')' : m[0].replace('ₙ', '_n')]);
+  // 아래첨자 「aₙ」은 「a_n」과 같은 기호 (S₁ → S_1 · αⁿ → α^n · cos θ → cosθ)
+  for (const re of 꼴들) for (const m of t.matchAll(re)) 자리.push([m.index!, m[0].startsWith('P(') ? m[0] + ')' : 꼴맞춤(m[0])]);
   // 도함수 f'(x)·f''(x)는 f(x)와 별개 기호 [오종래 2026-10-21 확정] — 프라임을 떼지 않는다 (함수들()의 이어받기 열쇠와 다르다)
   for (const m of t.matchAll(/[A-Za-z]'{0,2}\([A-Za-z]\)/g)) 자리.push([m.index!, m[0]]);
   // 긴 용어 먼저 — 「정적분」이 있으면 「적분」은 같은 자리라 따로 세지 않는다

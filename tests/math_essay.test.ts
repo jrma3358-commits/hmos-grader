@@ -188,7 +188,8 @@ describe('constraint_links — 제시문 수학 기호 (2026-10-21)', () => {
   });
   it('E(X) · S\' · cos · θ — 노드에 같은 기호가 있으면 얹힌다', () => {
     const l = constraint_links(['E(X)의 값', "S'과 cosθ"], 하나고);
-    assert.deepEqual(l.map((x) => [x.출처, x.말]), [['다', 'E(X)'], ['라', "S' · cos · θ"]]);
+    // cosθ는 cos · θ와 함께 하나 더 (기호 세트 추가, 2026-10-21)
+    assert.deepEqual(l.map((x) => [x.출처, x.말]), [['다', 'E(X)'], ['라', "S' · cos · cosθ · θ"]]);
   });
   it('한 글자 변수는 기호가 아니다', () => {
     assert.deepEqual(math_symbols('n이 자연수 x'), []);
@@ -213,6 +214,32 @@ describe('math_symbols — 「f」 단독 제외 · 도함수 별개 (2026-10-21
   });
   it('Σ는 기호', () => {
     assert.deepEqual(math_symbols('Σk(n-k)'), ['Σ']);
+  });
+});
+
+// 기호 세트 추가 [오종래 2026-10-21 확정] — h(x)·g(x)·cosθ·S₁·S₂·O₁·O₂·αⁿ·βⁿ·Lₙ·X·Y·Z
+describe('math_symbols — 기호 세트 추가 (2026-10-21)', () => {
+  it('h(x) · g(x)', () => {
+    assert.deepEqual(math_symbols('h(x)와 g(x)'), ['h(x)', 'g(x)']);
+  });
+  it('cosθ는 cos · θ와 함께 하나 더, 띄어 써도 같다', () => {
+    assert.deepEqual(math_symbols('S=cosθ'), ['cos', 'cosθ', 'θ']);
+    assert.deepEqual(math_symbols('cos θ'), ['cos', 'cosθ', 'θ']);
+  });
+  it('S₁·S₂·O₁·O₂는 S_1 꼴과 같은 기호', () => {
+    assert.deepEqual(math_symbols('넓이 S₁, S₂와 중심 O₁, O₂'), ['넓이', 'S_1', 'S_2', 'O_1', 'O_2']);
+    assert.deepEqual(math_symbols('S_1+S_2'), ['S_1', 'S_2']);
+  });
+  it('αⁿ·βⁿ · Lₙ', () => {
+    assert.deepEqual(math_symbols('αⁿ+β^n, Lₙ'), ['α^n', 'β^n', 'L_n']);
+  });
+  it('X·Y·Z는 홀로 선 것만 — E(X)·P(X=…) 안은 그 꼴', () => {
+    assert.deepEqual(math_symbols('변수 X, Y, Z'), ['X', 'Y', 'Z']);
+    assert.deepEqual(math_symbols('E(X)와 P(X=1)'), ['E(X)', 'P(X)']);
+  });
+  it('S₁이 있는 제시문은 S_1 노드에 얹힌다', () => {
+    const 제약 = math_constraints('[논제 1]', [{ id: '가', 기호: '[가]', 텍스트: '두 넓이 S₁, S₂의 비' }]);
+    assert.deepEqual(constraint_links(['S_1의 값'], 제약), [{ 출처: '가', 종류: '제시문', 말: 'S_1' }]);
   });
 });
 
