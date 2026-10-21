@@ -1364,12 +1364,36 @@ function 경로Html(x) {
     + (강.length ? `<details class="c-text"><summary>극성 표지</summary><div>${강.map(b => `「${esc(b.t)}」 ${esc(b.p.극성)} — ${esc(b.p.이유)}`).join('\n')}</div></details>` : '');
 }
 
+// 연결된 제시문만 (오종래 2026-10-21 확정) — 3단계는 논제와 연결된 제시문만 보이고, 무관한 제시문(배경)은 숨긴다.
+//   연결 = 엔진 4단계 연결 단락(정합.소문항.연결단락) ∪ 수리 제약 연결 출처(소문항.제약연결, 제시문). 「전체 제시문 보기」로 모두
+let C3전체 = false;
+/** 연결된 제시문 기호 Set — 엔진 정합이 없는 예전 분석이면 null (모두 보인다) */
+function 연결제시문() {
+  const 단 = C.분석 && C.분석.단계;
+  if (!단 || !단.정합) return null;
+  return new Set([
+    ...(단.정합.소문항 || []).flatMap(x => x.연결단락 || []),
+    ...((단.인식 && 단.인식.소문항) || []).flatMap(s => (s.제약연결 || []).filter(x => x.종류 === '제시문').map(x => x.출처)),
+  ]);
+}
+/** 숨긴 제시문 안내 + 전체 보기 단추 — 숨길 것이 없으면 빈 글 */
+function 숨김줄Html(숨긴) {
+  if (!숨긴.length && !C3전체) return '';
+  return `<div class="card" style="padding:10px 14px;"><div class="type-selector" style="align-items:center; gap:8px; margin:0;">
+    <span class="c-meta" style="flex:1;">${C3전체 ? '전체 제시문을 보고 있습니다.' : `논제와 연결되지 않은 제시문 ${숨긴.map(id => `[${esc(id)}]`).join('·')}은 숨겼습니다 (배경).`}</span>
+    <button class="type-btn" style="margin:0;" onclick="C3전체 = !C3전체; renderC3();">${C3전체 ? '연결된 제시문만 보기' : '전체 제시문 보기'}</button>
+  </div></div>`;
+}
+
 function renderC3() {
   const body = document.getElementById('c3-body');
   // 수리논술 C-2 — 제시문·조건은 제약 C (수렴 경로·극성을 잡지 않는다)
   if (C.분석 && 수리of()) { body.innerHTML = 수리3단계Html(); return; }
   if (!C.제시문.length) { body.innerHTML = '<div class="card c-empty">제시문이 없습니다 — 1단계에 제시문을 넣으면 엔진이 제시문마다 수렴 경로를 잡습니다</div>'; return; }
+  const 연결 = 연결제시문();
+  const 숨긴 = 연결 ? (C.제시문급소 || []).map(x => x.id).filter(id => !연결.has(id)) : [];
   const 목록 = C.제시문급소 || [];
+  const 보일 = 목록.filter(x => C3전체 || !숨긴.includes(x.id));
   const 끝남 = 목록.length && 목록.every(x => x.상태 === '완료' || x.상태 === '실패');
   const 극 = C.극성;
   const 극줄 = !끝남 || !극 ? ''
@@ -1379,7 +1403,7 @@ function renderC3() {
     const m = x.분석 && (x.분석.메시지 || []).find(y => y.id === x.id);
     return m && m.실체 ? `<br>핵심 메시지 「${esc(m.실체)}」 <span class="c-meta">(${esc(m.근거)} — ${esc(m.문장)})</span>` : '';
   };
-  const 급소카드 = 목록.map(x => {
+  const 급소카드 = 보일.map(x => {
     // 배경 단락 실체 (오종래 2026-10-20) — 단락마다 하나, 8단계 ② 세우기 조각이 된다
     const 단락실체 = x.배경 && x.분석 ? (x.분석.단락 || []).filter(p => p.실체).map(p => `${esc(p.라벨)} 「${esc(p.실체)}」 <span class="c-meta">(${esc(p.근거)})</span>`).join(' · ') : '';
     const 줄 = x.상태 === '완료' && x.배경 ? `라벨 없는 한 덩어리 제시문 — 엔진이 통째로 배경(P)으로 읽습니다. 수렴 경로를 세우지 않고 논제 급소와 잇지 않습니다.${단락실체 ? `<br>단락마다 실체 (세우기 조각): ${단락실체}` : ''}`
@@ -1407,7 +1431,7 @@ function renderC3() {
     !목록.length || (끝남 && 목록.some(x => x.상태 === '실패')) ? '<button class="type-btn" onclick="제시문급소추출()">제시문 수렴 경로 다시 추출</button>' : '',
     끝남 && 선수 >= 2 && g && g.상태 !== '판정 중' ? '<button class="type-btn" onclick="관계판정()">관계 다시 판정</button>' : '',
   ].filter(Boolean).join('');
-  body.innerHTML = `<div class="card">${극줄 || '<div class="c-meta">제시문마다 엔진 수렴 경로 · 극성(기능표지) → 최종 입장 관계(Claude) 순으로 진행합니다.</div>'}${버튼 ? `<div class="type-selector" style="margin-top:10px;">${버튼}</div>` : ''}</div>` + 급소카드 + `
+  body.innerHTML = `<div class="card">${극줄 || '<div class="c-meta">제시문마다 엔진 수렴 경로 · 극성(기능표지) → 최종 입장 관계(Claude) 순으로 진행합니다.</div>'}${버튼 ? `<div class="type-selector" style="margin-top:10px;">${버튼}</div>` : ''}</div>` + 숨김줄Html(숨긴) + 급소카드 + `
     <div class="card">
       <div class="card-title">${AI배지}제시문 관계도</div>
       <div class="c-meta" style="margin-bottom:8px;">최종 입장은 엔진 수렴 경로에서 극성 표지(당김·밀침)가 있는 B만 남긴 것이고, 그 사이 관계(${['병렬', '대비', '대조', '흡수', '근거·주장', '수렴'].join('·')})는 Claude가 판정합니다. ▶는 포함되는 쪽 → 포함하는 쪽 · 근거 → 주장 · 모이는 제시문 → 결론.</div>
@@ -1442,14 +1466,18 @@ function 수리3단계Html() {
   const 소 = C.분석.단계.인식.소문항;
   // 사슬 — 첫 소문항이 이어받은 앞 결과(소문항 창이면 앞 창 결과)부터
   const 이어 = 소.length ? (소[0].제약 || []).filter(c => c.종류 === '이어받기') : [];
+  // 연결되지 않은 제시문 제약은 숨긴다 (오종래 2026-10-21) — 설정·조건은 그대로
+  const 연결 = 연결제시문();
+  const 숨김 = c => !C3전체 && 연결 && c.종류 === '제시문' && !연결.has(c.출처);
+  const 숨긴 = 연결 ? [...new Set(묶음.flatMap(g => g.제약.filter(c => c.종류 === '제시문' && !연결.has(c.출처)).map(c => c.출처)))] : [];
   const 사슬 = 소.length ? `<div class="rel-row">${[
     ...이어.map(c => `<span class="rel-node"><b>(${esc(c.출처)}) 결과</b>${esc(c.실체)}</span>`),
     ...소.map(s => `<span class="rel-node"><b>(${esc(s.번호)})</b>${esc(급소글텍스트(s))}</span>`),
   ].join('<span class="rel-link">──<span>이어받기</span>──▶</span>')}</div>` : '';
-  return 묶음.map(g => `<div class="card">
+  return 숨김줄Html(숨긴) + 묶음.map(g => `<div class="card">
       <div class="card-title">${엔진배지}제약조건 C — 먼저 읽고 소문항에 얹습니다</div>
       <div class="c-meta" style="margin-bottom:8px;">수리논술: 라벨 없는 글(문제 설정 · 제시문 [I][II] · 조건 (가)(나)(다))은 배경 설정이지 논제가 아닙니다. 번호 라벨 [2-1]… 만 독립 논제입니다.</div>
-      ${g.제약.length ? g.제약.map(c => `<div class="c-row"><span class="badge muted">${esc(제약종류글[c.종류])}</span> ${제약칸Html(c)}${c.구조 ? 조각조합Html(c.구조) : ''}</div>`).join('') : '<div class="c-empty">제약 C가 없습니다</div>'}
+      ${g.제약.length ? g.제약.filter(c => !숨김(c)).map(c => `<div class="c-row"><span class="badge muted">${esc(제약종류글[c.종류])}</span> ${제약칸Html(c)}${c.구조 ? 조각조합Html(c.구조) : ''}</div>`).join('') : '<div class="c-empty">제약 C가 없습니다</div>'}
     </div>`).join('') + `<div class="card">
       <div class="card-title">${엔진배지}소문항 이어달리기</div>
       <div class="c-meta" style="margin-bottom:8px;">앞 소문항 결과(급소 B)가 다음 소문항의 제약 C로 넘어갑니다.</div>
