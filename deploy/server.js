@@ -262,7 +262,10 @@ const MODEL='claude-sonnet-5-5';
 // 대체 모델을 claude-sonnet-4-6 하나로 고정한다 (오종래 2026-10-21). 서버 측 대체는 sonnet-5-5 → sonnet-5만 받아서,
 // 서버 측 대체 없이 부르고 거절이면 같은 요청을 claude-sonnet-4-6으로 한 번 더 부른다
 const 루브릭대체모델='claude-sonnet-4-6';
+// max_tokens 16000 — sonnet-5-5는 적응형 사고가 기본이라 사고 토큰도 한도 안에 든다. 8000이면 조각 많은 인문논술(하나고 [라]~[사], 60점)에서 잘렸다 (2026-10-21)
+const 루브릭최대토큰=16000;
 async function 루브릭호출(params){
+  params={...params,max_tokens:루브릭최대토큰};
   const msg=await client.messages.create({model:MODEL,...params});
   if(msg.stop_reason!=='refusal')return msg;
   console.warn(`/api/rubric ${MODEL} 거절 (${(msg.stop_details&&msg.stop_details.category)||'분류 없음'}) → ${루브릭대체모델}`);
@@ -488,7 +491,6 @@ async function 조각문장(user){
   let msg;
   try{
     msg=await 루브릭호출({
-      max_tokens:8000,
       system:RUBRIC_SYSTEM,
       output_config:{format:RUBRIC_FORMAT},
       messages:[{role:'user',content:user}],
@@ -556,7 +558,6 @@ async function 줄쓰기(user){
   let msg;
   try{
     msg=await 루브릭호출({
-      max_tokens:8000,
       system:LINES_SYSTEM,output_config:{format:LINES_FORMAT},messages:[{role:'user',content:user}],
     });
   }catch(e){
