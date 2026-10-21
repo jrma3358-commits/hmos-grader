@@ -192,10 +192,15 @@ export function 봉인6_조각대조(학생답: string, 조각: 조각, 맥락: 
       : 조각.경우의수 ? (답: string) => {
         const v = verify_counting_line(조각.줄글!, 답);
         if (v.결과 === 'O') return v;
-        const w = verify_case_split_line(조각.줄글!, 답, 모범끝값(맥락), 조각.경우의수);
+        // 다른 세우기 줄 값 — 경우 나누기의 나머지 인수 · 결론 곱 대조에 쓴다
+        const 줄들 = 맥락.루브릭.filter((c) => c.파트 === '세우기' && c.경우의수 && c.줄글);
+        const 줄값들 = 줄들.map((c) => counting_line_value(c.줄글!));
+        const 다른줄값 = 줄값들.filter((x, i): x is number => x !== null && 줄들[i].줄글 !== 조각.줄글);
+        // [오종래 2026-10-21 확정] 세우기는 같은 단계 세우기 값(이 줄 값)과 대조 — 모범 끝 값(72)과 대조하지 않는다 (답구하기에 남긴다)
+        const w = verify_case_split_line(조각.줄글!, 답, 다른줄값, 조각.경우의수, 모범끝값(맥락));
         if (w.결과 !== '판정불가') return w;
-        // 여사건 「전체-뺀 값=결과」 (2026-10-17 q3 학생 3, 오류 「양 끝 모두 자음만 뺌 — 여사건 계산 오류」)
-        const c = verify_complement(답, 조각.경우의수!, 모범끝값(맥락));
+        // 여사건 「전체-뺀 값=결과」 (2026-10-17 q3 학생 3, 오류 「양 끝 모두 자음만 뺌 — 여사건 계산 오류」) — 뺄셈 · 뺀 값만 (2026-10-21)
+        const c = verify_complement(답, 조각.경우의수!);
         if (c.결과 !== '판정불가') return c;
         // 양 끝 조합 열거 「(a,e), (e,a), (a,a) → 3가지」 · 「=」 없이 식만 쓴 줄 「… 경우의 수는 4!」 (2026-10-17 q3 학생 10)
         const p = verify_end_pairs_line(조각.줄글!, 답, 조각.경우의수!);
@@ -204,9 +209,6 @@ export function 봉인6_조각대조(학생답: string, 조각: 조각, 맥락: 
         if (m.결과 === 'O') return m;
         // 결론 곱에서 이 줄의 학생 값을 읽는다 — 「∴ 4×24=96」 → 양 끝 4 (2026-10-17 q3 학생 2, 오류 「… 중복 미처리」)
         //   두 줄 모두 틀렸으면(「∴ 2×6=12」) 세우기 줄 차례대로 짝짓는다 (q3 학생 7, 오류 이름은 조각마다 — B안)
-        const 줄들 = 맥락.루브릭.filter((c) => c.파트 === '세우기' && c.경우의수 && c.줄글);
-        const 줄값들 = 줄들.map((c) => counting_line_value(c.줄글!));
-        const 다른줄값 = 줄값들.filter((x, i): x is number => x !== null && 줄들[i].줄글 !== 조각.줄글);
         const 자리 = 줄값들.every((x) => x !== null) ? { 줄값들: 줄값들 as number[], i: 줄들.findIndex((c) => c.줄글 === 조각.줄글) } : undefined;
         const f = verify_counting_factor(조각.줄글!, 답, 다른줄값, 조각.경우의수!, 자리);
         return f.결과 === '판정불가' ? v : f;

@@ -94,7 +94,22 @@ describe('경우 나누기 경로 (q3 학생 1)', () => {
     assert.equal(verify_case_split('① → 4!=24\n② → 2!×4!=48\n48+24=72', 72).결과, 'O');
   });
   it('세우기 줄 「1/2!×3P2=3」 — 24÷24 + 48÷24 = 1+2 = 3', () => {
-    assert.equal(verify_case_split_line('양 끝 모음 나열: 1/2! × 3P2 = 3', 학생1, 72).결과, 'O');
+    assert.equal(verify_case_split_line('양 끝 모음 나열: 1/2! × 3P2 = 3', 학생1, [24], undefined, 72).결과, 'O');
+  });
+  // [오종래 2026-10-21 확정] 세우기는 같은 단계 세우기 값(3)과 대조 — 모범 끝 값(72)과 대조하지 않는다
+  it('나머지 인수 = 다른 세우기 줄 값(24) · 몫의 합이 줄 값이면 O, 아니면 X · 다른 줄 값이 없거나 모범이 곱이 아니면 판정불가', () => {
+    assert.equal(verify_case_split_line('양 끝 모음 나열: 1/2! × 3P2 = 3', 학생1, [24]).결과, 'O');
+    assert.equal(verify_case_split_line('양 끝 모음 나열: 1/2! × 3P2 = 3', 'i) → 4!=24\nii) → 3×4!=72\n∴ 24+72=96', [24]).결과, 'X');
+    assert.equal(verify_case_split_line('양 끝 모음 나열: 1/2! × 3P2 = 3', 학생1, []).결과, '판정불가');
+    assert.equal(verify_case_split_line('양 끝 모음 나열: 1/2! × 3P2 = 3', 학생1, [24], undefined, 70).결과, '판정불가');
+  });
+  it('풀이1 — 「양 끝이 a, a인 경우:」 머리 줄 둘 → 경우 24 · 48, 세우기 줄 3 O', () => {
+    const 풀이1 = '모음은 a, a, e이다.\n양 끝이 a, a인 경우: 가운데 b, c, d, e를 나열하므로 4! = 24가지\n양 끝이 a, e 또는 e, a인 경우: 가운데 a, b, c, d를 나열하므로 2 × 4! = 48가지\n따라서 24 + 48 = 72가지';
+    assert.deepEqual(verify_case_split(풀이1, 72).경우값, [24, 48]);
+    assert.equal(verify_case_split(풀이1, 72).결과, 'O');
+    assert.equal(verify_case_split_line('양 끝 모음 나열: 1/2! × 3P2 = 3', 풀이1, [24], undefined, 72).결과, 'O');
+    // 머리 줄이 하나뿐이면 경우 나누기가 아니다
+    assert.equal(verify_case_split('양 끝이 a, a인 경우: 4! = 24가지\n따라서 24가지', 72).결과, '판정불가');
   });
   it('「→ 4!=24」 — 화살표를 떼고 읽는다', () => {
     assert.equal(verify_counting_line('나머지 4개 나열: 4!=24', 학생1).결과, 'O');
@@ -309,16 +324,21 @@ describe('여사건 경로 (q3 학생 3)', () => {
     assert.equal(count_arrangements(원소, (a) => !모음(a[0]) && !모음(a.at(-1)!)), 72);
   });
   it('360-72=288 — 뺀 값이 양 끝 모두 자음 → X · 오류 이름', () => {
-    const v = verify_complement(학생3, 문항정보, 72);
+    const v = verify_complement(학생3, 문항정보);
     assert.equal(v.결과, 'X');
     assert.equal(v.오류, '양 끝 모두 자음만 뺌 — 여사건 계산 오류');
   });
   it('360-288=72 — 맞는 여사건이면 O · 다른 뺀 값은 오류 이름 없이 X · 전체 줄이 없으면 판정불가', () => {
-    assert.equal(verify_complement('전체: 6!/2!=360\n양 끝 중 자음이 있는 경우: 288\n∴ 360-288=72', 문항정보, 72).결과, 'O');
-    const w = verify_complement('전체: 6!/2!=360\n∴ 360-100=260', 문항정보, 72);
+    assert.equal(verify_complement('전체: 6!/2!=360\n양 끝 중 자음이 있는 경우: 288\n∴ 360-288=72', 문항정보).결과, 'O');
+    const w = verify_complement('전체: 6!/2!=360\n∴ 360-100=260', 문항정보);
     assert.equal(w.결과, 'X');
     assert.equal(w.오류, undefined);
-    assert.equal(verify_complement('360-72=288', 문항정보, 72).결과, '판정불가');
+    assert.equal(verify_complement('360-72=288', 문항정보).결과, '판정불가');
+  });
+  // [오종래 2026-10-21 확정] 여사건은 뺄셈과 뺀 값만 — 결과가 끝 값인지는 답구하기에 남긴다
+  it('뺀 값 288 · 뺄셈 맞으면 O · 뺄셈 계산이 틀리면 X', () => {
+    assert.equal(verify_complement('전체: 6!/2!=360\n∴ 360-288=72', 문항정보).결과, 'O');
+    assert.equal(verify_complement('전체: 6!/2!=360\n∴ 360-288=82', 문항정보).결과, 'X');
   });
   it('채점 — ① O(÷2! 있음) · ② 둘 X (오류 이름) · ③ O · ④ X', () => {
     const 입력 = f2_input_from_v2(recognizeV2Analysis(문항));
