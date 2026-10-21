@@ -62,11 +62,12 @@
    * 돌려주는 값: { 설정(형식) — 형식으로 버튼을 맞춘다(바뀜은 부르지 않는다), 형식() — 지금 형식 }
    */
   function 형식선택(el, 옵션 = {}) {
-    const o = { 종류들: 종류목록, 줄: '', 버튼: '', 고름: 'on', 이름표: '', 바뀜: () => {}, ...옵션 };
+    // 표시 — 버튼 글만 바꾼다 (값은 그대로). 예) tools: { '제시문 없음': '제시문 없음 (서논술형)' } (오종래 2026-10-21)
+    const o = { 종류들: 종류목록, 줄: '', 버튼: '', 고름: 'on', 이름표: '', 바뀜: () => {}, 표시: {}, ...옵션 };
     let 고른 = {};
     const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
     const 줄 = (단, 이름, 값들, 지금) => `<div class="hmos-step" data-step="${단}"><div class="${o.이름표}">${단}단계 · ${이름}</div>`
-      + `<div class="${o.줄}">${값들.map((v) => `<button type="button" class="${o.버튼}${v === 지금 ? ' ' + o.고름 : ''}" data-v="${esc(v)}">${esc(v)}</button>`).join('')}</div></div>`;
+      + `<div class="${o.줄}">${값들.map((v) => `<button type="button" class="${o.버튼}${v === 지금 ? ' ' + o.고름 : ''}" data-v="${esc(v)}">${esc(o.표시[v] ?? v)}</button>`).join('')}</div></div>`;
     function 그리기() {
       const 셋 = 셋째(고른.종류, 고른.계열);
       if (셋 && 셋.값.length === 1) 고른.셋 = 셋.값[0];
