@@ -200,3 +200,10 @@ describe('math_symbols — 아래첨자 (2026-10-21)', () => {
     assert.deepEqual(math_symbols('lim aₙ'), ['lim', 'a_n']);
   });
 });
+
+// 「f」 한 글자는 기호가 아니다 [오종래 2026-10-21 확정] — f(x)·f(a)·f'(x) 꼴만
+describe('math_symbols — 「f」 단독 제외 (2026-10-21)', () => {
+  it('「f」 단독은 빠지고 함수 꼴만 기호', () => {
+    assert.deepEqual(math_symbols("함수 f 와 f(x), f(a), f'(x)"), ['f(x)', 'f(a)']);
+  });
+});
