@@ -109,7 +109,16 @@ const 파트순서 = ['근거대기', '세우기', '풀기', '답구하기'];
  * 대시보드는 7단계에서 확정한 논제만 보낸다. 소문항 하나가 멈춰도 나머지는 낸다
  * 인문논술(계열 인문사회국어) ② 세우기 = 소문항 급소와 엔진이 연결한 제시문 단락(정합 연결)의 문장 수 — 3·4단계와 같은 정합을 다시 돌려 연결을 얻는다 (봉인②, 오종래 2026-10-14)
  */
-function 루브릭작업(논제글: string, 계열: string, 총배점: number, 제시문목록: { id: string; 텍스트: string }[] | null, 공통자료 = false, 이어받기 = false, 모범답안: unknown = [], 정답: unknown = '', 핵심: unknown = '', 세우기남길: unknown = null, 서술형 = false, 수리논술형식 = false) {
+/** 요청 소문항배점 → 소문항마다 배점 (dashboard2, 오종래 2026-10-21). 쓸 수 없으면 null */
+function 소문항배점(값: unknown, 수: number, 총배점: number): number[] | null {
+  if (!수) return null;
+  if (Array.isArray(값) && 값.length === 수 && 값.every((x) => Number(x) > 0)) return 값.map(Number);
+  if (값 !== '균등') return null;
+  const 몫 = Math.floor((총배점 / 수) * 100) / 100;
+  return Array.from({ length: 수 }, (_, i) => (i < 수 - 1 ? 몫 : Math.round((총배점 - 몫 * (수 - 1)) * 100) / 100));
+}
+
+function 루브릭작업(논제글: string, 계열: string, 총배점: number, 제시문목록: { id: string; 텍스트: string }[] | null, 공통자료 = false, 이어받기 = false, 모범답안: unknown = [], 정답: unknown = '', 핵심: unknown = '', 세우기남길: unknown = null, 서술형 = false, 수리논술형식 = false, 요청소배점: unknown = null) {
   // 서술형 B 급소 (오종래 2026-10-19 확정) — 서술 방식(C-F)은 급소 후보가 아니고 실체 명사(배경·이유 등) B가 급소다 (pivot.ts)
   const 인식 = (글: string) => fq.recognizeV2Analysis(글, { 서술형 });
   // 출제의도는 급소를 고르거나 바꾸지 않는다 — 소문항 몫을 루브릭 화면 참고 정보로만 낸다 (오종래 2026-10-16, 급소 대체 제거)
@@ -195,7 +204,9 @@ function 루브릭작업(논제글: string, 계열: string, 총배점: number, �
   // 소문항 배점 — 소문항 글에 「[N점]」이 있으면 그 값, 없으면 요청 총배점 (2026-10-14)
   //   [오종래 2026-10-15 ③] 괄호 안 「N점」도 — 「(200자 내외, 4점)」. 여럿이면 마지막 것 (앞에 붙은 공통 발문의 「(16점)」이 아니라)
   //   [오종래 2026-10-16 q4] 자기 「[N점]」이 없고 공통 발문에 「[총 N점]」이 있으면 소문항마다 N (나누기는 취소)
-  const 소배점들 = sub_item_points(소문항들, 총배점);
+  //   [오종래 2026-10-21] 채점 대시보드(dashboard2)는 소문항배점을 함께 보낸다 — 수 배열이면 소문항 차례대로 그 값, 「균등」이면 총배점 ÷ 소문항 수
+  //   (0.01 단위, 나머지는 끝 소문항에 — 합이 총배점). 없으면 위 규칙 그대로 (문항 분석 /dashboard는 안 보낸다)
+  const 소배점들 = 소문항배점(요청소배점, 소문항들.length, 총배점) ?? sub_item_points(소문항들, 총배점);
   return 소문항들.map((s: any, n: number) => {
     const 소배점 = 소배점들[n];
     const 답안글 = item_portion(모범답안, s.번호, n, true);
@@ -369,7 +380,7 @@ try {
     const 총배점 = Number(req.총배점) > 0 ? Number(req.총배점) : 10;
     out.단계.루브릭 = { 계열, 총배점, 소문항: 루브릭작업(String(req.논제 ?? 문항원문), 계열, 총배점, 제시문목록, !!req.공통자료, !!req.이어받기, req.모범답안 ?? [], req.정답 ?? '', req.핵심 ?? '', req.세우기남길 ?? null, !!req.서술형 || String(req.형식 ?? '') === 'C-1a',
       // 세우기 → 풀기 → 답구하기 줄 가르기 — 수리논술 C-2 · 물리·과학 계산 문항 (오종래 2026-10-20 확정)
-      /^C-2/.test(String(req.형식 ?? '')) || (계열 === '수리' && is_science_calc(String(req.논제 ?? 문항원문), 답안모두))) };
+      /^C-2/.test(String(req.형식 ?? '')) || (계열 === '수리' && is_science_calc(String(req.논제 ?? 문항원문), 답안모두)), req.소문항배점 ?? null) };
   } else if (파이프라인 === 'C') {
     // ── C·논술 (조립설명서 C·논술 9단계) — 논제를 먼저 읽는다. 1차 필터는 타지 않는다 (2026-10-13 확정 4) ──
     const 논제글 = String(req.논제 ?? 문항원문);

@@ -302,6 +302,11 @@ const 소문항들 = () => (기록?.루브릭?.out?.소문항 || []);
 // 채점 항목 — 소문항별 채점(자리 = 소문항 차례)은 자리로, 검증/ 파일은 번호 · 차례로
 const 채점of = (s, i) => { const xs = 기록?.채점 || []; return xs.find((g) => g.자리 === i) || (xs.some((g) => g.자리 != null) ? null : xs.find((g) => (g.번호 ?? null) === (s.번호 ?? null)) || xs[i]) || null; };
 const 자리 = (s, i) => String(s.번호 ?? i);
+// 급소 · 멈춤 글 (오종래 2026-10-21) — 엔진 멈춤은 { 멈춤, 종류, 사유 } 객체라 그대로 찍으면 [object Object]. 급소가 없거나 글이 아니면 교사 확인
+const 급소미확인 = '급소 미확인 — 교사 확인 필요';
+const 글로 = (v) => (v == null ? '' : typeof v === 'string' ? v : typeof v === 'number' ? String(v) : Array.isArray(v) ? v.map(글로).filter(Boolean).join(' · ') : 글로(v.실체 ?? v.entity ?? v.사유 ?? v.text ?? ''));
+const 급소글 = (s) => 글로(s?.급소?.실체 ?? s?.급소).trim();
+const 멈춤글 = (m) => (m && typeof m === 'object' && !Array.isArray(m) ? [m.멈춤 || m.종류, m.사유].filter(Boolean).join(' — ') : 글로(m));
 
 // 소문항별 흐름 (오종래 2026-10-21) — 소문항 2개 이상이면 ② · ③ · ④를 소문항 탭 (1)(2)(3)으로 하나씩: 문항분석 → 루브릭 → 답안 입력 → 채점 결과.
 //   엔진 문항분석은 문항 전체를 한 번 (앞 소문항 이어받기 그대로), 보이기 · 답안 · 채점은 소문항마다. 다 채점되면 ④에 전체 합산, ⑤ 교사 확정은 그 뒤 한 번
@@ -588,7 +593,7 @@ function 답칸그리기() {
   if ($('#in-go-ans')) $('#in-go-ans').textContent = 여러칸 && ps[지금소] ? `${소이름(ps[지금소], 지금소)} 답안 입력 →` : '답안 입력 →';
   $('#in-run').textContent = 여러칸 && ps[지금소] ? `${소이름(ps[지금소], 지금소)} 채점 →` : 문항방식 === '분석' ? '확정 루브릭으로 채점 →' : '분석한 루브릭으로 채점 →';
   $('#in-ans-q').innerHTML = p ? `<div class="card"><h3>채점할 문항${여러칸 ? ' — 소문항 ' + esc(소이름(ps[지금소], 지금소)) : ''}</h3><div class="pre">${esc(여러칸 ? (p.문항.split(/\n/).find((l) => l.startsWith(소이름(ps[지금소], 지금소))) || p.문항) : p.문항)}</div>
-    <div class="muted" style="margin-top:8px;font-size:12px">${(여러칸 ? [ps[지금소]] : ps).map((s) => `${s.번호 ? '(' + esc(s.번호) + ') ' : ''}급소 「${esc(s.급소?.실체 || '—')}」 · 조각 ${s.조각?.length || 0}개 · ${점(s.배점 ?? (s.조각 || []).reduce((a, c) => a + (Number(c.배점) || 0), 0))}점`).join('<br>')}</div></div>` : '';
+    <div class="muted" style="margin-top:8px;font-size:12px">${(여러칸 ? [ps[지금소]] : ps).map((s) => `${s.번호 ? '(' + esc(s.번호) + ') ' : ''}${급소글(s) ? `급소 「${esc(급소글(s))}」` : 급소미확인} · 조각 ${s.조각?.length || 0}개 · ${점(s.배점 ?? (s.조각 || []).reduce((a, c) => a + (Number(c.배점) || 0), 0))}점`).join('<br>')}</div></div>` : '';
   if (!p) {
     el.innerHTML = Object.entries(옛).map(([id, v]) => `<textarea id="${esc(id)}" hidden>${esc(v)}</textarea>`).join(''); // 쓰던 답은 숨겨 둔다
     return;
@@ -646,7 +651,7 @@ async function 새문항분석() {
   if (!입력형식) { st.textContent = '① 문항 입력에서 문제 형식을 고르세요'; return; }
   // 형식마다 엔진 요청 — B-s2·B-h2(소문항 2개+): 소문항을 「(1) … [N점]」 줄로 이어 붙이고 모범답안은 소문항 순서 배열(엔진이 소문항 「[N점]」을 배점으로 읽는다) ·
   //   C1·C2: 제시문을 (가)(나) 머리로 나눠 함께 보낸다 (C1은 필수) · B-s1·B-h1: 문항 하나
-  let 문항, 모범답안, 모범, 총배점, 제시문 = [];
+  let 문항, 모범답안, 모범, 총배점, 제시문 = [], 소배점들 = null;
   const 다문 = 다문B(입력형식);
   if (다문) {
     const 칸 = B2칸.map((x) => ({ q: x.q.trim(), p: Number(x.p), m: x.m.trim() })).filter((x) => x.q);
@@ -656,6 +661,7 @@ async function 새문항분석() {
     모범 = 칸.some((x) => x.m) ? 칸.map((x) => x.m || null) : undefined;
     모범답안 = 칸.map((x, i) => x.m ? `(${i + 1}) ${x.m}` : '').filter(Boolean).join('\n\n');
     총배점 = 칸.reduce((a, x) => a + x.p, 0);
+    소배점들 = 칸.map((x) => x.p);
   } else {
     문항 = $('#in-q').value.trim();
     모범답안 = $('#in-m').value.trim();
@@ -674,7 +680,9 @@ async function 새문항분석() {
     st.textContent = '문항분석 중… (엔진 5색 · 급소 → 루브릭 · 모범답안)';
     const 루브릭 = await 받기('/api/rubric', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
       논제: 문항, 계열: 엔진계열(), 총배점, 이어받기: true, ...(제시문.length ? { 제시문 } : { 공통자료: true }),
-      모범답안: 모범, 정답: 정답 || undefined, gradeFormat: 입력형식 }) });
+      모범답안: 모범, 정답: 정답 || undefined, gradeFormat: 입력형식,
+      // 소문항 배점 (오종래 2026-10-21) — 소문항 칸에 교사가 넣은 배점이 있으면 그대로, 아니면 총배점 ÷ 소문항 수 (엔진이 나눈 소문항 수로)
+      소문항배점: 소배점들 || '균등' }) });
     const p = { 키: '새', 문항, 계열: 루브릭.계열, 정답, 모범답안, 루브릭, 덧: { 논제: 문항, ...(제시문.length ? { 제시문 } : {}) }, 소문항답: 다문, 보임: true,
       분석기록: { 학생: '', 문항, 계열: 루브릭.계열, 형식: 입력형식, 정답, 모범답안, 학생답: '', 루브릭: { status: 200, out: 루브릭 }, 채점: [] } };
     준비들.새로 = p;
@@ -855,7 +863,7 @@ function 단위목록그리기() {
     ${us.map((u) => `<tr class="${u.상태 === '준비' ? 'pick' : 'off'}">
       <td>${u.상태 === '준비' ? `<input type="radio" name="an-unit" value="${esc(u.key)}" ${분석.고른 === u.key ? 'checked' : ''}>` : ''}</td>
       <td><b>${esc(u.이름)}</b> ${esc(u.라벨)}${u.종류 ? `<div class="muted" style="font-size:12px">${esc(u.종류)} · ${esc(u.계열 || '')}</div>` : ''}</td>
-      <td>${u.s?.급소?.실체 ? '「' + esc(String(u.s.급소.실체).replace(/^[,，]\s*/, '')) + '」' : '—'}</td>
+      <td>${급소글(u.s) ? '「' + esc(급소글(u.s).replace(/^[,，]\s*/, '')) + '」' : (u.s ? 급소미확인 : '—')}</td>
       <td>${u.s?.조각?.length ?? '—'}</td>
       <td>${u.s?.조각 ? 점(u.s.조각.reduce((a, c) => a + (Number(c.배점) || 0), 0)) : '—'}</td>
       <td>${u.상태 === '준비' ? '<span class="tag">채점 가능</span>' : `<span class="muted" style="font-size:12px">${esc(u.상태)}</span>`}</td></tr>`).join('')}
@@ -929,7 +937,7 @@ async function 새채점() {
     const 채점 = [];
     for (const [j, s] of 소문항.entries()) {
       const 답 = 답들 ? 답들[j] : 학생답;
-      if (!s.조각 || !s.조각.length) { 채점.push({ 번호: s.번호 ?? null, 건너뜀: s.멈춤 || '조각 없음' }); continue; }
+      if (!s.조각 || !s.조각.length) { 채점.push({ 번호: s.번호 ?? null, 건너뜀: 멈춤글(s.멈춤) || '조각 없음' }); continue; }
       if (!답) { 채점.push({ 번호: s.번호 ?? null, 건너뜀: '이 소문항 학생 답안이 없음' }); continue; }
       st.textContent = `채점 중… ${s.번호 ? '(' + s.번호 + ') ' : ''}엔진 조각 · 4축 대조`;
       채점.push(await 소문항채점(보내기, s, 답, p.루브릭.계열 || p.계열, p.덧));
@@ -1062,15 +1070,14 @@ function 그리기2() {
     + (여럿() ? `<div class="fmt-hint" style="margin:0 0 12px">소문항 ${esc(소이름(소문항들()[지금소], 지금소))} — 위 소문항 탭에서 하나씩 봅니다. 엔진 문항분석은 문항 전체를 한 번에 합니다 (앞 소문항 이어받기).</div>` : '')
     + 보일소().map(([s]) => {
     const 노드 = s.인식?.노드 || [];
-    const 급소 = s.급소 || {};
     const 쓴색 = [...new Set(노드.map((n) => n.색))];
     const v = s.정답검증;
     return `<div class="card">
       ${s.번호 ? `<h3>소문항 (${esc(s.번호)}) · ${점(s.배점)}점</h3>` : `<h3>배점 ${점(s.배점)}점</h3>`}
       <div class="label">1 5색 노드 · 급소</div>
-      <div class="pivot"><div class="t">급소 (K)</div><div class="e">${급소.실체 ? esc(급소.실체) : '<span class="muted">급소 없음</span>'}</div>${s.멈춤 ? `<div class="muted" style="margin-top:6px;font-size:12px">멈춤: ${esc(s.멈춤)}</div>` : ''}</div>
+      <div class="pivot"><div class="t">급소 (K)</div><div class="e">${급소글(s) ? esc(급소글(s)) : `<span style="color:var(--un)">${급소미확인}</span>`}</div>${s.멈춤 ? `<div class="muted" style="margin-top:6px;font-size:12px">멈춤: ${esc(멈춤글(s.멈춤))}</div>` : ''}</div>
       <div style="margin-bottom:10px">${(s.인식?.조합 || []).map((c) => `<span class="chip" style="background:${색[c] || '#888'}">${esc(c)} ${esc(색이름[c] || '')}</span>`).join('') || '<span class="muted">조합 —</span>'}</div>
-      <div class="node-list">${노드.map((n) => `<div class="node${급소.실체 && n.실체 === 급소.실체 ? ' key' : ''}"><b style="background:${색[n.색] || '#888'}">${esc(n.색)}</b>${esc(n.실체)}</div>`).join('') || '<span class="muted">노드 없음</span>'}</div>
+      <div class="node-list">${노드.map((n) => `<div class="node${급소글(s) && n.실체 === 급소글(s) ? ' key' : ''}"><b style="background:${색[n.색] || '#888'}">${esc(n.색)}</b>${esc(n.실체)}</div>`).join('') || '<span class="muted">노드 없음</span>'}</div>
       <div style="margin-top:10px;font-size:12px" class="muted">${['B', 'C', 'P', 'D', 'Q'].map((c) => `${c} ${색이름[c]} ${노드.filter((n) => n.색 === c).length}`).join(' · ')}${쓴색.some((c) => !색[c]) ? ' · 기타 ' + 쓴색.filter((c) => !색[c]).join(',') : ''}</div>
 
       <div class="label" style="margin-top:20px">2 루브릭</div>
@@ -1174,7 +1181,7 @@ function 합산Html() {
   const 다 = 다채점됨();
   return `<div class="card"><h3>${다 ? '전체 합산' : `소문항별 채점 — ${ss.filter(채점됨).length}/${ss.length}`}</h3>
     <div class="tbl-wrap"><table><tr><th>소문항</th><th>급소</th><th>엔진</th><th>4축</th><th></th></tr>
-    ${줄.map(({ s, i, g }) => `<tr${i === 지금소 ? ' style="background:var(--gold-lt)"' : ''}><td><b>${esc(소이름(s, i))}</b></td><td>${esc(s.급소?.실체 || '—')}</td>
+    ${줄.map(({ s, i, g }) => `<tr${i === 지금소 ? ' style="background:var(--gold-lt)"' : ''}><td><b>${esc(소이름(s, i))}</b></td><td>${급소글(s) ? esc(급소글(s)) : `<span style="color:var(--un)">${급소미확인}</span>`}</td>
       <td>${g?.out?.조각별 ? `${점(g.out.부분점수)} / ${점(g.out.만점)}` : `<span class="muted">${!(s.조각 || []).length ? '조각 없음' : '채점 전'}</span>`}</td>
       <td>${g?.축 && !g.축.error ? `${점(g.축.부분점수)} / ${점(g.축.만점)}` : '—'}</td>
       <td>${i === 지금소 ? '' : `<button class="ghost-btn" style="padding:3px 10px" data-sum="${i}">보기</button>`}</td></tr>`).join('')}
@@ -1195,7 +1202,7 @@ function 그리기3() {
   if (!기록?.채점?.length) { $('#p3-rec').innerHTML = 비었음('③ 답안 입력에서 「채점 →」을 누르거나 위에서 저장된 채점 결과를 고르세요. 인문·사회 4축 채점은 아래에 있습니다.'); return; }
   $('#p3-rec').innerHTML = (여럿() ? 합산Html() : '') + '<div class="sec-sub">판정 · 값 · 다경로 · 오류 이름은 모두 엔진 출력입니다. 조각마다 판단근거 전체를 보입니다.</div>' + 보일소().map(([s, i]) => {
     const g = 채점of(s, i);
-    if (!g || !g.out || !g.out.조각별) return `<div class="card">${s.번호 ? `<h3>소문항 (${esc(s.번호)})</h3>` : ''}<div class="muted">${esc(g?.건너뜀 || g?.out?.error || (!(s.조각 || []).length ? '조각 없음 — 채점하지 않는 소문항' : '채점 전 — ③ 답안 입력에서 이 소문항을 채점하세요'))}</div></div>`;
+    if (!g || !g.out || !g.out.조각별) return `<div class="card">${s.번호 ? `<h3>소문항 (${esc(s.번호)})</h3>` : ''}<div class="muted">${esc(멈춤글(g?.건너뜀) || 글로(g?.out?.error) || (!(s.조각 || []).length ? '조각 없음 — 채점하지 않는 소문항' : '채점 전 — ③ 답안 입력에서 이 소문항을 채점하세요'))}</div></div>`;
     const o = g.out;
     return `<div class="card">
       ${s.번호 ? `<h3>소문항 (${esc(s.번호)})</h3>` : ''}
