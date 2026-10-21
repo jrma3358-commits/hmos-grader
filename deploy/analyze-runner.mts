@@ -29,7 +29,7 @@ const { 이어달리기 } = await load('src/filter/sealed/stepwise.ts');
 const 형식계열 = (형식: unknown): string | null => createRequire(import.meta.url)('./format-detect.js').엔진계열(형식);
 const { split_thesis } = await load('src/thesis/split.ts');
 // 수리논술 C-2 인식 규칙 — 제약 C · 이어달리기 · 「각각」 조각 조합 (오종래 2026-10-19 확정)
-const { math_constraints, block_constraints, relay_constraint, constraint_links } = await load('src/thesis/math_essay.ts');
+const { math_constraints, block_constraints, relay_constraint, constraint_links, math_symbols } = await load('src/thesis/math_essay.ts');
 // 논리 펼치기 표지 — 인문 채점 3축 도달 조건 ② (오종래 2026-10-19). 표지 목록은 봉인 표지사전 「논리펼치기」, 찾기는 엔진 logic_markers
 const { find_logic_markers } = await load('src/fq/logic_markers.ts');
 // 답구하기 · 답표현하기 표지 — 채점 4축 (오종래 2026-10-19). 표지 목록은 봉인 표지사전, 찾기는 엔진 answer_markers
@@ -423,6 +423,10 @@ try {
       const B들 = (u: any) => ((u.급소덩어리 && u.급소덩어리.length ? u.급소덩어리 : u.급소) ?? []).map((d: any) => String(d.실체).trim().replace(/^[\s,]+/, '')).filter(Boolean);
       const 앞꼴 = (x: any) => (x && typeof x === 'object' && Array.isArray(x.급소) ? { 번호: String(x.번호 ?? ''), B: x.급소.map(String) } : null);
       const 요청앞 = 앞꼴(req.앞소문항);
+      // 소논제 이어달리기 [오종래 2026-10-21 확정] — 화면이 앞 소논제의 B 노드 실체 전부 · 연결 제시문을 함께 보내면,
+      //   B 노드는 수학 기호가 있는 것(h(x)·lim …)만 제약 C(이어받기)로 얹고, 연결 제시문은 이어받은 연결로 싣는다 (요청 앞소문항일 때만)
+      const 요청앞B노드 = Array.isArray(req.앞소문항?.B노드) ? [...new Set(req.앞소문항.B노드.map((t: unknown) => String(t).trim().replace(/^[\s,]+/, '')).filter((t: string) => t && math_symbols(t).length))] as string[] : [];
+      const 요청앞제시문 = Array.isArray(req.앞소문항?.제시문) ? req.앞소문항.제시문.filter((x: any) => x && typeof x.출처 === 'string').map((x: any) => ({ 출처: x.출처, 말: String(x.말 ?? ''), 앞번호: 요청앞?.번호 ?? '' })) : [];
       // 소문항 창이면 앞 창들 결과 — 이어받기 표지가 가리킨 번호를 여기서 찾는다 (오종래 2026-10-20)
       const 요청앞들 = (Array.isArray(req.앞소문항들) ? req.앞소문항들.map(앞꼴) : []).filter(Boolean);
       out.단계.인식.소문항.forEach((u: any, i: number) => {
@@ -440,8 +444,15 @@ try {
         // 제시문 [I]은 참조가 있으면 그 범위만, 설정·조건은 문제 설정이라 늘 얹는다. 소문항 조건 블록은 그 소문항에만 (2026-10-20)
         const 공통 = math_constraints(u.공통발문 ?? '', 제시문목록 ?? []).filter((c: any) => c.종류 !== '제시문' || !u.참조.length || u.참조.includes(c.출처));
         const 자기조건 = block_constraints(u.조건 ?? [], u.공통발문 ?? '');
-        u.제약 = [...공통, ...자기조건, ...(앞 ? relay_constraint(앞.번호, 앞.B, u.이어받기?.대상 ?? '') : [])];
-        u.제약연결 = constraint_links(u.노드.map((n: any) => String(n.실체)), u.제약);
+        const 앞B노드 = 앞 && 앞 === 요청앞 ? 요청앞B노드.filter((b) => !앞.B.includes(b)) : [];
+        u.제약 = [...공통, ...자기조건, ...(앞 ? relay_constraint(앞.번호, 앞.B, u.이어받기?.대상 ?? '') : []), ...(앞B노드.length ? relay_constraint(앞!.번호, 앞B노드).map((c: any) => ({ ...c, B노드: true })) : [])];
+        // 제시문 연결은 이 소문항 노드 + 이 소문항에 얹힌 이어받기 실체 위에서 (2026-10-21) — 앞 소문항에서 넘어온 h(x) 정의가 제시문 기호를 함께 품는다.
+        //   이어받기 · 설정 · 조건 연결은 이 소문항 노드만 본다 (이어받기 실체가 제 자신에 닿지 않게)
+        const 노드글 = u.노드.map((n: any) => String(n.실체));
+        const 얹힌이어 = u.제약.filter((c: any) => c.종류 === '이어받기' && constraint_links(노드글, [c]).length).map((c: any) => c.실체);
+        const 연결들 = u.제약.flatMap((c: any) => constraint_links(c.종류 === '제시문' ? [...노드글, ...얹힌이어] : 노드글, [c]));
+        u.제약연결 = [...new Map(연결들.map((x: any) => [`${x.종류}|${x.출처}|${x.말}`, x])).values()];
+        if (앞 && 앞 === 요청앞 && 요청앞제시문.length) u.이어받은제시문 = 요청앞제시문;
       });
       out.단계.수리 = { 형식: String(req.형식), 제약묶음: 발문들.map((t) => ({ 공통발문: t, 제약: math_constraints(t, 제시문목록 ?? []) })) };
     }
