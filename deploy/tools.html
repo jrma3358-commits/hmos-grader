@@ -3192,6 +3192,13 @@ function 면접인쇄() {
     </section>`).join('')}`;
   window.print();
 }
+
+// guide 샘플 바로 열기 (오종래 2026-10-22) — ?sample=<샘플 이름>이면 그 샘플을 불러온다
+(() => {
+  let 이름 = '';
+  try { 이름 = new URLSearchParams(location.search).get('sample') || ''; } catch (_) {}
+  if (이름) 샘플불러오기(이름);
+})();
 </script>
 
 </body>

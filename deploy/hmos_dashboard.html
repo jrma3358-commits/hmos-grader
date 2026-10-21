@@ -5052,6 +5052,13 @@ async function 목록불러오기(input) {
   문항열기(새것[0].id);
   document.getElementById('batch-status').textContent = `질문 설계 도구에서 문항 ${새것.length}개를 받았습니다 — 교사 입력(A는 정답, B·C는 출제의도)을 채우고 등록하세요`;
 })();
+
+// guide 샘플 바로 열기 (오종래 2026-10-22) — ?sample=<샘플 이름>이면 그 샘플을 불러온다
+(() => {
+  let 이름 = '';
+  try { 이름 = new URLSearchParams(location.search).get('sample') || ''; } catch (_) {}
+  if (이름) 샘플불러오기(이름);
+})();
 </script>
 
 </body>
