@@ -258,6 +258,16 @@ const Anthropic=require('@anthropic-ai/sdk').default;
 // .env에 ANTHROPIC_WORKSPACE_ID가 있으면 붙인다 (scripts/run-grader.mjs와 같다, 2026-10-14 새 서버)
 const client=new Anthropic(process.env.ANTHROPIC_WORKSPACE_ID?{defaultHeaders:{'anthropic-workspace-id':process.env.ANTHROPIC_WORKSPACE_ID}}:{});
 const MODEL='claude-sonnet-5-5';
+// /api/rubric 줄모범답안 · 소문항모범답안 — 서버 측 「default」 대체에서 reasoning_extraction 거절이 되풀이돼서
+// 대체 모델을 claude-sonnet-4-6 하나로 고정한다 (오종래 2026-10-21). 서버 측 대체는 sonnet-5-5 → sonnet-5만 받아서,
+// 서버 측 대체 없이 부르고 거절이면 같은 요청을 claude-sonnet-4-6으로 한 번 더 부른다
+const 루브릭대체모델='claude-sonnet-4-6';
+async function 루브릭호출(params){
+  const msg=await client.messages.create({model:MODEL,...params});
+  if(msg.stop_reason!=='refusal')return msg;
+  console.warn(`/api/rubric ${MODEL} 거절 (${(msg.stop_details&&msg.stop_details.category)||'분류 없음'}) → ${루브릭대체모델}`);
+  return client.messages.create({model:루브릭대체모델,...params});
+}
 // 명세는 정적 서빙 폴더 밖에 둔다
 const SPEC=process.env.HMOS_SPEC||path.join(__dirname,'..','hmos-spec','HMOS_루브릭_구현명세-7.md');
 
@@ -477,11 +487,8 @@ const K글자=(c,급소={})=>{
 async function 조각문장(user){
   let msg;
   try{
-    msg=await client.beta.messages.create({
-      model:MODEL,
+    msg=await 루브릭호출({
       max_tokens:8000,
-      betas:['server-side-fallback-2026-07-01'],
-      fallbacks:'default',
       system:RUBRIC_SYSTEM,
       output_config:{format:RUBRIC_FORMAT},
       messages:[{role:'user',content:user}],
@@ -548,8 +555,8 @@ function 줄점검(줄,s){
 async function 줄쓰기(user){
   let msg;
   try{
-    msg=await client.beta.messages.create({
-      model:MODEL,max_tokens:8000,betas:['server-side-fallback-2026-07-01'],fallbacks:'default',
+    msg=await 루브릭호출({
+      max_tokens:8000,
       system:LINES_SYSTEM,output_config:{format:LINES_FORMAT},messages:[{role:'user',content:user}],
     });
   }catch(e){
