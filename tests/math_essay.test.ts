@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { block_constraints, condition_blocks, constraint_links, math_constraints, piece_structure, relay_constraint, relay_marker } from '../src/thesis/math_essay.ts';
+import { block_constraints, condition_blocks, constraint_links, math_constraints, math_symbols, piece_structure, relay_constraint, relay_marker } from '../src/thesis/math_essay.ts';
 import { split_thesis } from '../src/thesis/split.ts';
 import { recognizeV2Analysis } from '../src/fq/index.ts';
 import { essay_pivot_chunks } from '../src/thesis/chunk.ts';
@@ -171,5 +171,26 @@ describe('「~에 따라」 C는 급소 덩어리·④ 대상이 아니다 (2026
     assert.ok(입력.ok);
     const 답 = derive_pieces(입력.물음, 입력.k, 입력.인식, '수리').filter((c: any) => c.파트 === '답구하기');
     assert.deepEqual(답.map((c: any) => c.node?.entity), ['교점의 개수']);
+  });
+});
+
+// 제시문 제약 수학 기호 연결 [오종래 2026-10-21 확정] — 하나고 자연논술 [논제 1]
+describe('constraint_links — 제시문 수학 기호 (2026-10-21)', () => {
+  const 하나고 = math_constraints('[논제 1]', [
+    { id: '가', 기호: '[가]', 텍스트: "접선의 방정식\n함수 f(x)가 x=a에서 미분가능할 때, 곡선 y=f(x) 위의 점 P(a,f(a))에서의 접선의 방정식은 y-f(a)=f'(a)(x-a)" },
+    { id: '나', 기호: '[나]', 텍스트: '수렴하는 두 수열 {a_n},{b_n}에 대하여 다음 성질이 성립한다.\nlim(a_n+b_n)=lim a_n+lim b_n' },
+    { id: '다', 기호: '[다]', 텍스트: '이산확률변수 X의 확률질량함수가 P(X=x_i)=p_i일 때, E(X)=x1p1+x2p2' },
+    { id: '라', 기호: '[라]', 텍스트: "정사영의 넓이를 S'이라고 할 때, S'=Scosθ" },
+  ]);
+  it('(1) lim · f(x) · 미분 → [가] [나], 기호 없는 [다] [라]는 얹히지 않는다', () => {
+    const l = constraint_links(['함수 h(x)={f(x),x≤0 / g(x),x>0}', '미분가능', '각각 a_n, b_n', 'lim(a_n/nb_n)의 값'], 하나고);
+    assert.deepEqual(l, [{ 출처: '가', 종류: '제시문', 말: 'f(x) · 미분' }, { 출처: '나', 종류: '제시문', 말: 'a_n · b_n · lim' }]);
+  });
+  it('E(X) · S\' · cos · θ — 노드에 같은 기호가 있으면 얹힌다', () => {
+    const l = constraint_links(['E(X)의 값', "S'과 cosθ"], 하나고);
+    assert.deepEqual(l.map((x) => [x.출처, x.말]), [['다', 'E(X)'], ['라', "S' · cos · θ"]]);
+  });
+  it('한 글자 변수는 기호가 아니다', () => {
+    assert.deepEqual(math_symbols('n이 자연수 x'), []);
   });
 });

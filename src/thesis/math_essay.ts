@@ -142,13 +142,43 @@ export const relay_constraint = (앞번호: string, 앞급소: string[], 대상:
   앞급소.filter(Boolean).map((b) => ({ 색: 'C', 종류: '이어받기', 출처: 앞번호, 실체: b, 텍스트: `(${앞번호}) 결과 「${b}」`, ...(대상 ? { 대상 } : {}) }));
 
 /**
+ * 기본 수학 기호 세트 [오종래 2026-10-21 확정] — 봉인 목록이 서기 전까지의 기본값. 제시문 제약 연결의 열쇠.
+ * 기호(lim·Σ·∫·sin·cos·tan·θ·log·√)는 그 이름, 꼴(E(X)·P(X=…)·S'·a_n·f(x))은 글에 나온 그대로, 용어는 그 낱말.
+ * 한 글자 변수(n·x)는 넣지 않는다 — 수리 문항이면 어디에나 있다
+ */
+const 기호들: [string, RegExp][] = [
+  ['lim', /lim/], ['Σ', /[Σ∑]/], ['∫', /∫/], ['sin', /sin/], ['cos', /cos/], ['tan', /tan/], ['θ', /θ/], ['log', /log|ln(?![a-z])/], ['√', /√/],
+];
+const 꼴들 = [/[EV]\([A-Z]\)/g, /P\([A-Z](?=\s*[=<>≤≥)])/g, /(?<![A-Za-z])[A-Z]'(?!\()/g, /(?<![A-Za-z])[a-z]_n/g];
+const 용어들 = ['접선', '미분', '도함수', '극한', '수열', '급수', '정적분', '적분', '곡선', '기울기', '넓이', '부피', '정사영', '확률', '기댓값', '분산', '표준편차', '확률변수', '벡터', '내적'];
+/** 글 속 수학 기호 — 나온 차례, 겹침 없이 */
+export function math_symbols(t: string): string[] {
+  const 자리: [number, string][] = [];
+  for (const [이름, re] of 기호들) { const m = re.exec(t); if (m) 자리.push([m.index, 이름]); }
+  for (const re of 꼴들) for (const m of t.matchAll(re)) 자리.push([m.index!, m[0].startsWith('P(') ? m[0] + ')' : m[0]]);
+  for (const m of t.matchAll(함수꼴)) 자리.push([m.index!, m[0].replace("'", '')]);
+  // 긴 용어 먼저 — 「정적분」이 있으면 「적분」은 같은 자리라 따로 세지 않는다
+  for (const w of [...용어들].sort((a, b) => b.length - a.length)) {
+    for (const m of t.matchAll(new RegExp(w, 'g'))) if (!자리.some(([i, x]) => 용어들.includes(x) && i <= m.index! && m.index! < i + x.length)) 자리.push([m.index!, w]);
+  }
+  return [...new Set(자리.sort((a, b) => a[0] - b[0]).map(([, x]) => x))];
+}
+
+/**
  * 제약 연결 — 소문항 노드 실체에 제약의 함수 꼴(「f(x)」「g(t)」)이 나오면 그 제약이 이 소문항에 얹힌 것이다.
- * 함수 꼴이 없는 제약은 실체 글 그대로 찾는다
+ * 함수 꼴이 없는 제약은 실체 글 그대로 찾는다.
+ * 제시문 제약은 수학 기호로 맞댄다 [오종래 2026-10-21 확정] — 제시문과 노드에 함께 나온 기호(lim·접선·f(x)·E(X)·S'·cos·θ …)가 말이다 (여럿이면 「 · 」로)
  */
 export function constraint_links(노드실체: string[], 제약: 제약C[]): { 출처: string; 종류: 제약종류; 말: string }[] {
   const 글 = 노드실체.join(' ');
+  const 글기호 = math_symbols(글);
   const out: { 출처: string; 종류: 제약종류; 말: string }[] = [];
   for (const c of 제약) {
+    if (c.종류 === '제시문') {
+      const 같은 = math_symbols(c.텍스트).filter((x) => 글기호.includes(x));
+      if (같은.length) out.push({ 출처: c.출처, 종류: c.종류, 말: 같은.join(' · ') });
+      continue;
+    }
     // 이어받기 표지의 대상(「함수 f(x)」)은 그 함수 꼴로, 아니면 앞 급소 글로
     const 열쇠 = c.구조?.완성 ? [c.구조.완성] : c.대상 && 함수들(c.대상).length ? 함수들(c.대상) : 함수들(c.종류 === '이어받기' ? c.실체 : c.텍스트);
     const 말 = (열쇠.length ? 열쇠 : [c.실체]).find((k) => k && 글.includes(k));

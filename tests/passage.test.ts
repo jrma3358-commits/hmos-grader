@@ -227,3 +227,20 @@ describe('제시문 급소 3규칙 —지시어 역추적 · keyword 특이도 �
     assert.deepEqual(c.background, [0, 1, 2]);
   });
 });
+
+// 꼬리 수식 B [오종래 2026-10-21 확정] — 마지막 노드 뒤 표지 없이 남은 수식은 그 단락의 마지막 B
+describe('꼬리 수식 B (2026-10-21)', () => {
+  it('마지막 노드 뒤 수식 → 마지막 B (말미)', () => {
+    const p = recognizePassage("[가] 접선의 방정식를 y-f(a)=f'(a)(x-a)", table).paragraphs[0];
+    assert.deepEqual(p.colors.B, ['접선의 방정식', "y-f(a)=f'(a)(x-a)"]);
+    assert.equal(p.tail.at(-1)?.entity, "y-f(a)=f'(a)(x-a)");
+  });
+  it('앞 쉼표·끝 마침표는 뗀다', () => {
+    const p = recognizePassage('[가] 확률질량함수를, E(X)=x1p1+x2p2.', table).paragraphs[0];
+    assert.equal(p.colors.B.at(-1), 'E(X)=x1p1+x2p2');
+  });
+  it('한글 꼬리(산문)는 그대로 둔다', () => {
+    const p = recognizePassage('[가] 다수결를 그냥 본다', table).paragraphs[0];
+    assert.deepEqual(p.colors.B, ['다수결']);
+  });
+});

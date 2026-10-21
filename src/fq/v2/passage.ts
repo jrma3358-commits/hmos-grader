@@ -129,6 +129,12 @@ export function recognizePassage(text: string, table: SealedTable): PassageRecog
         if (tailStart === 0) tail.push(stated);
         colors.B.push(stated.entity);
       }
+      const formula = tailFormulaB(body, graph.nodes);
+      if (formula) {
+        if (formula.index < headEnd) head.push(formula);
+        tail.push(formula);
+        colors.B.push(formula.entity);
+      }
       return { label, text: body, graph, colors, head, tail };
     })
     .filter((p) => p.text.trim() !== '');
@@ -184,6 +190,19 @@ function statementB(body: string, headEnd: number, nodes: PathNode[], switchId: 
   const entity = clean(body.slice(from, at));
   if (!entity) return undefined;
   return { id: 'stated', surface: '이다.', switchId, index: at, color: 'B', entity };
+}
+
+/**
+ * 꼬리 수식 B [오종래 2026-10-21 확정] — 마지막 노드 뒤에 표지 없이 남은 꼬리 글이 수식이면 그 단락의 마지막 B다
+ * (「…접선의 방정식은 y-f(a)=f'(a)(x-a)」 → B「y-f(a)=f'(a)(x-a)」, 「…일 때, E(X)=x1p1+…」 → B「E(X)=x1p1+…」).
+ * 수식 = 한글이 없고 영문·숫자·수학 기호가 있는 글. 한글 꼬리(산문)는 그대로 둔다 — 산문 단락은 바뀌지 않는다
+ */
+function tailFormulaB(body: string, nodes: PathNode[]): PathNode | undefined {
+  const last = nodes.at(-1);
+  const at = last ? last.index + last.surface.length : 0;
+  const entity = body.slice(at).trim().replace(/^[,，\s]+/, '').replace(/[.。]\s*$/, '').trim();
+  if (!entity || /[가-힣]/.test(entity) || !/[A-Za-z0-9=<>≤≥+\-*/^√∫Σ∑πθ]/.test(entity)) return undefined;
+  return { id: 'tail-formula', surface: '', switchId: 'tail-formula', index: at, color: 'B', entity };
 }
 
 export type PassageLinkKind =

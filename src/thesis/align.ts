@@ -87,6 +87,8 @@ export interface 단락연결 {
   자리: '서두' | '말미' | '지정' | '자료';
   /** 자료 표 단락 순번 (자리 「자료」일 때만) */
   문단?: number;
+  /** 급소가 아닌 논제 B로 닿은 단락이면 그 논제 B 실체 (오종래 2026-10-21) */
+  논제B?: string;
 }
 
 /** 논제 급소 하나의 연결 */
@@ -126,16 +128,25 @@ export function align_passage(소문항들: 인식소문항[], passage: PassageR
     const 부른자료 = data_calls(s.호출글 ?? s.인식.question).flatMap((n) => 자료들.filter((x) => x.번호 === n))
       .map((x): 단락연결 => ({ 단락: `${이름(x.단락)}-자료${x.번호}`, 단락급소: x.제목, 자리: '자료', 문단: x.단락 }));
     const 자리of = (id: string) => s.인식.graph.nodes.find((n) => n.id === id)?.index ?? -1;
+    const 급소B = new Set(덩어리들.map((d) => d.B.id));
     덩어리들.forEach((d, k) => {
       const 단락: 단락연결[] = [];
+      const 끝 = 자리of(d.Q.at(-1)!.id);
+      const 앞끝 = k > 0 ? 자리of(덩어리들[k - 1].Q.at(-1)!.id) : -1;
+      // 덩어리 구간 — 앞 덩어리의 마지막 Q 뒤 ~ 이 덩어리의 마지막 Q. 마지막 덩어리는 그 뒤 노드까지
+      const 구간안 = (at: number) => at > 앞끝 && (at <= 끝 || k === 덩어리들.length - 1);
       c.pivots.forEach((pv, i) => {
         if (pv && pv.questionNode === d.B.id) 단락.push({ 단락: 이름(i), 단락급소: clean(pv.entity), 자리: pv.place });
+        // 논제 B 연결 [오종래 2026-10-21 확정] — 급소가 아닌 논제 B(관련 정보)로 닿은 단락도 4단계 연결이다.
+        //   그 논제 B가 선 덩어리 구간의 급소에 단다 (지정 연결과 같은 구간)
+        else if (pv && !급소B.has(pv.questionNode) && 구간안(자리of(pv.questionNode))) {
+          const 논제B = clean(s.인식.graph.nodes.find((n) => n.id === pv.questionNode)?.entity ?? pv.key);
+          단락.push({ 단락: 이름(i), 단락급소: clean(pv.entity), 자리: pv.place, 논제B });
+        }
       });
       // 지정 연결 [오종래 2026-10-15 안 A] — 논제가 기호로 짚은 단락(「(나)의 ⓐ~ⓓ」「(라)의 핵심 개념과」「(가), (다)…를 활용하여」)은
       //   그 덩어리의 연결 단락이다. 덩어리 구간(앞 덩어리의 마지막 Q 뒤 ~ 이 덩어리의 마지막 Q)에 선 노드의 지정만 받는다.
       //   이미 단락 급소로 이은 단락은 그대로. 6단계는 connectPassage pivots로 단락 급소만 모으므로 지정 연결은 6단계에 들지 않는다 (ⓑ)
-      const 끝 = 자리of(d.Q.at(-1)!.id);
-      const 앞끝 = k > 0 ? 자리of(덩어리들[k - 1].Q.at(-1)!.id) : -1;
       for (const l of c.links) {
         if (l.kind !== '지정') continue;
         const at = 자리of(l.questionNode);
