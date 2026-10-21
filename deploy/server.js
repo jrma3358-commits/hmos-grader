@@ -847,9 +847,72 @@ app.post('/api/verify',async(req,res)=>{
   res.json(r.단계.정답검증);
 });
 
+// ── 학생 경로 나누기 (오종래 2026-10-21 확정 B · Hybrid) ──
+// Claude는 학생 답을 학생이 쓴 순서대로 파트(근거대기·세우기·풀기·답구하기) 단계로 나누고, 모범답안과 다른 경로면 「다경로」만 표시한다.
+// O/X · 계산이 맞는지는 판단하지 않는다 — 단계마다 계산(양변) · 같은 단계 모범 값 · 최종값 정답 대조는 엔진(src/rubric/path_grade.ts), 점수는 코드, 확정은 교사(⑤)
+const PATH_SYSTEM=`너는 HMOS 학생 답안 분리기다. 학생 답안을 학생이 쓴 풀이 경로 그대로 파트별 단계로 나눈다.
+
+파트:
+- 근거대기: 문제의 조건·개념을 확인한 단계 (계산 없음 — 「모음은 a, a, e이다」)
+- 세우기: 문제 조건을 식으로 세운 단계 — 경우를 나누어 각 경우의 수를 식으로 세운 줄, 부분 값을 구하는 식 줄
+- 풀기: 세운 식들을 이어 계산·결합한 단계 — 경우 값을 더하거나 곱한 줄
+- 답구하기: 최종 답을 낸 단계 (결론 줄)
+
+지킬 것:
+- 너는 채점하지 않는다. 단계가 맞는지·계산이 맞는지·값이 정답인지 판단하지 않고 말하지도 않는다. 점수를 매기지 않는다.
+- 글: 학생 답안의 줄을 한 글자도 바꾸지 않고 그대로 옮긴다 (한 줄 또는 이어진 여러 줄). 학생 답에 없는 글을 만들지 않는다.
+- 학생이 쓴 순서대로 나눈다. 루브릭에 있는 파트는 학생 답에 그 내용이 있으면 빠짐없이 채운다.
+- 결론 줄이 결합 계산과 최종 답을 함께 담으면(「따라서 24+48=72가지」 「∴ 4×24=96(가지)」) 같은 줄을 풀기 단계와 답구하기 단계에 모두 쓴다.
+- 대응: 그 단계가 모범답안의 어느 조각 줄과 같은 단계(같은 자리의 계산)인지 그 조각 id. 같은 단계가 없으면 "".
+- 다경로: 모범답안과 다른 방법·다른 경로로 푼 단계면 true (예: 같은 것이 있는 순열 대신 경우를 나누어 셈 · 여사건). 같은 방법인데 값만 다르면 false — 값이 맞는지는 보지 않는다.
+- 까닭: 다경로면 어떤 경로인지 한 줄, 아니면 대응한 까닭 한 줄. 교사가 읽는 말로, 맞다·틀리다는 쓰지 않는다.
+- 모든 출력은 한국어.`;
+const PATH_FORMAT=ids=>({type:'json_schema',schema:{type:'object',additionalProperties:false,required:['단계'],properties:{단계:{type:'array',items:{type:'object',additionalProperties:false,required:['파트','글','대응','다경로','까닭'],properties:{
+  파트:{type:'string',enum:['근거대기','세우기','풀기','답구하기']},
+  글:{type:'string',description:'학생 답안 줄 그대로'},
+  대응:{type:'string',enum:[...ids,''],description:'같은 단계의 모범 조각 id, 없으면 ""'},
+  다경로:{type:'boolean'},
+  까닭:{type:'string'},
+}}}}}});
+/** 소문항 하나의 학생 답 → 학생 단계들 (Claude). 글이 학생 답에 없으면 경고 */
+async function 경로나누기(s,학생답,모범답안){
+  const ids=s.조각.map(c=>c.id);
+  const 모범줄=c=>c.줄글||c.풀기글||(c.모범답?c.모범답.줄:'')||c.실체||'';
+  const user=[
+    `문항:\n${[s.공통발문,s.텍스트].filter(Boolean).join('\n')}`,
+    `모범답안:\n${String(모범답안||s.모범답안글||s.모범답안||'(없음)')}`,
+    `루브릭 조각 (모범답안 경로 — 참고):\n${s.조각.map(c=>`- ${c.id} · ${c.파트} · ${c.배점}점 · 「${모범줄(c)}」`).join('\n')}`,
+    `학생 답안:\n${학생답}`,
+  ].join('\n\n');
+  let msg;
+  try{
+    msg=await client.beta.messages.create({
+      model:MODEL,max_tokens:8000,betas:['server-side-fallback-2026-07-01'],fallbacks:'default',
+      system:PATH_SYSTEM,output_config:{format:PATH_FORMAT(ids)},messages:[{role:'user',content:user}],
+    });
+  }catch(e){
+    if(e instanceof Anthropic.AuthenticationError)throw new Error('API 키 인증 실패 — .env의 ANTHROPIC_API_KEY 확인');
+    if(e instanceof Anthropic.RateLimitError)throw new Error('API 요청 한도 초과 — 잠시 뒤 다시');
+    if(e instanceof Anthropic.APIError)throw new Error(`Claude API 오류 ${e.status}: ${e.message}`);
+    throw new Error('Claude API 연결 실패: '+e.message);
+  }
+  if(msg.stop_reason==='refusal')throw new Error(`모델이 거절함 (${(msg.stop_details&&msg.stop_details.category)||'분류 없음'})`);
+  if(msg.stop_reason==='max_tokens')throw new Error('응답이 max_tokens에서 잘림');
+  let out=null;
+  try{out=JSON.parse(msg.content.filter(b=>b.type==='text').map(b=>b.text).join(''));}catch(_){}
+  if(!out||!Array.isArray(out.단계))throw new Error(`학생 단계를 받지 못함 (stop_reason: ${msg.stop_reason})`);
+  const 붙인=t=>String(t||'').replace(/\s+/g,'');
+  const 답=붙인(학생답);
+  const 단계=out.단계.map(d=>({파트:d.파트,글:String(d.글||'').trim(),대응:d.대응||null,다경로:!!d.다경로,까닭:String(d.까닭||'')})).filter(d=>d.글);
+  const 없는글=단계.filter(d=>!답.includes(붙인(d.글))).map(d=>d.글);
+  return {단계,usage:msg.usage,...(없는글.length?{경고:`학생 답에 없는 글로 나눈 단계가 있습니다 — ${없는글.map(t=>`「${t}」`).join(' ')}`}:{})};
+}
+
 // ── POST /api/grade — C 8단계 학생 답안 채점 (오종래 2026-10-14) ──────────
 // 엔진 G1이 조각마다 O/X를 판정한다 (봉인⑥ 조각 대조 · 봉인④-b 게이트, 계열별). Claude는 쓰지 않는다.
 // 인문 세우기는 판정불가로 오고 교사가 매긴다. 교사 수정·확정·여러 학생 목록은 대시보드가 한다.
+// [오종래 2026-10-21 확정 B] 채점 대시보드(dashboard2 — gradeFormat)의 수리는 학생 경로 채점 — 위 경로나누기(Claude, 단계만) → 엔진 경로채점.
+//   엔진 조각 채점(모범 경로)은 모범경로로 함께 돌려준다. /dashboard · /grader(gradeFormat 없음)는 엔진 조각 채점 그대로
 app.post('/api/grade',async(req,res)=>{
   // 소문항: /api/rubric 응답의 소문항 하나 그대로 (조각·급소) · 학생답: 학생 답안 글 · 계열: 8단계에서 고른 값
   const {소문항:s,학생답,계열,앞학생답}=req.body||{}; // 앞학생답: 단계형 앞 소문항들의 학생 답 (② 방정식 세우기 자동 적용, 2026-10-16)
@@ -858,9 +921,21 @@ app.post('/api/grade',async(req,res)=>{
   if(!['수리','인문사회국어'].includes(계열)){res.status(400).json({error:'계열(수리·인문사회국어)이 필요합니다'});return;}
   // 논제 = 공통 발문 + 소문항 글 — 엔진이 수학 문항인지 본다 (q4처럼 식이 공통 발문에만 있는 소문항, 2026-10-16)
   const 논제글=[s.공통발문,s.텍스트].filter(Boolean).join('\n')||'채점';
-  const r=await runAnalyze({파이프라인:'C',작업:'채점',논제:논제글,계열,학생답:String(학생답),앞학생답:String(앞학생답||''),조각:s.조각,급소:s.급소});
+  let 경로=null,경로경고=null;
+  if(채점형식(req)&&계열==='수리'){
+    try{경로=await 경로나누기(s,String(학생답),req.모범답안);}
+    catch(e){경로경고='학생 경로 나누기 실패 — 엔진 조각 채점(모범 경로)으로 보입니다: '+e.message;}
+  }
+  const r=await runAnalyze({파이프라인:'C',작업:'채점',논제:논제글,계열,학생답:String(학생답),앞학생답:String(앞학생답||''),조각:s.조각,급소:s.급소,
+    ...(경로?{단계들:경로.단계,정답:String(req.정답||''),번호:s.번호??null}:{})});
   if(!r.ok||!r.단계||!r.단계.채점){res.status(r.러너실패?500:400).json({error:엔진실패글('엔진 채점 실패: ',r)});return;}
-  res.json({엔진:r.엔진,...r.단계.채점,...(채점형식(req)?{형식:채점형식(req)}:{})});
+  const 형식칸=채점형식(req)?{형식:채점형식(req)}:{};
+  if(경로&&r.단계.경로채점){
+    const p=r.단계.경로채점,e=r.단계.채점;
+    res.json({엔진:r.엔진,방식:'학생 경로',...p,경고:[...p.경고,...(경로.경고?[경로.경고]:[])],모범경로:{부분점수:e.부분점수,만점:e.만점,조각별:e.조각별},usage:경로.usage,...형식칸});
+    return;
+  }
+  res.json({엔진:r.엔진,...r.단계.채점,...(경로경고?{경고:[...(r.단계.채점.경고||[]),경로경고]}:{}),...형식칸});
 });
 
 // ── POST /api/axis-grade — dashboard2 형식별 4축 채점 (오종래 2026-10-19 확정) ──

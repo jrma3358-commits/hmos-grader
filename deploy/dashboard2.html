@@ -681,7 +681,7 @@ async function 새문항분석() {
       모범답안: 모범, 정답: 정답 || undefined, gradeFormat: 입력형식,
       // 소문항 배점 (오종래 2026-10-21) — 소문항 칸에 교사가 넣은 배점이 있으면 그대로, 아니면 총배점 ÷ 소문항 수 (엔진이 나눈 소문항 수로)
       소문항배점: 소배점들 || '균등' }) });
-    const p = { 키: '새', 문항, 계열: 루브릭.계열, 정답, 모범답안, 루브릭, 덧: { 논제: 문항, ...(제시문.length ? { 제시문 } : {}) }, 소문항답: 다문, 보임: true,
+    const p = { 키: '새', 문항, 계열: 루브릭.계열, 정답, 모범답안, 루브릭, 덧: { 논제: 문항, ...(제시문.length ? { 제시문 } : {}), 정답, 모범답안 }, 소문항답: 다문, 보임: true,
       분석기록: { 학생: '', 문항, 계열: 루브릭.계열, 형식: 입력형식, 정답, 모범답안, 학생답: '', 루브릭: { status: 200, out: 루브릭 }, 채점: [] } };
     준비들.새로 = p;
     $('#rec-select').value = '';
@@ -876,7 +876,7 @@ function 고른단위보기() {
   const 옛준비 = 준비들.분석;
   if (옛준비 && 옛준비.키 === '분석:' + u?.key && 옛준비.s === u?.s) { 답칸그리기(); } // 같은 단위 — 분석 · 답 그대로
   else { 준비버리기(옛준비); 준비들.분석 = u && u.상태 === '준비' ? { 키: '분석:' + u.key, s: u.s, 문항: u.논제, 계열: u.계열, 정답: String(u.m.정답 || ''), 모범답안: 모범글(u.s) || String(u.m.모범답안 || ''),
-    루브릭: { 계열: u.계열, 총배점: u.s.조각.reduce((a, c) => a + (Number(c.배점) || 0), 0), 소문항: [u.s] }, 덧: { 논제: u.논제 }, 소문항답: false } : null;
+    루브릭: { 계열: u.계열, 총배점: u.s.조각.reduce((a, c) => a + (Number(c.배점) || 0), 0), 소문항: [u.s] }, 덧: { 논제: u.논제, 정답: String(u.m.정답 || ''), 모범답안: 모범글(u.s) || String(u.m.모범답안 || '') }, 소문항답: false } : null;
   답칸그리기(); }
   if (!el) return;
   el.innerHTML = u ? `<div class="grid2" style="margin-top:12px">
@@ -893,7 +893,8 @@ const 축이름들 = { 수리: ['근거대기', '세우기', '풀기', '답구�
 
 /** 소문항 하나 — 엔진 조각 채점 + 4축 대조. 4축이 실패해도 엔진 결과는 남긴다 */
 async function 소문항채점(보내기, s, 학생답, 계열, 덧) {
-  const out = await 보내기('/api/grade', { 소문항: s, 학생답, 계열, gradeFormat: 입력형식, 계열형식: 선택형식 || undefined });
+  // 수리는 학생 경로 채점 (오종래 2026-10-21 B) — 정답(최종값 대조) · 모범답안(다경로 참고)을 함께 보낸다
+  const out = await 보내기('/api/grade', { 소문항: s, 학생답, 계열, gradeFormat: 입력형식, 계열형식: 선택형식 || undefined, 정답: 덧?.정답 || undefined, 모범답안: 덧?.모범답안 || undefined });
   let 축 = null;
   try { 축 = await 보내기('/api/axis-grade', { 소문항: s, 학생답, 계열, gradeFormat: 입력형식, ...덧 }); }
   catch (e) { 축 = { error: e.message }; }
@@ -1105,10 +1106,12 @@ function 조각카드(x) {
   const 값 = x.학생값 !== undefined || x.모범값 !== undefined
     ? `<div class="vals ${x.결과 === 'O' ? 'same' : x.결과 === 'X' ? 'diff' : ''}"><div class="val s"><span class="k">학생 값</span><span class="v">${esc(x.학생값 ?? '—')}</span></div><div class="val"><span class="k">모범 값</span><span class="v">${esc(x.모범값 ?? '—')}</span></div></div>` : '';
   const 다 = x.다경로 ? `<div class="multi"><div class="h">🔆 다경로 — ${esc(x.다경로)}</div>${x.다경로식 ? `<div>식 <code>${esc(x.다경로식)}</code></div>` : ''}${x.다경로까닭 ? `<div class="muted" style="color:#5A4A1A">${esc(x.다경로까닭)}</div>` : ''}</div>` : '';
+  // 학생 경로 채점 — 단계 글(학생 답 그대로) · 같은 단계 모범 조각 (2026-10-21)
+  const 글 = x.글 !== undefined ? `<div class="ans" style="max-height:none;margin-top:8px">${x.글 ? esc(x.글) : '<span class="muted">학생 답에 이 파트 단계가 없음</span>'}</div>` : '';
   return `<div class="piece">
-    <div class="piece-head">${표지(x.결과)}<span class="pid">${esc(x.조각id)}</span><span class="part">${esc(x.파트)}${x.요소 ? ' · ' + esc(x.요소) : ''}</span><span class="pts"><b>${점(x.득점)}</b> / ${점(x.배점)}</span></div>
+    <div class="piece-head">${표지(x.결과)}<span class="pid">${esc(x.조각id)}</span><span class="part">${esc(x.파트)}${x.요소 ? ' · ' + esc(x.요소) : ''}${x.대응 ? ' · 모범 ' + esc(x.대응) : ''}</span><span class="pts"><b>${점(x.득점)}</b> / ${점(x.배점)}</span></div>
     <div class="errline">${오류 ? `<span class="ename">${esc(오류)}</span>` : ''}<span class="why">${esc(오류 && 설명.startsWith(오류) ? 설명.slice(오류.length).replace(/^\s*[(—-]\s*/, '').replace(/\)\s*$/, '') : 설명)}</span></div>
-    ${값}${다}
+    ${글}${값}${다}
   </div>`;
 }
 
@@ -1205,7 +1208,7 @@ function 그리기3() {
     return `<div class="card">
       ${s.번호 ? `<h3>소문항 (${esc(s.번호)})</h3>` : ''}
       ${축카드Html(g, s)}
-      <div class="label" style="margin-top:6px">엔진 조각 채점</div>
+      <div class="label" style="margin-top:6px">${o.방식 === '학생 경로' ? '학생 경로 채점 — 단계 나누기 AI · 계산 · 같은 단계 값 · 최종값 정답 대조 엔진' : '엔진 조각 채점'}</div>${o.모범경로 ? `<div class="muted" style="font-size:12px;margin-bottom:4px">참고 — 모범 경로 엔진 조각 채점 ${점(o.모범경로.부분점수)} / ${점(o.모범경로.만점)}</div>` : ''}
       <div class="scorebox"><span class="big">${점(o.부분점수)}</span><span class="of">/ ${점(o.만점)}점</span></div>
       <div class="tags">
         ${o.무너진지점 ? `<span class="tag no">무너진 지점 · ${esc(o.무너진지점)}</span>` : '<span class="tag">무너진 지점 없음</span>'}

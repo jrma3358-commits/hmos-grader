@@ -62,6 +62,7 @@ const { parse_quadratic, parse_polynomial_conditions, parse_counting_item, resol
 // 8단계 학생 답안 채점 — 엔진 G1 (봉인⑥ 조각 대조 · 봉인④-b 게이트, 계열별, 오종래 2026-10-14)
 const { grade } = await load('src/rubric/g1.ts');
 const { 게이트사슬, 상한비 } = await load('src/rubric/sealed/g1.ts');
+const { grade_student_path } = await load('src/rubric/path_grade.ts'); // 학생 경로 채점 (오종래 2026-10-21 B · Hybrid)
 
 const [reqPath, outPath] = process.argv.slice(2);
 const req = JSON.parse(readFileSync(reqPath, 'utf8'));
@@ -342,6 +343,11 @@ try {
       // 교사가 O/X를 고치면 대시보드가 이 사슬·비율로 다시 센다 (엔진 값 그대로)
       게이트: { 사슬: 게이트사슬(계열, r.풀기있음), 상한비 }, // 풀기(루브릭 조각 · 학생 풀기 마디) 없으면 ④X→② (2026-10-16)
     };
+    // 학생 경로 채점 (오종래 2026-10-21 확정 B) — 서버가 Claude로 나눈 학생 단계(단계들)를 보내면 엔진이 단계마다 계산 · 같은 단계 값 · 최종값 정답을 대조한다.
+    //   계산식 없는 단계는 위 엔진 조각 판정을 쓴다. 정답 = 이 소문항 몫 (「(1) 360가지 (2) 72가지」 → 번호로)
+    if (Array.isArray(req.단계들)) {
+      out.단계.경로채점 = grade_student_path(req.단계들, req.조각 ?? [], out.단계.채점.조각별, item_portion(req.정답 ?? '', req.번호 ?? null, 0) || null);
+    }
   } else if (req.작업 === '정답검증') {
     // ── C 9단계 정답 검증 (오종래 2026-10-16) ── 정답은 채점 기준이 아니라 검증. 모범답안(한 문단)을 문장으로 나눠
     //   답 문장(급소 핵심어가 마지막으로 나온 문장)과 정답을 대조한다. 조각은 루브릭 작업 출력 그대로 받아 엔진 조각으로 되살린다
