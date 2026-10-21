@@ -184,6 +184,14 @@ th{font-size:11.5px;color:var(--muted);font-weight:600;background:var(--ivory)}
 .dot.U{background:var(--un-bg);color:var(--un)}
 .ans{font-size:12px;color:#555;background:var(--ivory);border-radius:6px;padding:7px 9px;white-space:pre-wrap;line-height:1.55;max-height:5.6em;overflow:hidden}
 .same-err{font-size:12px;color:var(--muted)}
+/* 학생 답안 루브릭 추출 대조표 (2026-10-21) */
+.match-tbl td{font-size:12.5px}
+.match-tbl .mt-line{color:var(--muted);font-size:12px;margin-top:2px;white-space:pre-wrap}
+.match-tbl select{font-family:inherit;font-size:12.5px;padding:3px 6px;border:1px solid var(--line);border-radius:5px;background:var(--white)}
+.mt-tag{display:inline-block;font-size:11.5px;padding:1px 8px;border-radius:10px;margin-left:4px}
+.mt-tag.일치{background:var(--ok-bg);color:var(--ok)}
+.mt-tag.다경로{background:var(--gold-lt);color:#8A6A10}
+.mt-tag.불일치{background:var(--no-bg);color:var(--no)}
 </style>
 </head>
 <body>
@@ -221,6 +229,7 @@ let 기록 = null;
 let 기록키 = '';
 let 기록준비 = null; // 지금 기록을 만든 채점 준비 (준비들.분석 · 준비들.새로) — 검증/ 파일이면 null
 let 교사 = {}; // 소문항 자리 → { 조각id: 'O'|'X'|'판정불가' } — 엔진 판정과 다를 때만
+let 교사대조 = {}; // 소문항 자리 → { 대조표 줄 키: '일치'|'다경로'|'불일치' } — 교사가 대조 결과를 고친 것만 (2026-10-21)
 
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -293,6 +302,8 @@ function 보이기(j, 키, p) {
   지금소 = 0;
   교사 = {};
   try { 교사 = JSON.parse(localStorage.getItem('hmos-d2-teacher:' + 키) || '{}'); } catch (_) {}
+  교사대조 = {};
+  try { 교사대조 = JSON.parse(localStorage.getItem('hmos-d2-match:' + 키) || '{}'); } catch (_) {}
   그리기();
 }
 
@@ -356,7 +367,7 @@ function 그리기() {
 }
 /** 보이던 기록을 비운다 (새 문항으로 넘어감) */
 function 기록비우기() {
-  기록 = null; 기록키 = ''; 기록준비 = null; 교사 = {};
+  기록 = null; 기록키 = ''; 기록준비 = null; 교사 = {}; 교사대조 = {};
   $('#rec-select').value = '';
   그리기();
 }
@@ -886,8 +897,8 @@ function 고른단위보기() {
     </div>` : '';
 }
 
-// 4축 채점 (오종래 2026-10-19 확정) — 엔진 조각 채점(/api/grade)과 함께, 같은 엔진 조각을 4축에 놓고 /api/axis-grade로 대조한다.
-//   Claude는 조각마다 도달·인용·근거만 대조하고, 축 O/X와 점수는 서버 코드가 정한다. 탭3 위에 4축 카드로 보인다
+// 4축 채점 (오종래 2026-10-19) — [오종래 2026-10-21 확정 — 4축도 엔진 판단, Claude 개입 없음] /api/grade 엔진 채점 결과(학생 경로 · 엔진 조각)를
+//   /api/axis-grade가 축으로 모은다. 엔진이 못 세는 인문 조건(근거 추출 · 매듭 · 서술 형식 · 결론)은 「교사 판정」. ④ 위에 4축 카드로 보인다
 const 엔진계열 = () => (입력계열 === '인문·사회' ? '인문사회국어' : '수리');
 const 축이름들 = { 수리: ['근거대기', '세우기', '풀기', '답구하기'], 인문사회국어: ['근거대기', '세우기', '논리 펼치기', '답표현하기'] };
 
@@ -896,7 +907,7 @@ async function 소문항채점(보내기, s, 학생답, 계열, 덧) {
   // 수리는 학생 경로 채점 (오종래 2026-10-21 B) — 정답(최종값 대조) · 모범답안(다경로 참고)을 함께 보낸다
   const out = await 보내기('/api/grade', { 소문항: s, 학생답, 계열, gradeFormat: 입력형식, 계열형식: 선택형식 || undefined, 정답: 덧?.정답 || undefined, 모범답안: 덧?.모범답안 || undefined });
   let 축 = null;
-  try { 축 = await 보내기('/api/axis-grade', { 소문항: s, 학생답, 계열, gradeFormat: 입력형식, ...덧 }); }
+  try { 축 = await 보내기('/api/axis-grade', { 소문항: s, 학생답, 계열, gradeFormat: 입력형식, 채점: out }); }
   catch (e) { 축 = { error: e.message }; }
   return { 번호: s.번호 ?? null, status: 200, out, 축 };
 }
@@ -961,33 +972,34 @@ async function 소문항채점하기(p, 소문항, 학생, 보내기, st, btn) {
     const g = { ...(await 소문항채점(보내기, s, 답, p.루브릭.계열 || p.계열, p.덧)), 자리: j };
     // 이 준비의 첫 채점이면 분석 기록을 본떠 새 채점 기록을 연다 (분석 기록은 ②로 돌아갈 때 다시 쓰므로 그대로 둔다)
     if (기록준비 !== p || 기록 === p.분석기록) {
-      기록 = { ...p.분석기록, 채점: [] }; 기록키 = p.키 + ':' + Date.now(); 기록준비 = p; 교사 = {};
+      기록 = { ...p.분석기록, 채점: [] }; 기록키 = p.키 + ':' + Date.now(); 기록준비 = p; 교사 = {}; 교사대조 = {};
       $('#rec-select').value = '';
     }
     기록.학생 = 학생;
     기록.채점 = [...기록.채점.filter((x) => x.자리 !== j), g].sort((a, b) => a.자리 - b.자리);
     기록.학생답 = 소문항.map((x, i) => { const a = ($('#in-st-' + i)?.value || '').trim(); return a && 기록.채점.some((c) => c.자리 === i) ? `${소이름(x, i)} ${a}` : ''; }).filter(Boolean).join('\n\n');
     if (교사[자리(s, j)]) { delete 교사[자리(s, j)]; 저장교사(); } // 다시 채점한 소문항은 교사 고침을 지운다
+    if (교사대조[자리(s, j)]) { delete 교사대조[자리(s, j)]; 저장대조(); }
     st.textContent = 다채점됨() ? '모든 소문항 채점 끝 — ④에서 전체 합산을 보고 교사 확정으로' : `${이름} 채점 끝 — ④ 채점 결과에서 보세요`;
     그리기();
     탭(3);
   } catch (e) { st.textContent = '채점 실패: ' + e.message; } finally { btn.disabled = false; }
 }
 
-/** 탭3 4축 카드 — 축마다 O/X · 판단 근거 한 줄 (판정 · 근거 · 점수는 /api/axis-grade 그대로) */
+/** ④ 4축 카드 — 축마다 O/X · 판단 근거 한 줄 (판정 · 근거 · 점수는 /api/axis-grade 엔진 그대로 — Claude 개입 없음) */
 function 축카드Html(g, s) {
   const a = g && g.축;
   if (!a) return '';
   if (a.error) return `<div class="warn">⚠ 4축 대조 실패 — ${esc(a.error)}</div>`;
   return `<div class="axis4">
-    <div class="axis4-head"><b>4축 채점</b> <span class="muted">${esc(형식들[a.형식] || '')} · ${a.계열 === '수리' ? '수리·과학' : '인문·사회'}</span>
+    <div class="axis4-head"><b>4축 채점 (엔진)</b> <span class="muted">${esc(형식들[a.형식] || '')} · ${a.계열 === '수리' ? '수리·과학' : '인문·사회'}</span>
       <span class="axis4-sc">${점(a.부분점수)} <small>/ ${점(a.만점)}</small></span></div>
     <table class="axis4-tbl">${a.축.map((x) => `<tr>
       <td class="ax-n">${x.축}축 ${esc(x.이름)}</td>
       <td><span class="dot ${x.판정 === 'O' ? 'O' : x.판정 === 'X' ? 'X' : 'U'}">${x.판정 === '조각 없음' ? '—' : x.판정}</span></td>
       <td class="ax-sc">${x.조각수 ? `${점(x.점수)}/${점(x.배점)}` : ''}</td>
-      <td class="ax-why">${esc(x.근거)}${x.조건목록 ? `<div class="muted" style="font-size:12px">${x.조건목록.map((c) => `${esc(c.이름)} ${c.맞음 === null ? '— (따지지 않음)' : c.맞음 ? 'O' : 'X'}${c.덧 ? ` (${esc(c.덧)})` : ''}`).join(' · ')}${x.배점 ? '' : ' · 배점 없음 (판정만)'}</div>` : ''}</td></tr>`).join('')}</table>
-    <details class="ax-more"><summary>조각별 대조 (${a.조각.length})</summary>${a.조각.map((c) => `<div class="ax-c"><span class="dot ${c.도달 ? 'O' : 'X'}">${c.도달 ? 'O' : 'X'}</span>
+      <td class="ax-why">${esc(x.근거)}${x.조건목록 ? `<div class="muted" style="font-size:12px">${x.조건목록.map((c) => `${esc(c.이름)} ${c.맞음 === null ? '— (따지지 않음)' : c.맞음 === '교사' ? '— 교사 판정' : c.맞음 ? 'O' : 'X'}${c.덧 ? ` (${esc(c.덧)})` : ''}`).join(' · ')}${x.배점 ? '' : ' · 배점 없음 (판정만)'}</div>` : ''}</td></tr>`).join('')}</table>
+    <details class="ax-more"><summary>조각별 (${a.조각.length}) — 엔진 채점 그대로</summary>${a.조각.map((c) => `<div class="ax-c"><span class="dot ${c.도달 === true ? 'O' : c.도달 === false ? 'X' : 'U'}">${c.도달 === true ? 'O' : c.도달 === false ? 'X' : '?'}</span>
       <b>${esc(c.id)}</b> 「${esc(c.실체)}」 ${점(c.배점)}점 — ${esc(c.근거)}${c.인용 ? `<div class="muted">인용: ${esc(c.인용)}</div>` : ''}</div>`).join('')}</details>
   </div>`;
 }
@@ -1099,6 +1111,41 @@ function 그리기2() {
 
 // ── 탭3 채점 결과 ── 조각별 O/X · 오류 이름 · 설명 한 줄 · 학생 값 vs 모범 값 · 🔆 다경로 · 총점 0.1
 const 표지 = (r) => r === 'O' ? '<div class="mark O">O</div>' : r === 'X' ? '<div class="mark X">X</div>' : '<div class="mark U">?</div>';
+
+/**
+ * 학생 답안 루브릭 추출 대조표 (오종래 2026-10-21 확정) — 왼쪽 엔진 루브릭 조각 · 가운데 AI가 학생 답에서 나눈 조각 · 오른쪽 대조 결과.
+ * 대조 결과는 화면이 엔진 판정에서 읽기만 한다 — 다경로(AI 표시) · 일치(같은 단계 조각이고 엔진 O, 값이 있으면 같음) · 불일치(엔진 X · 같은 단계 값 다름 · 대응 없음 · 학생 단계 없음).
+ * 교사가 고칠 수 있다 (교사대조). 점수는 바뀌지 않는다 — O/X는 ⑤ 교사 확정에서
+ */
+function 대조표Html(s, o, k) {
+  const 순서 = (p) => 파트들.indexOf(p);
+  const 줄들 = [];
+  const 쓴 = new Set();
+  for (const x of o.조각별.filter((x) => x.글)) {
+    const e = (s.조각 || []).find((c) => c.id === x.대응) || null;
+    if (e) 쓴.add(e.id);
+    줄들.push({ 키: x.조각id, e, x });
+  }
+  // 대응 없는 엔진 조각은 같은 파트의 대응 없는 학생 단계와 차례로 한 줄에 — 학생이 다른 경로로 대신한 자리 (풀이1)
+  for (const e of (s.조각 || []).filter((c) => !쓴.has(c.id))) {
+    const 빈 = 줄들.find((r) => r.x && !r.e && r.x.파트 === e.파트);
+    if (빈) 빈.e = e; else 줄들.push({ 키: 'e:' + e.id, e, x: null });
+  }
+  줄들.sort((a, b) => 순서((a.x || a.e).파트) - 순서((b.x || b.e).파트));
+  const 대신 = (e) => 줄들.some((r) => r.x?.다경로 && r.x.파트 === e.파트);
+  const 자동 = ({ e, x }) => !x ? (대신(e) ? '다경로' : '불일치') : x.다경로 ? '다경로' : !e || x.결과 === 'X' || x.같은단계 === '불일치' ? '불일치' : '일치';
+  const 까닭 = ({ e, x }) => !x ? (대신(e) ? '학생이 이 파트를 다른 경로로 대신함' : '학생 답에 같은 단계 없음') : x.다경로 ? (x.다경로까닭 || 'AI가 다른 경로로 표시') : !e ? '같은 단계 엔진 조각 없음' : x.결과 === 'X' ? '엔진 X — ' + x.판단근거 : x.같은단계 === '불일치' ? `같은 단계 값 다름 (학생 ${x.학생값} · 모범 ${x.모범값})` : x.같은단계 === '일치' ? `같은 단계 값 ${x.모범값} 일치` : '같은 단계 · 엔진 O';
+  const 모범줄 = (c) => c.줄글 || c.풀기글 || (c.모범답 ? c.모범답.줄 : '') || c.실체 || '';
+  const 고침 = 교사대조[k] || {};
+  return `<div class="label" style="margin-top:14px">학생 답안 루브릭 추출 대조표</div>
+    <div class="muted" style="font-size:12px;margin-bottom:6px">AI가 학생 답을 어떻게 나눠 읽었는지 — 대조 결과는 교사가 고칠 수 있습니다 (점수 O/X는 ⑤ 교사 확정에서)</div>
+    <div class="tbl-wrap"><table class="match-tbl"><tr><th>엔진 루브릭 조각</th><th>학생 답안에서 추출된 조각</th><th>대조 결과</th></tr>
+    ${줄들.map((r) => { const a = 자동(r), v = 고침[r.키] || a; return `<tr>
+      <td>${r.e ? `<b>${esc(r.e.id)}</b> · ${esc(r.e.파트)} · ${점(r.e.배점)}점<div class="mt-line">${esc(모범줄(r.e))}</div>` : '<span class="muted">— (모범답안에 없는 단계)</span>'}</td>
+      <td>${r.x ? `${표지(r.x.결과).replace('class="mark', 'style="display:inline-flex;width:22px;height:22px;font-size:12px;vertical-align:middle;margin-right:6px" class="mark')}<b>${esc(r.x.조각id)}</b><div class="mt-line">「${esc(r.x.글)}」</div>` : '<span class="muted">— 학생 답에 없음</span>'}</td>
+      <td><select data-m="${esc(k)}|${esc(r.키)}" data-auto="${a}">${['일치', '다경로', '불일치'].map((t) => `<option${t === v ? ' selected' : ''}>${t}</option>`).join('')}</select><span class="mt-tag ${v}">${v}</span>${v !== a ? ` <span class="changed">고침 (자동 ${a})</span>` : ''}<div class="mt-line">${esc(까닭(r))}</div></td></tr>`; }).join('')}
+    </table></div>`;
+}
 
 function 조각카드(x) {
   const 오류 = x.오류 || '';
@@ -1215,11 +1262,20 @@ function 그리기3() {
         ${o.판정불가?.length ? `<span class="tag un">교사 판정 ${o.판정불가.length}개</span>` : ''}
         ${파트들.map((p) => o.파트별?.[p] ? `<span class="tag">${p} ${점(o.파트별[p].파트점수)}/${점(o.파트별[p].배점합)}${o.파트별[p].상한 != null ? ` (상한 ${점(o.파트별[p].상한)})` : ''}</span>` : '').join('')}
       </div>
+      ${o.방식 === '학생 경로' ? 대조표Html(s, o, 자리(s, i)) : ''}
       ${o.조각별.map(조각카드).join('')}
       ${(o.경고 || []).filter((w) => !o.조각별.some((x) => x.오류 && w.endsWith(x.오류))).map((w) => `<div class="warn">⚠ ${esc(w)}</div>`).join('')}
     </div>`;
   }).join('');
   document.querySelectorAll('#p3-rec [data-sum]').forEach((b) => b.addEventListener('click', () => 소고르기(Number(b.dataset.sum))));
+  // 대조표 — 교사가 대조 결과를 고치면 이 브라우저에 남기고 「확정 내려받기」에 함께 (점수는 ⑤ 교사 확정의 O/X로)
+  document.querySelectorAll('#p3-rec select[data-m]').forEach((sel) => sel.addEventListener('change', () => {
+    const [k, 줄] = sel.dataset.m.split('|');
+    교사대조[k] = { ...(교사대조[k] || {}) };
+    if (sel.value === sel.dataset.auto) delete 교사대조[k][줄]; else 교사대조[k][줄] = sel.value;
+    저장대조();
+    그리기3();
+  }));
 }
 
 // ── 탭6 교사 확정 ── 조각 판정을 교사가 확정 · 고친다. 점수는 엔진 게이트 사슬 · 상한비로 다시 센다 (엔진 g1 집계 · /dashboard 채점집계와 같은 계산)
@@ -1236,6 +1292,7 @@ function 재집계(o, 고침) {
 }
 
 function 저장교사() { try { localStorage.setItem('hmos-d2-teacher:' + 기록키, JSON.stringify(교사)); } catch (_) {} }
+function 저장대조() { try { localStorage.setItem('hmos-d2-match:' + 기록키, JSON.stringify(교사대조)); } catch (_) {} }
 
 function 그리기6() {
   if (!(기록?.채점 || []).some((g) => g.out?.조각별)) { $('#p6').innerHTML = '<div class="sec-title">교사 확정</div>' + 비었음('④ 채점 결과가 나오면 교사가 조각 판정을 검토 · 수정 · 확정할 수 있습니다.'); return; }
@@ -1278,7 +1335,7 @@ function 내려받기() {
     const r = 재집계(g.out, 고침);
     return { 번호: s.번호 ?? null, 엔진점수: g.out.부분점수, 확정점수: r.부분점수, 만점: r.만점, 판정불가: r.판정불가, 고친조각: Object.entries(고침).map(([조각id, 교사판정]) => ({ 조각id, 엔진판정: g.out.조각별.find((x) => x.조각id === 조각id)?.결과, 교사판정 })) };
   }).filter(Boolean);
-  const 글 = JSON.stringify({ 원본: 기록키, 학생: 기록.학생, 문항: 기록.문항, 엔진: (기록.채점 || [])[0]?.out?.엔진 || null, 확정일시: new Date().toISOString(), 소문항: 확정 }, null, 1);
+  const 글 = JSON.stringify({ 원본: 기록키, 학생: 기록.학생, 문항: 기록.문항, 엔진: (기록.채점 || [])[0]?.out?.엔진 || null, 확정일시: new Date().toISOString(), 소문항: 확정, 대조고침: 교사대조 }, null, 1);
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([글], { type: 'application/json' }));
   a.download = (기록키.startsWith('파일:') ? 기록키.slice(3).replace(/\.json$/, '') : 'hmos_새채점') + '_교사확정.json';
