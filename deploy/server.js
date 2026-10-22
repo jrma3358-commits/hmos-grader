@@ -982,7 +982,8 @@ const 처방SYSTEM=`너는 HMOS 처방전 구술자다. 교사가 확정한 채�
 - 막힌곳: X인 축과 막힌 조각만 말한다. 학생이 쓴 줄을 「」로 짧게 인용하고, 엔진 근거에 있는 내용만으로 무엇이 빠졌는지 1~2문장. 근거에 없는 오류를 만들지 않는다. X 축이 없으면 "".
 - 다음: 한 문장. 받은 「기본 처방」(처음 X인 축)을 이 학생의 막힌 조각에 맞게 구체적으로 바꾼다. 막힌 조각 근거에 빠진 처리가 식으로 나와 있으면(예: ÷2!) 그 처리를 이름과 함께 연습할 것으로 쓴다. X 축이 없으면 다음 문항에서도 같은 순서로 풀라는 한 문장.
 - 정답 값이나 모범 풀이 전체를 그대로 알려주지 않는다 (근거에 나온 빠진 처리 하나를 짚는 것은 된다). 점수 · 배점 숫자를 쓰지 않는다. ? 축을 틀렸다고 말하지 않는다.
-- 축 이름은 근거대기 · 세우기 · 풀기 · 답구하기 그대로 쓴다. 해요체, 학생이 읽는 말로. 채점 용어(조각 · 판정 · 엔진 · 배점 · 루브릭)는 쓰지 않는다.`;
+- 축 이름은 근거대기 · 세우기 · 풀기 · 답구하기 그대로 쓴다. 해요체, 학생이 읽는 말로. 채점 용어(조각 · 판정 · 엔진 · 배점 · 루브릭)는 쓰지 않는다.
+- 모든 출력은 한국어로 쓴다. 영어 낱말 · 영어 문장을 쓰지 않는다 (학생 줄 인용 「」 안의 식 · 기호는 그대로).`;
 const 처방FORMAT={type:'json_schema',schema:{type:'object',additionalProperties:false,required:['잘한것','막힌곳','다음'],properties:{
   잘한것:{type:'string',description:'O 축이 없으면 빈 글'},막힌곳:{type:'string',description:'X 축이 없으면 빈 글'},다음:{type:'string',description:'한 문장'}}}};
 const 처방축=['근거대기','세우기','풀기','답구하기'];
@@ -1012,6 +1013,9 @@ function 처방검사(o,축,잘한,막힌){
   if(/\n/.test(o.다음.trim()))틀.push('다음은 한 문장');
   if(X.length&&o.막힌곳.length<20)틀.push('막힌곳이 너무 짧다 — 학생이 쓴 줄과 빠진 것을 1~2문장');
   if(o.다음.length<15)틀.push('다음이 너무 짧다 — 구체적인 한 문장');
+  // 한국어 — 「」 인용 밖에 영어 낱말(세 글자 이상, 수학 함수 이름 빼고)이 있으면 다시 (오종래 2026-10-22)
+  const 영어=[o.잘한것,o.막힌곳,o.다음].flatMap(t=>(t.replace(/「[^」]*」/g,'').match(/[A-Za-z]{3,}/g)||[])).filter(w=>!/^(lim|sin|cos|tan|log|max|min)$/i.test(w));
+  if(영어.length)틀.push(`영어 낱말 ${[...new Set(영어)].slice(0,5).map(w=>`「${w}」`).join(' ')} — 모두 한국어로`);
   const 빠진처리=처리.filter(p=>!붙임(o.다음).includes(p));
   if(빠진처리.length)틀.push(`다음에 막힌 근거의 빠진 처리 ${빠진처리.map(p=>`「${p}」`).join(' ')}를 연습할 것으로 넣는다`);
   const 용어=['조각','판정','엔진','배점','루브릭'].filter(w=>[o.잘한것,o.막힌곳,o.다음].some(t=>t.includes(w)));
@@ -1043,14 +1047,19 @@ app.post('/api/prescription',async(req,res)=>{
         messages:[{role:'user',content:시도===0?user:`${user}\n\n앞서 쓴 구술:\n${JSON.stringify(out)}\n\n고칠 것:\n${틀.map(t=>'- '+t).join('\n')}\n\n고쳐서 다시 쓴다.`}]});
       사용.push(msg.usage);
       if(msg.stop_reason==='refusal')throw new Error('모델이 거절함');
-      if(msg.stop_reason==='max_tokens')throw new Error('구술이 max_tokens에서 잘림');
+      if(msg.stop_reason==='max_tokens')throw new Error('구술이 길이 한도에서 잘렸습니다 — 다시 누르세요');
       let o=null;try{o=JSON.parse(msg.content.filter(b=>b.type==='text').map(b=>b.text).join(''));}catch(_){}
-      if(!o)throw new Error(`구술을 받지 못함 (stop_reason: ${msg.stop_reason})`);
+      if(!o)throw new Error('구술을 받지 못했습니다 — 다시 누르세요');
       out={잘한것:String(o.잘한것||'').trim(),막힌곳:String(o.막힌곳||'').trim(),다음:String(o.다음||'').trim()};
       틀=처방검사(out,축,잘한,막힌);
       if(!틀.length)break;
     }
-  }catch(e){res.status(502).json({error:e.message});return;}
+  }catch(e){
+    // 처방전 꼬리에 그대로 찍히므로 SDK의 영어 오류 글은 한국어로 바꿔 보낸다
+    const 글=e instanceof Anthropic.AuthenticationError?'API 키 인증 실패 — 관리자에게 문의하세요':e instanceof Anthropic.RateLimitError?'요청이 많아 잠시 막혔습니다 — 잠시 뒤 다시 누르세요'
+      :e instanceof Anthropic.APIError?`구술 서버 오류 (${e.status||'상태 없음'}) — 잠시 뒤 다시 누르세요`:/[가-힣]/.test(e.message)?e.message:'구술 서버에 연결하지 못했습니다 — 잠시 뒤 다시 누르세요';
+    res.status(502).json({error:글});return;
+  }
   res.json({...out,학생:학생||null,검사:틀,usage:사용});
 });
 
