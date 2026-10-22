@@ -170,6 +170,15 @@ function 리포트학생(파일,j){
   return {파일,문항:(이름.match(/^q\d+/)||[''])[0],학생,문항글:String(j.문항||''),정답:String(j.정답||(j.정답보충&&j.정답보충.값)||''),...(j.정답보충?{정답출처:j.정답보충.출처}:{}),
     ...채점합(j.채점),축,막힘,원본:이력[0]||null,이력,재채점:j.재채점};
 }
+// GET /api/integrated — 학생별 통합 리포트 (오종래 2026-10-22) — 검증/통합리포트/학생N_통합리포트.json (scripts/integrated-report.mjs가 만든 것) 그대로
+app.get('/api/integrated',(req,res)=>{
+  res.setHeader('Cache-Control','no-store');
+  if(!접속됨(req)){res.status(401).json({ok:false,error:접속만료});return;}
+  const 폴더=path.join(검증폴더,'통합리포트');
+  let 파일들=[];try{파일들=fs.readdirSync(폴더).filter(f=>/^학생\d+_통합리포트\.json$/.test(f));}catch(_){}
+  const 목록=파일들.map(f=>{try{return JSON.parse(fs.readFileSync(path.join(폴더,f),'utf8'));}catch(_){return null;}}).filter(Boolean).sort((a,b)=>a.번호-b.번호);
+  res.json({ok:true,목록});
+});
 app.get('/api/report',(req,res)=>{
   res.setHeader('Cache-Control','no-store');
   if(!접속됨(req)){res.status(401).json({ok:false,error:접속만료});return;}

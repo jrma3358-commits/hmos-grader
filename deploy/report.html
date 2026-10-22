@@ -90,7 +90,7 @@ details summary{cursor:pointer;font-size:13px;color:var(--teal);margin-top:8px}
 <header class="topbar">
   <a class="brand" href="/dashboard2">HMOS<em>채점 리포트</em></a>
   <div class="views" role="tablist">
-    <button role="tab" data-view="student">학생용</button><button role="tab" data-view="teacher">교사용</button><button role="tab" data-view="parent">학부모용</button>
+    <button role="tab" data-view="student">학생용</button><button role="tab" data-view="teacher">교사용</button><button role="tab" data-view="parent">학부모용</button><button role="tab" data-view="integrated">통합 리포트</button>
   </div>
   <a class="back" href="/dashboard2">← 채점 대시보드</a>
 </header>
@@ -301,8 +301,54 @@ function 층3(목록, 청중, 나) {
 
 // ── 화면 ──
 let 목록 = [], 청중 = 'teacher', 나키 = null, 문항거르기 = '';
-const 청중이름 = { student: '학생', teacher: '교사', parent: '학부모' };
+const 청중이름 = { student: '학생', teacher: '교사', parent: '학부모', integrated: '통합' };
 const 키 = (x) => x.파일;
+// ── 통합 리포트 (오종래 2026-10-22) ── 같은 학생번호 = 같은 학생, q3~q7 — /api/integrated (scripts/integrated-report.mjs가 만든 검증/통합리포트/ 그대로)
+let 통합 = null, 통합번호 = null;
+const 판칸 = { O: ['ok', '✓'], X: ['no', '✕'], '?': ['un', '?'], '—': ['', '—'] };
+function 통합고르기() {
+  $('#pick').innerHTML = `<label for="fi">학생</label><select id="fi">${(통합 || []).map((x) => `<option value="${x.번호}" ${x.번호 === 통합번호 ? 'selected' : ''}>${esc(x.학생)} · ${x.문항.map((m) => m.문항).join(' ')}</option>`).join('')}</select><span class="hint">같은 학생번호 = 같은 학생 · q3~q7 채점결과 + 처방전</span>`;
+  $('#fi')?.addEventListener('change', (e) => { 통합번호 = Number(e.target.value); 저장.set('hmos-report-int', String(통합번호)); 그리기(); });
+}
+async function 통합그리기() {
+  if (!통합) {
+    $('#main').innerHTML = '<div class="empty">통합 리포트를 불러오는 중…</div>';
+    try { const r = await fetch('/api/integrated', { cache: 'no-store' }); const j = await r.json(); if (!r.ok || !j.ok) throw new Error(j.error || r.status); 통합 = j.목록; }
+    catch (e) { $('#main').innerHTML = `<div class="err">통합 리포트를 불러오지 못했습니다 — ${esc(e.message)}</div>`; return; }
+  }
+  if (!통합.length) { $('#pick').innerHTML = ''; $('#main').innerHTML = '<div class="empty">통합 리포트가 아직 없습니다 (scripts/integrated-report.mjs).</div>'; return; }
+  if (!통합.some((x) => x.번호 === 통합번호)) 통합번호 = 통합[0].번호;
+  통합고르기();
+  const x = 통합.find((y) => y.번호 === 통합번호);
+  const 문항수 = x.문항.length;
+  // 4 성장 여지 — 잘하는 것 먼저
+  const 성장 = `<section><div class="layer">성장 여지</div><h2>잘하는 것부터</h2>
+    <div class="card"><div class="strong">${x.성장여지.잘하는것.length ? x.성장여지.잘하는것.map((a) => `<div>★ ${esc(a.글)}</div>`).join('') : '아직 여러 문항에서 꾸준히 O인 축은 없어요 — 한 문항씩 다져 가면 됩니다.'}</div>
+    ${x.성장여지.키울것.length ? `<div class="sub" style="margin:10px 0 4px">키울 것</div>${x.성장여지.키울것.map((a) => `<div class="coord"><span class="k">${esc(a.축)} — ${esc(a.문항.join(' · '))} X</span>${a.막힌곳.map((m) => `<div style="margin-top:4px"><b>${esc(m.문항)}</b> ${esc(m.글)}</div>`).join('') || '<div style="margin-top:4px;color:var(--muted)">처방전 없음 (보류) — 막힌 곳 글 없음</div>'}</div>`).join('')}` : ''}</div></section>`;
+  // 1 문항별 점수
+  const 점수표 = `<section><div class="layer">1</div><h2>문항별 점수</h2><div class="sub">${esc(x.학생)} · ${문항수}개 문항 · 합 ${점(x.총점)} / ${점(x.총만점)}. ✓ ✕ ? — 는 처방전(교사 확정) 4축, 처방전이 보류된 문항은 채점결과 엔진 판정입니다.</div>
+    <div class="card scroll"><table><thead><tr><th>문항</th><th class="num">점수</th><th style="min-width:120px">비율</th>${축들.map((a) => `<th style="text-align:center">${a}</th>`).join('')}<th>출처</th></tr></thead><tbody>
+    ${['q3', 'q4', 'q5', 'q6', 'q7'].map((q) => { const m = x.문항.find((y) => y.문항 === q); if (!m) return `<tr><td>${q}</td><td class="num" style="color:var(--muted)">—</td><td colspan="6" style="color:var(--muted)">이 문항 답안 없음</td></tr>`;
+      return `<tr><td><b>${q}</b></td><td class="num"><b>${점(m.점수)}</b> / ${점(m.만점)}</td><td><div class="bar" data-tip="${q} ${퍼(m.비율)}"><i style="width:${(m.비율 * 100).toFixed(1)}%"></i></div></td>
+        ${축들.map((a) => `<td style="text-align:center"><span class="tag ${판칸[m.축[a]]?.[0] ?? ''}">${판칸[m.축[a]]?.[1] ?? '—'}</span></td>`).join('')}
+        <td><span class="tag ${m.처방전 ? 'ok' : 'un'}">${m.처방전 ? '처방전' : '보류'}</span></td></tr>`; }).join('')}</tbody></table></div></section>`;
+  // 2 4축 누적
+  const 누적 = `<section><div class="layer">2</div><h2>4축 누적 — 강점 · 약점</h2><div class="sub">축마다 문항별 O · X · ? 를 모았습니다. 반복 X = 두 문항 이상 X · 일관 O = 두 문항 이상 O이고 X · ? 없음.</div>
+    <div class="card"><div class="bars">${x.축누적.map((a) => { const n = a.O.length + a.X.length + a.미정.length; const w = (k) => (n ? (k / n) * 100 : 0).toFixed(1);
+      const 표 = x.강점.includes(a.축) ? '<span class="tag ok">일관 O</span>' : x.약점.includes(a.축) ? '<span class="tag no">반복 X</span>' : '';
+      return `<div class="n">${esc(a.축)} ${표}</div>
+        <div class="bar" style="display:flex" role="img" aria-label="${esc(a.축)} O ${a.O.length} X ${a.X.length} ? ${a.미정.length}" data-tip="${esc(a.축)}
+O ${a.O.join(' · ') || '없음'}
+X ${a.X.join(' · ') || '없음'}${a.미정.length ? '\n? ' + a.미정.join(' · ') : ''}">
+          <i style="position:static;width:${w(a.O.length)}%;border-radius:0"></i><i style="position:static;width:${w(a.X.length)}%;background:var(--no);border-radius:0;margin-left:2px"></i><i style="position:static;width:${w(a.미정.length)}%;background:var(--gold);border-radius:0;margin-left:2px"></i></div>
+        <div class="v">O ${a.O.length} · X ${a.X.length}${a.미정.length ? ` · ? ${a.미정.length}` : ''}</div>`; }).join('')}</div>
+      <div class="legend"><span><i style="background:var(--teal-mid);border-radius:2px"></i>O</span><span><i style="background:var(--no);border-radius:2px"></i>X</span><span><i style="background:var(--gold);border-radius:2px"></i>? (교사 판정 남음)</span></div></div></section>`;
+  // 3 공통 처방
+  const 공통 = `<section><div class="layer">3</div><h2>공통 처방</h2><div class="card"><div class="nx" style="border-left:4px solid var(--teal);background:#F5FAF9;padding:10px 14px;font-size:15px">${esc(x.공통처방.글)}</div>
+    ${문항수 < 2 ? '<div class="sub" style="margin:8px 0 0">이 학생은 답안이 한 문항뿐이라 반복을 볼 수 없습니다.</div>' : ''}</div></section>`;
+  // 잘하는 것 먼저 — 성장 여지를 맨 위에
+  $('#main').innerHTML = 성장 + 점수표 + 누적 + 공통;
+}
 function 고르기줄() {
   const 학생들 = 목록.filter((x) => x.학생 !== '모범').sort((a, b) => a.문항.localeCompare(b.문항, 'ko', { numeric: true }) || 학생순(a, b));
   const 문항들 = [...new Set(목록.map((x) => x.문항))].sort((a, b) => a.localeCompare(b, 'ko', { numeric: true }));
@@ -316,6 +362,7 @@ function 고르기줄() {
 }
 function 그리기() {
   document.querySelectorAll('.views button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.view === 청중)));
+  if (청중 === 'integrated') { 통합그리기(); return; }
   // 고른 답안이 없으면 고르기 줄의 첫 답안 (문항 · 학생 번호 순)
   if (!목록.some((x) => 키(x) === 나키 && x.학생 !== '모범')) 나키 = 키(목록.filter((x) => x.학생 !== '모범').sort((a, b) => a.문항.localeCompare(b.문항, 'ko', { numeric: true }) || 학생순(a, b))[0]);
   고르기줄();
@@ -352,6 +399,7 @@ document.addEventListener('focusout', () => { tip.style.opacity = 0; });
   const v = new URLSearchParams(location.search).get('view') || 저장.get('hmos-report-view');
   if (청중이름[v]) 청중 = v;
   나키 = 저장.get('hmos-report-me');
+  통합번호 = Number(저장.get('hmos-report-int')) || null;
   그리기();
 })();
 </script>
