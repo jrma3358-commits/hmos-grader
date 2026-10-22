@@ -139,6 +139,48 @@ app.get('/api/results/*file',(req,res)=>{ // file = 검증/ 아래 경로 (.json
   res.type('application/json').send(fs.readFileSync(path.join(검증폴더,파일),'utf8'));
 });
 
+// ── /report · GET /api/report — 채점 리포트 (오종래 2026-10-22) ──
+// 학생 경로 채점 B로 재채점한 결과(재채점 칸이 있는 채점결과/ 파일)만 모은다. 점수 · 4축 · 조각 판정은 엔진 출력 그대로 더하기만 — 화면도 새로 판정하지 않는다.
+//   막힌 곳 = O가 아닌 조각. 엔진확인 = 답구하기 X인데 학생 최종값이 정답의 다른 값과 같다 (정답 값이 여럿 — 엔진은 한 값만 대조, 교사 확인 표시만)
+app.get('/report',(req,res)=>{
+  if(!접속됨(req)){res.redirect(302,'/?login=1&next=report');return;}
+  res.setHeader('Cache-Control','no-store');
+  res.sendFile(path.join(__dirname,'report.html'));
+});
+app.get('/report.html',(req,res)=>res.redirect(302,'/report'));
+const 리포트축=['근거대기','세우기','풀기','답구하기'];
+const 반올림=x=>Math.round(x*100)/100;
+const 채점합=채점=>{const xs=Array.isArray(채점)?채점:Object.values(채점||{});return {부분점수:반올림(xs.reduce((a,g)=>a+Number((g.out&&g.out.부분점수)||0),0)),만점:반올림(xs.reduce((a,g)=>a+Number((g.out&&g.out.만점)||0),0))};};
+function 리포트학생(파일,j){
+  const 이름=파일.split('/').pop().replace(/\.json$/,'');
+  const 칸=이름.split('_')[1]||'';
+  const 학생=/모범|규칙반영/.test(칸)?'모범':칸==='실채점'?'실채점':칸.replace(/^학생/,'학생 ');
+  const 정답값=(String(j.정답||(j.정답보충&&j.정답보충.값)||'').match(/-?\d+(?:\.\d+)?/g)||[]);
+  const 축=리포트축.map((이름,i)=>{
+    const xs=j.채점.map(g=>g.축&&Array.isArray(g.축.축)?g.축.축[i]:null).filter(x=>x&&x.배점>0);
+    const 판정=!xs.length?'조각 없음':xs.some(x=>x.판정==='X')?'X':xs.some(x=>x.판정==='판정불가')?'판정불가':'O';
+    return {이름,판정,점수:반올림(xs.reduce((a,x)=>a+Number(x.점수||0),0)),배점:반올림(xs.reduce((a,x)=>a+Number(x.배점||0),0))};
+  });
+  const 막힘=j.채점.flatMap(g=>((g.out&&g.out.조각별)||[]).filter(x=>x.결과!=='O').map(x=>{
+    const m=String(x.판단근거||'').match(/정답 값 (\S+) · 학생 최종값 (\S+)/);
+    return {번호:g.번호??null,id:x.조각id,파트:x.파트,결과:x.결과,배점:x.배점,글:String(x.글||''),근거:String(x.판단근거||''),
+      ...(x.파트==='답구하기'&&x.결과==='X'&&m&&m[1]!==m[2]&&정답값.includes(m[2])?{엔진확인:'정답 값이 여럿 — 엔진은 한 값만 대조합니다. 학생 최종값이 정답의 다른 값과 같습니다'}:{})};
+  }));
+  const 이력=(j.채점이력||[]).map(h=>({방식:h.방식,일시:h.일시||null,...채점합(h.채점)}));
+  return {파일,문항:(이름.match(/^q\d+/)||[''])[0],학생,문항글:String(j.문항||''),정답:String(j.정답||(j.정답보충&&j.정답보충.값)||''),...(j.정답보충?{정답출처:j.정답보충.출처}:{}),
+    ...채점합(j.채점),축,막힘,원본:이력[0]||null,이력,재채점:j.재채점};
+}
+app.get('/api/report',(req,res)=>{
+  res.setHeader('Cache-Control','no-store');
+  if(!접속됨(req)){res.status(401).json({ok:false,error:접속만료});return;}
+  const 목록=[];
+  for(const 파일 of 검증파일들()){
+    if(!파일.startsWith('채점결과/'))continue;
+    try{const j=JSON.parse(fs.readFileSync(path.join(검증폴더,파일),'utf8'));if(j&&j.재채점&&Array.isArray(j.채점))목록.push(리포트학생(파일,j));}catch(_){}
+  }
+  res.json({ok:true,목록});
+});
+
 // ── 샘플 (오종래 2026-10-19) — 검증/샘플/<형식>/<이름>.json. tools·dashboard 0단계 「샘플 불러오기」 ──
 // 목록·읽기는 GET이라 아래 접속 검사를 지나므로 여기서 쿠키를 본다. 저장(POST, 같은 이름이면 덮어쓰기)은 접속 검사를 거친다.
 // 이름은 공백을 떼고 글자·숫자·_·- 만 — 경로 문자로 폴더 밖을 열거나 쓰지 못하게
@@ -942,11 +984,11 @@ app.post('/api/grade',async(req,res)=>{
   const 논제글=[s.공통발문,s.텍스트].filter(Boolean).join('\n')||'채점';
   let 경로=null,경로경고=null;
   if(채점형식(req)&&계열==='수리'){
-    try{경로=await 경로나누기(s,String(학생답),req.모범답안);}
+    try{경로=await 경로나누기(s,String(학생답),req.body.모범답안);}
     catch(e){경로경고='학생 경로 나누기 실패 — 엔진 조각 채점(모범 경로)으로 보입니다: '+e.message;}
   }
   const r=await runAnalyze({파이프라인:'C',작업:'채점',논제:논제글,계열,학생답:String(학생답),앞학생답:String(앞학생답||''),조각:s.조각,급소:s.급소,
-    ...(경로?{단계들:경로.단계,정답:String(req.정답||''),번호:s.번호??null}:{})});
+    ...(경로?{단계들:경로.단계,정답:String(req.body.정답||''),번호:s.번호??null}:{})});
   if(!r.ok||!r.단계||!r.단계.채점){res.status(r.러너실패?500:400).json({error:엔진실패글('엔진 채점 실패: ',r)});return;}
   const 형식칸=채점형식(req)?{형식:채점형식(req)}:{};
   if(경로&&r.단계.경로채점){

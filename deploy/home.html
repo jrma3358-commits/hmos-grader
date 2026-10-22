@@ -653,11 +653,11 @@ AI는 질문에 답을 내놓는다.
     만들기('text', { class: 'core-label', x: cx, y: cy }, 층.node).textContent = '급소';
   })();
 
-  // /dashboard · /dashboard2 · /tools에 바로 들어오려다 돌아온 경우 (/?login=1[&next=dashboard2|tools]) — 팝업을 바로 열고, 들어가면 그 화면으로
+  // /dashboard · /dashboard2 · /tools에 바로 들어오려다 돌아온 경우 (/?login=1[&next=dashboard2|tools|report]) — 팝업을 바로 열고, 들어가면 그 화면으로
   const 물음 = new URLSearchParams(location.search);
   if (물음.get('login') === '1') {
     history.replaceState(null, '', '/');
-    열기({ dashboard2: '/dashboard2', tools: '/tools' }[물음.get('next')] || '/dashboard');
+    열기({ dashboard2: '/dashboard2', tools: '/tools', report: '/report' }[물음.get('next')] || '/dashboard');
   }
 </script>
 </body>
