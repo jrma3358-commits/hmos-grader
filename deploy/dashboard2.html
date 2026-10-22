@@ -1288,7 +1288,7 @@ async function 채점결과저장() {
 }
 
 function 그리기3() {
-  if (!$('#p3-axis')) { $('#p3').innerHTML = '<div class="sec-title">채점 결과</div><div id="p3-rec"></div><div id="p3-go" style="margin:4px 0 28px"></div><div id="p3-axis"></div><div id="p3-report" style="margin-top:28px;padding-top:18px;border-top:1px solid var(--line);display:flex;gap:12px;align-items:center;flex-wrap:wrap"><a class="run-btn" href="/report" target="_blank" rel="noopener" style="text-decoration:none">리포트 보기 ↗</a><span class="status" style="margin-left:0">문항별 점수 분포 · 4축 지형도 · 막힌 자리 · q3 성장 비교 (오종래 2026-10-22)</span></div>'; 그리기3축(); }
+  if (!$('#p3-axis')) { $('#p3').innerHTML = '<div class="sec-title">채점 결과</div><div id="p3-rec"></div><div id="p3-go" style="margin:4px 0 28px"></div><div id="p3-axis"></div><div id="p3-report" style="margin-top:28px;padding-top:18px;border-top:1px solid var(--line);display:flex;gap:12px;align-items:center;flex-wrap:wrap"><a class="run-btn" href="/report?view=teacher" target="_blank" rel="noopener" style="text-decoration:none">리포트 보기 ↗</a><span class="status" style="margin-left:0">점수 분포 · 4축 지형도 · 성장 궤적 — 학생용 · 교사용 · 학부모용 (오종래 2026-10-22)</span></div>'; 그리기3축(); }
   // 채점된 조각이 있으면 아래에 「교사 확정 →」 (오종래 2026-10-21)
   //   소문항이 여럿이면 다 채점될 때까지 「다음 소문항 (k) →」(② 문항분석부터), 다 채점되면 「교사 확정 →」
   const ss = 소문항들(), 채점있음 = (기록?.채점 || []).some((g) => g.out?.조각별);

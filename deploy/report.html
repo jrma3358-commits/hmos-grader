@@ -7,31 +7,34 @@
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=Noto+Serif+KR:wght@400;600&display=swap" rel="stylesheet">
 <style>
-/* 채점 리포트 (오종래 2026-10-22) — /api/report 엔진 출력 그대로. 점수 · 4축 판정 · 조각 판정을 화면이 새로 매기지 않는다 (모으고 그리기만) */
-:root{--teal:#1A4A4A;--teal-mid:#2A6060;--gold:#C8A84B;--gold-lt:#F6EFD9;--ivory:#F7F5F0;--ivory-dk:#EDE9E1;--line:#DDD8CC;--muted:#6B6B70;--ink:#1C1C1E;--white:#FFFFFF;
-  --ok:#2E7D32;--ok-bg:#E8F5E9;--no:#C62828;--no-bg:#FFEBEE;--un:#8D6E00;--un-bg:#FFF8E1;
-  --s0:#F1F5F4;--s1:#CFE3E0;--s2:#9DC7C1;--s3:#5E9E96;--s4:#2A6B64;--s5:#1A4A4A}
+/* 채점 리포트 (오종래 2026-10-22) — /api/report 엔진 출력 그대로. 점수 · 4축 판정 · 조각 판정을 화면이 새로 매기지 않는다 (모으고 그리기만).
+   3층: ① 문항별 점수 분포 ② 학생별 4축 지형도(막대 · 아직 안 편 이해의 좌표 · 강점 먼저) ③ 성장 궤적(q3 이전 vs 현재).
+   청중 탭: 학생용(서술 · 숫자 최소) · 교사용(4축 수치 · 처방) · 학부모용(강점 먼저 · 성장 궤적). 서술 · 처방 문장은 엔진 판정에 붙이는 고정 문안 */
+:root{--teal:#1A4A4A;--teal-mid:#2A6060;--teal-lt:#CFE3E0;--gold:#C8A84B;--gold-lt:#F6EFD9;--ivory:#F7F5F0;--ivory-dk:#EDE9E1;--line:#DDD8CC;--muted:#6B6B70;--ink:#1C1C1E;--white:#FFFFFF;
+  --ok:#2E7D32;--ok-bg:#E8F5E9;--no:#C62828;--no-bg:#FFEBEE;--un:#8D6E00;--un-bg:#FFF8E1;--track:#ECEAE4}
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Noto Sans KR',sans-serif;background:var(--ivory);color:var(--ink);font-size:14px;line-height:1.6}
-a{color:var(--teal)}
+body{font-family:'Noto Sans KR',sans-serif;background:var(--ivory);color:var(--ink);font-size:14px;line-height:1.65}
 .topbar{min-height:54px;background:var(--teal);display:flex;align-items:center;padding:0 24px;gap:18px;position:sticky;top:0;z-index:10;flex-wrap:wrap}
 .brand{font-family:'Noto Serif KR',serif;font-size:17px;font-weight:600;color:#fff;text-decoration:none}
 .brand em{font-style:normal;color:var(--gold);font-size:11px;font-family:'Noto Sans KR',sans-serif;font-weight:300;margin-left:6px}
-.nav{display:flex;gap:4px;flex-wrap:wrap}
-.nav a{color:rgba(255,255,255,.7);text-decoration:none;font-size:13px;padding:6px 10px;border-radius:14px}
-.nav a:hover{color:#fff;background:rgba(255,255,255,.1)}
+.views{display:flex;gap:2px}
+.views button{border:none;background:transparent;color:rgba(255,255,255,.6);font:inherit;font-size:14px;padding:0 14px;height:54px;border-bottom:3px solid transparent;cursor:pointer}
+.views button:hover{color:#fff}
+.views button[aria-selected="true"]{color:#fff;border-bottom-color:var(--gold);font-weight:600}
 .back{margin-left:auto;color:var(--gold);font-size:13px;text-decoration:none}
-.content{max-width:1080px;margin:0 auto;padding:28px 24px 72px}
-section{margin-bottom:40px;scroll-margin-top:70px}
+.pick{background:var(--white);border-bottom:1px solid var(--line);padding:10px 24px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;position:sticky;top:54px;z-index:9}
+.pick label{font-size:12px;color:var(--muted)}
+.pick select{padding:6px 10px;border:1px solid var(--line);border-radius:6px;font:inherit;font-size:13px;background:var(--white)}
+.pick .hint{font-size:12px;color:var(--muted)}
+.content{max-width:1000px;margin:0 auto;padding:26px 24px 72px}
+section{margin-bottom:38px}
+.layer{font-size:11px;font-weight:700;letter-spacing:.08em;color:var(--gold);margin-bottom:2px}
 h2{font-family:'Noto Serif KR',serif;font-size:19px;font-weight:600;color:var(--teal);margin-bottom:4px}
-.sub{font-size:13px;color:var(--muted);margin-bottom:16px}
+.sub{font-size:13px;color:var(--muted);margin-bottom:14px}
 .card{background:var(--white);border:1px solid var(--line);border-radius:8px;padding:18px 20px;margin-bottom:14px}
-.card h3{font-size:14px;font-weight:600;color:var(--teal);margin-bottom:10px;display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
+.card h3{font-size:15px;font-weight:600;color:var(--teal);margin-bottom:10px;display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
 .card h3 small{font-weight:400;color:var(--muted);font-size:12px}
-.tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:28px}
-.tile{background:var(--white);border:1px solid var(--line);border-radius:8px;padding:14px 16px}
-.tile .v{font-size:26px;font-weight:700;color:var(--teal);line-height:1.2}
-.tile .k{font-size:12px;color:var(--muted)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 .empty,.err{padding:40px;text-align:center;color:var(--muted);background:var(--white);border:1px dashed var(--line);border-radius:8px}
 .err{color:var(--no);background:var(--no-bg);border-color:var(--no)}
 table{border-collapse:collapse;width:100%;font-size:13px}
@@ -39,56 +42,59 @@ th,td{padding:7px 8px;border-bottom:1px solid var(--line);text-align:left;vertic
 th{font-size:12px;font-weight:600;color:var(--muted);white-space:nowrap}
 td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 .scroll{overflow-x:auto}
-.tag{display:inline-block;font-size:11px;padding:1px 7px;border-radius:9px;background:var(--ivory-dk);color:var(--ink);white-space:nowrap}
-.tag.ok{background:var(--ok-bg);color:var(--ok)}.tag.no{background:var(--no-bg);color:var(--no)}.tag.un{background:var(--un-bg);color:var(--un)}
-.tag.gold{background:var(--gold-lt);color:#6B5418}
-/* 분포 띠 */
-.strip{width:100%;height:auto;display:block}
-.strip .grid{stroke:var(--line);stroke-width:1}
-.strip .axis{fill:var(--muted);font-size:11px}
-.strip .dot{fill:var(--teal-mid);stroke:var(--white);stroke-width:2;cursor:pointer}
-.strip .dot:hover,.strip .dot:focus{fill:var(--gold);outline:none}
-.strip .model{fill:var(--white);stroke:var(--gold);stroke-width:2.5}
-.strip .mean{stroke:var(--teal);stroke-width:2}
+.tag{display:inline-block;font-size:11px;padding:1px 7px;border-radius:9px;background:var(--ivory-dk);white-space:nowrap}
+.tag.ok{background:var(--ok-bg);color:var(--ok)}.tag.no{background:var(--no-bg);color:var(--no)}.tag.un{background:var(--un-bg);color:var(--un)}.tag.gold{background:var(--gold-lt);color:#6B5418}
+/* 강점 · 좌표 · 처방 */
+.strong{background:var(--ok-bg);border-radius:6px;padding:10px 14px;margin-bottom:12px;font-size:14px}
+.strong b{color:var(--ok)}
+.coord{border-left:3px solid var(--no);background:#FFFBFA;border-radius:0 6px 6px 0;padding:9px 13px;margin-top:12px;font-size:14px}
+.coord.calm{border-left-color:var(--teal-mid);background:#F5FAF9}
+.coord.wait{border-left-color:var(--un);background:#FFFDF5}
+.coord .k{font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.04em;display:block}
+.rx{margin-top:10px;font-size:13px;background:var(--gold-lt);border-radius:6px;padding:9px 13px}
+.rx .k{font-size:11px;font-weight:700;color:#6B5418;display:block}
+.rx li{margin-left:18px}
+/* 4축 막대 */
+.bars{display:grid;grid-template-columns:auto 1fr auto;gap:8px 12px;align-items:center}
+.bars .n{font-size:13px;white-space:nowrap}
+.bars .n small{color:var(--muted);font-size:11px;margin-left:4px}
+.bar{height:14px;background:var(--track);border-radius:4px;position:relative;overflow:hidden}
+.bar i{position:absolute;left:0;top:0;bottom:0;background:var(--teal-mid);border-radius:0 4px 4px 0;min-width:0}
+.bar.top i{background:var(--teal)}
+.bar.wait i{background:repeating-linear-gradient(45deg,var(--gold) 0 4px,var(--gold-lt) 4px 8px);width:100%!important;opacity:.6}
+.bars .v{font-size:12px;color:var(--muted);white-space:nowrap;font-variant-numeric:tabular-nums}
+/* 분포 띠 · 성장 */
+svg{width:100%;height:auto;display:block}
+.grid{stroke:var(--line);stroke-width:1}
+.axis{fill:var(--muted);font-size:11px}
+.dot{fill:var(--teal-mid);stroke:var(--white);stroke-width:2;cursor:pointer}
+.dot.me{fill:var(--gold);stroke:var(--ink);stroke-width:1.5}
+.dot:hover,.dot:focus{fill:var(--gold);outline:none}
+.model{fill:var(--white);stroke:var(--gold);stroke-width:2.5}
+.mean{stroke:var(--teal);stroke-width:2}
+.lbl{font-size:12px;fill:var(--ink)}
+.before{fill:var(--white);stroke:#8A8A90;stroke-width:2}
+.after{fill:var(--teal);stroke:var(--white);stroke-width:2}
+.link{stroke:#9DC7C1;stroke-width:3;stroke-linecap:round}
+.val{font-size:11px;fill:var(--muted)}
 .legend{display:flex;gap:16px;font-size:12px;color:var(--muted);flex-wrap:wrap;margin-top:6px}
 .legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;vertical-align:-1px}
-/* 지형도 */
-.heat td.cell{text-align:center;min-width:92px;font-variant-numeric:tabular-nums;border:2px solid var(--white);border-radius:4px;cursor:default}
-.heat td.cell b{display:block;font-size:13px}
-.heat td.cell span{font-size:11px;opacity:.85}
-.heat tr.grp td{background:var(--ivory-dk);font-weight:600;color:var(--teal);font-size:12px}
-.scale{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);margin-top:10px;flex-wrap:wrap}
-.scale i{display:inline-block;width:26px;height:12px;border-radius:2px}
-/* 좌표 */
-.coord td.c{text-align:center;font-variant-numeric:tabular-nums;min-width:70px}
-.block{border-left:3px solid var(--no);padding:8px 12px;margin:8px 0;background:#FFFBFA;border-radius:0 6px 6px 0}
-.block.un{border-left-color:var(--un);background:#FFFDF5}
-.block .q{font-size:12px;color:var(--muted)}
-.block .t{white-space:pre-wrap;font-size:13px;margin:3px 0}
-.block .r{font-size:12px;color:var(--muted)}
-.block .chk{font-size:12px;color:#6B5418;background:var(--gold-lt);padding:2px 8px;border-radius:4px;display:inline-block;margin-top:4px}
-details summary{cursor:pointer;font-size:13px;color:var(--teal);margin-top:6px}
-/* 성장 */
-.dumb{width:100%;height:auto;display:block}
-.dumb .lbl{font-size:12px;fill:var(--ink)}
-.dumb .axis{fill:var(--muted);font-size:11px}
-.dumb .grid{stroke:var(--line)}
-.dumb .before{fill:var(--white);stroke:#8A8A90;stroke-width:2}
-.dumb .after{fill:var(--teal);stroke:var(--white);stroke-width:2}
-.dumb .link{stroke:var(--s2);stroke-width:3;stroke-linecap:round}
-.dumb .val{font-size:11px;fill:var(--muted)}
+.story{font-size:15px;line-height:1.85}
+.story p+p{margin-top:8px}
+details summary{cursor:pointer;font-size:13px;color:var(--teal);margin-top:8px}
 #tip{position:fixed;pointer-events:none;background:var(--ink);color:#fff;font-size:12px;padding:6px 9px;border-radius:5px;max-width:280px;opacity:0;transition:opacity .1s;z-index:50;white-space:pre-line}
-@media (max-width:760px){.topbar{padding:8px 16px}.content{padding:20px 16px 56px}.tiles{grid-template-columns:repeat(2,1fr)}.back{margin-left:0}}
+@media (max-width:760px){.topbar{padding:0 16px;gap:8px}.views button{padding:0 9px;font-size:13px}.back{display:none}.pick{padding:8px 16px}.content{padding:20px 16px 56px}.grid2{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
 <header class="topbar">
   <a class="brand" href="/dashboard2">HMOS<em>채점 리포트</em></a>
-  <nav class="nav">
-    <a href="#dist">점수 분포</a><a href="#map">4축 지형도</a><a href="#coord">이해의 좌표</a><a href="#growth">q3 성장</a>
-  </nav>
+  <div class="views" role="tablist">
+    <button role="tab" data-view="student">학생용</button><button role="tab" data-view="teacher">교사용</button><button role="tab" data-view="parent">학부모용</button>
+  </div>
   <a class="back" href="/dashboard2">← 채점 대시보드</a>
 </header>
+<div class="pick" id="pick"></div>
 <main class="content" id="main"><div class="empty">채점 결과를 불러오는 중…</div></main>
 <div id="tip" role="tooltip"></div>
 <script>
@@ -98,128 +104,244 @@ const 점 = (x) => (Math.round(Number(x) * 100) / 100).toString();
 const 비율 = (a, b) => (b > 0 ? a / b : 0);
 const 퍼 = (x) => Math.round(x * 100) + '%';
 const 축들 = ['근거대기', '세우기', '풀기', '답구하기'];
-const 판정표 = { O: ['ok', '✓ O'], X: ['no', '✕ X'], 판정불가: ['un', '? 교사'], '조각 없음': ['', '— 조각 없음'] };
-const 판정태그 = (p) => `<span class="tag ${판정표[p]?.[0] ?? ''}">${esc(판정표[p]?.[1] ?? p)}</span>`;
 const 학생순 = (a, b) => (a.학생 === '모범' ? -1 : b.학생 === '모범' ? 1 : a.학생.localeCompare(b.학생, 'ko', { numeric: true }));
+const 저장 = { get: (k) => { try { return localStorage.getItem(k); } catch (_) { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch (_) {} } };
 
-// 툴팁 — 마크마다 data-tip
+// ── 고정 문안 — 축이 뜻하는 단계 · 학생에게 다음 걸음 · 교사 처방 (엔진 판정에 붙이기만, 판정을 바꾸지 않는다) ──
+const 축뜻 = { 근거대기: '문제의 조건과 개념을 확인하는', 세우기: '조건을 식으로 세우는', 풀기: '세운 식을 이어 계산하는', 답구하기: '문제가 묻는 답을 내는' };
+const 다음걸음 = {
+  근거대기: '풀기 전에 문제 조건과 쓰일 개념(공식 이름)을 한 줄로 먼저 적어 보세요.',
+  세우기: '조건 하나하나가 식의 어느 부분이 되는지 짝지어 보세요.',
+  풀기: '계산을 한 줄에 한 단계씩, 중간 값을 적어 가며 이어 보세요.',
+  답구하기: '마지막 줄에 문제가 묻는 값을 문제의 꼴 그대로 다시 써 보세요.',
+};
+const 처방 = {
+  근거대기: '개념 확인 발문 — 「이 문제에 쓰이는 조건 · 공식은?」을 풀이 첫 줄로 쓰게 한다',
+  세우기: '학생 식과 모범 식을 나란히 놓고 다른 항 · 빠진 처리를 학생이 찾게 한다',
+  풀기: '중간 값을 줄마다 적게 하고, 한 줄씩 검산하게 한다',
+  답구하기: '결론 줄을 문제가 묻는 대상 · 꼴(값 · 범위 · 단위)로 다시 쓰게 한다',
+};
+
+// ── 학생 하나 읽기 — 축마다 비율 · 확인 중 여부, 강점, 처음 막힌 좌표 ──
+function 읽기(x) {
+  const 축 = x.축.map((a) => {
+    const 조각 = x.막힘.filter((b) => b.파트 === a.이름);
+    const 진짜X = 조각.some((b) => b.결과 === 'X' && !b.엔진확인);
+    // 엔진 X가 「정답 값 여럿」 한 칸뿐이거나 교사 판정 대기면 「확인 중」 — 학생 · 학부모에게 틀렸다고 보이지 않는다
+    const 확인중 = !진짜X && 조각.some((b) => b.결과 === '판정불가' || b.엔진확인);
+    return { ...a, r: 비율(a.점수, a.배점), 확인중, 진짜X };
+  }).filter((a) => a.배점 > 0);
+  const 다진 = 축.filter((a) => !a.확인중);
+  const 최고 = 다진.length ? Math.max(...다진.map((a) => a.r)) : 0;
+  const 강점 = 다진.filter((a) => a.r === 최고 && 최고 > 0);
+  const 순 = [...x.막힘].sort((a, b) => 축들.indexOf(a.파트) - 축들.indexOf(b.파트));
+  const 막힌곳 = 순.find((b) => b.결과 === 'X' && !b.엔진확인) || null;
+  const 대기 = 순.filter((b) => b.결과 === '판정불가' || b.엔진확인);
+  return { 축, 강점, 막힌곳, 대기, 모두O: 다진.length === 축.length && 다진.every((a) => a.r >= 0.999) };
+}
+const 첫줄 = (t) => { const s = String(t || '').split('\n').map((l) => l.trim()).filter(Boolean); const l = s[s.length - 1] || ''; return l.length > 40 ? l.slice(0, 40) + '…' : l; };
+const 이어 = (xs) => xs.map((a) => a.이름).join(' · ');
+
+/** 「아직 안 편 이해의 좌표」 한 줄 — 청중마다 말만 다르다 */
+function 좌표줄(x, 읽, 청중) {
+  const b = 읽.막힌곳;
+  if (!b) {
+    if (읽.대기.length) return { 꼴: 'wait', 글: 청중 === '교사' ? `막힌 곳 없음 — 교사 판정 ${읽.대기.filter((d) => d.결과 === '판정불가').length}칸 · 엔진 확인 ${읽.대기.filter((d) => d.엔진확인).length}칸이 남았습니다` : 청중 === '학부모' ? '눈에 띄게 막힌 곳은 없습니다. 몇 군데는 선생님이 한 번 더 확인하고 있습니다.' : '눈에 띄게 막힌 곳은 없어요. 몇 군데는 선생님이 한 번 더 확인하고 있어요.' };
+    return { 꼴: 'calm', 글: 청중 === '학생' ? '모든 단계를 끝까지 펼쳤어요. 막힌 곳이 없어요.' : 청중 === '학부모' ? '풀이의 모든 단계를 끝까지 해냈습니다.' : '막힌 곳 없음 — 모든 조각 O' };
+  }
+  const 곳 = `${b.번호 != null ? `(${b.번호}) ` : ''}「${첫줄(b.글) || '(쓰지 않음)'}」`;
+  if (청중 === '학생') return { 꼴: '', 글: `${곳} — ${축뜻[b.파트]} 단계에서 아직 이해가 펴지지 않았어요.` };
+  if (청중 === '학부모') return { 꼴: '', 글: `${축뜻[b.파트]} 단계(${b.파트})를 조금 더 다지면 풀이가 끝까지 이어집니다.` };
+  return { 꼴: '', 글: `${b.파트} ${b.id} ${곳} — ${b.근거}` };
+}
+
+/** 4축 막대 — 강점 먼저(학생 · 학부모) / 축 순서 그대로(교사) */
+function 막대(읽, 청중) {
+  const 줄 = 청중 === '교사' ? 읽.축 : [...읽.축].sort((a, b) => (a.확인중 - b.확인중) || (b.r - a.r) || (축들.indexOf(a.이름) - 축들.indexOf(b.이름)));
+  const 말 = (a) => (a.확인중 ? '확인 중' : a.r >= 0.999 ? '탄탄해요' : a.r >= 0.5 ? '거의 왔어요' : a.r > 0 ? '다지는 중' : '아직 펴지 않았어요');
+  return `<div class="bars">${줄.map((a) => {
+    const 강 = 읽.강점.includes(a);
+    const 값 = 청중 === '교사' ? `${점(a.점수)} / ${점(a.배점)} · ${퍼(a.r)} ${a.판정 === 'O' ? '✓' : a.판정 === 'X' ? '✕' : a.판정 === '판정불가' ? '?' : ''}` : 청중 === '학부모' ? (a.확인중 ? '확인 중' : 퍼(a.r)) : 말(a);
+    return `<div class="n">${강 ? '★ ' : ''}${esc(a.이름)}${청중 === '학생' ? `<small>${esc(축뜻[a.이름])}</small>` : ''}</div>
+      <div class="bar ${강 ? 'top' : ''} ${a.확인중 ? 'wait' : ''}" role="img" aria-label="${esc(a.이름)} ${esc(값)}" tabindex="0" data-tip="${esc(a.이름)} — ${esc(a.확인중 ? '선생님 확인 중' : 청중 === '학생' ? 말(a) : `${점(a.점수)} / ${점(a.배점)} (${퍼(a.r)})`)}"><i style="width:${(a.r * 100).toFixed(1)}%"></i></div>
+      <div class="v">${esc(값)}</div>`;
+  }).join('')}</div>`;
+}
+
+function 강점줄(x, 읽, 청중) {
+  if (읽.모두O) return 청중 === '교사' ? '<b>강점</b> 4축 모두 만점' : `<b>잘한 점</b> ${청중 === '학생' ? '조건 확인부터 답까지 모든 단계를 해냈어요.' : '조건 확인부터 답까지 풀이의 모든 단계를 해냈습니다.'}`;
+  if (!읽.강점.length) return 청중 === '교사' ? '<b>강점</b> 아직 다진 축 없음' : `<b>잘한 점</b> 끝까지 답안을 써 냈어요. 이제 한 단계씩 다져 가면 돼요.`;
+  const 이름 = 이어(읽.강점);
+  if (청중 === '교사') return `<b>강점</b> ${esc(이름)} (${퍼(읽.강점[0].r)})`;
+  const 뜻 = 읽.강점.map((a) => 축뜻[a.이름].replace(/는$/, '기')).join(', ');
+  return 청중 === '학생' ? `<b>잘한 점</b> ${esc(뜻)} — ${esc(이름)} 단계가 가장 탄탄해요.` : `<b>강점</b> ${esc(이름)} — ${esc(뜻)}를 가장 잘 해냈습니다.`;
+}
+
+// ── 1층 문항별 점수 분포 ──
+function 분포띠(q, xs, 나) {
+  const 학생 = xs.filter((x) => x.학생 !== '모범'), 모범 = xs.find((x) => x.학생 === '모범');
+  const rs = 학생.map((x) => 비율(x.부분점수, x.만점)), 평균 = rs.length ? rs.reduce((a, b) => a + b, 0) / rs.length : 0;
+  const W = 640, H = 64, L = 12, R = 12, sx = (r) => L + r * (W - L - R), 자리 = {};
+  const dots = 학생.map((x) => { const r = 비율(x.부분점수, x.만점), k = r.toFixed(3), n = (자리[k] = (자리[k] ?? -1) + 1); return { x, r, y: 30 + (n % 2 ? 1 : -1) * Math.ceil(n / 2) * 9 }; });
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(q)} 학생 점수 분포">
+    ${[0, .25, .5, .75, 1].map((t) => `<line class="grid" x1="${sx(t)}" x2="${sx(t)}" y1="6" y2="50"/><text class="axis" x="${sx(t)}" y="62" text-anchor="middle">${퍼(t)}</text>`).join('')}
+    ${rs.length ? `<line class="mean" x1="${sx(평균)}" x2="${sx(평균)}" y1="8" y2="50" data-tip="평균 ${퍼(평균)}"/>` : ''}
+    ${모범 ? `<circle class="model" cx="${sx(비율(모범.부분점수, 모범.만점))}" cy="30" r="7" tabindex="0" data-tip="모범답안 자기 채점 ${점(모범.부분점수)} / ${점(모범.만점)}"/>` : ''}
+    ${dots.map((d) => `<circle class="dot ${d.x === 나 ? 'me' : ''}" cx="${sx(d.r)}" cy="${d.y}" r="${d.x === 나 ? 8 : 6}" tabindex="0" data-tip="${esc(d.x === 나 ? '나 · ' : '')}${esc(d.x.학생)} ${점(d.x.부분점수)} / ${점(d.x.만점)} (${퍼(d.r)})"/>`).join('')}
+  </svg>`;
+}
+function 문항요약(q, xs) {
+  const 학생 = xs.filter((x) => x.학생 !== '모범');
+  const 끝까지 = 학생.filter((x) => 읽기(x).모두O).length;
+  const 처음막힘 = {}; 학생.forEach((x) => { const b = 읽기(x).막힌곳; if (b) 처음막힘[b.파트] = (처음막힘[b.파트] || 0) + 1; });
+  const 많이 = Object.entries(처음막힘).sort((a, b) => b[1] - a[1])[0];
+  return { 학생, 끝까지, 많이 };
+}
+function 층1(묶음, 청중, 나) {
+  if (청중 === '교사') return `<section><div class="layer">1층</div><h2>문항별 점수 분포표</h2><div class="sub">학생 경로 채점 B 엔진 점수 그대로. 만점이 달라 비율로 한 줄에 놓았고, 모범답안 자기 채점은 기준으로만 표시합니다(평균 제외).</div>
+    <div class="legend" style="margin-bottom:10px"><span><i style="background:var(--teal-mid)"></i>학생</span><span><i style="background:#fff;border:2.5px solid var(--gold)"></i>모범답안</span><span><i style="background:var(--teal);border-radius:0;width:2px;height:12px"></i>평균</span></div>
+    ${묶음.map(([q, xs]) => {
+      const 학생 = xs.filter((x) => x.학생 !== '모범'), rs = 학생.map((x) => 비율(x.부분점수, x.만점));
+      const 평균 = rs.length ? rs.reduce((a, b) => a + b, 0) / rs.length : 0;
+      return `<div class="card"><h3>${esc(q)} <small>학생 ${학생.length}명 · 만점 ${점((학생[0] || xs[0]).만점)} · 평균 ${퍼(평균)} · 최저 ${퍼(Math.min(...rs))} · 최고 ${퍼(Math.max(...rs))}</small></h3>
+        <div class="sub" style="margin-bottom:6px">${esc(xs[0].문항글.split('\n').slice(0, 2).join(' '))}${xs[0].정답 ? `<br>정답 ${esc(xs[0].정답)}${xs[0].정답출처 ? ` <span class="tag gold" data-tip="${esc(xs[0].정답출처)}">모범답안에서 보충</span>` : ''}` : ''}</div>
+        ${분포띠(q, xs)}
+        <div class="scroll"><table><thead><tr><th>학생</th><th class="num">점수</th><th class="num">비율</th>${축들.map((a) => `<th class="num">${a}</th>`).join('')}<th>확인</th></tr></thead><tbody>
+        ${[...xs].sort(학생순).map((x) => `<tr><td>${esc(x.학생)}${x.학생 === '모범' ? ' <span class="tag gold">기준</span>' : ''}</td><td class="num"><b>${점(x.부분점수)}</b> / ${점(x.만점)}</td><td class="num">${퍼(비율(x.부분점수, x.만점))}</td>
+          ${x.축.map((a) => `<td class="num">${a.배점 ? `${점(a.점수)}/${점(a.배점)}` : '—'}</td>`).join('')}
+          <td>${x.막힘.some((b) => b.엔진확인) ? '<span class="tag gold">정답 값 여럿</span> ' : ''}${x.막힘.some((b) => b.결과 === '판정불가') ? `<span class="tag un">교사 판정 ${x.막힘.filter((b) => b.결과 === '판정불가').length}</span>` : ''}</td></tr>`).join('')}
+        </tbody></table></div></div>`;
+    }).join('')}</section>`;
+  // 학생 · 학부모 — 고른 학생의 문항 하나, 숫자 대신 자리와 서술
+  const [q, xs] = 묶음.find(([q]) => q === 나.문항);
+  const 요 = 문항요약(q, xs);
+  const 글 = 청중 === '학생'
+    ? `<p>이 문항은 ${요.학생.length}명이 풀었고, ${요.끝까지 ? `${요.끝까지}명이 모든 단계를 끝까지 펼쳤어요.` : '아직 모든 단계를 끝까지 편 친구는 없어요.'}${요.많이 && 요.많이[1] >= 2 ? ` ${요.많이[1]}명이 <b>${esc(요.많이[0])}</b>(${esc(축뜻[요.많이[0]])} 단계)에서 처음 막혔어요.` : ''}</p><p>아래 띠에서 노란 점이 나예요.</p>`
+    : `<p>같은 문항을 푼 ${요.학생.length}명 가운데 자녀의 답안 위치입니다(노란 점). ${요.많이 && 요.많이[1] >= 2 ? `이 문항에서는 ${요.많이[1]}명이 <b>${esc(요.많이[0])}</b> 단계에서 처음 막혔습니다.` : ''}</p>`;
+  return `<section><div class="layer">1층</div><h2>${청중 === '학생' ? '이 문항, 친구들은 어땠을까' : '문항 안에서의 위치'}</h2><div class="sub">${esc(xs[0].문항글.split('\n').slice(0, 2).join(' '))}</div>
+    <div class="card"><div class="story">${글}</div>${분포띠(q, xs, 나)}</div></section>`;
+}
+
+// ── 2층 학생별 4축 지형도 ──
+function 학생카드(x, 청중) {
+  const 읽 = 읽기(x), 좌 = 좌표줄(x, 읽, 청중);
+  const 막힌축 = [...new Set(x.막힘.filter((b) => b.결과 === 'X' && !b.엔진확인).map((b) => b.파트))].sort((a, b) => 축들.indexOf(a) - 축들.indexOf(b));
+  const 처방글 = 청중 === '교사' ? [
+    ...막힌축.map((a) => `<li><b>${esc(a)}</b> — ${esc(처방[a])}</li>`),
+    ...(x.막힘.some((b) => b.결과 === '판정불가') ? [`<li>교사 판정 ${x.막힘.filter((b) => b.결과 === '판정불가').length}칸 — 엔진이 수로 검증하지 못한 줄, ⑤ 교사 확정에서 O/X</li>`] : []),
+    ...(x.막힘.some((b) => b.엔진확인) ? ['<li>엔진 확인 — 정답 값이 여럿인데 엔진은 한 값만 대조, 학생 최종값이 정답의 다른 값과 같음</li>'] : []),
+  ] : [];
+  const 머리 = 청중 === '교사' ? `${esc(x.문항)} · ${esc(x.학생)} <small>${점(x.부분점수)} / ${점(x.만점)} (${퍼(비율(x.부분점수, x.만점))})</small>` : 청중 === '학부모' ? `${esc(x.문항)} · ${esc(x.학생)} <small>${점(x.부분점수)} / ${점(x.만점)}점</small>` : `${esc(x.문항)} · ${esc(x.학생)}`;
+  return `<div class="card"><h3>${머리}</h3>
+    <div class="strong">${강점줄(x, 읽, 청중)}</div>
+    ${막대(읽, 청중)}
+    <div class="coord ${좌.꼴}"><span class="k">아직 안 편 이해의 좌표</span>${esc(좌.글)}</div>
+    ${청중 === '학생' && 읽.막힌곳 ? `<div class="rx"><span class="k">다음에 해 볼 것</span>${esc(다음걸음[읽.막힌곳.파트])}</div>` : ''}
+    ${처방글.length ? `<div class="rx"><span class="k">처방</span><ul>${처방글.join('')}</ul></div>` : ''}
+  </div>`;
+}
+function 층2(목록, 청중, 나, 문항) {
+  if (청중 !== '교사') return `<section><div class="layer">2층</div><h2>${청중 === '학생' ? '나의 4축 지형도' : '4축 지형도 — 강점부터'}</h2>
+    <div class="sub">${청중 === '학생' ? '풀이를 네 단계로 나눠 봤어요. ★가 가장 탄탄한 단계예요. 줄무늬는 선생님이 확인하고 있는 단계예요.' : '풀이를 근거대기 · 세우기 · 풀기 · 답구하기 네 단계로 나눠, 가장 잘한 단계(★)부터 보입니다. 줄무늬는 선생님 확인 중인 단계입니다.'}</div>
+    ${학생카드(나, 청중)}</section>`;
+  const 보일 = 목록.filter((x) => !문항 || x.문항 === 문항).sort((a, b) => a.문항.localeCompare(b.문항, 'ko', { numeric: true }) || 학생순(a, b));
+  // 좌표판 — 문항 × 축, 그 축에서 엔진 X인 학생 수 (모범 · 엔진 확인 칸 제외)
+  const 문항들 = [...new Set(보일.map((x) => x.문항))];
+  const 판 = `<div class="card scroll"><h3>좌표판 <small>칸 = 그 축에서 막힌 학생 수 (엔진 X, 엔진 확인 칸 제외) · ? 교사 판정 대기</small></h3><table><thead><tr><th>문항</th>${축들.map((a) => `<th class="num">${a}</th>`).join('')}</tr></thead><tbody>
+    ${문항들.map((q) => { const 학생 = 보일.filter((x) => x.문항 === q && x.학생 !== '모범').map((x) => [x, 읽기(x)]); return `<tr><td><b>${esc(q)}</b> <span style="color:var(--muted);font-size:12px">${학생.length}명</span></td>${축들.map((a) => {
+      const n = 학생.filter(([, r]) => r.축.some((c) => c.이름 === a && c.진짜X)).length, u = 학생.filter(([, r]) => r.축.some((c) => c.이름 === a && c.확인중)).length, rr = 학생.length ? n / 학생.length : 0;
+      return `<td class="num" style="background:${n ? `rgba(198,40,40,${0.1 + rr * 0.5})` : 'transparent'};color:${rr > .6 ? '#fff' : 'var(--ink)'}">${n ? `✕ ${n}` : '·'}${u ? ` <span class="tag un">? ${u}</span>` : ''}</td>`;
+    }).join('')}</tr>`; }).join('')}</tbody></table></div>`;
+  return `<section><div class="layer">2층</div><h2>학생별 4축 지형도 · 처방</h2><div class="sub">막대 = 그 축 점수 ÷ 그 축 배점 (소문항이 여럿이면 합). ✓ ✕ ? 는 엔진 4축 판정 그대로. 좌표 = 근거대기 → 답구하기 순으로 처음 막힌 조각과 엔진 판단근거. 처방은 막힌 축마다 붙이는 고정 문안입니다.</div>
+    ${판}<div class="grid2">${보일.map((x) => 학생카드(x, '교사')).join('')}</div></section>`;
+}
+
+// ── 3층 성장 궤적 (q3 이전 채점 vs 현재 채점) ──
+function 층3(목록, 청중, 나) {
+  const q3 = 목록.filter((x) => x.문항 === 'q3' && x.원본 && x.학생 !== '모범').sort(학생순);
+  if (!q3.length) return '';
+  const 설명 = '같은 답안을 두 방식으로 매긴 점수입니다. 이전 = 모범답안 경로에 맞춰 본 채점, 현재 = 학생이 간 풀이 경로를 단계마다 따라가며 계산을 검증한 채점(학생 경로 B).';
+  if (청중 !== '교사' && 나.문항 !== 'q3') return `<section><div class="layer">3층</div><h2>성장 궤적</h2><div class="card"><div class="story"><p>이전 채점과 지금 채점을 견주는 기록은 q3 답안에만 있습니다. ${esc(나.문항)}은 지금 채점만 있${청중 === '학부모' ? '습니다' : '어요'}.</p></div></div></section>`;
+  if (청중 === '학생') {
+    const d = 나.부분점수 - 나.원본.부분점수;
+    return `<section><div class="layer">3층</div><h2>내 풀이가 어떻게 다시 읽혔을까</h2><div class="card"><div class="story">
+      <p>${d > 0 ? '모범답안과 다른 길로 풀었어도, 내가 간 길 안에서 맞게 한 단계들이 이번 채점에서 인정됐어요.' : d < 0 ? '이번 채점에서 단계마다 계산을 다시 따져 보니, 이전보다 덜 인정된 단계가 있어요.' : '이전 채점과 지금 채점이 같아요. 내 풀이가 어떤 방식으로 봐도 같게 읽혔다는 뜻이에요.'}</p>
+      <p style="font-size:13px;color:var(--muted)">${esc(설명)}</p></div></div></section>`;
+  }
+  const 대상 = 청중 === '교사' ? q3 : [나];
+  const W = 640, 줄높이 = 30, T = 18, L = 70, R = 60, H = T + 대상.length * 줄높이 + 24, sx = (r) => L + r * (W - L - R);
+  const svg = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="q3 이전 채점과 현재 채점 비교">
+    ${[0, .25, .5, .75, 1].map((t) => `<line class="grid" x1="${sx(t)}" x2="${sx(t)}" y1="${T - 8}" y2="${H - 22}"/><text class="axis" x="${sx(t)}" y="${H - 6}" text-anchor="middle">${점(t * 대상[0].만점)}</text>`).join('')}
+    ${대상.map((x, i) => {
+      const y = T + i * 줄높이 + 줄높이 / 2, a = 비율(x.원본.부분점수, x.원본.만점), b = 비율(x.부분점수, x.만점);
+      const 글 = `${x.학생}\n이전 ${점(x.원본.부분점수)} → 현재 ${점(x.부분점수)} / ${점(x.만점)}`;
+      return `<text class="lbl" x="${L - 10}" y="${y + 4}" text-anchor="end">${esc(x.학생)}</text>${a !== b ? `<line class="link" x1="${sx(a)}" x2="${sx(b)}" y1="${y}" y2="${y}"/>` : ''}
+        <circle class="before" cx="${sx(a)}" cy="${y}" r="6" tabindex="0" data-tip="${esc(글)}"/><circle class="after" cx="${sx(b)}" cy="${y}" r="7" tabindex="0" data-tip="${esc(글)}"/>
+        <text class="val" x="${Math.max(sx(a), sx(b)) + 12}" y="${y + 4}">${a === b ? '같음' : (b > a ? '+' : '') + 점(x.부분점수 - x.원본.부분점수)}</text>`;
+    }).join('')}</svg>`;
+  const 범례 = '<div class="legend"><span><i style="background:#fff;border:2px solid #8A8A90"></i>이전 (모범 경로 채점)</span><span><i style="background:var(--teal)"></i>현재 (학생 경로 B)</span></div>';
+  // 회차별 궤적 — 원본부터 재채점 회차마다 점수
+  const 궤적 = (x) => { const hs = x.이력, w = 640, h = 90, l = 30, r = 20, sx2 = (i) => l + (hs.length > 1 ? i / (hs.length - 1) : 0) * (w - l - r), sy = (v) => 12 + (1 - 비율(v, x.만점)) * 52;
+    return `<svg viewBox="0 0 ${w} ${h}" role="img" aria-label="${esc(x.학생)} 채점 회차별 점수"><line class="grid" x1="${l}" x2="${w - r}" y1="${sy(0)}" y2="${sy(0)}"/><line class="grid" x1="${l}" x2="${w - r}" y1="${sy(x.만점)}" y2="${sy(x.만점)}"/>
+      <polyline points="${hs.map((hh, i) => `${sx2(i)},${sy(hh.부분점수)}`).join(' ')}" fill="none" stroke="var(--teal-mid)" stroke-width="2"/>
+      ${hs.map((hh, i) => `<circle class="dot" cx="${sx2(i)}" cy="${sy(hh.부분점수)}" r="5" tabindex="0" data-tip="${esc(i === 0 ? '원본' : i + '차')} ${점(hh.부분점수)} / ${점(x.만점)}\n${esc(hh.방식)}"/><text class="axis" x="${sx2(i)}" y="${h - 4}" text-anchor="middle">${i === 0 ? '원본' : i + '차'}</text>`).join('')}</svg>`; };
+  if (청중 === '학부모') {
+    const d = 나.부분점수 - 나.원본.부분점수;
+    return `<section><div class="layer">3층</div><h2>성장 궤적</h2><div class="sub">${esc(설명)}</div><div class="card">
+      <div class="story"><p>${d > 0 ? `모범답안과 다른 길로 풀었지만, 자녀가 간 풀이 길 안에서 맞게 해낸 단계들이 새 채점에서 인정되어 <b>${점(나.원본.부분점수)}점 → ${점(나.부분점수)}점</b>이 되었습니다. 풀이 과정에서 실제로 이해한 만큼이 점수에 드러난 것입니다.` : d < 0 ? `단계마다 계산을 다시 검증하면서 <b>${점(나.원본.부분점수)}점 → ${점(나.부분점수)}점</b>이 되었습니다.` : `이전 채점과 새 채점이 <b>${점(나.부분점수)}점</b>으로 같습니다. 어느 방식으로 보아도 같은 풀이로 읽혔습니다.`}</p></div>
+      ${svg}${범례}<details><summary>채점 회차별 궤적</summary>${궤적(나)}</details></div></section>`;
+  }
+  const 오른 = q3.filter((x) => x.부분점수 > x.원본.부분점수).length, 내린 = q3.filter((x) => x.부분점수 < x.원본.부분점수).length;
+  return `<section><div class="layer">3층</div><h2>성장 궤적 — q3 이전 채점 vs 현재 채점</h2><div class="sub">${esc(설명)}</div>
+    <div class="card"><h3>q3 ${q3.length}명 <small>오름 ${오른} · 내림 ${내린} · 같음 ${q3.length - 오른 - 내린}</small></h3>${svg}${범례}
+    <details><summary>채점 이력 표 (회차마다 점수)</summary><div class="scroll"><table><thead><tr><th>학생</th>${q3[0].이력.map((_, i) => `<th class="num">${i === 0 ? '원본' : i + '차'}</th>`).join('')}</tr></thead><tbody>
+    ${q3.map((x) => `<tr><td>${esc(x.학생)}</td>${x.이력.map((h) => `<td class="num" data-tip="${esc(h.방식)}">${점(h.부분점수)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
+    <div class="sub" style="margin-top:6px">원본 = 10-17 엔진 조각 채점(모범 경로). 1차부터 학생 경로 채점 B — 회차마다 엔진 규칙이 하나씩 붙었습니다.</div></details></div></section>`;
+}
+
+// ── 화면 ──
+let 목록 = [], 청중 = 'teacher', 나키 = null, 문항거르기 = '';
+const 청중이름 = { student: '학생', teacher: '교사', parent: '학부모' };
+const 키 = (x) => x.파일;
+function 고르기줄() {
+  const 학생들 = 목록.filter((x) => x.학생 !== '모범').sort((a, b) => a.문항.localeCompare(b.문항, 'ko', { numeric: true }) || 학생순(a, b));
+  const 문항들 = [...new Set(목록.map((x) => x.문항))].sort((a, b) => a.localeCompare(b, 'ko', { numeric: true }));
+  if (청중 === 'teacher') {
+    $('#pick').innerHTML = `<label for="fq">문항</label><select id="fq"><option value="">전체 (${문항들.join(' · ')})</option>${문항들.map((q) => `<option ${q === 문항거르기 ? 'selected' : ''}>${q}</option>`).join('')}</select><span class="hint">4축 수치 · 처방 — 엔진 판정 그대로</span>`;
+    $('#fq').addEventListener('change', (e) => { 문항거르기 = e.target.value; 그리기(); });
+  } else {
+    $('#pick').innerHTML = `<label for="fs">${청중 === 'student' ? '내 답안' : '자녀 답안'}</label><select id="fs">${문항들.map((q) => `<optgroup label="${q}">${학생들.filter((x) => x.문항 === q).map((x) => `<option value="${esc(키(x))}" ${키(x) === 나키 ? 'selected' : ''}>${esc(q)} · ${esc(x.학생)}</option>`).join('')}</optgroup>`).join('')}</select>`;
+    $('#fs').addEventListener('change', (e) => { 나키 = e.target.value; 저장.set('hmos-report-me', 나키); 그리기(); });
+  }
+}
+function 그리기() {
+  document.querySelectorAll('.views button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.view === 청중)));
+  // 고른 답안이 없으면 고르기 줄의 첫 답안 (문항 · 학생 번호 순)
+  if (!목록.some((x) => 키(x) === 나키 && x.학생 !== '모범')) 나키 = 키(목록.filter((x) => x.학생 !== '모범').sort((a, b) => a.문항.localeCompare(b.문항, 'ko', { numeric: true }) || 학생순(a, b))[0]);
+  고르기줄();
+  const 문항들 = [...new Set(목록.map((x) => x.문항))].sort((a, b) => a.localeCompare(b, 'ko', { numeric: true }));
+  const 묶음 = 문항들.map((q) => [q, 목록.filter((x) => x.문항 === q)]);
+  const 청 = 청중이름[청중];
+  if (청중 === 'teacher') { $('#main').innerHTML = 층1(문항거르기 ? 묶음.filter(([q]) => q === 문항거르기) : 묶음, 청) + 층2(목록, 청, null, 문항거르기) + (!문항거르기 || 문항거르기 === 'q3' ? 층3(목록, 청) : ''); return; }
+  const 나 = 목록.find((x) => 키(x) === 나키);
+  // 학생용: 지형도 → 문항 → 성장 / 학부모용: 강점(지형도) → 성장 궤적 → 문항 안 위치
+  $('#main').innerHTML = 청중 === 'student' ? 층2(목록, 청, 나) + 층1(묶음, 청, 나) + 층3(목록, 청, 나) : 층2(목록, 청, 나) + 층3(목록, 청, 나) + 층1(묶음, 청, 나);
+}
+document.querySelectorAll('.views button').forEach((b) => b.addEventListener('click', () => {
+  청중 = b.dataset.view; 저장.set('hmos-report-view', 청중);
+  history.replaceState(null, '', '?view=' + 청중);
+  그리기();
+}));
+
+// 툴팁 — 마크마다 data-tip (마우스 · 키보드 초점)
 const tip = $('#tip');
 document.addEventListener('pointerover', (e) => { const t = e.target.closest('[data-tip]'); if (!t) return; tip.textContent = t.dataset.tip; tip.style.opacity = 1; });
-document.addEventListener('pointermove', (e) => { if (tip.style.opacity !== '1') return; const x = Math.min(e.clientX + 14, innerWidth - 290); tip.style.left = x + 'px'; tip.style.top = e.clientY + 14 + 'px'; });
+document.addEventListener('pointermove', (e) => { if (tip.style.opacity !== '1') return; tip.style.left = Math.min(e.clientX + 14, innerWidth - 290) + 'px'; tip.style.top = e.clientY + 14 + 'px'; });
 document.addEventListener('pointerout', (e) => { if (e.target.closest('[data-tip]')) tip.style.opacity = 0; });
 document.addEventListener('focusin', (e) => { const t = e.target.closest('[data-tip]'); if (!t) return; const r = t.getBoundingClientRect(); tip.textContent = t.dataset.tip; tip.style.left = Math.min(r.right + 6, innerWidth - 290) + 'px'; tip.style.top = r.top + 'px'; tip.style.opacity = 1; });
 document.addEventListener('focusout', () => { tip.style.opacity = 0; });
 
-/** 순차 칸 색 — 한 색(청록) 밝음 → 어두움. 글자는 칸 밝기에 맞춰 */
-function 칸색(r) {
-  const i = Math.min(5, Math.floor(r * 5.0001));
-  return { bg: `var(--s${i})`, fg: i >= 3 ? '#fff' : 'var(--ink)' };
-}
-
-// ── 1. 문항별 점수 분포 ──
-function 분포(묶음) {
-  const 줄 = 묶음.map(([q, xs]) => {
-    const 학생 = xs.filter((x) => x.학생 !== '모범'), 모범 = xs.find((x) => x.학생 === '모범');
-    const rs = 학생.map((x) => 비율(x.부분점수, x.만점));
-    const 평균 = rs.length ? rs.reduce((a, b) => a + b, 0) / rs.length : 0;
-    const W = 640, H = 64, L = 12, R = 12, sx = (r) => L + r * (W - L - R);
-    // 같은 점수는 위아래로 비켜 그린다
-    const 자리 = {}; const dots = 학생.map((x) => { const r = 비율(x.부분점수, x.만점), k = r.toFixed(3); const n = (자리[k] = (자리[k] ?? -1) + 1); return { x, r, y: 30 + (n % 2 ? 1 : -1) * Math.ceil(n / 2) * 9 }; });
-    const svg = `<svg class="strip" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(q)} 학생 점수 분포">
-      ${[0, .25, .5, .75, 1].map((t) => `<line class="grid" x1="${sx(t)}" x2="${sx(t)}" y1="6" y2="50"/><text class="axis" x="${sx(t)}" y="62" text-anchor="middle">${퍼(t)}</text>`).join('')}
-      ${rs.length ? `<line class="mean" x1="${sx(평균)}" x2="${sx(평균)}" y1="8" y2="50" data-tip="평균 ${퍼(평균)}"/>` : ''}
-      ${모범 ? `<circle class="model" cx="${sx(비율(모범.부분점수, 모범.만점))}" cy="30" r="7" tabindex="0" data-tip="모범답안 자기 채점 ${점(모범.부분점수)} / ${점(모범.만점)}"/>` : ''}
-      ${dots.map((d) => `<circle class="dot" cx="${sx(d.r)}" cy="${d.y}" r="6" tabindex="0" data-tip="${esc(d.x.학생)} ${점(d.x.부분점수)} / ${점(d.x.만점)} (${퍼(d.r)})"/>`).join('')}
-    </svg>`;
-    const 표 = `<div class="scroll"><table><thead><tr><th>학생</th><th class="num">점수</th><th class="num">비율</th>${축들.map((a) => `<th class="num">${a}</th>`).join('')}<th>엔진 확인</th></tr></thead><tbody>
-      ${[...xs].sort(학생순).map((x) => `<tr><td>${esc(x.학생)}${x.학생 === '모범' ? ' <span class="tag gold">기준</span>' : ''}</td><td class="num"><b>${점(x.부분점수)}</b> / ${점(x.만점)}</td><td class="num">${퍼(비율(x.부분점수, x.만점))}</td>
-        ${x.축.map((a) => `<td class="num">${a.배점 ? `${점(a.점수)}/${점(a.배점)}` : '—'}</td>`).join('')}
-        <td>${x.막힘.some((b) => b.엔진확인) ? '<span class="tag gold">정답 값 여럿</span>' : ''}${x.막힘.some((b) => b.결과 === '판정불가') ? ' <span class="tag un">교사 판정 ' + x.막힘.filter((b) => b.결과 === '판정불가').length + '</span>' : ''}</td></tr>`).join('')}
-    </tbody></table></div>`;
-    const 정답줄 = xs[0].정답 ? `정답 ${esc(xs[0].정답)}${xs[0].정답출처 ? ` <span class="tag gold" title="${esc(xs[0].정답출처)}">모범답안에서 보충</span>` : ''}` : '';
-    return `<div class="card"><h3>${esc(q)} <small>학생 ${학생.length}명 · 만점 ${점(xs[0].만점)} · 평균 ${rs.length ? 퍼(평균) : '—'} · 최저 ${rs.length ? 퍼(Math.min(...rs)) : '—'} · 최고 ${rs.length ? 퍼(Math.max(...rs)) : '—'}</small></h3>
-      <div class="sub" style="margin-bottom:8px">${esc(xs[0].문항글.split('\n').slice(0, 2).join(' '))}${정답줄 ? '<br>' + 정답줄 : ''}</div>
-      ${svg}${표}</div>`;
-  }).join('');
-  return `<section id="dist"><h2>문항별 점수 분포</h2><div class="sub">학생 경로 채점 B(유물복원 · 다경로 · 엔진 검증) 엔진 점수 그대로. 문항마다 만점이 달라 비율로 한 줄에 놓았습니다. 모범답안 자기 채점은 기준으로만 표시하고 평균에 넣지 않습니다.</div>
-    <div class="legend"><span><i style="background:var(--teal-mid)"></i>학생</span><span><i style="background:#fff;border:2.5px solid var(--gold)"></i>모범답안</span><span><i style="background:var(--teal);border-radius:0;width:2px;height:12px"></i>평균</span></div>
-    ${줄}</section>`;
-}
-
-// ── 2. 학생별 4축 강점 · 약점 지형도 ──
-function 지형도(묶음) {
-  const 행 = 묶음.map(([q, xs]) => `<tr class="grp"><td colspan="7">${esc(q)}</td></tr>` + [...xs].sort(학생순).map((x) => {
-    const 있는 = x.축.filter((a) => a.배점 > 0);
-    const 강 = 있는.length ? 있는.reduce((a, b) => (비율(b.점수, b.배점) > 비율(a.점수, a.배점) ? b : a)) : null;
-    const 약 = 있는.length ? 있는.reduce((a, b) => (비율(b.점수, b.배점) < 비율(a.점수, a.배점) ? b : a)) : null;
-    const 같음 = 강 && 약 && 비율(강.점수, 강.배점) === 비율(약.점수, 약.배점);
-    return `<tr><td>${esc(x.학생)}</td>${x.축.map((a) => {
-      if (!a.배점) return `<td class="cell" style="background:var(--ivory)" data-tip="${esc(a.이름)} — 이 문항에 이 축 조각 없음"><span>—</span></td>`;
-      const r = 비율(a.점수, a.배점), c = 칸색(r);
-      return `<td class="cell" tabindex="0" style="background:${c.bg};color:${c.fg}" data-tip="${esc(x.학생)} · ${esc(a.이름)}\n${점(a.점수)} / ${점(a.배점)} (${퍼(r)}) · 엔진 판정 ${esc(a.판정)}"><b>${퍼(r)}</b><span>${a.판정 === 'O' ? '✓' : a.판정 === 'X' ? '✕' : a.판정 === '판정불가' ? '? 교사' : ''}</span></td>`;
-    }).join('')}<td>${강 && !같음 ? `<span class="tag ok">${esc(강.이름)}</span>` : 같음 ? '<span class="muted" style="color:var(--muted)">고름</span>' : ''}</td><td>${약 && !같음 ? `<span class="tag no">${esc(약.이름)}</span>` : ''}</td></tr>`;
-  }).join('')).join('');
-  return `<section id="map"><h2>학생별 4축 강점 · 약점 지형도</h2><div class="sub">칸 = 그 축에서 받은 점수 ÷ 그 축 배점 (소문항이 여럿이면 합). ✓ ✕ ? 는 엔진 4축 판정 그대로 — ? 는 엔진이 수로 검증하지 못해 교사 판정으로 넘긴 칸입니다(점수 0으로 셈).</div>
-    <div class="card scroll"><table class="heat"><thead><tr><th>학생</th>${축들.map((a, i) => `<th style="text-align:center">${i + 1} ${a}</th>`).join('')}<th>강점</th><th>약점</th></tr></thead><tbody>${행}</tbody></table>
-    <div class="scale">0%${[0, 1, 2, 3, 4, 5].map((i) => `<i style="background:var(--s${i})"></i>`).join('')}100%</div></div></section>`;
-}
-
-// ── 3. 어디서 막혔는지 — 아직 안 편 이해의 좌표 ──
-function 좌표(묶음, 전체) {
-  // 문항 × 축: 그 축에서 X인 학생 수 · 교사 판정 학생 수 (모범 제외)
-  const 표 = `<div class="card scroll"><h3>좌표판 <small>칸 = 그 축에서 막힌 학생 수 (✕ 엔진 X · ? 교사 판정 대기)</small></h3><table class="coord"><thead><tr><th>문항</th>${축들.map((a) => `<th style="text-align:center">${a}</th>`).join('')}</tr></thead><tbody>
-    ${묶음.map(([q, xs]) => { const 학생 = xs.filter((x) => x.학생 !== '모범'); return `<tr><td><b>${esc(q)}</b> <span style="color:var(--muted);font-size:12px">${학생.length}명</span></td>${축들.map((_, i) => {
-      const x수 = 학생.filter((x) => x.축[i].판정 === 'X').length, u수 = 학생.filter((x) => x.축[i].판정 === '판정불가').length;
-      const r = 학생.length ? x수 / 학생.length : 0;
-      const bg = x수 ? `rgba(198,40,40,${0.12 + r * 0.55})` : 'transparent';
-      return `<td class="c" style="background:${bg};color:${r > .5 ? '#fff' : 'var(--ink)'}" data-tip="${esc(q)} · ${축들[i]}\n엔진 X ${x수}명 · 교사 판정 ${u수}명">${x수 ? `✕ ${x수}` : '·'}${u수 ? ` <span class="tag un">? ${u수}</span>` : ''}</td>`;
-    }).join('')}</tr>`; }).join('')}</tbody></table></div>`;
-  // 학생마다 처음 막힌 자리 (근거대기 → 세우기 → 풀기 → 답구하기 순)
-  const 카드 = 묶음.map(([q, xs]) => {
-    const 막힌 = [...xs].sort(학생순).filter((x) => x.막힘.length);
-    if (!막힌.length) return `<div class="card"><h3>${esc(q)} <small>막힌 학생 없음 — 모든 조각 O</small></h3></div>`;
-    return `<div class="card"><h3>${esc(q)} <small>막힌 학생 ${막힌.length}명</small></h3>${막힌.map((x) => {
-      const 순 = [...x.막힘].sort((a, b) => 축들.indexOf(a.파트) - 축들.indexOf(b.파트));
-      const 처음 = 순.find((b) => b.결과 === 'X' && !b.엔진확인) || 순[0];
-      const 블록 = (b) => `<div class="block ${b.결과 === 'X' ? '' : 'un'}"><div class="q">${esc(x.학생)} · ${b.번호 != null ? `(${esc(b.번호)}) · ` : ''}${esc(b.파트)} <span class="tag ${b.결과 === 'X' ? 'no' : 'un'}">${b.결과 === 'X' ? '✕ X' : '? 교사 판정'}</span> ${esc(b.id)} · ${점(b.배점)}점</div>
-        <div class="t">${esc(b.글 || '(학생 글 없음)')}</div><div class="r">엔진: ${esc(b.근거)}</div>${b.엔진확인 ? `<div class="chk">엔진 확인 필요 — ${esc(b.엔진확인)}</div>` : ''}</div>`;
-      const 나머지 = 순.filter((b) => b !== 처음);
-      return 블록(처음) + (나머지.length ? `<details><summary>${esc(x.학생)}의 다른 막힘 ${나머지.length}개</summary>${나머지.map(블록).join('')}</details>` : '');
-    }).join('')}</div>`;
-  }).join('');
-  const 확인 = 전체.flatMap((x) => x.막힘.filter((b) => b.엔진확인).map(() => x)).length;
-  return `<section id="coord"><h2>어디서 막혔는지 — 아직 안 편 이해의 좌표</h2><div class="sub">좌표 = (문항, 축, 조각). 학생마다 처음 막힌 자리를 먼저 보입니다 — 근거대기 → 세우기 → 풀기 → 답구하기 순, 엔진 확인 필요 칸은 뒤로. 글은 학생 답 그대로, 판단은 엔진 판단근거 그대로입니다.${확인 ? ` <b>엔진 확인 필요 ${확인}칸</b>은 정답 값이 여럿인 문항(q5 · q7)에서 엔진이 한 값만 대조한 자리로, 교사 확인 전까지 X로 셉니다.` : ''}</div>${표}${카드}</section>`;
-}
-
-// ── 4. q3 이전 채점 vs 현재 채점 ──
-function 성장(xs) {
-  const q3 = xs.filter((x) => x.문항 === 'q3' && x.원본).sort(학생순);
-  if (!q3.length) return '';
-  const W = 640, 줄높이 = 30, T = 18, L = 70, R = 60, H = T + q3.length * 줄높이 + 24;
-  const sx = (r) => L + r * (W - L - R);
-  const 오른 = q3.filter((x) => x.부분점수 > x.원본.부분점수).length, 내린 = q3.filter((x) => x.부분점수 < x.원본.부분점수).length;
-  const svg = `<svg class="dumb" viewBox="0 0 ${W} ${H}" role="img" aria-label="q3 이전 채점과 현재 채점 비교">
-    ${[0, .25, .5, .75, 1].map((t) => `<line class="grid" x1="${sx(t)}" x2="${sx(t)}" y1="${T - 8}" y2="${H - 22}"/><text class="axis" x="${sx(t)}" y="${H - 6}" text-anchor="middle">${점(t * q3[0].만점)}</text>`).join('')}
-    ${q3.map((x, i) => {
-      const y = T + i * 줄높이 + 줄높이 / 2, a = 비율(x.원본.부분점수, x.원본.만점), b = 비율(x.부분점수, x.만점);
-      const 글 = `${x.학생}\n이전 (엔진 조각 채점 · 모범 경로) ${점(x.원본.부분점수)} → 현재 (학생 경로 B) ${점(x.부분점수)} / ${점(x.만점)}`;
-      return `<text class="lbl" x="${L - 10}" y="${y + 4}" text-anchor="end">${esc(x.학생)}</text>
-        ${a !== b ? `<line class="link" x1="${sx(a)}" x2="${sx(b)}" y1="${y}" y2="${y}"/>` : ''}
-        <circle class="before" cx="${sx(a)}" cy="${y}" r="6" tabindex="0" data-tip="${esc(글)}"/>
-        <circle class="after" cx="${sx(b)}" cy="${y}" r="7" tabindex="0" data-tip="${esc(글)}"/>
-        <text class="val" x="${Math.max(sx(a), sx(b)) + 12}" y="${y + 4}">${a === b ? '변화 없음' : (b > a ? '+' : '') + 점(x.부분점수 - x.원본.부분점수)}</text>`;
-    }).join('')}
-  </svg>`;
-  const 표 = `<details><summary>채점 이력 표 보기 (회차마다 점수)</summary><div class="scroll"><table><thead><tr><th>학생</th>${q3[0].이력.map((_, i) => `<th class="num">${i === 0 ? '원본' : i + '차'}</th>`).join('')}</tr></thead><tbody>
-    ${q3.map((x) => `<tr><td>${esc(x.학생)}</td>${x.이력.map((h) => `<td class="num" title="${esc(h.방식)}">${점(h.부분점수)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
-    <div class="sub" style="margin-top:6px">원본 = 10-17 엔진 조각 채점(모범 경로). 1차부터 학생 경로 채점 B — 회차마다 엔진 규칙이 하나씩 붙었습니다(머리글에 마우스를 올리면 방식).</div></details>`;
-  return `<section id="growth"><h2>q3 이전 채점 vs 현재 채점</h2><div class="sub">같은 답안, 같은 루브릭을 두 방식으로 매긴 점수입니다. 이전 = 모범답안 경로에 맞춰 본 엔진 조각 채점, 현재 = 학생이 간 경로 그대로 단계마다 엔진이 계산 검증한 학생 경로 채점 B. 학생이 풀이에서 실제로 이해한 만큼이 점수에 드러난 폭입니다.</div>
-    <div class="card"><h3>q3 ${q3.length}개 답안 <small>오름 ${오른} · 내림 ${내린} · 같음 ${q3.length - 오른 - 내린}</small></h3>${svg}
-    <div class="legend"><span><i style="background:#fff;border:2px solid #8A8A90"></i>이전 (엔진 조각 채점 · 모범 경로)</span><span><i style="background:var(--teal)"></i>현재 (학생 경로 B)</span></div>${표}</div></section>`;
-}
-
-async function 그리기() {
-  let 목록;
+(async () => {
   try {
     const r = await fetch('/api/report', { cache: 'no-store' });
     const j = await r.json();
@@ -227,20 +349,11 @@ async function 그리기() {
     목록 = j.목록;
   } catch (e) { $('#main').innerHTML = `<div class="err">리포트를 불러오지 못했습니다 — ${esc(e.message)}</div>`; return; }
   if (!목록.length) { $('#main').innerHTML = '<div class="empty">학생 경로 채점 B로 재채점한 결과가 아직 없습니다.</div>'; return; }
-  const 문항들 = [...new Set(목록.map((x) => x.문항))].sort((a, b) => a.localeCompare(b, 'ko', { numeric: true }));
-  const 묶음 = 문항들.map((q) => [q, 목록.filter((x) => x.문항 === q)]);
-  const 학생 = 목록.filter((x) => x.학생 !== '모범');
-  const 교사 = 목록.reduce((a, x) => a + x.막힘.filter((b) => b.결과 === '판정불가').length, 0);
-  const 확인 = 목록.reduce((a, x) => a + x.막힘.filter((b) => b.엔진확인).length, 0);
-  const 평균 = 학생.reduce((a, x) => a + 비율(x.부분점수, x.만점), 0) / (학생.length || 1);
-  $('#main').innerHTML = `<div class="tiles">
-      <div class="tile"><div class="v">${학생.length}</div><div class="k">학생 답안 · ${문항들.join(' ')}</div></div>
-      <div class="tile"><div class="v">${퍼(평균)}</div><div class="k">전체 평균 (만점 비율)</div></div>
-      <div class="tile"><div class="v">${교사}</div><div class="k">교사 판정 대기 조각</div></div>
-      <div class="tile"><div class="v">${확인}</div><div class="k">엔진 확인 필요 조각</div></div>
-    </div>` + 분포(묶음) + 지형도(묶음) + 좌표(묶음, 목록) + 성장(목록);
-}
-그리기();
+  const v = new URLSearchParams(location.search).get('view') || 저장.get('hmos-report-view');
+  if (청중이름[v]) 청중 = v;
+  나키 = 저장.get('hmos-report-me');
+  그리기();
+})();
 </script>
 </body>
 </html>
