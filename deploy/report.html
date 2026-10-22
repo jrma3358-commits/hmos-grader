@@ -88,6 +88,7 @@ table.hc td small{display:block;font-size:11.5px;color:var(--muted);font-weight:
 table.hc td.mk{text-align:center;font-size:22px;line-height:1;vertical-align:middle;color:var(--teal)}
 table.hc td.mk.half{color:var(--teal-mid)}table.hc td.mk.lo{color:var(--no)}table.hc td.mk.wait{color:var(--un);font-size:15px;font-weight:700}table.hc td.mk.none{color:var(--line)}
 table.hc td.mk:last-child{background:var(--ivory)}
+table.hc td.mk sup{font-size:11px;color:var(--un);font-weight:700;margin-left:1px}
 #tip{position:fixed;pointer-events:none;background:var(--ink);color:#fff;font-size:12px;padding:6px 9px;border-radius:5px;max-width:280px;opacity:0;transition:opacity .1s;z-index:50;white-space:pre-line}
 @media (max-width:760px){.topbar{padding:0 16px;gap:8px}.views button{padding:0 9px;font-size:13px}.back{display:none}.pick{padding:8px 16px}.content{padding:20px 16px 56px}.grid2{grid-template-columns:1fr}}
 </style>
@@ -355,22 +356,25 @@ X ${a.X.join(' · ') || '없음'}${a.미정.length ? '\n? ' + a.미정.join(' ·
   // 건강검진표형 (오종래 2026-10-23 — 밑그림 5장) — 밖으로는 기호(● ◐ ○)와 서술, 숫자는 접힌 「내부 계측」에만
   if (!x.진단표) { $('#main').innerHTML = 성장 + 점수표 + 누적 + 공통; return; }
   const 있는문항 = x.문항.map((m) => m.문항);
-  const 기호칸 = (s) => `<td class="mk ${{ '●': 'full', '◐': 'half', '○': 'lo', '?': 'wait' }[s] || 'none'}" data-tip="${esc(기호뜻[s] || '이 문항에 없음')}">${esc(s === '-' ? '–' : s)}</td>`;
+  // 게이트 칸(앞 역량 X 위에서 얻은 O — ◐까지)은 *, 닿은 척 확인(① X · ④ O)은 ! (오종래 2026-10-23 확정, 안 C1)
+  const 기호칸 = (s, k = {}) => `<td class="mk ${{ '●': 'full', '◐': 'half', '○': 'lo', '?': 'wait' }[s] || 'none'}" data-tip="${esc((기호뜻[s] || '이 문항에 없음') + (k.게이트 ? ` — 해냈지만 앞 단계(${k.게이트})가 아직 소화되지 않은 위에서 (◐까지)` : '') + (k.닿은척확인 ? ' — 개념소화력이 막혔는데 답에 닿음: 선생님 확인' : ''))}">${esc(s === '-' ? '–' : s)}${k.게이트 ? '<sup>*</sup>' : ''}${k.닿은척확인 ? '<sup>!</sup>' : ''}</td>`;
   const 진단 = `<section><div class="layer">학습수행역량 진단표</div><h2>${esc(x.학생)} — 네 역량의 지금</h2>
     <div class="sub">재기 위한 표가 아니라, 정확히 보고 돕기 위한 표입니다. 네 역량은 채점의 네 단계에서 그대로 나옵니다. 지금은 수학 문항(${esc(있는문항.join(' · '))})끼리 견주었고, 과목이 늘면 과목을 가로질러 봅니다.</div>
     <div class="card scroll"><table class="hc"><thead><tr><th>역량</th>${있는문항.map((q) => `<th>${esc(q)}</th>`).join('')}<th>종합</th></tr></thead><tbody>
-    ${x.진단표.map((d) => `<tr><td><b>${esc(d.역량)}</b><small>${esc(d.뜻)}</small></td>${d.칸.map((k) => 기호칸(k.기호)).join('')}${기호칸(d.종합)}</tr>`).join('')}</tbody></table>
-    <div class="legend"><span>● 강점</span><span>◐ 보통</span><span>○ 다질 곳</span><span>? 선생님 확인 중</span><span>– 이 문항에 없음</span></div></div></section>`;
+    ${x.진단표.map((d) => `<tr><td><b>${esc(d.역량)}</b><small>${esc(d.뜻)}</small></td>${d.칸.map((k) => 기호칸(k.기호, k)).join('')}${기호칸(d.종합)}</tr>`).join('')}</tbody></table>
+    <div class="legend"><span>● 강점</span><span>◐ 보통</span><span>○ 다질 곳</span><span>? 선생님 확인 중</span><span>– 이 문항에 없음</span>${x.진단표.some((d) => d.칸.some((k) => k.게이트)) ? '<span>* 해냈지만 앞 단계가 아직 소화되지 않은 위에서 (◐까지)</span>' : ''}${x.소견.닿은척확인 ? '<span>! 선생님 확인 — 개념이 막혔는데 답에 닿음</span>' : ''}</div></div></section>`;
   const 소 = x.소견;
   const 소견 = `<section><div class="layer">종합 소견 — 왜</div><h2>강점부터, 다질 곳은 성장으로</h2><div class="card"><div class="story">
     ${소.강점.length ? `<p><b>강점</b></p>${소.강점.map((a) => `<p>★ ${esc(a.글)}</p>`).join('')}` : '<p>아직 여러 문항에서 단단히 드러난 역량은 없습니다. 한 역량씩 소화해 가면 됩니다.</p>'}
+    ${소.게이트?.length ? `<p style="margin-top:14px"><b>해낸 것 — 앞 단계를 소화하면 온전히 살아납니다</b></p>${소.게이트.map((a) => `<div class="coord calm"><span class="k">${esc(a.역량)} · ${esc(a.문항.join(' · '))}</span>${esc(a.글)}</div>`).join('')}` : ''}
+    ${소.닿은척확인 ? `<div class="coord wait"><span class="k">선생님 확인</span>${esc(소.닿은척확인.join(' · '))}에서 개념소화력은 막혔는데 답에는 닿았습니다. 급소에 진짜 닿은 것인지 한 번 더 봐 주세요.</div>` : ''}
     ${소.다질곳.length ? `<p style="margin-top:14px"><b>다질 곳 — 왜 막혔는가</b></p>${소.다질곳.map((a) => `<div class="coord ${a.판정 === '삼킴형' ? '' : 'calm'}"><span class="k">${esc(a.판정 === '삼킴형' ? '삼킴형 — 습관을 봅니다' : a.판정 === '문항벽' ? '문항벽 — 그 문항을 봅니다' : '기록이 쌓이면 가려집니다')}</span>${esc(a.글)}</div>`).join('')}` : ''}
     ${소.성향 ? `<p style="margin-top:12px">${esc(소.성향)}</p>` : ''}</div></div></section>`;
   const 안내 = `<section><div class="layer">성장 안내</div><h2>이렇게 가면 됩니다</h2><div class="card">
     ${소.안내 ? `<div class="rx" style="font-size:15px;margin-top:0">${esc(소.안내)}</div>` : ''}<div class="story" style="margin-top:12px"><p>${esc(소.마무리)}</p></div></div></section>`;
   const 내부 = `<section><details><summary>내부 계측 — 선생님 참고 (점수 · 역량 비율 · 4축 누적)</summary><div style="margin-top:14px">
-    <div class="card scroll"><h3>역량 비율 <small>확정 O = 100% · 확정 X = 엔진 축 점수 비율 · 종합 = 축 배점 가중 · ● 80% 이상 · ◐ 50% 이상 · ○ 그 아래</small></h3><table><thead><tr><th>역량</th>${있는문항.map((q) => `<th class="num">${esc(q)}</th>`).join('')}<th class="num">종합</th><th>삼킴 · 소화</th></tr></thead><tbody>
-      ${x.진단표.map((d) => `<tr><td>${esc(d.역량)} <span style="color:var(--muted);font-size:12px">${esc(d.축)}</span></td>${d.칸.map((k) => `<td class="num">${k.비율 == null ? '—' : 퍼(k.비율)}</td>`).join('')}<td class="num"><b>${d.종합비율 == null ? '—' : 퍼(d.종합비율)}</b></td><td>${d.소화 ? `${esc(d.소화.판정)} (X ${esc(d.소화.X.join(' · '))})` : ''}</td></tr>`).join('')}</tbody></table></div>
+    <div class="card scroll"><h3>역량 비율 <small>확정 O = 100% · 확정 X = 엔진 축 점수 비율 · 종합 = 축 배점 가중 · ● 80% 이상 · ◐ 50% 이상 · ○ 그 아래 · * 게이트 (바로 앞 역량 X → 79% 상한)</small></h3><table><thead><tr><th>역량</th>${있는문항.map((q) => `<th class="num">${esc(q)}</th>`).join('')}<th class="num">종합</th><th>삼킴 · 소화</th></tr></thead><tbody>
+      ${x.진단표.map((d) => `<tr><td>${esc(d.역량)} <span style="color:var(--muted);font-size:12px">${esc(d.축)}</span></td>${d.칸.map((k) => `<td class="num"${k.게이트 ? ` data-tip="${esc(`게이트 — 앞 단계 ${k.게이트} X, 비율 상한 79%`)}"` : ''}>${k.비율 == null ? '—' : 퍼(k.비율)}${k.게이트 ? '*' : ''}</td>`).join('')}<td class="num"><b>${d.종합비율 == null ? '—' : 퍼(d.종합비율)}</b></td><td>${d.소화 ? `${esc(d.소화.판정)} (X ${esc(d.소화.X.join(' · '))})` : ''}</td></tr>`).join('')}</tbody></table></div>
     ${점수표}${누적}${공통}${성장}</div></details></section>`;
   $('#main').innerHTML = 진단 + 소견 + 안내 + 내부;
 }
