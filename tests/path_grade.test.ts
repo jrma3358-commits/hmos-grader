@@ -1,7 +1,7 @@
 // 학생 경로 채점 (오종래 2026-10-21 확정 B · Hybrid) — 단계는 Claude가 나눈 꼴을 고정해 엔진 판정만 본다
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { grade_student_path, type 학생단계 } from '../src/rubric/path_grade.ts';
+import { grade_student_path, 정답값들of, type 학생단계 } from '../src/rubric/path_grade.ts';
 
 // q3 모범답안 루브릭 (경우의 수 · 균등 5점)
 const 조각 = [
@@ -93,5 +93,23 @@ describe('학생 경로 채점', () => {
     assert.equal(r.조각별.find((x) => x.파트 === '답구하기')!.결과, 'O'); // 「=」 없는 결론 줄 끝 수 72 — 모범 끝 값 72와 같다
     const q = grade_student_path([단계('답구하기', '∴ 3×24=72')], 조각.map((c) => ({ ...c, 모범답: null })), [], null);
     assert.equal(q.조각별.find((x) => x.파트 === '답구하기')!.결과, '판정불가');
+  });
+
+  it('정답 값 여럿 (오종래 2026-10-22 확정) — 모두 대조해 하나라도 같으면 O', () => {
+    assert.deepEqual(정답값들of('x=1 또는 x=-3'), ['1', '-3']);
+    assert.deepEqual(정답값들of('a=-7, R=-8'), ['-7', '-8']);
+    assert.deepEqual(정답값들of('72가지'), ['72']);
+    assert.deepEqual(정답값들of('k<2'), ['2']);
+    const 답 = [{ id: '세우기-1', 파트: '세우기', 배점: 3 }, { id: '답구하기-1', 파트: '답구하기', 배점: 2 }];
+    const q5 = (글: string) => grade_student_path([단계('세우기', '(x+3)(x-1)=0', '세우기-1'), 단계('답구하기', 글, '답구하기-1')], 답, [{ 조각id: '세우기-1', 파트: '세우기', 결과: 'O' }], 'x=1 또는 x=-3').조각별.find((x) => x.파트 === '답구하기')!;
+    assert.equal(q5('∴ x=1 또는 x=-3').결과, 'O'); // 끝 값 -3 — 정답 값 1 · -3 중 하나
+    assert.equal(q5('∴ x=-3 또는 x=1').결과, 'O');
+    assert.equal(q5('∴ x=2').결과, 'X');
+    const q7 = (글: string) => grade_student_path([단계('답구하기', 글, '답구하기-1')], 답, [], 'a=-7, R=-8').조각별.find((x) => x.파트 === '답구하기')!;
+    assert.equal(q7('∴ R=-8').결과, 'O');
+    assert.equal(q7('f(-1)=1+2-7=-4').결과, 'X');
+    assert.match(q7('∴ R=-8').판단근거, /정답 값 여럿 -7 · -8 모두 대조/);
+    // 값 하나인 정답은 그대로 — 96 ≠ 72
+    assert.equal(grade_student_path([단계('답구하기', '∴ 4×24=96(가지)')], 답, [], '72가지').조각별.find((x) => x.파트 === '답구하기')!.결과, 'X');
   });
 });
