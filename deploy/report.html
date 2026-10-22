@@ -440,7 +440,8 @@ document.addEventListener('focusout', () => { tip.style.opacity = 0; });
   const v = new URLSearchParams(location.search).get('view') || 저장.get('hmos-report-view');
   if (청중이름[v]) 청중 = v;
   나키 = 저장.get('hmos-report-me');
-  통합번호 = Number(저장.get('hmos-report-int')) || null;
+  // ?s=N — 통합 리포트 학생 번호 (시연 안내 guide.html 링크, 2026-10-23). 없으면 이 브라우저가 마지막에 본 학생
+  통합번호 = Number(new URLSearchParams(location.search).get('s')) || Number(저장.get('hmos-report-int')) || null;
   그리기();
 })();
 </script>

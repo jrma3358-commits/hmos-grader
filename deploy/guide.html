@@ -7,8 +7,9 @@
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=Noto+Serif+KR:wght@400;600&display=swap" rel="stylesheet">
 <style>
-/* 시연 안내 (오종래 2026-10-21) — 상단 탭 3개(① 질문 설계 도구 ② 문항 분석 ③ 채점 대시보드) · 탭마다 단계 카드 (← → 버튼 · 방향키)
-   카드: 단계 번호 · 제목 · 화면에서 할 것 · 설명 멘트 · 소요 시간. 단계 이름과 버튼 이름은 각 화면(tools.html · hmos_dashboard.html · dashboard2.html) 그대로 */
+/* 시연 안내 (오종래 2026-10-21) — 상단 탭 4개(① 질문 설계 도구 ② 문항 분석 ③ 채점 대시보드 ④ 학습수행역량 리포트, 2026-10-23) · 탭마다 단계 카드 (← → 버튼 · 방향키)
+   탭 사이 화살표 = 질문 설계 → 문항 분석 → 채점 → 리포트 흐름.
+   카드: 단계 번호 · 제목 · 화면에서 할 것 · 설명 멘트 · 소요 시간. 단계 이름과 버튼 이름은 각 화면(tools.html · hmos_dashboard.html · dashboard2.html · report.html) 그대로 */
 :root{--teal:#1A4A4A;--teal-mid:#2A6060;--gold:#C8A84B;--gold-lt:#F6EFD9;--ivory:#F7F5F0;--ivory-dk:#EDE9E1;--line:#DDD8CC;--muted:#6E6E73;--ink:#1C1C1E;--white:#fff}
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Noto Sans KR',sans-serif;background:var(--ivory);color:var(--ink);min-height:100vh;display:flex;flex-direction:column;font-size:15px;line-height:1.6}
@@ -21,6 +22,7 @@ button{font-family:inherit}
 .tab.on{color:#fff;border-bottom-color:var(--gold);font-weight:500}
 .tab .n{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;background:rgba(255,255,255,.14)}
 .tab.on .n{background:var(--gold);color:var(--teal);font-weight:700}
+.arr{color:rgba(255,255,255,.35);font-size:13px;padding:0 2px}
 .wrap{flex:1;width:100%;max-width:960px;margin:0 auto;padding:28px 24px 48px}
 .head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:6px}
 .head h1{font-family:'Noto Serif KR',serif;font-size:22px;color:var(--teal);font-weight:600}
@@ -66,9 +68,10 @@ button{font-family:inherit}
 <body>
 <nav class="topbar">
   <a class="brand" href="/">HMOS <em>시연 안내</em></a>
-  <button class="tab" data-tab="0"><span class="n">1</span>질문 설계 도구</button>
-  <button class="tab" data-tab="1"><span class="n">2</span>문항 분석</button>
-  <button class="tab" data-tab="2"><span class="n">3</span>채점 대시보드</button>
+  <button class="tab" data-tab="0"><span class="n">1</span>질문 설계 도구</button><span class="arr" aria-hidden="true">→</span>
+  <button class="tab" data-tab="1"><span class="n">2</span>문항 분석</button><span class="arr" aria-hidden="true">→</span>
+  <button class="tab" data-tab="2"><span class="n">3</span>채점 대시보드</button><span class="arr" aria-hidden="true">→</span>
+  <button class="tab" data-tab="3"><span class="n">4</span>학습수행역량 리포트</button>
 </nav>
 <main class="wrap">
   <div class="head"><h1 id="t-name"></h1><span class="total" id="t-total"></span><a class="open" id="t-open" target="_blank" rel="noopener">화면 열기 ↗</a></div>
@@ -77,7 +80,7 @@ button{font-family:inherit}
   <div class="dots" id="dots"></div>
   <article class="card" id="card"></article>
   <div class="nav"><button class="prev" id="prev">← 이전</button><span class="pos" id="pos"></span><button class="next" id="next">다음 →</button></div>
-  <div class="keys">방향키 ← → 로 카드를 넘기고, 1 · 2 · 3 으로 탭을 바꿉니다.</div>
+  <div class="keys">방향키 ← → 로 카드를 넘기고, 1 · 2 · 3 · 4 로 탭을 바꿉니다.</div>
 </main>
 <script>
 // 카드 — 단계 · 제목 · 할 것(「버튼 이름」은 화면 그대로) · 멘트 · 시간(분). 시연 문항은 세 화면 모두 경우의 수(a,a,b,c,d,e 6장 카드 양 끝 모음, 정답 72가지)
@@ -164,6 +167,30 @@ const 탭들 = [
       { 단계: '⑤', 제목: '교사 확정', 시간: 1,
         할것: ['조각마다 엔진 판정을 확인하고 필요하면 O / X를 고친다', '「확정 내려받기 (JSON)」'],
         멘트: '엔진은 근거를 남기고, 마지막 판정은 교사가 합니다. 고친 판정은 점수에 바로 다시 반영됩니다.' },
+      { 단계: '⑥', 제목: '처방전', 시간: 2,
+        할것: ['⑤에서 「처방전 출력 — 학생 이름」 → 「처방전」 탭으로 넘어간다', '4역량 표(개념소화력 · 논리구성력 · 연산수행력 · 핵심인지력) · 4역량 구술 · 삼킴 · 소화 줄을 읽는다', '잘한 것 → 막힌 곳 → 다음에 할 것', '「인쇄 · PDF로 저장」 · 시연용은 「샘플 불러오기」'],
+        멘트: '처방전은 학생이 납득하는 글입니다. 잘한 역량을 먼저 세우고, 막힌 곳은 「아직 소화되지 않은 흔적」으로 짚습니다. 같은 흔적이 다른 문항에도 있으면 습관을, 이 문항에만 있으면 이 문항을 봅니다.' },
+    ],
+  },
+  {
+    이름: '학습수행역량 리포트', 주소: 'https://hmos.hunminos.com/report', 샘플: '통합 리포트 · 학생 2', 샘플열기: '?view=integrated&s=2',
+    안내: '채점의 네 단계가 곧 네 역량입니다 — 근거대기 → 개념소화력 · 세우기 → 논리구성력 · 풀기 → 연산수행력 · 답구하기 → 핵심인지력. 재기 위함이 아니라 정확히 보고 돕기 위함입니다.',
+    카드: [
+      { 단계: '1', 제목: '통합 리포트 — 진단표', 시간: 2,
+        할것: ['위쪽 「통합 리포트」 탭 → 학생을 고른다 (시연은 학생 2)', '4역량 × 문항 기호를 읽는다 — ● 강점 · ◐ 보통 · ○ 다질 곳', '「*」 칸 = 해냈지만 앞 단계가 아직 소화되지 않은 위에서 (◐까지)'],
+        멘트: '건강검진표처럼 상태를 보여 줍니다. 숫자는 안에서만 쓰고, 밖으로는 기호와 말로 냅니다. 앞 단계가 무너진 위에서 해낸 것은 강점으로 세지 않습니다.' },
+      { 단계: '2', 제목: '종합 소견 — 왜', 시간: 3,
+        할것: ['강점 → 해낸 것 → 다질 곳 순서로 읽는다', '다질 곳의 「삼킴형 — 습관을 봅니다」와 「문항벽 — 그 문항을 봅니다」를 견준다'],
+        멘트: '같은 「막힘」이라도 처방은 반대입니다. 여러 문항에서 되풀이되면 급히 삼키고 넘어가는 습관을, 한 문항에서만 막혔으면 그 문항의 기초를 봅니다. 노력이 모자란 것이 아니라 어디가 막혔는지를 정확히 본 것입니다.' },
+      { 단계: '3', 제목: '성향 · 성장 안내', 시간: 2,
+        할것: ['「성향 — 현재 경향」 — 과목이 둘 이상 기록되면 구조 · 정확 쪽과 이해 · 통찰 쪽 중 어느 쪽이 더 단단한지', '「성장 안내 — 이렇게 가면 됩니다」 — 강점을 발판으로 다질 곳 한 줄'],
+        멘트: '경향은 고정된 딱지가 아니라 지금의 모습입니다. 강점이 있으니 이것만 다지면 풀이가 끝까지 이어진다 — 미소가 자라게 하는 안내입니다.' },
+      { 단계: '4', 제목: '성장 궤적', 시간: 1,
+        할것: ['「성장 궤적 — 어제의 나와 견주어」를 본다 — 지금은 「2026-10 1차」가 첫 기록'],
+        멘트: '남과 견주지 않고 지난 회차의 나와 견줍니다. 회차는 선생님이 이름 붙인 측정 한 번이고, 지난 기록은 그때 그대로 고정됩니다.' },
+      { 단계: '5', 제목: '내부 계측 · 청중 탭', 시간: 2,
+        할것: ['맨 아래 「내부 계측 — 선생님 참고」를 펼친다 (역량 비율 · 과목 비중 · 4축 누적)', '위쪽 「학생용」 · 「교사용」 · 「학부모용」 탭 — 같은 채점을 세 사람의 눈으로'],
+        멘트: '정밀한 수치는 선생님이 참고하고, 학생과 부모에게는 상처 주지 않는 말로 번역합니다. 세 사람의 눈을 정확하게 하는 것이 이 리포트의 목적입니다.' },
     ],
   },
 ];
@@ -208,7 +235,7 @@ document.addEventListener('keydown', (e) => {
   if (e.target.closest?.('input, textarea')) return;
   if (e.key === 'ArrowRight') 다음();
   else if (e.key === 'ArrowLeft') 이전();
-  else if (['1', '2', '3'].includes(e.key)) 가기(Number(e.key) - 1, 0);
+  else if (['1', '2', '3', '4'].includes(e.key)) 가기(Number(e.key) - 1, 0);
 });
 // 주소 #탭-카드 (예: #3-4) — 시연 중 새로 고쳐도 · 링크로 와도 그 카드로
 const 주소로 = () => { const m = location.hash.match(/^#(\d)-(\d+)$/); m ? 가기(Number(m[1]) - 1, Number(m[2]) - 1) : 그리기(); };

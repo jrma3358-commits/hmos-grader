@@ -139,6 +139,17 @@
   .cta.tool:hover { background: #2A1D16; }
   .cta:focus-visible, .header-btn:focus-visible, .modal button:focus-visible { outline: 3px solid var(--olive); outline-offset: 3px; }
   .cta-note { font-size: 13px; color: var(--brown-sub); }
+  /* 메인 4탭 흐름 (2026-10-23) — 번호 · 화살표로 차례를 한눈에. 학습수행역량 리포트는 짙은 테라코타 */
+  .flow { list-style: none; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+  .flow li { display: flex; align-items: center; gap: 10px; }
+  .flow li + li::before { content: '→'; color: var(--brown-sub); font-weight: 700; font-size: 18px; }
+  .flow .cta { padding: 15px 24px; font-size: 16px; }
+  .cta .step-n { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 50%; background: rgba(255, 255, 255, 0.22); font-size: 13px; }
+  .cta.rep { background: var(--terracotta-dark); box-shadow: 0 10px 24px -10px rgba(164, 79, 47, 0.7); }
+  .cta.rep:hover { background: #87401F; }
+  .hero-cta .cta-note { flex-basis: 100%; }
+  /* 헤더 버튼 넷은 좁은 화면에서 넘친다 — 히어로의 4탭이 바로 아래에 있으니 헤더 쪽만 숨긴다 */
+  @media (max-width: 960px) { .header-btn { display: none; } }
 
   /* 장식 — 잎 모양 */
   .leaf {
@@ -325,6 +336,9 @@
     .header-link { font-size: 13px; }
     .hero { padding: 80px 0 88px; }
     .cta { width: 100%; justify-content: center; }
+    .flow { flex-direction: column; align-items: stretch; width: 100%; }
+    .flow li { flex-direction: column; align-items: stretch; gap: 6px; }
+    .flow li + li::before { content: '↓'; text-align: center; }
     .features { padding: 72px 0 80px; }
     .pivot { padding: 72px 0; min-height: 0; }
     .pivot-net { margin-top: 24px; }
@@ -353,9 +367,10 @@
     </a>
     <nav class="header-nav">
       <a class="header-link" href="/about">HMOS 이야기</a>
-      <button class="header-btn" type="button" onclick="열기('/dashboard')">문항 분석</button>
       <button class="header-btn" type="button" onclick="열기('/tools')">질문 설계 도구</button>
+      <button class="header-btn" type="button" onclick="열기('/dashboard')">문항 분석</button>
       <button class="header-btn alt" type="button" onclick="열기('/dashboard2')">채점 대시보드</button>
+      <button class="header-btn alt" type="button" onclick="열기('/report')">학습수행역량 리포트</button>
     </nav>
   </div>
 </header>
@@ -369,20 +384,15 @@
       <div class="hero-slogan">질문의 급소를 읽는 우리 모두의 <em>언어인식 AI</em></div>
       <h1>질문을 읽는 순간,<br><span class="accent">디지털의 사유</span>가 시작됩니다</h1>
       <p class="hero-sub">상상하는 순간 모든 것은 이루어진다</p>
+      <!-- 메인 4탭 (오종래 2026-10-23) — 질문 설계 → 문항 분석 → 채점 → 리포트 흐름 그대로 -->
       <div class="hero-cta">
-        <button class="cta" type="button" onclick="열기('/dashboard')">
-          문항 분석 시작하기
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
-        </button>
-        <button class="cta tool" type="button" onclick="열기('/tools')">
-          질문 설계 도구
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
-        </button>
-        <button class="cta alt" type="button" onclick="열기('/dashboard2')">
-          채점 대시보드
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
-        </button>
-        <span class="cta-note">접속 비밀번호가 필요합니다</span>
+        <ol class="flow" aria-label="흐름: 질문 설계 → 문항 분석 → 채점 → 리포트">
+          <li><button class="cta tool" type="button" onclick="열기('/tools')"><span class="step-n">1</span>질문 설계 도구</button></li>
+          <li><button class="cta" type="button" onclick="열기('/dashboard')"><span class="step-n">2</span>문항 분석</button></li>
+          <li><button class="cta alt" type="button" onclick="열기('/dashboard2')"><span class="step-n">3</span>채점 대시보드</button></li>
+          <li><button class="cta rep" type="button" onclick="열기('/report')"><span class="step-n">4</span>학습수행역량 리포트</button></li>
+        </ol>
+        <span class="cta-note">질문을 설계하고, 문항을 분석하고, 답안을 채점하고, 네 역량으로 비춥니다 · 접속 비밀번호가 필요합니다</span>
       </div>
     </div>
   </section>
@@ -494,7 +504,7 @@ AI는 질문에 답을 내놓는다.
   const 버튼 = document.getElementById('access-btn');
 
   // 들어갈 화면 — 문항 분석 /dashboard · 채점 대시보드 /dashboard2 (2026-10-17)
-  const 화면 = { '/dashboard': '문항 분석', '/dashboard2': '채점 대시보드', '/tools': '질문 설계 도구' };
+  const 화면 = { '/tools': '질문 설계 도구', '/dashboard': '문항 분석', '/dashboard2': '채점 대시보드', '/report': '학습수행역량 리포트' };
   let 갈곳 = '/dashboard';
   function 열기(곳 = '/dashboard') {
     갈곳 = 화면[곳] ? 곳 : '/dashboard';
