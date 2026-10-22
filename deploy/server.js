@@ -971,41 +971,58 @@ async function 경로나누기(s,학생답,모범답안){
 
 // ── POST /api/prescription — ⑤ 처방전 구술 (오종래 2026-10-22) ──
 // [엔진 우선] 4축 O/X · 막힌 조각 · 급소는 엔진 판정 + 교사 확정 그대로 받는다. Claude는 그것을 학생에게 하는 말로 옮기기만 한다 — 판정하지 않는다.
-// 구술 구조: 4축 구술(형식별 고정 템플릿 — dashboard2가 쓴다, Claude 아님, 오종래 2026-10-22 확정) → 막힌 곳(X 축 · 조각) → 다음에 할 것(한 줄).
-//   Claude는 막힌 곳 · 다음만. 서버가 축 이름 · 길이 · 채점 용어를 검사해 어긋나면 한 번 다시 쓰게 한다
+// 구술 구조: 4축 구술(형식별 고정 템플릿 — dashboard2가 쓴다, Claude 아님, 오종래 2026-10-22 확정) → 잘한 것(O 축 학생 줄 인용) → 막힌 곳(X 축 · 조각) → 다음에 할 것(한 줄).
+//   Claude는 잘한 것 · 막힌 곳 · 다음. 서버가 인용(학생 줄에 있는 글인가) · 축 이름 · 길이 · 채점 용어를 검사해 어긋나면 한 번 다시 쓰게 한다
 const 처방SYSTEM=`너는 HMOS 처방전 구술자다. 교사가 확정한 채점 결과를 학생에게 직접 말하듯 짧게 옮긴다.
-4축을 한 줄로 요약한 문장(잘한 축 · 못한 축)은 처방전에 따로 있다 — 너는 그 요약을 되풀이하지 않고, 막힌 곳의 구체적인 줄과 다음에 할 것만 쓴다.
+4축을 한 줄로 요약한 문장(잘한 축 · 못한 축)은 처방전에 따로 있다 — 너는 그 요약을 되풀이하지 않고, 잘한 곳 · 막힌 곳의 구체적인 줄과 다음에 할 것을 쓴다.
 
 지킬 것:
 - 너는 채점하지 않는다. 축마다 O · X · ?(교사 확인 중) · —(이 문항에 없음)는 받은 그대로다. 바꾸거나 새로 판단하지 않는다.
+- 잘한것: O인 축만 말한다. 받은 「잘한 줄」에서 학생이 쓴 줄을 「」로 그대로 짧게 인용하고(한 글자도 바꾸지 않는다), 그 줄로 무엇을 해냈는지 1~2문장. O 축이 없으면 "".
 - 막힌곳: X인 축과 막힌 조각만 말한다. 학생이 쓴 줄을 「」로 짧게 인용하고, 엔진 근거에 있는 내용만으로 무엇이 빠졌는지 1~2문장. 근거에 없는 오류를 만들지 않는다. X 축이 없으면 "".
-- 다음: 한 문장. 받은 「기본 처방」(처음 X인 축)을 이 학생의 막힌 조각에 맞게 구체적으로 바꾼다. X 축이 없으면 다음 문항에서도 같은 순서로 풀라는 한 문장.
-- 정답 값이나 모범 풀이를 그대로 알려주지 않는다. 점수 · 배점 숫자를 쓰지 않는다. ? 축을 틀렸다고 말하지 않는다.
+- 다음: 한 문장. 받은 「기본 처방」(처음 X인 축)을 이 학생의 막힌 조각에 맞게 구체적으로 바꾼다. 막힌 조각 근거에 빠진 처리가 식으로 나와 있으면(예: ÷2!) 그 처리를 이름과 함께 연습할 것으로 쓴다. X 축이 없으면 다음 문항에서도 같은 순서로 풀라는 한 문장.
+- 정답 값이나 모범 풀이 전체를 그대로 알려주지 않는다 (근거에 나온 빠진 처리 하나를 짚는 것은 된다). 점수 · 배점 숫자를 쓰지 않는다. ? 축을 틀렸다고 말하지 않는다.
 - 축 이름은 근거대기 · 세우기 · 풀기 · 답구하기 그대로 쓴다. 해요체, 학생이 읽는 말로. 채점 용어(조각 · 판정 · 엔진 · 배점 · 루브릭)는 쓰지 않는다.`;
-const 처방FORMAT={type:'json_schema',schema:{type:'object',additionalProperties:false,required:['막힌곳','다음'],properties:{
-  막힌곳:{type:'string',description:'X 축이 없으면 빈 글'},다음:{type:'string',description:'한 문장'}}}};
+const 처방FORMAT={type:'json_schema',schema:{type:'object',additionalProperties:false,required:['잘한것','막힌곳','다음'],properties:{
+  잘한것:{type:'string',description:'O 축이 없으면 빈 글'},막힌곳:{type:'string',description:'X 축이 없으면 빈 글'},다음:{type:'string',description:'한 문장'}}}};
 const 처방축=['근거대기','세우기','풀기','답구하기'];
 // 다음에 할 것 기본 처방 — 형식 갈래(수리계산 · 인문사회)마다
 const 처방기본={
   수리:{근거대기:'풀기 전에 문제 조건과 쓰일 개념(공식 이름)을 한 줄로 먼저 적어 보세요.',세우기:'조건 하나하나가 식의 어느 부분이 되는지 짝지어 보세요.',풀기:'계산을 한 줄에 한 단계씩, 중간 값을 적어 가며 이어 보세요.',답구하기:'마지막 줄에 문제가 묻는 값을 문제의 꼴 그대로 다시 써 보세요.'},
   인문:{근거대기:'제시문에서 핵심 개념이 드러난 문장을 먼저 찾아 한 줄로 정리해 보세요.',세우기:'내 주장을 한 문장으로 먼저 적고, 그 문장이 논제의 물음에 답하는지 확인해 보세요.',풀기:'주장마다 제시문 근거를 하나씩 붙여 「왜냐하면」으로 이어 보세요.',답구하기:'마지막 문단에 논제가 묻는 것에 대한 결론을 한 문장으로 분명히 써 보세요.'},
 };
-/** 구술 검사 — 막힌곳에 X 축이 없음, 다음이 여러 줄, 길이, 채점 용어 */
-function 처방검사(o,축){
-  const X=축.filter(a=>a.판정==='X').map(a=>a.이름),틀=[];
+const 붙임=t=>String(t||'').replace(/\s+/g,'');
+/** 구술 검사 — 잘한것 인용이 O 줄에 없음 · X 축 이름, 막힌곳에 X 축이 없음, 다음이 여러 줄, 길이, 채점 용어 */
+function 처방검사(o,축,잘한,막힌){
+  // 막힌 조각 근거의 빠진 처리 식 (「÷2! 없음」 → ÷2!) — 다음에 그 처리가 있어야 한다
+  const 처리=[...new Set((막힌||[]).flatMap(b=>[...String(b.근거||'').matchAll(/(÷\s*\d+!)\s*없음/g)].map(m=>붙임(m[1]))))];
+  const O=축.filter(a=>a.판정==='O').map(a=>a.이름),X=축.filter(a=>a.판정==='X').map(a=>a.이름),틀=[];
+  const 줄들=(잘한||[]).map(b=>붙임(b.글)).filter(Boolean);
+  if(O.length&&줄들.length){
+    const 인용=[...o.잘한것.matchAll(/「([^」]{2,})」/g)].map(m=>붙임(m[1]));
+    if(!인용.length)틀.push('잘한것에 학생이 쓴 줄을 「」로 인용하지 않았다');
+    else{const 없는=인용.filter(q=>!줄들.some(l=>l.includes(q)));if(없는.length)틀.push(`잘한것의 인용이 학생 줄에 없다 — 받은 잘한 줄에서 그대로: ${없는.map(q=>`「${q}」`).join(' ')}`);}
+    if(o.잘한것.length<15)틀.push('잘한것이 너무 짧다 — 1~2문장');
+  }
+  if(!O.length&&o.잘한것.trim())틀.push('O 축이 없으니 잘한것은 빈 글');
+  const 잘못X=X.filter(a=>o.잘한것.includes(a));
+  if(잘못X.length)틀.push(`잘한것에 X 축 ${잘못X.join(' · ')}을 말했다 — O 축(${O.join(' · ')})만`);
   if(X.length&&!X.some(a=>o.막힌곳.includes(a)))틀.push(`막힌곳에 X 축 이름(${X.join(' · ')})이 없다`);
   if(!X.length&&o.막힌곳.trim())틀.push('X 축이 없으니 막힌곳은 빈 글');
   if(/\n/.test(o.다음.trim()))틀.push('다음은 한 문장');
   if(X.length&&o.막힌곳.length<20)틀.push('막힌곳이 너무 짧다 — 학생이 쓴 줄과 빠진 것을 1~2문장');
   if(o.다음.length<15)틀.push('다음이 너무 짧다 — 구체적인 한 문장');
-  const 용어=['조각','판정','엔진','배점','루브릭'].filter(w=>[o.막힌곳,o.다음].some(t=>t.includes(w)));
+  const 빠진처리=처리.filter(p=>!붙임(o.다음).includes(p));
+  if(빠진처리.length)틀.push(`다음에 막힌 근거의 빠진 처리 ${빠진처리.map(p=>`「${p}」`).join(' ')}를 연습할 것으로 넣는다`);
+  const 용어=['조각','판정','엔진','배점','루브릭'].filter(w=>[o.잘한것,o.막힌곳,o.다음].some(t=>t.includes(w)));
   if(용어.length)틀.push(`채점 용어 ${용어.map(w=>`「${w}」`).join(' ')}를 학생 말로`);
   return 틀;
 }
 app.post('/api/prescription',async(req,res)=>{
   // 학생 · 문항 · 급소[{번호,글}] · 축[{이름,판정:'O'|'X'|'?'|'—'}] · 막힌[{번호,파트,글,근거,교사고침}] — 모두 ⑤ 교사 확정 재집계 그대로
   //   갈래: '수리'(수리계산 B-s1 · B-s2 · C-2a · C-2b) · '인문'(인문사회 B-h1 · B-h2 · C-1a) — 기본 처방 고르기
-  const {학생,문항,급소,축,막힌}=req.body||{};
+  //   잘한[{번호,파트,글}] = 교사 확정 O 조각의 학생 줄 (잘한 것 인용 근거)
+  const {학생,문항,급소,축,막힌,잘한}=req.body||{};
   const 갈래=req.body&&req.body.갈래==='인문'?'인문':'수리';
   if(!Array.isArray(축)||축.length!==4||축.some(a=>!처방축.includes(a.이름)||!['O','X','?','—'].includes(a.판정))){res.status(400).json({error:'4축 판정(근거대기 · 세우기 · 풀기 · 답구하기 O/X/?/—)이 필요합니다'});return;}
   const 첫X=축.find(a=>a.판정==='X');
@@ -1013,6 +1030,7 @@ app.post('/api/prescription',async(req,res)=>{
     `문항:\n${String(문항||'').slice(0,1500)}`,
     `급소: ${(급소||[]).map(g=>`${g.번호?`(${g.번호}) `:''}「${g.글||'미확인'}」`).join(' ')||'미확인'}`,
     `4축 (교사 확정):\n${축.map(a=>`- ${a.이름}: ${a.판정}`).join('\n')}`,
+    `잘한 줄 (O — 학생이 쓴 줄):\n${(잘한||[]).length?(잘한||[]).slice(0,8).map(b=>`- ${b.번호?`(${b.번호}) `:''}${b.파트}: 「${String(b.글).slice(0,200)}」`).join('\n'):'없음'}`,
     `막힌 곳 (X — 학생이 쓴 줄 · 근거):\n${(막힌||[]).length?(막힌||[]).slice(0,8).map(b=>`- ${b.번호?`(${b.번호}) `:''}${b.파트}: ${String(b.글||'').trim()?`「${String(b.글).slice(0,200)}」`:'(학생이 이 단계를 쓰지 않음 — 인용하지 말고 쓰지 않았다고 말한다)'} — ${b.교사고침?'선생님이 틀렸다고 확정함':String(b.근거||'').slice(0,300)}`).join('\n'):'없음'}`,
     `기본 처방 (처음 X인 축${첫X?` ${첫X.이름}`:' 없음'}): ${첫X?처방기본[갈래][첫X.이름]:'다음 문항에서도 근거대기 → 세우기 → 풀기 → 답구하기 순서로 풀기'}`,
   ].join('\n\n');
@@ -1028,12 +1046,26 @@ app.post('/api/prescription',async(req,res)=>{
       if(msg.stop_reason==='max_tokens')throw new Error('구술이 max_tokens에서 잘림');
       let o=null;try{o=JSON.parse(msg.content.filter(b=>b.type==='text').map(b=>b.text).join(''));}catch(_){}
       if(!o)throw new Error(`구술을 받지 못함 (stop_reason: ${msg.stop_reason})`);
-      out={막힌곳:String(o.막힌곳||'').trim(),다음:String(o.다음||'').trim()};
-      틀=처방검사(out,축);
+      out={잘한것:String(o.잘한것||'').trim(),막힌곳:String(o.막힌곳||'').trim(),다음:String(o.다음||'').trim()};
+      틀=처방검사(out,축,잘한,막힌);
       if(!틀.length)break;
     }
   }catch(e){res.status(502).json({error:e.message});return;}
   res.json({...out,학생:학생||null,검사:틀,usage:사용});
+});
+
+// ── POST /api/prescriptions — 처방전 저장 (오종래 2026-10-22) ── 검증/처방전/<이름>.json, 같은 이름이면 새 처방전으로 덮는다
+const 처방전폴더=path.join(검증폴더,'처방전');
+app.post('/api/prescriptions',(req,res)=>{
+  const {이름,처방전}=req.body||{};
+  const n=샘플이름(이름);
+  if(!n){res.status(400).json({error:'처방전 이름은 글자 · 숫자 · _ · - 로만'});return;}
+  if(!처방전||typeof 처방전!=='object'||!Array.isArray(처방전.축)){res.status(400).json({error:'저장할 처방전이 없습니다'});return;}
+  try{
+    fs.mkdirSync(처방전폴더,{recursive:true});
+    fs.writeFileSync(path.join(처방전폴더,n+'.json'),JSON.stringify({종류:'HMOS 처방전',이름:n,...처방전,저장:new Date().toISOString()},null,1)+'\n','utf8');
+  }catch(e){res.status(500).json({error:'처방전 저장 실패: '+e.message});return;}
+  res.json({ok:true,파일:'검증/처방전/'+n+'.json'});
 });
 
 // ── POST /api/grade — C 8단계 학생 답안 채점 (오종래 2026-10-14) ──────────

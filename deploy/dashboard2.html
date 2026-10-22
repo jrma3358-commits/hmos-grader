@@ -1485,14 +1485,18 @@ function 처방전값(j, 고침들) {
     다음: 첫X ? { 축: 첫X.이름, 글: 처방한줄[갈래][첫X.이름] } : null, 미정: 조각.filter((x) => x.판정 === '판정불가').length,
     // 막힌 조각 — 교사 확정 X. 교사가 O → X로 고친 조각은 엔진 근거(맞음)를 싣지 않는다
     막힌: 조각.filter((x) => x.판정 === 'X').sort((a, b) => 파트들.indexOf(a.파트) - 파트들.indexOf(b.파트))
-      .map((x) => ({ 번호: x.번호, 파트: x.파트, 글: String(x.글 || ''), 근거: [x.오류, x.판단근거].filter(Boolean).join(' — '), 교사고침: x.결과 !== 'X' })) };
+      .map((x) => ({ 번호: x.번호, 파트: x.파트, 글: String(x.글 || ''), 근거: [x.오류, x.판단근거].filter(Boolean).join(' — '), 교사고침: x.결과 !== 'X' })),
+    // 잘한 조각 — 교사 확정 O 중 학생이 쓴 줄이 있는 것 (잘한 것 인용 근거)
+    잘한: 조각.filter((x) => x.판정 === 'O' && String(x.글 || '').trim()).sort((a, b) => 파트들.indexOf(a.파트) - 파트들.indexOf(b.파트))
+      .map((x) => ({ 번호: x.번호, 파트: x.파트, 글: String(x.글) })),
+    형식: j.형식 || j.계열형식 || null };
 }
 /** 구술 — /api/prescription (Claude는 엔진 · 교사 확정 결과를 말로 옮기기만). 실패하면 고정 문안 그대로 */
 async function 구술받기(v) {
   try {
     const r = await 받기('/api/prescription', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 학생: v.학생, 문항: v.문항, 갈래: v.갈래, 급소: v.급소, 축: v.축.map((a) => ({ 이름: a.이름, 판정: a.판정 })), 막힌: v.막힌 }) });
-    return { 막힌곳: r.막힌곳, 다음: r.다음, 검사: r.검사 || [] };
+      body: JSON.stringify({ 학생: v.학생, 문항: v.문항, 갈래: v.갈래, 급소: v.급소, 축: v.축.map((a) => ({ 이름: a.이름, 판정: a.판정 })), 막힌: v.막힌, 잘한: v.잘한 }) });
+    return { 잘한것: r.잘한것, 막힌곳: r.막힌곳, 다음: r.다음, 검사: r.검사 || [] };
   } catch (e) { return { 실패: e.message }; }
 }
 /** 같은 문항 학생 파일 — 탭7 샘플과 같은 고르기 (학생N 파일만, 「_최종」이 있으면 그 판) */
@@ -1514,7 +1518,7 @@ table{border-collapse:collapse;width:100%;margin-top:4px}td,th{border:1px solid 
 .sc{display:flex;align-items:baseline;gap:6px;margin-top:4px}.sc b{font-size:30px;color:#1A4A4A}.sc span{color:#6B6B70}
 .nx{border-left:4px solid #1A4A4A;background:#F5FAF9;padding:10px 14px;margin-top:4px;font-size:15px}.nx small{display:block;color:#6B6B70;font-size:12px}
 .ft{margin-top:16px;font-size:11px;color:#9A9A9E;border-top:1px solid #EDE9E1;padding-top:6px}.ft .w{color:#8D6E00}
-.say{padding:9px 13px;border-radius:5px;font-size:14.5px;line-height:1.75;margin-top:4px}.say.ok{background:#E8F5E9}.say.no{background:#FFF4F2;border-left:4px solid #C62828}
+.say{padding:9px 13px;border-radius:5px;font-size:14.5px;line-height:1.75;margin-top:4px}.say.ok{background:#F7F5F0}.say.good{background:#E8F5E9;border-left:4px solid #2E7D32}.say.no{background:#FFF4F2;border-left:4px solid #C62828}
 @media print{body{background:#fff}.bar{display:none}.sheet{margin:0;padding:0;max-width:none;border-radius:0}}
 @media (max-width:640px){.sheet{margin:12px 8px;padding:20px 16px}}`;
 function 처방전Html(v) {
@@ -1527,11 +1531,12 @@ function 처방전Html(v) {
     <div class="k">학생이 한 것 — 4축</div><table><tr>${v.축.map((a) => `<th>${esc(a.이름)}</th>`).join('')}</tr><tr>${v.축.map((a) => `<td class="v ${표[a.판정][0]}">${표[a.판정][1]}</td>`).join('')}</tr></table>
     <div class="k">점수</div><div class="sc"><b>${점(v.점수)}</b><span>/ ${점(v.만점)}점</span></div>
     ${사축구술(v) ? `<div class="k">4축 구술 — ${v.갈래 === '수리' ? '수리계산' : '인문사회'}</div><div class="say ok">${esc(사축구술(v))}</div>` : ''}
-    ${v.구술 && !v.구술.실패 ? `${v.구술.막힌곳 ? `<div class="k">막힌 곳</div><div class="say no">${esc(v.구술.막힌곳)}</div>` : ''}
+    ${v.구술 && !v.구술.실패 ? `${v.구술.잘한것 ? `<div class="k">잘한 것</div><div class="say good">${esc(v.구술.잘한것)}</div>` : ''}
+      ${v.구술.막힌곳 ? `<div class="k">막힌 곳</div><div class="say no">${esc(v.구술.막힌곳)}</div>` : ''}
       <div class="k">다음에 할 것</div><div class="nx">${v.다음 ? `<small>${esc(v.다음.축)}</small>` : ''}${esc(v.구술.다음)}</div>`
     : `<div class="k">다음에 할 것</div><div class="nx">${v.다음 ? `<small>${esc(v.다음.축)}</small>${esc(v.다음.글)}` : '네 단계를 모두 해냈어요. 다음 문항에서도 같은 순서로 풀어 보세요.'}</div>`}
     <div class="ft">교사 확정 판정 기준 (엔진 판정 + 교사 고침) · ✅ 그 축 조각 모두 맞음 · ✗ 하나라도 틀림 · ? 교사 판정 남음 · — 이 문항에 그 축 없음${v.미정 ? ` · 아직 교사 판정 ${v.미정}칸 (0점으로 셈)` : ''}
-      ${v.구술 ? (v.구술.실패 ? `<br><span class="w">구술 생성 실패 — 기본 문안으로 냈습니다 (${esc(v.구술.실패)})</span>` : `<br>4축 구술: ${v.갈래 === '수리' ? '수리계산' : '인문사회'} 템플릿 · 막힌 곳 · 다음에 할 것: Claude가 막힌 줄을 말로 옮김 — 판정은 바꾸지 않음${v.구술.검사.length ? ` <span class="w">· 확인 필요: ${esc(v.구술.검사.join(' / '))}</span>` : ''}`) : ''}</div></div>`;
+      ${v.구술 ? (v.구술.실패 ? `<br><span class="w">구술 생성 실패 — 기본 문안으로 냈습니다 (${esc(v.구술.실패)})</span>` : `<br>4축 구술: ${v.갈래 === '수리' ? '수리계산' : '인문사회'} 템플릿 · 잘한 것 · 막힌 곳 · 다음에 할 것: Claude가 학생 줄을 말로 옮김 — 판정은 바꾸지 않음${v.구술.검사.length ? ` <span class="w">· 확인 필요: ${esc(v.구술.검사.join(' / '))}</span>` : ''}`) : ''}${v.저장 ? `<br>저장: ${esc(v.저장)}` : ''}</div></div>`;
 }
 async function 처방전출력(전체) {
   const st = $('#rx-st');
@@ -1549,9 +1554,9 @@ async function 처방전출력(전체) {
         const j = 키 === 기록키 ? 기록 : await 받기('/api/results/' + x.파일.replace(/\.json$/, '').split('/').map(encodeURIComponent).join('/'));
         let 고침 = {};
         try { 고침 = 키 === 기록키 ? 교사 : JSON.parse(localStorage.getItem('hmos-d2-teacher:' + 키) || '{}'); } catch (_) {}
-        장.push({ ...처방전값(j, 고침), 문항번호: 번호 });
+        장.push({ ...처방전값(j, 고침), 문항번호: 번호, 원본: '검증/' + x.파일, 교사고침: Object.keys(고침).length > 0 });
       }
-    } else 장.push({ ...처방전값(기록, 교사), 문항번호: 번호 });
+    } else 장.push({ ...처방전값(기록, 교사), 문항번호: 번호, 원본: 기록키.startsWith('파일:') ? '검증/' + 기록키.slice(3) : null, 교사고침: Object.keys(교사).length > 0 });
   } catch (e) { 창.close(); st.textContent = '처방전 만들기 실패: ' + e.message; return; }
   // 구술 — 학생마다 하나씩 차례로 (Claude, 엔진 · 교사 확정 결과를 말로만)
   for (const [n, v] of 장.entries()) {
@@ -1560,13 +1565,27 @@ async function 처방전출력(전체) {
     try { 창.document.body.innerHTML = `<p style="font-family:sans-serif;padding:24px">${esc(알림)}</p>`; } catch (_) {}
     v.구술 = await 구술받기(v);
   }
+  // 저장 — 검증/처방전/<문항>_<학생>_처방전.json (같은 이름은 새 처방전으로 덮는다)
+  const 저장됨 = [];
+  for (const v of 장) {
+    const 이름 = `${v.문항번호 || '문항'}_${String(v.학생).replace(/\s+/g, '')}_처방전`;
+    try {
+      const r = await 받기('/api/prescriptions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ 이름, 처방전: {
+        원본: v.원본 || null, 교사고침: !!v.교사고침, 학생: v.학생, 문항번호: v.문항번호 || null, 문항: v.문항, 형식: v.형식, 갈래: v.갈래 === '수리' ? '수리계산' : '인문사회',
+        급소: v.급소, 축: v.축.map((a) => ({ 이름: a.이름, 판정: a.판정 })), 점수: v.점수, 만점: v.만점, 교사판정남음: v.미정,
+        구술: { 사축: 사축구술(v), 잘한것: v.구술?.잘한것 ?? null, 막힌곳: v.구술?.막힌곳 ?? null, 다음: v.구술?.실패 ? v.다음?.글 ?? null : v.구술?.다음 ?? null, 다음축: v.다음?.축 ?? null,
+          ...(v.구술?.실패 ? { 실패: v.구술.실패 } : {}), ...(v.구술?.검사?.length ? { 확인필요: v.구술.검사 } : {}) },
+        잘한조각: v.잘한, 막힌조각: v.막힌, 생성: new Date().toISOString() } }) });
+      저장됨.push(r.파일); v.저장 = r.파일;
+    } catch (e) { v.저장 = '저장 실패: ' + e.message; }
+  }
   창.document.open();
   창.document.write(`<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>HMOS 처방전 — ${esc(번호 || '채점')} ${장.length}명</title>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&family=Noto+Serif+KR:wght@600&display=swap" rel="stylesheet"><style>${처방전CSS}</style></head>
     <body><div class="bar"><span>처방전 ${장.length}장 — 한 장에 한 학생</span><button onclick="window.print()">인쇄 · PDF로 저장</button><span style="opacity:.75">인쇄 창에서 「PDF로 저장」을 고르면 PDF 파일이 됩니다</span></div>${장.map(처방전Html).join('')}</body></html>`);
   창.document.close();
   const 실패 = 장.filter((v) => v.구술?.실패).length;
-  st.textContent = `처방전 ${장.length}장을 새 창에 열었습니다${실패 ? ` — 구술 실패 ${실패}장은 기본 문안` : ''}`;
+  st.textContent = `처방전 ${장.length}장을 새 창에 열었습니다${실패 ? ` — 구술 실패 ${실패}장은 기본 문안` : ''} · 저장 ${저장됨.length}장 ${저장됨.length === 1 ? 저장됨[0] : '검증/처방전/'}`;
 }
 
 // ── 탭7 채점 샘플 ── q3~q7 대표 답안 카드 (검증/ 폴더 JSON — /api/results 요약). 판정 · 오류 · 다경로는 엔진 출력 그대로, 화면은 고르기만 한다
