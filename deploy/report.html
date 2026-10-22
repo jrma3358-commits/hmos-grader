@@ -8,8 +8,8 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=Noto+Serif+KR:wght@400;600&display=swap" rel="stylesheet">
 <style>
 /* 채점 리포트 (오종래 2026-10-22) — /api/report 엔진 출력 그대로. 점수 · 4축 판정 · 조각 판정을 화면이 새로 매기지 않는다 (모으고 그리기만).
-   3층: ① 문항별 점수 분포 ② 학생별 4축 지형도(막대 · 아직 안 편 이해의 좌표 · 강점 먼저) ③ 성장 궤적(q3 이전 vs 현재).
-   청중 탭: 학생용(서술 · 숫자 최소) · 교사용(4축 수치 · 처방) · 학부모용(강점 먼저 · 성장 궤적). 서술 · 처방 문장은 엔진 판정에 붙이는 고정 문안 */
+   3층: ① 문항별 점수 분포 ② 학생별 4축 지형도(막대 · 아직 안 편 이해의 좌표 · 강점 먼저) ③ 채점 방식 비교(q3 이전 vs 현재 — 교사 탭에만, 성장 아님). 통합 리포트: 4역량 진단표 · 소견 · 성장 궤적(교사가 이름 붙인 회차, 지난 회차 고정).
+   청중 탭: 학생용(서술 · 숫자 최소) · 교사용(4축 수치 · 처방) · 학부모용(강점 먼저). 서술 · 처방 문장은 엔진 판정에 붙이는 고정 문안 */
 :root{--teal:#1A4A4A;--teal-mid:#2A6060;--teal-lt:#CFE3E0;--gold:#C8A84B;--gold-lt:#F6EFD9;--ivory:#F7F5F0;--ivory-dk:#EDE9E1;--line:#DDD8CC;--muted:#6B6B70;--ink:#1C1C1E;--white:#FFFFFF;
   --ok:#2E7D32;--ok-bg:#E8F5E9;--no:#C62828;--no-bg:#FFEBEE;--un:#8D6E00;--un-bg:#FFF8E1;--track:#ECEAE4}
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -263,19 +263,13 @@ function 층2(목록, 청중, 나, 문항) {
     ${판}<div class="grid2">${보일.map((x) => 학생카드(x, '교사')).join('')}</div></section>`;
 }
 
-// ── 3층 성장 궤적 (q3 이전 채점 vs 현재 채점) ──
-function 층3(목록, 청중, 나) {
+// ── 3층 채점 방식 비교 (q3 이전 채점 vs 현재 채점) — 교사 탭에만 (오종래 2026-10-23 확정) ──
+//   같은 답안을 채점 방식이 바뀔 때마다 다시 매긴 기록이라 학생의 성장이 아니다 — 학생 · 학부모 탭에는 내지 않는다. 성장 궤적은 통합 리포트(회차)에
+function 층3(목록) {
   const q3 = 목록.filter((x) => x.문항 === 'q3' && x.원본 && x.학생 !== '모범').sort(학생순);
   if (!q3.length) return '';
-  const 설명 = '같은 답안을 두 방식으로 매긴 점수입니다. 이전 = 모범답안 경로에 맞춰 본 채점, 현재 = 학생이 간 풀이 경로를 단계마다 따라가며 계산을 검증한 채점(학생 경로 B).';
-  if (청중 !== '교사' && 나.문항 !== 'q3') return `<section><div class="layer">3층</div><h2>성장 궤적</h2><div class="card"><div class="story"><p>이전 채점과 지금 채점을 견주는 기록은 q3 답안에만 있습니다. ${esc(나.문항)}은 지금 채점만 있${청중 === '학부모' ? '습니다' : '어요'}.</p></div></div></section>`;
-  if (청중 === '학생') {
-    const d = 나.부분점수 - 나.원본.부분점수;
-    return `<section><div class="layer">3층</div><h2>내 풀이가 어떻게 다시 읽혔을까</h2><div class="card"><div class="story">
-      <p>${d > 0 ? '모범답안과 다른 길로 풀었어도, 내가 간 길 안에서 맞게 한 단계들이 이번 채점에서 인정됐어요.' : d < 0 ? '이번 채점에서 단계마다 계산을 다시 따져 보니, 이전보다 덜 인정된 단계가 있어요.' : '이전 채점과 지금 채점이 같아요. 내 풀이가 어떤 방식으로 봐도 같게 읽혔다는 뜻이에요.'}</p>
-      <p style="font-size:13px;color:var(--muted)">${esc(설명)}</p></div></div></section>`;
-  }
-  const 대상 = 청중 === '교사' ? q3 : [나];
+  const 설명 = '같은 답안을 두 방식으로 매긴 점수입니다 — 학생의 성장이 아니라 채점 방식의 차이입니다. 이전 = 모범답안 경로에 맞춰 본 채점, 현재 = 학생이 간 풀이 경로를 단계마다 따라가며 계산을 검증한 채점(학생 경로 B).';
+  const 대상 = q3;
   const W = 640, 줄높이 = 30, T = 18, L = 70, R = 60, H = T + 대상.length * 줄높이 + 24, sx = (r) => L + r * (W - L - R);
   const svg = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="q3 이전 채점과 현재 채점 비교">
     ${[0, .25, .5, .75, 1].map((t) => `<line class="grid" x1="${sx(t)}" x2="${sx(t)}" y1="${T - 8}" y2="${H - 22}"/><text class="axis" x="${sx(t)}" y="${H - 6}" text-anchor="middle">${점(t * 대상[0].만점)}</text>`).join('')}
@@ -287,19 +281,8 @@ function 층3(목록, 청중, 나) {
         <text class="val" x="${Math.max(sx(a), sx(b)) + 12}" y="${y + 4}">${a === b ? '같음' : (b > a ? '+' : '') + 점(x.부분점수 - x.원본.부분점수)}</text>`;
     }).join('')}</svg>`;
   const 범례 = '<div class="legend"><span><i style="background:#fff;border:2px solid #8A8A90"></i>이전 (모범 경로 채점)</span><span><i style="background:var(--teal)"></i>현재 (학생 경로 B)</span></div>';
-  // 회차별 궤적 — 원본부터 재채점 회차마다 점수
-  const 궤적 = (x) => { const hs = x.이력, w = 640, h = 90, l = 30, r = 20, sx2 = (i) => l + (hs.length > 1 ? i / (hs.length - 1) : 0) * (w - l - r), sy = (v) => 12 + (1 - 비율(v, x.만점)) * 52;
-    return `<svg viewBox="0 0 ${w} ${h}" role="img" aria-label="${esc(x.학생)} 채점 회차별 점수"><line class="grid" x1="${l}" x2="${w - r}" y1="${sy(0)}" y2="${sy(0)}"/><line class="grid" x1="${l}" x2="${w - r}" y1="${sy(x.만점)}" y2="${sy(x.만점)}"/>
-      <polyline points="${hs.map((hh, i) => `${sx2(i)},${sy(hh.부분점수)}`).join(' ')}" fill="none" stroke="var(--teal-mid)" stroke-width="2"/>
-      ${hs.map((hh, i) => `<circle class="dot" cx="${sx2(i)}" cy="${sy(hh.부분점수)}" r="5" tabindex="0" data-tip="${esc(i === 0 ? '원본' : i + '차')} ${점(hh.부분점수)} / ${점(x.만점)}\n${esc(hh.방식)}"/><text class="axis" x="${sx2(i)}" y="${h - 4}" text-anchor="middle">${i === 0 ? '원본' : i + '차'}</text>`).join('')}</svg>`; };
-  if (청중 === '학부모') {
-    const d = 나.부분점수 - 나.원본.부분점수;
-    return `<section><div class="layer">3층</div><h2>성장 궤적</h2><div class="sub">${esc(설명)}</div><div class="card">
-      <div class="story"><p>${d > 0 ? `모범답안과 다른 길로 풀었지만, 자녀가 간 풀이 길 안에서 맞게 해낸 단계들이 새 채점에서 인정되어 <b>${점(나.원본.부분점수)}점 → ${점(나.부분점수)}점</b>이 되었습니다. 풀이 과정에서 실제로 이해한 만큼이 점수에 드러난 것입니다.` : d < 0 ? `단계마다 계산을 다시 검증하면서 <b>${점(나.원본.부분점수)}점 → ${점(나.부분점수)}점</b>이 되었습니다.` : `이전 채점과 새 채점이 <b>${점(나.부분점수)}점</b>으로 같습니다. 어느 방식으로 보아도 같은 풀이로 읽혔습니다.`}</p></div>
-      ${svg}${범례}<details><summary>채점 회차별 궤적</summary>${궤적(나)}</details></div></section>`;
-  }
   const 오른 = q3.filter((x) => x.부분점수 > x.원본.부분점수).length, 내린 = q3.filter((x) => x.부분점수 < x.원본.부분점수).length;
-  return `<section><div class="layer">3층</div><h2>성장 궤적 — q3 이전 채점 vs 현재 채점</h2><div class="sub">${esc(설명)}</div>
+  return `<section><div class="layer">3층</div><h2>채점 방식 비교 — q3 이전 채점 vs 현재 채점</h2><div class="sub">${esc(설명)}</div>
     <div class="card"><h3>q3 ${q3.length}명 <small>오름 ${오른} · 내림 ${내린} · 같음 ${q3.length - 오른 - 내린}</small></h3>${svg}${범례}
     <details><summary>채점 이력 표 (회차마다 점수)</summary><div class="scroll"><table><thead><tr><th>학생</th>${q3[0].이력.map((_, i) => `<th class="num">${i === 0 ? '원본' : i + '차'}</th>`).join('')}</tr></thead><tbody>
     ${q3.map((x) => `<tr><td>${esc(x.학생)}</td>${x.이력.map((h) => `<td class="num" data-tip="${esc(h.방식)}">${점(h.부분점수)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
@@ -376,7 +359,15 @@ X ${a.X.join(' · ') || '없음'}${a.미정.length ? '\n? ' + a.미정.join(' ·
     <div class="card scroll"><h3>역량 비율 <small>확정 O = 100% · 확정 X = 엔진 축 점수 비율 · 종합 = 축 배점 가중 · ● 80% 이상 · ◐ 50% 이상 · ○ 그 아래 · * 게이트 (바로 앞 역량 X → 79% 상한)</small></h3><table><thead><tr><th>역량</th>${있는문항.map((q) => `<th class="num">${esc(q)}</th>`).join('')}<th class="num">종합</th><th>삼킴 · 소화</th></tr></thead><tbody>
       ${x.진단표.map((d) => `<tr><td>${esc(d.역량)} <span style="color:var(--muted);font-size:12px">${esc(d.축)}</span></td>${d.칸.map((k) => `<td class="num"${k.게이트 ? ` data-tip="${esc(`게이트 — 앞 단계 ${k.게이트} X, 비율 상한 79%`)}"` : ''}>${k.비율 == null ? '—' : 퍼(k.비율)}${k.게이트 ? '*' : ''}</td>`).join('')}<td class="num"><b>${d.종합비율 == null ? '—' : 퍼(d.종합비율)}</b></td><td>${d.소화 ? `${esc(d.소화.판정)} (X ${esc(d.소화.X.join(' · '))})` : ''}</td></tr>`).join('')}</tbody></table></div>
     ${점수표}${누적}${공통}${성장}</div></details></section>`;
-  $('#main').innerHTML = 진단 + 소견 + 안내 + 내부;
+  // 성장 궤적 (오종래 2026-10-23 확정) — 회차 = 교사가 이름 붙인 측정 한 번, 지난 회차 고정. 역량 종합 기호를 회차마다 — 어제의 나와의 비교
+  const 궤 = x.성장궤적 || { 회차: [] };
+  const 궤적 = `<section><div class="layer">성장 궤적</div><h2>어제의 나와 견주어</h2><div class="card">
+    ${궤.회차.length < 2 ? `<div class="story"><p>${궤.회차.length ? `「${esc(궤.회차[0].이름)}」 측정이 첫 기록입니다.` : '아직 기록한 측정 회차가 없습니다.'} 다음 측정부터 궤적이 그려집니다.</p></div>`
+      : `<div class="scroll"><table class="hc"><thead><tr><th>역량</th>${궤.회차.map((r) => `<th>${esc(r.이름)}</th>`).join('')}</tr></thead><tbody>
+        ${축들.map((a) => `<tr><td><b>${esc(궤.회차.at(-1).진단표.find((d) => d.축 === a)?.역량 || a)}</b></td>${궤.회차.map((r) => 기호칸(r.진단표.find((d) => d.축 === a)?.종합 || '-')).join('')}</tr>`).join('')}</tbody></table></div>
+        <div class="story" style="margin-top:12px">${궤.비교.글.map((t) => `<p>${esc(t)}</p>`).join('')}</div>
+        <div class="sub" style="margin:8px 0 0">남과 견주지 않고, ${esc(궤.비교.앞)} → ${esc(궤.비교.뒤)}의 나를 견주었습니다. 지난 회차 기록은 그때 그대로 고정입니다.</div>`}</div></section>`;
+  $('#main').innerHTML = 진단 + 소견 + 안내 + 궤적 + 내부;
 }
 const 기호뜻 = { '●': '강점', '◐': '보통', '○': '다질 곳', '?': '선생님 확인 중' };
 function 고르기줄() {
@@ -399,10 +390,10 @@ function 그리기() {
   const 문항들 = [...new Set(목록.map((x) => x.문항))].sort((a, b) => a.localeCompare(b, 'ko', { numeric: true }));
   const 묶음 = 문항들.map((q) => [q, 목록.filter((x) => x.문항 === q)]);
   const 청 = 청중이름[청중];
-  if (청중 === 'teacher') { $('#main').innerHTML = 층1(문항거르기 ? 묶음.filter(([q]) => q === 문항거르기) : 묶음, 청) + 층2(목록, 청, null, 문항거르기) + (!문항거르기 || 문항거르기 === 'q3' ? 층3(목록, 청) : ''); return; }
+  if (청중 === 'teacher') { $('#main').innerHTML = 층1(문항거르기 ? 묶음.filter(([q]) => q === 문항거르기) : 묶음, 청) + 층2(목록, 청, null, 문항거르기) + (!문항거르기 || 문항거르기 === 'q3' ? 층3(목록) : ''); return; }
   const 나 = 목록.find((x) => 키(x) === 나키);
-  // 학생용: 지형도 → 문항 → 성장 / 학부모용: 강점(지형도) → 성장 궤적 → 문항 안 위치
-  $('#main').innerHTML = 청중 === 'student' ? 층2(목록, 청, 나) + 층1(묶음, 청, 나) + 층3(목록, 청, 나) : 층2(목록, 청, 나) + 층3(목록, 청, 나) + 층1(묶음, 청, 나);
+  // 학생용 · 학부모용: 지형도 → 문항 안 위치 (채점 방식 비교는 교사 탭에만 — 성장 궤적은 통합 리포트)
+  $('#main').innerHTML = 층2(목록, 청, 나) + 층1(묶음, 청, 나);
 }
 document.querySelectorAll('.views button').forEach((b) => b.addEventListener('click', () => {
   청중 = b.dataset.view; 저장.set('hmos-report-view', 청중);
