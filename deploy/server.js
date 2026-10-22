@@ -224,6 +224,26 @@ app.get('/api/samples/:name',(req,res)=>{
   if(!경로){res.status(404).json({ok:false,error:'샘플이 없습니다'});return;}
   res.type('application/json').send(fs.readFileSync(path.join(샘플폴더,경로),'utf8'));
 });
+// 처방전 샘플 (오종래 2026-10-22) — 검증/샘플/처방전/<이름>.json. dashboard2 ⑥ 「샘플 불러오기」. 위 형식 폴더 목록에는 넣지 않는다 (분석 샘플과 따로)
+const 처방전샘플폴더=path.join(샘플폴더,'처방전');
+app.get('/api/prescription-samples',(req,res)=>{
+  res.setHeader('Cache-Control','no-store');
+  if(!접속됨(req)){res.status(401).json({ok:false,error:접속만료});return;}
+  let 파일들=[];try{파일들=fs.readdirSync(처방전샘플폴더).filter(f=>f.endsWith('.json')).sort();}catch(_){}
+  const 목록=파일들.map(f=>{const 파일=f.replace(/\.json$/,'');
+    try{const j=JSON.parse(fs.readFileSync(path.join(처방전샘플폴더,f),'utf8'));return {파일,학생:j.학생||null,문항번호:j.문항번호||null,점수:j.점수??null,만점:j.만점??null};}
+    catch(_){return {파일,오류:'JSON을 읽지 못함'};}
+  });
+  res.json({ok:true,목록});
+});
+app.get('/api/prescription-samples/:name',(req,res)=>{
+  res.setHeader('Cache-Control','no-store');
+  if(!접속됨(req)){res.status(401).json({ok:false,error:접속만료});return;}
+  const 이름=샘플이름(req.params.name);
+  const 파일=이름&&path.join(처방전샘플폴더,이름+'.json');
+  if(!파일||!fs.existsSync(파일)){res.status(404).json({ok:false,error:'처방전 샘플이 없습니다'});return;}
+  res.type('application/json').send(fs.readFileSync(파일,'utf8'));
+});
 
 // API도 접속 쿠키가 있어야 — 엔진(/analyze)·Claude 호출(/api/*) (2026-10-14).
 // API는 모두 POST라 GET·HEAD(홈·정적 파일) 말고는 전부 막고 /api/access만 연다 — 경로 대소문자·인코딩으로 비켜 가지 못하게 경로 모양으로 고르지 않는다.

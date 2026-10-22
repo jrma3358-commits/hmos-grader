@@ -204,6 +204,8 @@ th{font-size:11.5px;color:var(--muted);font-weight:600;background:var(--ivory)}
   <button class="tab off" data-tab="ans" id="tab-ans" disabled title="문항분석이 끝나면 열립니다"><span class="tab-num">3</span>답안 입력</button>
   <button class="tab" data-tab="3"><span class="tab-num">4</span>채점 결과</button>
   <button class="tab" data-tab="6" id="tab-t"><span class="tab-num">5</span>교사 확정</button>
+  <!-- ⑥ 처방전 (오종래 2026-10-22) — ⑤ 「처방전 출력」이 여기로 넘어온다 (새 창 없음). 패널 id = prx -->
+  <button class="tab" data-tab="rx" id="tab-rx"><span class="tab-num">6</span>처방전</button>
 </nav>
 <div class="recbar">
   <label for="rec-select">채점 결과</label>
@@ -219,6 +221,7 @@ th{font-size:11.5px;color:var(--muted);font-weight:600;background:var(--ivory)}
   <section class="panel" id="pans"></section>
   <section class="panel" id="p3"></section>
   <section class="panel" id="p6"></section>
+  <section class="panel" id="prx"></section>
 </div>
 
 <script src="/format-detect.js"></script>
@@ -1547,14 +1550,15 @@ table{border-collapse:collapse;width:100%;margin-top:4px}td,th{border:1px solid 
 function 처방전Html(v) {
   if (v.보류) return 보류Html(v);
   const 표 = { O: ['o', '✅'], X: ['x', '✗'], '?': ['u', '?'], '—': ['n', '—'] };
-  const 날 = new Date().toLocaleDateString('ko-KR');
+  const 날 = v.날 || new Date().toLocaleDateString('ko-KR');
+  const 사축 = v.사축 ?? 사축구술(v); // 샘플은 저장된 4축 구술 그대로
   const 문항명 = v.문항.split('\n').map((l) => l.trim()).filter(Boolean).slice(0, 3).join('\n');
   return `<div class="sheet"><div class="hd"><h1>HMOS 처방전</h1><div><span class="who">${esc(v.학생)}</span> <span class="d">· ${esc(v.문항번호 || '')} · ${날}</span></div></div>
     <div class="k">문항</div><div class="q">${esc(문항명)}</div>
     <div class="k">급소${v.급소.length > 1 ? ` — 소문항 ${v.급소.length}개 합산 한 장` : ''}</div><div class="pv">${v.급소.map((g) => `${g.번호 ? `(${esc(g.번호)}) ` : ''}${g.글 ? `「${esc(g.글)}」` : '급소 미확인'}`).join(' · ') || '—'}</div>
     <div class="k">학생이 한 것 — 4축</div><table><tr>${v.축.map((a) => `<th>${esc(a.이름)}</th>`).join('')}</tr><tr>${v.축.map((a) => `<td class="v ${표[a.판정][0]}">${표[a.판정][1]}</td>`).join('')}</tr></table>
     <div class="k">점수</div><div class="sc"><b>${점(v.점수)}</b><span>/ ${점(v.만점)}점</span></div>
-    ${사축구술(v) ? `<div class="k">4축 구술 — ${v.갈래 === '수리' ? '수리계산' : '인문사회'}</div><div class="say ok">${esc(사축구술(v))}</div>` : ''}
+    ${사축 ? `<div class="k">4축 구술 — ${v.갈래 === '수리' ? '수리계산' : '인문사회'}</div><div class="say ok">${esc(사축)}</div>` : ''}
     ${v.구술 && !v.구술.실패 ? `${v.구술.잘한것 ? `<div class="k">잘한 것</div><div class="say good">${esc(v.구술.잘한것)}</div>` : ''}
       ${v.구술.막힌곳 ? `<div class="k">막힌 곳</div><div class="say no">${esc(v.구술.막힌곳)}</div>` : ''}
       <div class="k">다음에 할 것</div><div class="nx">${v.다음 ? `<small>${esc(v.다음.축)}</small>` : ''}${esc(v.다음?.고정 ? v.다음.글 : v.구술.다음)}</div>`
@@ -1569,10 +1573,12 @@ function 보류Html(v) {
     <div class="ft">아직 교사 판정이 남은 조각 ${v.미정}개 (${esc(v.미정축.join(' · '))}) — ⑤ 교사 확정에서 O/X를 정한 뒤 「처방전 출력」을 다시 누르세요. 이 장은 저장하지 않습니다.</div></div>`;
 }
 async function 처방전출력(전체) {
-  const st = $('#rx-st');
-  const 창 = window.open('', '_blank'); // 클릭 바로 열어야 팝업 막기에 걸리지 않는다 — 내용은 뒤에 채운다
-  if (!창) { st.textContent = '새 창이 막혔습니다 — 브라우저 팝업 허용 후 다시 누르세요'; return; }
-  창.document.write('<!DOCTYPE html><meta charset="UTF-8"><title>처방전</title><p style="font-family:sans-serif;padding:24px">처방전을 만드는 중…</p>');
+  const st5 = $('#rx-st');
+  // ⑥ 처방전 탭으로 넘어가 거기서 만든다 (오종래 2026-10-22 — 새 창 없음). 알림은 ⑤ · ⑥ 둘 다에
+  처방전장 = [];
+  그리기처방전('처방전을 만드는 중…');
+  탭('rx');
+  const st = { set textContent(t) { if (st5) st5.textContent = t; 알림6(t); } };
   const 번호 = (기록키.startsWith('파일:') ? 기록키.slice(3).split('/').pop().match(/^q\d+/) || [''] : [''])[0];
   const 장 = [];
   try {
@@ -1587,15 +1593,13 @@ async function 처방전출력(전체) {
         장.push({ ...처방전값(j, 고침), 문항번호: 번호, 원본: '검증/' + x.파일, 교사고침: Object.keys(고침).length > 0 });
       }
     } else 장.push({ ...처방전값(기록, 교사), 문항번호: 번호, 원본: 기록키.startsWith('파일:') ? '검증/' + 기록키.slice(3) : null, 교사고침: Object.keys(교사).length > 0 });
-  } catch (e) { 창.close(); st.textContent = '처방전 만들기 실패: ' + e.message; return; }
+  } catch (e) { st.textContent = '처방전 만들기 실패: ' + e.message; return; }
   // 판정불가(?) 조각이 남으면 보류 — 구술 · 저장 없음 (오종래 2026-10-22 확정)
   for (const v of 장) v.보류 = v.미정 > 0;
   // 구술 — 학생마다 하나씩 차례로 (Claude, 엔진 · 교사 확정 결과를 말로만)
   for (const [n, v] of 장.entries()) {
     if (v.보류) continue;
-    const 알림 = `구술 쓰는 중… ${n + 1}/${장.length} (${v.학생})`;
-    st.textContent = 알림;
-    try { 창.document.body.innerHTML = `<p style="font-family:sans-serif;padding:24px">${esc(알림)}</p>`; } catch (_) {}
+    st.textContent = `구술 쓰는 중… ${n + 1}/${장.length} (${v.학생})`;
     v.구술 = await 구술받기(v);
   }
   // 저장 — 검증/처방전/<문항>_<학생>_처방전.json (같은 이름은 새 처방전으로 덮는다)
@@ -1613,14 +1617,70 @@ async function 처방전출력(전체) {
       저장됨.push(r.파일); v.저장 = r.파일;
     } catch (e) { v.저장 = '저장 실패: ' + e.message; }
   }
-  창.document.open();
-  창.document.write(`<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>HMOS 처방전 — ${esc(번호 || '채점')} ${장.length}명</title>
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&family=Noto+Serif+KR:wght@600&display=swap" rel="stylesheet"><style>${처방전CSS}</style></head>
-    <body><div class="bar"><span>처방전 ${장.length - 장.filter((v) => v.보류).length}장 — 한 장에 한 학생${장.some((v) => v.보류) ? ` · 보류 ${장.filter((v) => v.보류).length}명` : ''}</span><button onclick="window.print()">인쇄 · PDF로 저장</button><span style="opacity:.75">인쇄 창에서 「PDF로 저장」을 고르면 PDF 파일이 됩니다</span></div>${장.map(처방전Html).join('')}</body></html>`);
-  창.document.close();
   const 실패 = 장.filter((v) => v.구술?.실패).length, 보류 = 장.filter((v) => v.보류);
-  st.textContent = `처방전 ${장.length - 보류.length}장을 새 창에 열었습니다${실패 ? ` — 구술 실패 ${실패}장은 기본 문안` : ''} · 저장 ${저장됨.length}장 ${저장됨.length === 1 ? 저장됨[0] : '검증/처방전/'}${보류.length ? ` · 보류 ${보류.length}명 (${보류.map((v) => v.학생).join(' · ')}) — 교사 확정 후 처방전 생성 가능합니다` : ''}`;
+  const 끝 = `처방전 ${장.length - 보류.length}장${실패 ? ` — 구술 실패 ${실패}장은 기본 문안` : ''} · 저장 ${저장됨.length}장 ${저장됨.length === 1 ? 저장됨[0] : '검증/처방전/'}${보류.length ? ` · 보류 ${보류.length}명 (${보류.map((v) => v.학생).join(' · ')}) — 교사 확정 후 처방전 생성 가능합니다` : ''}`;
+  처방전장 = 장;
+  그리기처방전(끝);
+  if (st5) st5.textContent = 끝 + ' — ⑥ 처방전 탭에 보입니다';
 }
+
+// ── ⑥ 처방전 탭 (오종래 2026-10-22) ── ⑤ 「처방전 출력」 결과를 dashboard2 안에 보인다. 처방전 CSS가 대시보드와 섞이지 않게 틀(iframe) 안에 그리고,
+//   「인쇄 · PDF로 저장」은 그 틀만 인쇄한다. 「샘플 불러오기」 = 검증/샘플/처방전/<이름>.json (저장된 처방전 그대로 — 구술을 다시 쓰지 않고 저장하지도 않는다)
+let 처방전장 = [];
+let 처방전샘플 = null; // 샘플 목록 — 한 번 받으면 그대로
+const 알림6 = (t) => { const e = $('#rx-st6'); if (e) e.textContent = t; };
+function 그리기처방전(알림) {
+  const 낸 = 처방전장.filter((v) => !v.보류).length, 보류 = 처방전장.length - 낸;
+  $('#prx').innerHTML = `<div class="sec-title">처방전</div>
+    <div class="sec-sub" style="margin-bottom:12px">⑤ 교사 확정에서 「처방전 출력」을 누르면 여기에 나옵니다 — 한 장에 한 학생. 「인쇄 · PDF로 저장」은 처방전만 인쇄합니다 (인쇄 창에서 「PDF로 저장」을 고르면 PDF 파일).</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px">
+      <button class="run-btn" id="rx-print"${낸 ? '' : ' disabled'}>인쇄 · PDF로 저장</button>
+      <select id="rx-sample" style="min-width:220px;font-family:inherit;font-size:13px;padding:7px 8px;border:1px solid var(--line);border-radius:6px;background:var(--white)"><option value="">샘플 목록 불러오는 중…</option></select>
+      <button class="ghost-btn" id="rx-sample-load">샘플 불러오기</button>
+      <span class="status" id="rx-st6" style="margin-left:0">${esc(알림 ?? (처방전장.length ? `처방전 ${낸}장${보류 ? ` · 보류 ${보류}명` : ''}` : ''))}</span></div>
+    ${처방전장.length ? '<iframe id="rx-frame" title="처방전" style="display:block;width:100%;min-height:420px;border:none;border-radius:8px;background:#EDE9E1"></iframe>'
+      : '<div class="muted">아직 처방전이 없습니다 — ⑤ 교사 확정에서 「처방전 출력」을 누르거나 샘플을 불러오세요.</div>'}`;
+  const 틀 = $('#rx-frame');
+  if (틀) {
+    const 높이 = () => { try { 틀.style.height = 틀.contentDocument.documentElement.scrollHeight + 'px'; } catch (_) {} };
+    틀.addEventListener('load', () => { 높이(); 틀.contentDocument.fonts?.ready.then(높이); });
+    틀.srcdoc = `<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>HMOS 처방전</title>
+      <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&family=Noto+Serif+KR:wght@600&display=swap" rel="stylesheet"><style>${처방전CSS}</style></head>
+      <body>${처방전장.map(처방전Html).join('')}</body></html>`;
+  }
+  $('#rx-print').addEventListener('click', () => $('#rx-frame')?.contentWindow.print());
+  $('#rx-sample-load').addEventListener('click', 샘플처방전열기);
+  $('#rx-sample').addEventListener('change', (e) => e.target.value && 샘플처방전열기());
+  샘플목록채우기();
+}
+async function 샘플목록채우기() {
+  const sel = $('#rx-sample');
+  try { 처방전샘플 ??= (await 받기('/api/prescription-samples')).목록 || []; }
+  catch (e) { sel.innerHTML = `<option value="">샘플 목록을 받지 못함 — ${esc(e.message)}</option>`; return; }
+  sel.innerHTML = 처방전샘플.length ? 처방전샘플.map((x) => `<option value="${esc(x.파일)}">${esc([x.문항번호, x.학생].filter(Boolean).join(' '))} · ${점(x.점수)}/${점(x.만점)}</option>`).join('')
+    : '<option value="">샘플 없음</option>';
+}
+async function 샘플처방전열기() {
+  const 이름 = $('#rx-sample').value;
+  if (!이름) { 알림6('샘플이 없습니다'); return; }
+  알림6('샘플 불러오는 중…');
+  try {
+    const p = await 받기('/api/prescription-samples/' + encodeURIComponent(이름));
+    처방전장 = [샘플처방전값(p, 이름)];
+    그리기처방전(`샘플 — ${p.문항번호 || ''} ${p.학생 || ''} (검증/샘플/처방전/${이름}.json)`);
+    $('#rx-sample').value = 이름;
+  } catch (e) { 알림6('샘플 불러오기 실패: ' + e.message); }
+}
+/** 저장된 처방전 JSON (/api/prescriptions 꼴) → 처방전Html이 읽는 값 */
+function 샘플처방전값(p, 이름) {
+  const 구 = p.구술 || {};
+  return { 학생: p.학생 || '학생', 문항: String(p.문항 || ''), 문항번호: p.문항번호 || '', 갈래: p.갈래 === '수리계산' ? '수리' : '인문', 급소: p.급소 || [], 축: p.축 || [],
+    점수: p.점수, 만점: p.만점, 미정: p.교사판정남음 || 0, 미정축: [], 보류: false, 계산실수: !!구.규칙, 사축: 구.사축 ?? null,
+    다음: 구.다음축 ? { 축: 구.다음축, 글: 구.다음 || '', 고정: true } : null,
+    구술: 구.실패 ? { 실패: 구.실패 } : { 잘한것: 구.잘한것, 막힌곳: 구.막힌곳, 다음: 구.다음, 검사: 구.확인필요 || [] },
+    날: p.생성 ? new Date(p.생성).toLocaleDateString('ko-KR') : null, 저장: `검증/샘플/처방전/${이름}.json` };
+}
+그리기처방전();
 
 // ── 탭7 채점 샘플 ── q3~q7 대표 답안 카드 (검증/ 폴더 JSON — /api/results 요약). 판정 · 오류 · 다경로는 엔진 출력 그대로, 화면은 고르기만 한다
 //   고르기: 모범 · 학생N 파일만 (규칙반영 · 실채점 · 재채점 같은 작업 파일은 빼고), 「_최종」이 있으면 그 판
