@@ -969,6 +969,69 @@ async function 경로나누기(s,학생답,모범답안){
   return {단계,usage:msg.usage,...(없는글.length?{경고:`학생 답에 없는 글로 나눈 단계가 있습니다 — ${없는글.map(t=>`「${t}」`).join(' ')}`}:{})};
 }
 
+// ── POST /api/prescription — ⑤ 처방전 구술 (오종래 2026-10-22) ──
+// [엔진 우선] 4축 O/X · 막힌 조각 · 급소는 엔진 판정 + 교사 확정 그대로 받는다. Claude는 그것을 학생에게 하는 말로 옮기기만 한다 — 판정하지 않는다.
+// 구술 구조: 잘한 것(O 축) → 막힌 곳(X 축 · 조각) → 다음에 할 것(한 줄). 서버가 축 이름을 검사해 어긋나면 한 번 다시 쓰게 한다
+const 처방SYSTEM=`너는 HMOS 처방전 구술자다. 교사가 확정한 채점 결과를 학생에게 직접 말하듯 짧게 옮긴다.
+
+지킬 것:
+- 너는 채점하지 않는다. 축마다 O · X · ?(교사 확인 중) · —(이 문항에 없음)는 받은 그대로다. 바꾸거나 새로 판단하지 않는다.
+- 잘한것: O인 축만 말한다. 그 축에서 학생이 해낸 것을 1~2문장. O 축이 없으면 끝까지 답안을 쓴 것 같은 사실만 1문장.
+- 막힌곳: X인 축과 막힌 조각만 말한다. 학생이 쓴 줄을 「」로 짧게 인용하고, 엔진 근거에 있는 내용만으로 무엇이 빠졌는지 1~2문장. 근거에 없는 오류를 만들지 않는다. X 축이 없으면 "".
+- 다음: 한 문장. 받은 「기본 처방」(처음 X인 축)을 이 학생의 막힌 조각에 맞게 구체적으로 바꾼다. X 축이 없으면 다음 문항에서도 같은 순서로 풀라는 한 문장.
+- 정답 값이나 모범 풀이를 그대로 알려주지 않는다. 점수 · 배점 숫자를 쓰지 않는다. ? 축을 틀렸다고 말하지 않는다.
+- 축 이름은 근거대기 · 세우기 · 풀기 · 답구하기 그대로 쓴다. 해요체, 학생이 읽는 말로. 채점 용어(조각 · 판정 · 엔진 · 배점 · 루브릭)는 쓰지 않는다.`;
+const 처방FORMAT={type:'json_schema',schema:{type:'object',additionalProperties:false,required:['잘한것','막힌곳','다음'],properties:{
+  잘한것:{type:'string'},막힌곳:{type:'string',description:'X 축이 없으면 빈 글'},다음:{type:'string',description:'한 문장'}}}};
+const 처방축=['근거대기','세우기','풀기','답구하기'];
+const 처방기본={근거대기:'풀기 전에 문제 조건과 쓰일 개념(공식 이름)을 한 줄로 먼저 적어 보세요.',세우기:'조건 하나하나가 식의 어느 부분이 되는지 짝지어 보세요.',풀기:'계산을 한 줄에 한 단계씩, 중간 값을 적어 가며 이어 보세요.',답구하기:'마지막 줄에 문제가 묻는 값을 문제의 꼴 그대로 다시 써 보세요.'};
+/** 구술 검사 — 잘한것에 O 아닌 축 이름, 막힌곳에 X 축이 없음, 다음이 여러 줄, 채점 용어 */
+function 처방검사(o,축){
+  const O=축.filter(a=>a.판정==='O').map(a=>a.이름),X=축.filter(a=>a.판정==='X').map(a=>a.이름),틀=[];
+  const 잘못O=처방축.filter(a=>!O.includes(a)&&o.잘한것.includes(a));
+  if(잘못O.length)틀.push(`잘한것에 O가 아닌 축 ${잘못O.join(' · ')}을 말했다 — O 축(${O.join(' · ')||'없음'})만`);
+  if(X.length&&!X.some(a=>o.막힌곳.includes(a)))틀.push(`막힌곳에 X 축 이름(${X.join(' · ')})이 없다`);
+  if(!X.length&&o.막힌곳.trim())틀.push('X 축이 없으니 막힌곳은 빈 글');
+  if(/\n/.test(o.다음.trim()))틀.push('다음은 한 문장');
+  if(o.잘한것.length<12)틀.push('잘한것이 너무 짧다 — 1~2문장');
+  if(X.length&&o.막힌곳.length<20)틀.push('막힌곳이 너무 짧다 — 학생이 쓴 줄과 빠진 것을 1~2문장');
+  if(o.다음.length<15)틀.push('다음이 너무 짧다 — 구체적인 한 문장');
+  const 용어=['조각','판정','엔진','배점','루브릭'].filter(w=>[o.잘한것,o.막힌곳,o.다음].some(t=>t.includes(w)));
+  if(용어.length)틀.push(`채점 용어 ${용어.map(w=>`「${w}」`).join(' ')}를 학생 말로`);
+  return 틀;
+}
+app.post('/api/prescription',async(req,res)=>{
+  // 학생 · 문항 · 급소[{번호,글}] · 축[{이름,판정:'O'|'X'|'?'|'—'}] · 막힌[{번호,파트,글,근거,교사고침}] — 모두 ⑤ 교사 확정 재집계 그대로
+  const {학생,문항,급소,축,막힌}=req.body||{};
+  if(!Array.isArray(축)||축.length!==4||축.some(a=>!처방축.includes(a.이름)||!['O','X','?','—'].includes(a.판정))){res.status(400).json({error:'4축 판정(근거대기 · 세우기 · 풀기 · 답구하기 O/X/?/—)이 필요합니다'});return;}
+  const 첫X=축.find(a=>a.판정==='X');
+  const user=[
+    `문항:\n${String(문항||'').slice(0,1500)}`,
+    `급소: ${(급소||[]).map(g=>`${g.번호?`(${g.번호}) `:''}「${g.글||'미확인'}」`).join(' ')||'미확인'}`,
+    `4축 (교사 확정):\n${축.map(a=>`- ${a.이름}: ${a.판정}`).join('\n')}`,
+    `막힌 곳 (X — 학생이 쓴 줄 · 근거):\n${(막힌||[]).length?(막힌||[]).slice(0,8).map(b=>`- ${b.번호?`(${b.번호}) `:''}${b.파트}: ${String(b.글||'').trim()?`「${String(b.글).slice(0,200)}」`:'(학생이 이 단계를 쓰지 않음 — 인용하지 말고 쓰지 않았다고 말한다)'} —${b.교사고침?'선생님이 틀렸다고 확정함':String(b.근거||'').slice(0,300)}`).join('\n'):'없음'}`,
+    `기본 처방 (처음 X인 축${첫X?` ${첫X.이름}`:' 없음'}): ${첫X?처방기본[첫X.이름]:'다음 문항에서도 근거대기 → 세우기 → 풀기 → 답구하기 순서로 풀기'}`,
+  ].join('\n\n');
+  const 사용=[];let out=null,틀=[];
+  try{
+    for(let 시도=0;시도<2;시도++){
+      // max_tokens — sonnet-5-5 사고 토큰 포함, 2000이면 구술이 잘린다 (q3 학생 7)
+      const msg=await client.beta.messages.create({model:MODEL,max_tokens:8000,betas:['server-side-fallback-2026-07-01'],fallbacks:'default',
+        system:처방SYSTEM,output_config:{format:처방FORMAT},
+        messages:[{role:'user',content:시도===0?user:`${user}\n\n앞서 쓴 구술:\n${JSON.stringify(out)}\n\n고칠 것:\n${틀.map(t=>'- '+t).join('\n')}\n\n고쳐서 다시 쓴다.`}]});
+      사용.push(msg.usage);
+      if(msg.stop_reason==='refusal')throw new Error('모델이 거절함');
+      if(msg.stop_reason==='max_tokens')throw new Error('구술이 max_tokens에서 잘림');
+      let o=null;try{o=JSON.parse(msg.content.filter(b=>b.type==='text').map(b=>b.text).join(''));}catch(_){}
+      if(!o)throw new Error(`구술을 받지 못함 (stop_reason: ${msg.stop_reason})`);
+      out={잘한것:String(o.잘한것||'').trim(),막힌곳:String(o.막힌곳||'').trim(),다음:String(o.다음||'').trim()};
+      틀=처방검사(out,축);
+      if(!틀.length)break;
+    }
+  }catch(e){res.status(502).json({error:e.message});return;}
+  res.json({...out,학생:학생||null,검사:틀,usage:사용});
+});
+
 // ── POST /api/grade — C 8단계 학생 답안 채점 (오종래 2026-10-14) ──────────
 // 엔진 G1이 조각마다 O/X를 판정한다 (봉인⑥ 조각 대조 · 봉인④-b 게이트, 계열별). Claude는 쓰지 않는다.
 // 인문 세우기는 판정불가로 오고 교사가 매긴다. 교사 수정·확정·여러 학생 목록은 대시보드가 한다.
