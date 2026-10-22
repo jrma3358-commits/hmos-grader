@@ -1370,7 +1370,12 @@ function 그리기6() {
           <td style="font-size:12.5px">${x.오류 ? `<b style="color:var(--no)">${esc(x.오류)}</b><br>` : ''}${esc(x.판단근거)}</td></tr>`).join('')}
       </table></div>
     </div>`;
-  }).join('') + `<div style="display:flex;gap:10px;flex-wrap:wrap"><button class="run-btn" id="t-down">확정 내려받기 (JSON)</button><button class="ghost-btn" id="t-reset">교사 판정 지우기</button></div>`;
+  }).join('') + `<div style="display:flex;gap:10px;flex-wrap:wrap"><button class="run-btn" id="t-down">확정 내려받기 (JSON)</button><button class="ghost-btn" id="t-reset">교사 판정 지우기</button></div>`
+    + (() => { const 반 = 같은문항학생(); return `<div class="card" id="rx" style="margin-top:22px"><h3>처방전 출력</h3>
+      <div class="sec-sub" style="margin-bottom:10px">학생마다 한 장 — 문항 · 급소 · 4축 ✅/✗ · 점수 · 다음에 할 것. 위 교사 확정 판정으로 만들고, 새 창에서 인쇄하거나 PDF로 저장합니다.</div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center"><button class="run-btn" id="rx-one">처방전 출력 — ${esc(기록.학생 || '이 학생')}</button>
+      ${반.length > 1 ? `<button class="run-btn" id="rx-all">처방전 출력 — 같은 문항 학생 ${반.length}명 한 번에</button>` : ''}<span class="status" id="rx-st" style="margin-left:0"></span></div>
+      ${반.length > 1 ? `<div class="muted" style="font-size:12px;margin-top:8px">${반.map((x) => esc(x.학생 || x.파일)).join(' · ')} — 다른 학생의 교사 고침은 그 학생을 ⑤에서 확정한 이 브라우저 기록을 씁니다 (없으면 엔진 판정)</div>` : ''}</div>`; })();
   document.querySelectorAll('#p6 .seg button').forEach((b) => b.addEventListener('click', () => {
     const card = b.closest('.card');
     const k = card.dataset.k, i = Number(card.dataset.i);
@@ -1383,6 +1388,8 @@ function 그리기6() {
   }));
   $('#t-reset').addEventListener('click', () => { 교사 = {}; 저장교사(); 그리기6(); });
   $('#t-down').addEventListener('click', 내려받기);
+  $('#rx-one').addEventListener('click', () => 처방전출력(false));
+  $('#rx-all')?.addEventListener('click', () => 처방전출력(true));
 }
 
 function 내려받기() {
@@ -1399,6 +1406,98 @@ function 내려받기() {
   a.download = (기록키.startsWith('파일:') ? 기록키.slice(3).replace(/\.json$/, '') : 'hmos_새채점') + '_교사확정.json';
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+// ── ⑤ 처방전 출력 (오종래 2026-10-22) ── 학생마다 한 장: 문항명 · 급소 · 4축 ✅/✗ · 점수 · 다음에 할 것 한 줄.
+//   판정은 교사 확정(엔진 판정 + 이 브라우저의 교사 고침 — 재집계 그대로). 축 = 그 파트 조각이 모두 O면 ✅ · 하나라도 X면 ✗ · 판정불가가 남으면 ?
+//   다음에 할 것 = 근거대기 → 답구하기 순으로 처음 ✗인 축의 고정 문안 (채점 리포트 학생용과 같은 글). 인쇄 창에서 PDF로 저장
+const 처방한줄 = {
+  근거대기: '풀기 전에 문제 조건과 쓰일 개념(공식 이름)을 한 줄로 먼저 적어 보세요.',
+  세우기: '조건 하나하나가 식의 어느 부분이 되는지 짝지어 보세요.',
+  풀기: '계산을 한 줄에 한 단계씩, 중간 값을 적어 가며 이어 보세요.',
+  답구하기: '마지막 줄에 문제가 묻는 값을 문제의 꼴 그대로 다시 써 보세요.',
+};
+/** 기록 하나 + 교사 고침 → 처방전 한 장의 값 */
+function 처방전값(j, 고침들) {
+  const ss = j?.루브릭?.out?.소문항 || [], xs = j?.채점 || [];
+  const 찾기 = (s, i) => xs.find((g) => g.자리 === i) || (xs.some((g) => g.자리 != null) ? null : xs.find((g) => (g.번호 ?? null) === (s.번호 ?? null)) || xs[i]) || null;
+  const 조각 = [], 급소 = [];
+  let 점수 = 0, 만점 = 0;
+  ss.forEach((s, i) => {
+    const g = 찾기(s, i);
+    if (!g?.out?.조각별) return;
+    const r = 재집계(g.out, 고침들[String(s.번호 ?? i)] || {});
+    점수 += r.부분점수; 만점 += r.만점;
+    조각.push(...r.조각);
+    급소.push({ 번호: s.번호 ?? null, 글: 급소글(s) });
+  });
+  const 축 = 파트들.map((p) => {
+    const ys = 조각.filter((x) => x.파트 === p);
+    return { 이름: p, 판정: !ys.length ? '—' : ys.some((x) => x.판정 === 'X') ? 'X' : ys.some((x) => x.판정 === '판정불가') ? '?' : 'O', 조각수: ys.length };
+  });
+  const 첫X = 축.find((a) => a.판정 === 'X');
+  return { 학생: j.학생 || '학생', 문항: String(j.문항 || ''), 급소, 축, 점수: Math.round(점수 * 100) / 100, 만점: Math.round(만점 * 100) / 100,
+    다음: 첫X ? { 축: 첫X.이름, 글: 처방한줄[첫X.이름] } : null, 미정: 조각.filter((x) => x.판정 === '판정불가').length };
+}
+/** 같은 문항 학생 파일 — 탭7 샘플과 같은 고르기 (학생N 파일만, 「_최종」이 있으면 그 판) */
+function 같은문항학생() {
+  if (!기록키.startsWith('파일:')) return [];
+  const 지금 = 기록키.slice(3), 폴더 = 지금.split('/').slice(0, -1).join('/'), 번호 = (지금.split('/').pop().match(/^q\d+/) || [''])[0];
+  if (!번호) return [];
+  const 후보 = 목록.filter((x) => x.파일.split('/').slice(0, -1).join('/') === 폴더 && new RegExp(`^${번호}_학생\\d+(_최종)?_\\d{8}\\.json$`).test(x.파일.split('/').pop()));
+  const 판 = {};
+  for (const x of 후보) { const k = x.파일.replace('_최종', '').replace(/_\d{8}\.json$/, ''); if (!판[k] || /_최종/.test(x.파일)) 판[k] = x; }
+  return Object.values(판).sort((a, b) => 학생번호(a) - 학생번호(b));
+}
+const 처방전CSS = `@page{size:A4;margin:16mm}*{box-sizing:border-box;margin:0;padding:0}body{font-family:'Noto Sans KR',sans-serif;color:#1C1C1E;background:#EDE9E1;font-size:14px;line-height:1.6}
+.bar{position:sticky;top:0;background:#1A4A4A;color:#fff;padding:10px 16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;font-size:13px}.bar button{border:none;background:#C8A84B;color:#1A4A4A;font:inherit;font-weight:700;padding:7px 16px;border-radius:6px;cursor:pointer}
+.sheet{background:#fff;width:100%;max-width:180mm;margin:16px auto;padding:14mm 14mm 12mm;border-radius:6px;page-break-after:always;break-after:page}.sheet:last-child{page-break-after:auto;break-after:auto}
+.hd{display:flex;justify-content:space-between;align-items:baseline;border-bottom:2px solid #1A4A4A;padding-bottom:8px;margin-bottom:14px;gap:12px;flex-wrap:wrap}.hd h1{font-family:'Noto Serif KR',serif;font-size:20px;color:#1A4A4A}.hd .who{font-size:16px;font-weight:700}.hd .d{font-size:12px;color:#6B6B70}
+.k{font-size:11px;font-weight:700;color:#6B6B70;letter-spacing:.06em;margin:14px 0 4px}.q{white-space:pre-wrap;font-size:13.5px}.pv{background:#F6EFD9;border-radius:5px;padding:7px 11px;font-size:13.5px;margin-top:4px}
+table{border-collapse:collapse;width:100%;margin-top:4px}td,th{border:1px solid #DDD8CC;padding:9px 10px;text-align:center;font-size:14px}th{background:#F7F5F0;font-size:12.5px;color:#1A4A4A}td.v{font-size:20px;font-weight:700}td.v.o{color:#2E7D32}td.v.x{color:#C62828}td.v.u{color:#8D6E00}td.v.n{color:#9A9A9E}
+.sc{display:flex;align-items:baseline;gap:6px;margin-top:4px}.sc b{font-size:30px;color:#1A4A4A}.sc span{color:#6B6B70}
+.nx{border-left:4px solid #1A4A4A;background:#F5FAF9;padding:10px 14px;margin-top:4px;font-size:15px}.nx small{display:block;color:#6B6B70;font-size:12px}
+.ft{margin-top:16px;font-size:11px;color:#9A9A9E;border-top:1px solid #EDE9E1;padding-top:6px}
+@media print{body{background:#fff}.bar{display:none}.sheet{margin:0;padding:0;max-width:none;border-radius:0}}
+@media (max-width:640px){.sheet{margin:12px 8px;padding:20px 16px}}`;
+function 처방전Html(v) {
+  const 표 = { O: ['o', '✅'], X: ['x', '✗'], '?': ['u', '?'], '—': ['n', '—'] };
+  const 날 = new Date().toLocaleDateString('ko-KR');
+  const 문항명 = v.문항.split('\n').map((l) => l.trim()).filter(Boolean).slice(0, 3).join('\n');
+  return `<div class="sheet"><div class="hd"><h1>HMOS 처방전</h1><div><span class="who">${esc(v.학생)}</span> <span class="d">· ${esc(v.문항번호 || '')} · ${날}</span></div></div>
+    <div class="k">문항</div><div class="q">${esc(문항명)}</div>
+    <div class="k">급소</div>${v.급소.map((g) => `<div class="pv">${g.번호 ? `(${esc(g.번호)}) ` : ''}${g.글 ? `「${esc(g.글)}」` : '급소 미확인'}</div>`).join('') || '<div class="pv">—</div>'}
+    <div class="k">학생이 한 것 — 4축</div><table><tr>${v.축.map((a) => `<th>${esc(a.이름)}</th>`).join('')}</tr><tr>${v.축.map((a) => `<td class="v ${표[a.판정][0]}">${표[a.판정][1]}</td>`).join('')}</tr></table>
+    <div class="k">점수</div><div class="sc"><b>${점(v.점수)}</b><span>/ ${점(v.만점)}점</span></div>
+    <div class="k">다음에 할 것</div><div class="nx">${v.다음 ? `<small>${esc(v.다음.축)}</small>${esc(v.다음.글)}` : '네 단계를 모두 해냈어요. 다음 문항에서도 같은 순서로 풀어 보세요.'}</div>
+    <div class="ft">교사 확정 판정 기준 (엔진 판정 + 교사 고침) · ✅ 그 축 조각 모두 맞음 · ✗ 하나라도 틀림 · ? 교사 판정 남음 · — 이 문항에 그 축 없음${v.미정 ? ` · 아직 교사 판정 ${v.미정}칸 (0점으로 셈)` : ''}</div></div>`;
+}
+async function 처방전출력(전체) {
+  const st = $('#rx-st');
+  const 창 = window.open('', '_blank'); // 클릭 바로 열어야 팝업 막기에 걸리지 않는다 — 내용은 뒤에 채운다
+  if (!창) { st.textContent = '새 창이 막혔습니다 — 브라우저 팝업 허용 후 다시 누르세요'; return; }
+  창.document.write('<!DOCTYPE html><meta charset="UTF-8"><title>처방전</title><p style="font-family:sans-serif;padding:24px">처방전을 만드는 중…</p>');
+  const 번호 = (기록키.startsWith('파일:') ? 기록키.slice(3).split('/').pop().match(/^q\d+/) || [''] : [''])[0];
+  const 장 = [];
+  try {
+    if (전체) {
+      const 학생들 = 같은문항학생();
+      for (const [n, x] of 학생들.entries()) {
+        st.textContent = `처방전 만드는 중… ${n + 1}/${학생들.length}`;
+        const 키 = '파일:' + x.파일;
+        const j = 키 === 기록키 ? 기록 : await 받기('/api/results/' + x.파일.replace(/\.json$/, '').split('/').map(encodeURIComponent).join('/'));
+        let 고침 = {};
+        try { 고침 = 키 === 기록키 ? 교사 : JSON.parse(localStorage.getItem('hmos-d2-teacher:' + 키) || '{}'); } catch (_) {}
+        장.push({ ...처방전값(j, 고침), 문항번호: 번호 });
+      }
+    } else 장.push({ ...처방전값(기록, 교사), 문항번호: 번호 });
+  } catch (e) { 창.close(); st.textContent = '처방전 만들기 실패: ' + e.message; return; }
+  창.document.open();
+  창.document.write(`<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>HMOS 처방전 — ${esc(번호 || '채점')} ${장.length}명</title>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&family=Noto+Serif+KR:wght@600&display=swap" rel="stylesheet"><style>${처방전CSS}</style></head>
+    <body><div class="bar"><span>처방전 ${장.length}장 — 한 장에 한 학생</span><button onclick="window.print()">인쇄 · PDF로 저장</button><span style="opacity:.75">인쇄 창에서 「PDF로 저장」을 고르면 PDF 파일이 됩니다</span></div>${장.map(처방전Html).join('')}</body></html>`);
+  창.document.close();
+  st.textContent = `처방전 ${장.length}장을 새 창에 열었습니다`;
 }
 
 // ── 탭7 채점 샘플 ── q3~q7 대표 답안 카드 (검증/ 폴더 JSON — /api/results 요약). 판정 · 오류 · 다경로는 엔진 출력 그대로, 화면은 고르기만 한다
