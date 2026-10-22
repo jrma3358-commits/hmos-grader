@@ -229,7 +229,7 @@ const 처방전샘플폴더=path.join(샘플폴더,'처방전');
 app.get('/api/prescription-samples',(req,res)=>{
   res.setHeader('Cache-Control','no-store');
   if(!접속됨(req)){res.status(401).json({ok:false,error:접속만료});return;}
-  let 파일들=[];try{파일들=fs.readdirSync(처방전샘플폴더).filter(f=>f.endsWith('.json')).sort();}catch(_){}
+  let 파일들=[];try{파일들=fs.readdirSync(처방전샘플폴더).filter(f=>f.endsWith('.json')).sort((a,b)=>a.localeCompare(b,'ko',{numeric:true}));}catch(_){}
   const 목록=파일들.map(f=>{const 파일=f.replace(/\.json$/,'');
     try{const j=JSON.parse(fs.readFileSync(path.join(처방전샘플폴더,f),'utf8'));return {파일,학생:j.학생||null,문항번호:j.문항번호||null,점수:j.점수??null,만점:j.만점??null};}
     catch(_){return {파일,오류:'JSON을 읽지 못함'};}
