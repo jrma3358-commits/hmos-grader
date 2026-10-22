@@ -52,7 +52,8 @@ function 소화판정(v) {
   const X = v.축.filter((a) => a.판정 === 'X' && !(v.계산실수 && a.이름 === '답구하기'));
   const 나 =통합[Number((String(v.학생).match(/\d+/) || [])[0])];
   if (!X.length || !나) return [];
-  const 남 = 나.문항.filter((m) => m.문항 !== v.문항번호);
+  const 내과목 = 나.문항.find((m) => m.문항 === v.문항번호)?.과목;
+  const 남 = 나.문항.filter((m) => m.문항 !== v.문항번호 && m.과목 === 내과목);
   return X.map((a) => {
     const 이름 = 역량[a.이름], Xs = 남.filter((m) => m.축[a.이름] === 'X').map((m) => m.문항), Os = 남.filter((m) => m.축[a.이름] === 'O').map((m) => m.문항);
     if (!Xs.length && !Os.length) return null;

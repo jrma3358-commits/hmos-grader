@@ -341,23 +341,43 @@ X ${a.X.join(' · ') || '없음'}${a.미정.length ? '\n? ' + a.미정.join(' ·
   const 있는문항 = x.문항.map((m) => m.문항);
   // 게이트 칸(앞 역량 X 위에서 얻은 O — ◐까지)은 *, 닿은 척 확인(① X · ④ O)은 ! (오종래 2026-10-23 확정, 안 C1)
   const 기호칸 = (s, k = {}) => `<td class="mk ${{ '●': 'full', '◐': 'half', '○': 'lo', '?': 'wait' }[s] || 'none'}" data-tip="${esc((기호뜻[s] || '이 문항에 없음') + (k.게이트 ? ` — 해냈지만 앞 단계(${k.게이트})가 아직 소화되지 않은 위에서 (◐까지)` : '') + (k.닿은척확인 ? ' — 개념소화력이 막혔는데 답에 닿음: 선생님 확인' : ''))}">${esc(s === '-' ? '–' : s)}${k.게이트 ? '<sup>*</sup>' : ''}${k.닿은척확인 ? '<sup>!</sup>' : ''}</td>`;
+  // 성향 읽기 (오종래 2026-10-23 확정) — 과목이 둘 이상이면 4역량 × 과목 격자(원전 5-1), 과목마다 문항 칸은 펼쳐 보기. 하나면 4역량 × 문항
+  const 과 = x.과목진단 || { 과목들: [], 비교: false };
+  const 한과목 = 과.과목들.length === 1 && 과.과목들[0] !== '과목 미지정' ? 과.과목들[0] : '';
+  const 문항표 = (qs, 끝머리, 끝) => `<table class="hc"><thead><tr><th>역량</th>${qs.map((q) => `<th>${esc(q)}</th>`).join('')}<th>${esc(끝머리)}</th></tr></thead><tbody>
+    ${x.진단표.map((d) => `<tr><td><b>${esc(d.역량)}</b><small>${esc(d.뜻)}</small></td>${d.칸.filter((k) => qs.includes(k.문항)).map((k) => 기호칸(k.기호, k)).join('')}${기호칸(끝(d))}</tr>`).join('')}</tbody></table>`;
+  const 과목기호 = (d, g) => 과.표?.find((t) => t.축 === d.축)?.칸.find((k) => k.과목 === g)?.기호 || '-';
+  const 격자 = 과.비교
+    ? `<table class="hc"><thead><tr><th>역량</th>${과.과목들.map((g) => `<th>${esc(g)}</th>`).join('')}<th>종합</th></tr></thead><tbody>
+      ${x.진단표.map((d) => `<tr><td><b>${esc(d.역량)}</b><small>${esc(d.뜻)}</small></td>${과.과목들.map((g) => 기호칸(과목기호(d, g))).join('')}${기호칸(d.종합)}</tr>`).join('')}</tbody></table>
+      ${과.과목들.map((g) => { const qs = x.문항.filter((m) => m.과목 === g).map((m) => m.문항); return `<details><summary>${esc(g)} — 문항별 (${esc(qs.join(' · '))})</summary>${문항표(qs, g, (d) => 과목기호(d, g))}</details>`; }).join('')}`
+    : 문항표(있는문항, '종합', (d) => d.종합);
   const 진단 = `<section><div class="layer">학습수행역량 진단표</div><h2>${esc(x.학생)} — 네 역량의 지금</h2>
-    <div class="sub">재기 위한 표가 아니라, 정확히 보고 돕기 위한 표입니다. 네 역량은 채점의 네 단계에서 그대로 나옵니다. 지금은 수학 문항(${esc(있는문항.join(' · '))})끼리 견주었고, 과목이 늘면 과목을 가로질러 봅니다.</div>
-    <div class="card scroll"><table class="hc"><thead><tr><th>역량</th>${있는문항.map((q) => `<th>${esc(q)}</th>`).join('')}<th>종합</th></tr></thead><tbody>
-    ${x.진단표.map((d) => `<tr><td><b>${esc(d.역량)}</b><small>${esc(d.뜻)}</small></td>${d.칸.map((k) => 기호칸(k.기호, k)).join('')}${기호칸(d.종합)}</tr>`).join('')}</tbody></table>
-    <div class="legend"><span>● 강점</span><span>◐ 보통</span><span>○ 다질 곳</span><span>? 선생님 확인 중</span><span>– 이 문항에 없음</span>${x.진단표.some((d) => d.칸.some((k) => k.게이트)) ? '<span>* 해냈지만 앞 단계가 아직 소화되지 않은 위에서 (◐까지)</span>' : ''}${x.소견.닿은척확인 ? '<span>! 선생님 확인 — 개념이 막혔는데 답에 닿음</span>' : ''}</div></div></section>`;
+    <div class="sub">재기 위한 표가 아니라, 정확히 보고 돕기 위한 표입니다. 네 역량은 채점의 네 단계에서 그대로 나옵니다. ${과.비교 ? `과목(${esc(과.과목들.join(' · '))})을 가로질러 견주었습니다. 같은 이름의 역량도 과목마다 결이 달라, 정밀한 점수가 아니라 경향으로 읽습니다.` : `지금은 ${한과목 ? esc(한과목) + ' ' : ''}문항(${esc(있는문항.join(' · '))})끼리 견주었고, 과목이 늘면 과목을 가로질러 봅니다.`}</div>
+    <div class="card scroll">${격자}
+    <div class="legend"><span>● 강점</span><span>◐ 보통</span><span>○ 다질 곳</span><span>? 선생님 확인 중</span><span>– 없음</span>${x.진단표.some((d) => d.칸.some((k) => k.게이트)) ? '<span>* 해냈지만 앞 단계가 아직 소화되지 않은 위에서 (◐까지)</span>' : ''}${x.소견.닿은척확인 ? '<span>! 선생님 확인 — 개념이 막혔는데 답에 닿음</span>' : ''}</div></div></section>`;
   const 소 = x.소견;
   const 소견 = `<section><div class="layer">종합 소견 — 왜</div><h2>강점부터, 다질 곳은 성장으로</h2><div class="card"><div class="story">
     ${소.강점.length ? `<p><b>강점</b></p>${소.강점.map((a) => `<p>★ ${esc(a.글)}</p>`).join('')}` : '<p>아직 여러 문항에서 단단히 드러난 역량은 없습니다. 한 역량씩 소화해 가면 됩니다.</p>'}
     ${소.게이트?.length ? `<p style="margin-top:14px"><b>해낸 것 — 앞 단계를 소화하면 온전히 살아납니다</b></p>${소.게이트.map((a) => `<div class="coord calm"><span class="k">${esc(a.역량)} · ${esc(a.문항.join(' · '))}</span>${esc(a.글)}</div>`).join('')}` : ''}
     ${소.닿은척확인 ? `<div class="coord wait"><span class="k">선생님 확인</span>${esc(소.닿은척확인.join(' · '))}에서 개념소화력은 막혔는데 답에는 닿았습니다. 급소에 진짜 닿은 것인지 한 번 더 봐 주세요.</div>` : ''}
-    ${소.다질곳.length ? `<p style="margin-top:14px"><b>다질 곳 — 왜 막혔는가</b></p>${소.다질곳.map((a) => `<div class="coord ${a.판정 === '삼킴형' ? '' : 'calm'}"><span class="k">${esc(a.판정 === '삼킴형' ? '삼킴형 — 습관을 봅니다' : a.판정 === '문항벽' ? '문항벽 — 그 문항을 봅니다' : '기록이 쌓이면 가려집니다')}</span>${esc(a.글)}</div>`).join('')}` : ''}
+    ${소.다질곳.length ? `<p style="margin-top:14px"><b>다질 곳 — 왜 막혔는가</b></p>${소.다질곳.map((a) => `<div class="coord ${a.판정 === '삼킴형' ? '' : 'calm'}"><span class="k">${esc(a.판정 === '삼킴형' ? '삼킴형 — 습관을 봅니다' : a.판정 === '문항벽' ? '문항벽 — 그 문항을 봅니다' : a.판정 === '과목벽' ? '과목벽 — 그 과목을 봅니다' : '기록이 쌓이면 가려집니다')}</span>${esc(a.글)}</div>`).join('')}` : ''}
     ${소.성향 ? `<p style="margin-top:12px">${esc(소.성향)}</p>` : ''}</div></div></section>`;
+  // 성향 — 현재 경향 (밑그림 3-5 · 2-3) — 과목이 둘 이상일 때만. 비중 숫자는 내부 계측에만
+  const 성향 = `<section><div class="layer">성향 — 현재 경향</div><h2>어느 쪽이 더 단단한가</h2><div class="card"><div class="story">
+    ${소.과목 ? `${소.과목.경향 ? `<p><b>${esc(소.과목.경향.글)}</b></p>` : '<p>이과 · 문과 두 묶음에 과목이 모두 기록되면 경향이 보입니다.</p>'}
+      ${소.과목.비중글.length ? `<p style="margin-top:12px"><b>왜 이 과목은 되고 저 과목은 막히나</b></p>${소.과목.비중글.map((a) => `<p>${esc(a.글)}</p>`).join('')}` : ''}
+      ${소.과목.특이.length ? `<p style="margin-top:12px"><b>그 과목만 유독</b></p>${소.과목.특이.map((a) => `<div class="coord calm"><span class="k">${esc(a.과목)} · ${esc(a.역량)}</span>${esc(a.글)}</div>`).join('')}` : ''}
+      <p style="margin-top:12px;font-size:13px;color:var(--muted)">경향은 고정된 딱지가 아닙니다. 지금의 모습이고, 다지는 만큼 바뀝니다.</p>`
+    : '<p>과목이 둘 이상 기록되면 성향이 보입니다.</p>'}</div></div></section>`;
   const 안내 = `<section><div class="layer">성장 안내</div><h2>이렇게 가면 됩니다</h2><div class="card">
     ${소.안내 ? `<div class="rx" style="font-size:15px;margin-top:0">${esc(소.안내)}</div>` : ''}<div class="story" style="margin-top:12px"><p>${esc(소.마무리)}</p></div></div></section>`;
   const 내부 = `<section><details><summary>내부 계측 — 선생님 참고 (점수 · 역량 비율 · 4축 누적)</summary><div style="margin-top:14px">
     <div class="card scroll"><h3>역량 비율 <small>확정 O = 100% · 확정 X = 엔진 축 점수 비율 · 종합 = 축 배점 가중 · ● 80% 이상 · ◐ 50% 이상 · ○ 그 아래 · * 게이트 (바로 앞 역량 X → 79% 상한)</small></h3><table><thead><tr><th>역량</th>${있는문항.map((q) => `<th class="num">${esc(q)}</th>`).join('')}<th class="num">종합</th><th>삼킴 · 소화</th></tr></thead><tbody>
       ${x.진단표.map((d) => `<tr><td>${esc(d.역량)} <span style="color:var(--muted);font-size:12px">${esc(d.축)}</span></td>${d.칸.map((k) => `<td class="num"${k.게이트 ? ` data-tip="${esc(`게이트 — 앞 단계 ${k.게이트} X, 비율 상한 79%`)}"` : ''}>${k.비율 == null ? '—' : 퍼(k.비율)}${k.게이트 ? '*' : ''}</td>`).join('')}<td class="num"><b>${d.종합비율 == null ? '—' : 퍼(d.종합비율)}</b></td><td>${d.소화 ? `${esc(d.소화.판정)} (X ${esc(d.소화.X.join(' · '))})` : ''}</td></tr>`).join('')}</tbody></table></div>
+    ${과.비중 ? `<div class="card scroll"><h3>과목 역량 비중 <small>이번 시험지 — 그 과목 문항의 축 배점 비율 (밑그림 2-1)</small></h3><table><thead><tr><th>과목</th>${x.진단표.map((d) => `<th class="num">${esc(d.역량)}</th>`).join('')}</tr></thead><tbody>
+      ${Object.entries(과.비중).map(([g, w]) => `<tr><td>${esc(g)}</td>${x.진단표.map((d) => `<td class="num">${퍼(w[d.축] || 0)}</td>`).join('')}</tr>`).join('')}</tbody></table>
+      ${소.과목?.경향 ? `<div class="sub" style="margin:8px 0 0">묶음 종합 — ${소.과목.경향.쪽.map((z) => `${esc(z.쪽)}(${esc(z.묶음)}) ${z.비율 == null ? '—' : 퍼(z.비율)}`).join(' · ')}</div>` : ''}</div>` : ''}
     ${점수표}${누적}${공통}${성장}</div></details></section>`;
   // 성장 궤적 (오종래 2026-10-23 확정) — 회차 = 교사가 이름 붙인 측정 한 번, 지난 회차 고정. 역량 종합 기호를 회차마다 — 어제의 나와의 비교
   const 궤 = x.성장궤적 || { 회차: [] };
@@ -367,7 +387,7 @@ X ${a.X.join(' · ') || '없음'}${a.미정.length ? '\n? ' + a.미정.join(' ·
         ${축들.map((a) => `<tr><td><b>${esc(궤.회차.at(-1).진단표.find((d) => d.축 === a)?.역량 || a)}</b></td>${궤.회차.map((r) => 기호칸(r.진단표.find((d) => d.축 === a)?.종합 || '-')).join('')}</tr>`).join('')}</tbody></table></div>
         <div class="story" style="margin-top:12px">${궤.비교.글.map((t) => `<p>${esc(t)}</p>`).join('')}</div>
         <div class="sub" style="margin:8px 0 0">남과 견주지 않고, ${esc(궤.비교.앞)} → ${esc(궤.비교.뒤)}의 나를 견주었습니다. 지난 회차 기록은 그때 그대로 고정입니다.</div>`}</div></section>`;
-  $('#main').innerHTML = 진단 + 소견 + 안내 + 궤적 + 내부;
+  $('#main').innerHTML = 진단 + 소견 + 성향 + 안내 + 궤적 + 내부;
 }
 const 기호뜻 = { '●': '강점', '◐': '보통', '○': '다질 곳', '?': '선생님 확인 중' };
 function 고르기줄() {

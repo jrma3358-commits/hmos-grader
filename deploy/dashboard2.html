@@ -1484,7 +1484,9 @@ async function 소화판정(v) {
   if (!통합목록) { try { 통합목록 = (await 받기('/api/integrated')).목록 || []; } catch (_) { 통합목록 = []; } }
   const 나 = 통합목록.find((x) => x.번호 === 번호);
   if (!나) return [];
-  const 남 = 나.문항.filter((m) => m.문항 !== v.문항번호);
+  // 같은 과목 안에서만 문항끼리 (오종래 2026-10-23 확정 — 과목끼리 견주기는 통합 리포트 몫)
+  const 내과목 = 나.문항.find((m) => m.문항 === v.문항번호)?.과목;
+  const 남 = 나.문항.filter((m) => m.문항 !== v.문항번호 && m.과목 === 내과목);
   return X.map((a) => {
     const 이름 = 역량[a.이름], Xs = 남.filter((m) => m.축[a.이름] === 'X').map((m) => m.문항), Os = 남.filter((m) => m.축[a.이름] === 'O').map((m) => m.문항);
     if (!Xs.length && !Os.length) return null;
