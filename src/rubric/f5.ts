@@ -26,6 +26,15 @@ export function allocate_points(조각들: 조각뼈대[], 총배점: number, �
     const 파트배점 = { 근거대기: 0, 세우기: 0, 풀기: 총배점, 답구하기: 0 } as Record<파트, number>;
     return { 조각들: 조각들.map((c) => ({ ...c, 배점: c.역할 === '대응' ? 몫[대응.indexOf(c)] : 0 })), 파트배점, 미배정: [] };
   }
+  // [오종래 2026-10-23 5] 짝연결형 — 원전 점수 계산 그대로: 짝마다 개념연결 · 작동과정에 같은 몫 (강+강 4 · 강+약 3 · 약+약 2 …), 사례 · 목적지는 측정만
+  const 짝칸 = 조각들.filter((c) => c.역할 === '개념연결' || c.역할 === '작동과정');
+  if (짝칸.length) {
+    const 몫 = 봉인4a_반올림(총배점, 짝칸.map(() => 총배점 / 짝칸.length));
+    const 파트배점 = { 근거대기: 0, 세우기: 0, 풀기: 0, 답구하기: 0 } as Record<파트, number>;
+    const 조각배점 = 조각들.map((c) => ({ ...c, 배점: 짝칸.includes(c) ? 몫[짝칸.indexOf(c)] : 0 }));
+    조각배점.forEach((c) => (파트배점[c.파트] += c.배점));
+    return { 조각들: 조각배점, 파트배점, 미배정: [] };
+  }
   const 지수 = 봉인4_파트지수(계열);
   const 파트들 = Object.keys(지수) as 파트[];
   const 미배정 = 파트들.filter((p) => !조각들.some((c) => c.파트 === p));
