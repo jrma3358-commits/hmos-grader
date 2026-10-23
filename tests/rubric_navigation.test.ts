@@ -6,6 +6,7 @@ import { recognizeV2Analysis } from '../src/fq/pipeline.ts';
 import { derive_pieces, f2_input_from_v2 } from '../src/rubric/f2.ts';
 import { judge_element } from '../src/rubric/f3.ts';
 import { specify_condition } from '../src/rubric/f4.ts';
+import { allocate_points } from '../src/rubric/f5.ts';
 import { spread_piece } from '../src/rubric/f6.ts';
 import { 봉인2_부류 } from '../src/rubric/sealed/group.ts';
 
@@ -65,5 +66,51 @@ describe('분류형 논제 — 4구간 조각', () => {
     assert.deepEqual(경로.slice(0, 4).map((p) => p.단락), ['라', '마', '바', '사']);
     assert.equal(경로.at(-1)!.색, 'k');
     assert.match(경로.at(-1)!.실체, /다른 입장/);
+  });
+});
+
+// 대응형 (오종래 2026-10-23) — q8 (1) 「(나)의 ⓐ~ⓓ에 담긴 차별적 인식이 (가)의 언어 공동체 구성 요인 중 무엇에 의한 것인지 각각 서술」
+describe('대응형 논제 — 4구간 조각', () => {
+  const 대응논제 = '(나)의 ⓐ~ⓓ에 담긴 차별적 인식이 (가)의 언어 공동체 구성 요인 중 무엇에 의한 것인지 각각 서술하시오. (200자 내외, 4점)';
+  const 가 = '개인의 정체성은 개인적이면서도 사회적이다. 언어 공동체는 연령, 직업, 거주 지역, 성별, 민족, 인종, 종교 등 다양한 요인에 의해 구성되며, 한 개인은 여러 언어 공동체에 동시에 속할 수 있다.';
+  const 나 = "민준 : 야, 어제 지하철에서 ⓐ틀딱 한 명이 자리 양보 안 해준다고 뒤에서 엄청 뭐라 하더라.\n지아 : ⓑ쪽발이들한테 지다니.\n준서 : 학교 앞에 요즘 ⓒ흑형들 많이 보이지 않아?\n유리 : 딱 봐도 ⓓ여사님이더라.\n'ⓐ틀딱'은 노인 집단 전체를 낮잡아 이르는 표현이다. 'ⓑ쪽발이'는 일본인을 비하하는 표현이다. 'ⓒ흑형'은 '흑인 형'을 줄인 말이다. 'ⓓ여사님'은 여성 집단 전체를 차별하는 표현이다.";
+  const 입력 = f2_input_from_v2(recognizeV2Analysis(대응논제));
+  assert.ok(입력.ok);
+  const 참조단락 = [{ 단락: '가', 단락급소: '[가]', 글: 가 }, { 단락: '나', 단락급소: '[나]', 글: 나 }];
+  const 조각 = derive_pieces(입력.물음, 입력.k, { ...입력.인식, 참조단락, 연결문장: [], 단락연결: [] }, '인문사회국어');
+  const 파트 = (p: string) => 조각.filter((c) => c.파트 === p);
+
+  it('근거대기 = 사례 (ⓐ~ⓓ 표현) + 범주 ((가)의 구성 요인 후보)', () => {
+    assert.deepEqual(파트('근거대기').map((c) => c.역할), ['사례', '범주']);
+    assert.deepEqual(파트('근거대기')[0].사례목록!.사례.map((x) => `${x.기호}${x.표현}`), ['ⓐ틀딱', 'ⓑ쪽발이', 'ⓒ흑형', 'ⓓ여사님']);
+    assert.match(파트('근거대기')[0].사례목록!.사례[0].설명!, /노인 집단/);
+    const 범주 = 파트('근거대기')[1].범주!;
+    assert.equal(범주.이름, '언어 공동체 구성 요인');
+    assert.deepEqual(범주.후보, ['연령', '직업', '거주 지역', '성별', '민족', '인종', '종교']);
+  });
+  it('세우기 없음 · 논리펼치기 = 사례마다 대응', () => {
+    assert.equal(파트('세우기').length, 0);
+    assert.deepEqual(파트('풀기').map((c) => c.사례!.기호), ['ⓐ', 'ⓑ', 'ⓒ', 'ⓓ']);
+    assert.ok(파트('풀기').every((c) => c.역할 === '대응' && c.구간 === '논리펼치기'));
+  });
+  it('답표현하기 = 「ⓐ~ⓓ의 언어 공동체 구성 요인」 · 경로 (나) → 급소 → (가)', () => {
+    const 경로 = 파트('답구하기')[0].경로!;
+    assert.deepEqual(경로.map((p) => p.실체), ['(나)', 'ⓐ~ⓓ에 담긴 차별적 인식', '(가)', 'ⓐ~ⓓ의 언어 공동체 구성 요인']);
+    assert.equal(경로.at(-1)!.핵심어, '요인');
+  });
+  it('배점 원전 그대로 — 대응 조각마다 1, 나머지 0', () => {
+    const r = allocate_points(조각.map((c) => ({ ...c, 요소: judge_element(c, '인문사회국어') })), 4, '인문사회국어');
+    assert.deepEqual(r.조각들.map((c) => `${c.id}:${c.배점}`), ['근거대기-1:0', '근거대기-2:0', '풀기-1:1', '풀기-2:1', '풀기-3:1', '풀기-4:1', '답구하기-1:0']);
+  });
+  it('F4 충족조건 · F6 모범조각틀', () => {
+    for (const c of 조각) {
+      const 요소 = judge_element(c, '인문사회국어');
+      assert.ok(specify_condition({ ...c, 요소 }, '인문사회국어').length > 0);
+      assert.ok(spread_piece({ ...c, 요소 }, 입력.k, '인문사회국어').length > 0);
+    }
+    assert.match(specify_condition(파트('풀기')[0], '인문사회국어'), /ⓐ\(틀딱\)/);
+  });
+  it('참조 단락 글이 없으면 대응형이 아니다', () => {
+    assert.ok(!derive_pieces(입력.물음, 입력.k, { ...입력.인식, 연결문장: [], 단락연결: [] }, '인문사회국어').some((c) => c.역할 === '대응'));
   });
 });

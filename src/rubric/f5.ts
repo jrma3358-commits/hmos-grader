@@ -19,6 +19,13 @@ export interface 배점결과 {
  * k의 중심성은 배점이 아니라 게이트(G1)로 실현한다 — 여기서 가중하지 않는다.
  */
 export function allocate_points(조각들: 조각뼈대[], 총배점: number, 계열: 계열): 배점결과 {
+  // [오종래 2026-10-23 2] 대응형 — 배점은 원전 그대로: 대응 조각마다 총배점 ÷ 사례 수, 다른 구간은 통과 측정만 (배점 0)
+  const 대응 = 조각들.filter((c) => c.역할 === '대응');
+  if (대응.length) {
+    const 몫 = 봉인4a_반올림(총배점, 대응.map(() => 총배점 / 대응.length));
+    const 파트배점 = { 근거대기: 0, 세우기: 0, 풀기: 총배점, 답구하기: 0 } as Record<파트, number>;
+    return { 조각들: 조각들.map((c) => ({ ...c, 배점: c.역할 === '대응' ? 몫[대응.indexOf(c)] : 0 })), 파트배점, 미배정: [] };
+  }
   const 지수 = 봉인4_파트지수(계열);
   const 파트들 = Object.keys(지수) as 파트[];
   const 미배정 = 파트들.filter((p) => !조각들.some((c) => c.파트 === p));
