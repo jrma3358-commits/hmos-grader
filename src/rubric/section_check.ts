@@ -4,7 +4,7 @@
 // 답구하기 배점은 처방전_규칙 10-2 일방통행 어긋남 등급 — 네 구간 판정에서 센다.
 import { designatedLabels } from '../fq/v2/passage.ts';
 import { 축점수 } from './sealed/group.ts';
-import { 같은뜻, 깎는평가어, 결론더함, 근거자리, 꼬리, 묶음표지, 불용어, 비판표지, 선택표지, 양보표지, 역접더함, 판단서술 } from './sealed/section_words.ts';
+import { 같은뜻, 고르기자리, 방법론, 외재표현, 깎는평가어, 결론더함, 근거자리, 꼬리, 묶음표지, 물리침, 불용어, 비판표지, 비평관점, 선택표지, 양보표지, 역접더함, 요약서술, 판단서술, 해석서술 } from './sealed/section_words.ts';
 import type { 부류판정, 조각 } from './types.ts';
 
 export interface 구간표지 {
@@ -19,7 +19,7 @@ export interface 구간표지 {
   완결: boolean;
 }
 
-export interface 칸판정 { 결과: 'O' | 'X'; 근거: string }
+export interface 칸판정 { 결과: 'O' | 'X' | '판정불가'; 근거: string }
 
 export interface 구간측정결과 {
   조각: Record<string, 칸판정>;
@@ -34,8 +34,8 @@ export interface 구간측정결과 {
   학생묶음: string[][] | null;
 }
 
-/** 분류형 루브릭인가 — 역할 조각(묶음 · 상대비판)이 있다 */
-export const is_sectioned = (루브릭: 조각[]) => 루브릭.some((c) => c.역할 === '묶음');
+/** 구간 측정 루브릭인가 — 분류형(묶음) · 선택·적용형(관점선택) 역할 조각이 있다 */
+export const is_sectioned = (루브릭: 조각[]) => 루브릭.some((c) => c.역할 === '묶음' || c.역할 === '관점선택');
 
 const 문장들of = (글: string) => 글.replace(/\s*\n\s*/g, ' ').split(/(?<=[.?!。])\s+/).map((s) => s.trim()).filter(Boolean);
 
@@ -65,6 +65,7 @@ const 범위떼기 = (s: string) => s
  * 루브릭의 ① 제시문 조각(단락 · 글)과 묶음 조각의 엔진 부류를 쓴다
  */
 export function measure_sections(학생답: string, 루브릭: 조각[], 표: 구간표지): 구간측정결과 {
+  if (루브릭.some((c) => c.역할 === '관점선택')) return measure_application(학생답, 루브릭, 표);
   const 단락조각 = 루브릭.filter((c) => c.파트 === '근거대기' && c.제시문);
   const 기호들 = 단락조각.map((c) => c.제시문!.단락);
   const 부류: 부류판정 | null = 루브릭.find((c) => c.역할 === '묶음')?.부류 ?? null;
@@ -195,7 +196,7 @@ export function measure_sections(학생답: string, 루브릭: 조각[], 표: �
   };
 
   // 일방통행 (10-2) — 근거대기 · 세우기 · 논리펼치기 · 답표현하기
-  const 판 = (xs: { 결과: string }[]) => (xs.some((x) => x.결과 !== 'O') ? 'X' : 'O') as 'O' | 'X';
+  const 판 = (xs: { 결과: string }[]) => (xs.some((x) => x.결과 === 'X') ? 'X' : 'O') as 'O' | 'X'; // 판정불가(교사 칸)는 단계 판정에서 뺀다
   const 파트칸 = (p: string) => 루브릭.filter((c) => c.파트 === p && 조각[c.id]).map((c) => 조각[c.id]);
   const 단계 = [
     { 단계: '근거대기', 판정: 판(파트칸('근거대기')) },
@@ -205,4 +206,107 @@ export function measure_sections(학생답: string, 루브릭: 조각[], 표: �
   ];
   const 어긋남 = 단계.filter((s) => s.판정 === 'X').length;
   return { 조각, 조건, 단계, 어긋남, 등급: 어긋남 === 0 ? 4 : 어긋남 === 1 ? 3 : 어긋남 === 2 ? 2 : 1, 선택, 상대, 학생묶음 };
+}
+
+/**
+ * 선택·적용형 측정 (오종래 2026-10-23 추천안 1~4) — 「두 관점 중 하나를 선택하고, 그 관점에서 [다]를 해석」.
+ * 고른 관점 = 관점 기호 바로 뒤 고르기 자리(「(가)를 통해 해석」 「[나]의 관점에서」) · 대상 구절 = 따옴표 인용 · 대상 글과 겹치는 2어절 · 대상에만 있는 낱말(시어).
+ * 관점 개념어 = 고른 관점 단락에 가장 많이 나오는 비평 관점 묶음 + 그 단락에만 있는 개념
+ */
+function measure_application(학생답: string, 루브릭: 조각[], 표: 구간표지): 구간측정결과 {
+  const 후보 = 루브릭.find((c) => c.역할 === '고른관점')?.관점후보 ?? [];
+  const 대상 = 루브릭.find((c) => c.역할 === '대상')?.적용대상 ?? { 단락: '', 글: '' };
+  const 후보기호 = 후보.map((p) => p.단락);
+  const 문장 = 문장들of(학생답);
+  const 명시 = (s: string) => [...new Set(designatedLabels(s))].filter((x) => 후보기호.includes(x) || x === 대상.단락);
+  // 관점마다 비평 관점 묶음 · 고유 개념
+  const 묶음of = (글: string) => [...비평관점].sort((a, b) => b.낱말.filter((w) => 글.includes(w)).length - a.낱말.filter((w) => 글.includes(w)).length)[0];
+  const 개념of = new Map(후보.map((p) => [p.단락, 개념들(p.글)]));
+  const 대상개념 = 개념들(대상.글);
+  const 고유of = (x: string) => new Set([...개념of.get(x)!].filter((w) => 후보.every((p) => p.단락 === x || !개념of.get(p.단락)!.has(w)) && !대상개념.has(w)));
+  // 대상 구절 — 대상 줄(시는 행, 산문은 문장) 번호로 센다
+  const 줄 = 대상.글.split(/\n|(?<=[.?!。])\s+/).map((l) => l.trim()).filter(Boolean);
+  const 붙임 = (s: string) => s.replace(/\s+/g, '');
+  const 시어 = new Set([...대상개념].filter((w) => 후보.every((p) => !개념of.get(p.단락)!.has(w))));
+  const 구절of = (s: string): number[] => {
+    const 찾은 = new Set<number>();
+    const 넣기 = (조각글: string) => 줄.forEach((l, i) => { if (조각글.length >= 2 && 붙임(l).includes(붙임(조각글))) 찾은.add(i); });
+    for (const m of s.matchAll(/['‘"“「]([^'’"”」]{2,})['’"”」]/g)) 넣기(m[1].replace(/(라는|이라는|는|은|이|가|을|를|의)$/, ''));
+    const 낱 = s.split(/\s+/);
+    for (let i = 0; i + 1 < 낱.length; i++) 넣기(`${낱[i]} ${낱[i + 1]}`.replace(/[^\p{L}\p{N}\s]/gu, ''));
+    for (const w of 개념들(s)) if (시어.has(w)) 줄.forEach((l, i) => { if (개념들(l).has(w)) 찾은.add(i); });
+    return [...찾은];
+  };
+
+  // 고른 관점 — 관점 기호 바로 뒤 고르기 자리
+  let 고른: string | null = null, 고른문장 = -1;
+  문장.some((s, i) => {
+    for (const m of s.matchAll(/[[(<]([가-하])[\])>]/g)) {
+      if (후보기호.includes(m[1]) && 고르기자리.test(s.slice(m.index! + 3))) { 고른 = m[1]; 고른문장 = i; return true; }
+    }
+    return false;
+  });
+  const 고른관점 = 고른 as string | null;
+  const 관점묶음 = 고른관점 ? 묶음of(후보.find((p) => p.단락 === 고른관점)!.글) : null;
+  const 개념어 = new Set([...(고른관점 ? 고유of(고른관점) : []), ...(관점묶음?.낱말 ?? [])]);
+  const 개념수 = (s: string) => [...개념어].filter((w) => s.includes(w)).length;
+
+  const 조각: Record<string, 칸판정> = {};
+  const 칸 = (역할: string, r: 칸판정) => 루브릭.filter((c) => c.역할 === 역할).forEach((c) => (조각[c.id] = r));
+  // ① 근거대기
+  const 관점문장 = 고른관점 ? 문장.find((s) => 명시(s).includes(고른관점) && 개념수(s) >= 2) : undefined;
+  칸('고른관점', 관점문장 ? { 결과: 'O', 근거: `[${고른관점}] 개념 「${[...개념어].filter((w) => 관점문장.includes(w)).join(' · ')}」 — 「${관점문장.slice(0, 50)}」` }
+    : { 결과: 'X', 근거: 고른관점 ? `[${고른관점}]을 부르며 그 관점 개념을 둘 이상 담은 문장이 없음` : '고른 관점을 읽지 못함' });
+  const 구절문장 = 문장.map((s, i) => ({ i, 구절: 구절of(s) })).filter((x) => x.구절.length);
+  칸('대상', 구절문장.length ? { 결과: 'O', 근거: `[${대상.단락}] 구절 ${[...new Set(구절문장.flatMap((x) => x.구절))].length}곳을 가져옴` } : { 결과: 'X', 근거: `[${대상.단락}]의 구절을 가져오지 않음` });
+  // ② 세우기
+  칸('관점선택', 고른관점 ? { 결과: 'O', 근거: `고르기 자리 「${문장[고른문장].slice(0, 50)}」 → [${고른관점}]` } : { 결과: 'X', 근거: '관점 기호 뒤 고르기 자리(「~의 관점에서」 「~를 통해 해석」)가 없음' });
+  // 해석 문장 — 대상 구절 + (같은 · 다음 문장에) 관점 개념어 + 해석 서술
+  const 해석 = 구절문장.filter(({ i }) => { const 창 = 문장.slice(i, i + 2).join(' '); return 개념수(창) >= 1 && 해석서술.test(창); });
+  // 관점요약 (나) — 관점 선택 문장까지와 그 뒤 두 문장 안에서. 「이는」 같은 지시어로 앞 문장의 관점을 받아도 인정
+  const 부른관점 = (i: number) => !!고른관점 && (명시(문장[i]).includes(고른관점) || (/^(이는|이것은|이러한|이 관점은|이 입장은)/.test(문장[i]) && i > 0 && 명시(문장[i - 1]).includes(고른관점)));
+  const 요약at = 고른관점 ? 문장.slice(0, 고른문장 + 3).findIndex((s, i) => 부른관점(i) && 개념수(s) >= 1 && (요약서술.test(s) || 판단서술.test(s))) : -1;
+  const 요약 = 요약at >= 0 ? 문장[요약at] : undefined;
+  칸('관점요약', 요약 ? { 결과: 'O', 근거: `관점 선택 둘레 「${요약.slice(0, 60)}」` } : { 결과: 'X', 근거: '관점 선택 둘레에 고른 관점의 논지를 세운 문장이 없음' });
+  // ③ 논리펼치기 — 서로 다른 구절 두 곳 · 관점일관
+  const 덮은 = new Set<number>(); const 쓴: number[] = [];
+  for (const h of 해석) { const 새 = h.구절.find((x) => !덮은.has(x)); if (새 !== undefined) { 덮은.add(새); 쓴.push(h.i); } }
+  루브릭.filter((c) => c.역할 === '적용해석').forEach((c, k) => {
+    조각[c.id] = 쓴[k] !== undefined ? { 결과: 'O', 근거: `「${문장[쓴[k]].slice(0, 60)}」 — 구절 + 관점 개념 + 해석` } : { 결과: 'X', 근거: `서로 다른 구절의 해석이 ${쓴.length}곳뿐` };
+  });
+  // 관점일관 (오종래 2026-10-23 확정) — 내재 관점을 고른 답이 해석 근거로 명시적 외재 표현(작가 생애 · 시대 사건 · 창작 배경)을 쓸 때만 엔진이 X.
+  //   물리치려고 부른 문장(부정 · 경계 · 대비)은 근거가 아니다. 그 밖(외재 관점을 고른 답 포함)은 교사 판정
+  const 내재선택 = !!관점묶음 && 관점묶음.이름.startsWith('내재');
+  const 해석근거 = 문장.filter((s, i) => (구절문장.some((x) => x.i === i) || 명시(s).includes(대상.단락)) && !물리침.test(s) && !있나(s, [...표.대비, ...역접더함]));
+  const 외재근거 = 내재선택 ? 해석근거.find((s) => 외재표현.test(s)) : undefined;
+  칸('관점일관', 외재근거 ? { 결과: 'X', 근거: `내재 관점인데 해석 근거로 외재 표현 「${외재근거.match(외재표현)![0]}」 — 「${외재근거.slice(0, 50)}」` }
+    : { 결과: '판정불가', 근거: 내재선택 ? '명시적 외재 근거 없음 — 관점일관은 교사 판정' : `고른 관점이 ${관점묶음?.이름 ?? '미확인'} — 관점일관은 교사 판정` });
+
+  // 조건
+  const 결론표 = [...표.결론, ...결론더함];
+  const 결론at = 문장.reduce((at, s, i) => (있나(s, 결론표) ? i : at), -1);
+  const 결론자리 = 결론at >= 0 ? 문장.slice(결론at) : 문장.slice(-2);
+  const 끝 = 결론자리.join(' '), 끝문장 = 결론자리.at(-1) ?? '';
+  const 닫힘 = 결론at >= 0 || 판단서술.test(끝문장);
+  const 대상부름 = 명시(끝).includes(대상.단락) || 결론자리.some((s) => 구절of(s).length > 0) || /작품|시/.test(끝);
+  const 관점부름 = (!!고른관점 && 명시(끝).includes(고른관점)) || 개념수(끝) >= 1;
+  // 결론 (다) — 결론 자리가 대상의 해석 결과를 말하는가: 방법론 · 일반론이 아니고, 대상을 부르며 해석 서술이 있는 문장이 하나 이상
+  const 결과문장 = 결론자리.filter((s) => !방법론.test(s) && (명시(s).includes(대상.단락) || 구절of(s).length > 0 || /작품|시/.test(s)) && 해석서술.test(s));
+  const 조건 = {
+    '① 근거 추출': (쓴.length ? { 결과: 'O', 근거: `대상 구절을 관점으로 푼 해석 ${쓴.length}곳` } : { 결과: 'X', 근거: '대상 구절을 관점 개념으로 푼 문장이 없음' }) as 칸판정,
+    '③ 매듭': (닫힘 ? { 결과: 'O', 근거: 결론at >= 0 ? `결론 표지 문장 「${문장[결론at].slice(0, 40)}」` : `판단 서술로 닫힘 「${끝문장.slice(-40)}」` } : { 결과: 'X', 근거: `결론 표지 · 판단 서술 없이 끝남 「${끝문장.slice(-40)}」` }) as 칸판정,
+    '① 서술 형식': (고른관점 && 요약 && 쓴.length ? { 결과: 'O', 근거: '선택 · 요약 · 해석 세 마디' } : { 결과: 'X', 근거: `마디 빠짐 — 선택 ${고른관점 ? 'O' : 'X'} · 요약 ${요약 ? 'O' : 'X'} · 해석 ${쓴.length ? 'O' : 'X'}` }) as 칸판정,
+    '③ 결론': (닫힘 && 대상부름 && 관점부름 && 결과문장.length ? { 결과: 'O', 근거: `결론 자리가 해석 결과를 말함 — 「${결과문장[0].slice(0, 50)}」` }
+      : { 결과: 'X', 근거: `결론 자리 — 닫힘 ${닫힘 ? 'O' : 'X'} · 대상 ${대상부름 ? 'O' : 'X'} · 관점 ${관점부름 ? 'O' : 'X'} · 해석 결과 ${결과문장.length ? 'O' : 'X (방법론 · 일반론으로 끝남)'}` }) as 칸판정,
+  };
+  const 판 = (xs: { 결과: string }[]) => (xs.some((x) => x.결과 === 'X') ? 'X' : 'O') as 'O' | 'X'; // 판정불가(교사 칸)는 단계 판정에서 뺀다
+  const 파트칸 = (p: string) => 루브릭.filter((c) => c.파트 === p && 조각[c.id]).map((c) => 조각[c.id]);
+  const 단계 = [
+    { 단계: '근거대기', 판정: 판(파트칸('근거대기')) },
+    { 단계: '세우기', 판정: 판(파트칸('세우기')) },
+    { 단계: '논리펼치기', 판정: 판([...파트칸('풀기'), 조건['① 근거 추출'], { 결과: 표.기능표지 ? 'O' : 'X' }, 조건['③ 매듭']]) },
+    { 단계: '답표현하기', 판정: 판([조건['① 서술 형식'], { 결과: 표.분량 === false ? 'X' : 'O' }, 조건['③ 결론'], { 결과: 표.완결 ? 'O' : 'X' }]) },
+  ];
+  const 어긋남 = 단계.filter((s) => s.판정 === 'X').length;
+  return { 조각, 조건, 단계, 어긋남, 등급: 어긋남 === 0 ? 4 : 어긋남 === 1 ? 3 : 어긋남 === 2 ? 2 : 1, 선택: 고른관점 ? [고른관점] : null, 상대: 후보기호.filter((x) => x !== 고른관점), 학생묶음: null };
 }
