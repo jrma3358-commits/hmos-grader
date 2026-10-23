@@ -4,6 +4,7 @@
 // 답구하기 배점은 처방전_규칙 10-2 일방통행 어긋남 등급 — 네 구간 판정에서 센다.
 import { designatedLabels } from '../fq/v2/passage.ts';
 import { 축같은뜻, 축점수 } from './sealed/group.ts';
+import { 각각표지, 나열이음, 이어받기지시어, 절경계, 총괄표지 } from './sealed/section_words.ts';
 import { 같은뜻, 고르기자리, 방법론, 외재표현, 깎는평가어, 결론더함, 근거자리, 꼬리, 묶음표지, 물리침, 불용어, 비판표지, 비평관점, 선택표지, 양보표지, 역접더함, 요약서술, 판단서술, 해석서술 } from './sealed/section_words.ts';
 import type { 부류판정, 조각 } from './types.ts';
 
@@ -325,32 +326,99 @@ const 로마자of = (기호: string) => {
 };
 const 붙여 = (s: string) => s.replace(/\s+/g, '');
 
+const 원문자식 = '[\\u24D0-\\u24E9\\u2460-\\u2473\\u3260-\\u326D]';
+const 낱말식 = (w: string) => [...w.replace(/\s+/g, '')].map((ch) => ch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('\\s*');
+
 /**
- * 대응형 측정 (오종래 2026-10-23 — 1 정답 짝은 루브릭에 직접 · 2 논리펼치기 조건 뺌 · 3 「모두」 총괄 빼기 · 나열 끝 맞춤은 보류).
- * 학생 답을 사례를 부른 자리(기호 · 로마자 기호 · 표현)로 자른다 — 한 사례의 구역 = 그 사례를 부른 자리부터 다음 사례를 부른 자리 앞까지,
- * 같은 사례를 여러 번 부르면 구역을 합친다. 기호와 표현이 괄호 · 따옴표만 사이에 두고 붙으면(「ⓐ틀딱」 「틀딱(a)」) 한 번 부른 것.
+ * 대응형 측정 (오종래 2026-10-23 — 1 정답 짝은 루브릭에 직접 · 2 논리펼치기 조건 뺌 · A · B · C 구역 자르기 추천안 확정).
+ * 사례를 부른 자리 = 기호 · 로마자 기호 · 표현 (괄호 · 따옴표만 사이에 두고 붙으면 한 번). 범위 「ⓐ~ⓓ」는 부른 것이 아니다.
+ * 문장마다: B 나열 묶음 먼저 → C 나머지를 절로 나눠 사례에 붙임 → A 문장 끝에서 닫음 (이어받기 지시어 문장은 앞 문장 마지막 사례에).
  * 대응 = 구역에 정답 범주 또는 정답 집단 · 다른 범주 후보가 섞이면 X (원전 확정 해석)
  */
 function measure_correspondence(학생답: string, 루브릭: 조각[], 표: 구간표지): 구간측정결과 {
   const 사례들 = 루브릭.find((c) => c.역할 === '사례')?.사례목록?.사례 ?? 루브릭.filter((c) => c.역할 === '대응' && c.사례).map((c) => c.사례!);
   const 범주 = 루브릭.find((c) => c.범주)?.범주 ?? null;
   const 후보 = 범주?.후보 ?? [];
-  const 답 = 학생답;
-  // 부른 자리
-  const 자리: { 기호: string; at: number; end: number }[] = [];
-  for (const x of 사례들) {
-    const 식들 = [x.기호.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), ...(로마자of(x.기호) ? [`(?<![A-Za-z])${로마자of(x.기호)}(?![A-Za-z])`] : []), ...(x.표현.length >= 2 ? [x.표현] : [])];
-    for (const m of 답.matchAll(new RegExp(식들.join('|'), 'gu'))) 자리.push({ 기호: x.기호, at: m.index!, end: m.index! + m[0].length });
-  }
-  자리.sort((a, b) => a.at - b.at);
-  const 합친: typeof 자리 = [];
-  for (const z of 자리) {
-    const 앞 = 합친.at(-1);
-    if (앞 && 앞.기호 === z.기호 && /^[\s()（）'"‘’“”]*$/.test(답.slice(앞.end, z.at))) 앞.end = Math.max(앞.end, z.end);
-    else if (!앞 || z.at >= 앞.end) 합친.push({ ...z });
-  }
+  const 범주들at = (글: string) => 후보.flatMap((w) => [...글.matchAll(new RegExp(낱말식(w), 'gu'))].map((m) => ({ w, at: m.index! }))).sort((a, b) => a.at - b.at).map((x) => x.w);
+  const 모든집단 = 사례들.flatMap((x) => (x.정답?.집단 ?? []));
+  const 집단들at = (글: string) => 모든집단.flatMap((w) => [...글.matchAll(new RegExp(낱말식(w), 'gu'))].map((m) => ({ w, at: m.index! }))).sort((a, b) => a.at - b.at).map((x) => x.w);
+
   const 구역 = new Map<string, string>();
-  합친.forEach((z, i) => 구역.set(z.기호, `${구역.get(z.기호) ?? ''} ${답.slice(z.end, 합친[i + 1]?.at ?? 답.length)}`));
+  const 더함 = (기호: string, 글: string) => 구역.set(기호, `${구역.get(기호) ?? ''} ${글}`);
+  const 총괄만 = new Set<string>(), 따로 = new Set<string>();
+  const 문장들 = 학생답.split(/(?<=[.?!。])\s+|\n+/).map((s) => s.trim()).filter(Boolean);
+  let 앞문장끝: string | null = null;
+  for (const 원문장 of 문장들) {
+    // 범위 「ⓐ~ⓓ」는 지운다 (자리는 그대로 — 공백으로)
+    const s = 원문장.replace(new RegExp(`${원문자식}\\s*[~～\\-]\\s*${원문자식}`, 'gu'), (m) => ' '.repeat(m.length));
+    const 자리: { 기호: string; at: number; end: number }[] = [];
+    for (const x of 사례들) {
+      const 식들 = [x.기호.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), ...(로마자of(x.기호) ? [`(?<![A-Za-z])${로마자of(x.기호)}(?![A-Za-z])`] : []), ...(x.표현.length >= 2 ? [x.표현] : [])];
+      for (const m of s.matchAll(new RegExp(식들.join('|'), 'gu'))) 자리.push({ 기호: x.기호, at: m.index!, end: m.index! + m[0].length });
+    }
+    자리.sort((a, b) => a.at - b.at);
+    const 부름: typeof 자리 = [];
+    for (const z of 자리) {
+      const 앞 = 부름.at(-1);
+      if (앞 && 앞.기호 === z.기호 && /^[\s()（）'"‘’“”]*$/.test(s.slice(앞.end, z.at))) 앞.end = Math.max(앞.end, z.end);
+      else if (!앞 || z.at >= 앞.end) 부름.push({ ...z });
+    }
+    // A — 사례를 부르지 않은 문장: 이어받기 지시어로 시작하면 앞 문장 마지막 사례에, 아니면 버림
+    //   이어받기는 바로 다음 문장만 — 이어받지 않은 문장 뒤에서는 끊는다
+    if (!부름.length) {
+      if (앞문장끝 && 이어받기지시어.test(s)) 더함(앞문장끝, s);
+      else 앞문장끝 = null;
+      continue;
+    }
+    // B — 나열 묶음 (사례 둘 이상이 나열 이음말만 사이에 두고)
+    const 묶음칸 = new Array(s.length).fill(false);
+    const 묶음안 = new Set<number>();
+    for (let i = 0; i < 부름.length; ) {
+      let j = i;
+      while (j + 1 < 부름.length && 부름[j + 1].기호 !== 부름[j].기호 && 나열이음.test(s.slice(부름[j].end, 부름[j + 1].at))) j++;
+      if (j > i) {
+        const 묶음 = 부름.slice(i, j + 1);
+        const 꼬리끝 = 부름[j + 1]?.at ?? s.length;
+        const 꼬리 = s.slice(부름[j].end, 꼬리끝);
+        const 범주순 = 범주들at(꼬리), 집단순 = 집단들at(꼬리);
+        const 순서 = 각각표지.test(꼬리) || (!총괄표지.test(꼬리) && 범주순.length === 묶음.length);
+        if (순서) {
+          // 많으면 끝 맞춤(남은 것은 첫 사례에) · 적으면 앞 맞춤(남은 사례는 없음)
+          const 나눔 = (xs: string[]) => {
+            const n = 묶음.length;
+            if (xs.length <= n) return 묶음.map((_, k) => (k < xs.length ? [xs[k]] : []));
+            const 남 = xs.length - n + 1;
+            return 묶음.map((_, k) => (k === 0 ? xs.slice(0, 남) : [xs[남 + k - 1]]));
+          };
+          const 범 = 나눔(범주순), 집 = 나눔(집단순);
+          묶음.forEach((z, k) => { 더함(z.기호, [...범[k], ...집[k]].join(' ')); 따로.add(z.기호); });
+        } else 묶음.forEach((z) => { if (!구역.has(z.기호)) 구역.set(z.기호, ''); 총괄만.add(z.기호); });
+        for (let p = 묶음[0].at; p < 꼬리끝; p++) 묶음칸[p] = true;
+        for (let k = i; k <= j; k++) 묶음안.add(k);
+        i = j + 1;
+      } else i++;
+    }
+    // C — 나머지를 절로 나눠 붙인다 (묶음 자리는 지움)
+    const 남은 = [...s].map((ch, p) => (묶음칸[p] ? ' ' : ch)).join('');
+    const 절들: { 글: string; at: number }[] = [];
+    let 시작 = 0;
+    for (const m of 남은.matchAll(new RegExp(`,|，|${절경계.source}`, 'g'))) { 절들.push({ 글: 남은.slice(시작, m.index!), at: 시작 }); 시작 = m.index! + m[0].length; }
+    절들.push({ 글: 남은.slice(시작), at: 시작 });
+    let 앞사례: string | null = null;
+    for (const 절 of 절들) {
+      // 묶음 자리는 다음 사례를 부른 자리까지 지워져 있어, 사례 없는 절의 앞 사례는 이 절 앞에서 따로 부른 사례다 (문장 머리면 버림)
+      const 안 = 부름.filter((z, k) => !묶음안.has(k) && z.at >= 절.at && z.at < 절.at + 절.글.length);
+      if (!안.length) { if (앞사례 && 절.글.trim()) 더함(앞사례, 절.글); continue; }
+      if (안.length === 1) { 더함(안[0].기호, 절.글); 따로.add(안[0].기호); 앞사례 = 안[0].기호; continue; }
+      const 머리 = 절.글.slice(0, 안[0].at - 절.at);
+      if (앞사례 && 머리.trim()) 더함(앞사례, 머리);
+      안.forEach((z, k) => { 더함(z.기호, s.slice(z.at, 안[k + 1]?.at ?? 절.at + 절.글.length)); 따로.add(z.기호); });
+      앞사례 = 안.at(-1)!.기호;
+    }
+    // 다음 문장의 이어받기 지시어가 받는 사례 = 이 문장에서 마지막으로 부른 사례. 나열 묶음으로 끝나면 지시어는 묶음 전체를 가리켜 받지 않는다
+    앞문장끝 = 묶음안.has(부름.length - 1) ? null : 부름.at(-1)!.기호;
+  }
+  for (const x of 따로) 총괄만.delete(x);
   const 범주in = (글: string) => 후보.filter((w) => 붙여(글).includes(붙여(w)));
   const 집단in = (글: string, x: (typeof 사례들)[number]) => (x.정답?.집단 ?? []).filter((w) => 글.includes(w));
   // 구역에 내용이 있는가 — 문장 부호 · 공백 · 머리 조사(「와」 「는」)를 떼고 두 글자 이상 (나열 「쪽발이와 흑형」의 「와」는 내용이 아니다)
@@ -362,7 +430,7 @@ function measure_correspondence(학생답: string, 루브릭: 조각[], 표: 구
   루브릭.filter((c) => c.역할 === '사례').forEach((c) => (조각[c.id] = !안부른.length
     ? { 결과: 'O', 근거: `사례 ${사례들.map((x) => x.기호).join('·')}를 모두 불렀다` }
     : { 결과: 'X', 근거: `부르지 않은 사례 ${안부른.join('·')}` }));
-  const 쓴범주 = 범주in(답);
+  const 쓴범주 = 범주in(학생답);
   루브릭.filter((c) => c.역할 === '범주').forEach((c) => (조각[c.id] = 쓴범주.length
     ? { 결과: 'O', 근거: `(${범주!.단락})의 ${범주!.이름} 「${쓴범주.join(' · ')}」` }
     : { 결과: 'X', 근거: `(${범주?.단락 ?? '?'})의 범주 후보를 쓰지 않음` }));
@@ -371,6 +439,7 @@ function measure_correspondence(학생답: string, 루브릭: 조각[], 표: 구
     const x = c.사례!, 글 = 구역.get(x.기호);
     if (!x.정답) { 조각[c.id] = { 결과: '판정불가', 근거: `루브릭에 ${x.기호} 정답 짝이 없음 — 교사 판정` }; return; }
     if (글 === undefined) { 조각[c.id] = { 결과: 'X', 근거: `${x.기호}(${x.표현})를 부르지 않음 — 미작성` }; return; }
+    if (총괄만.has(x.기호)) { 조각[c.id] = { 결과: 'X', 근거: `${x.기호}(${x.표현})는 총괄 나열(「모두」 · 「등」)에만 나옴 — 따로 서술하지 않음` }; return; }
     const 정답 = x.정답, 쓴 = 범주in(글), 섞임 = 쓴.filter((w) => w !== 정답.범주), 집단 = 집단in(글, x);
     조각[c.id] = 섞임.length ? { 결과: 'X', 근거: `${x.기호} 구역에 다른 범주 「${섞임.join(' · ')}」 섞임` }
       : 쓴.includes(정답.범주) || 집단.length ? { 결과: 'O', 근거: `${x.기호} 구역 「${[...쓴, ...집단].join(' · ')}」 — 정답 ${정답.범주}` }
