@@ -70,7 +70,7 @@ export function check_math_answer(학생답: string, 논제: string, 모범답�
 
 export interface LengthRule { 기준: number; 최소: number | null; 최대: number | null; 근거: string }
 
-/** 논제의 분량 — 「800 ± 80자」 그대로 · 「N자 내외/안팎/정도」·「N자」는 분량기준(±10%) · 「N자 이내」는 N까지 · 「N자 이상」은 N부터. 없으면 null */
+/** 논제의 분량 — 「800 ± 80자」 그대로 · 「N자 내외/안팎/정도」·「N자」는 분량기준(봉인 표지사전 답표현하기.분량기준 — 2026-10-23부터 ±25%) · 「N자 이내」는 N까지 · 「N자 이상」은 N부터. 없으면 null */
 export function parse_length(논제: string, 분량기준: string): LengthRule | null {
   const 비율 = Number((String(분량기준).match(/(\d+(?:\.\d+)?)\s*%/) || [])[1] ?? NaN) / 100;
   const pm = 논제.match(/(\d[\d,]*)\s*[±]\s*(\d[\d,]*)\s*자/);
