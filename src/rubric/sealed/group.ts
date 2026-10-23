@@ -1,0 +1,46 @@
+// [봉인②-부류] 제시문을 입장이 유사한 두 부류로 묶는 규칙 (오종래 2026-10-23 확정 — 「엔진이 제시문을 두 부류로 묶음」).
+// 형태소 분석기·Claude를 쓰지 않는다. 대립 축 어휘(아래 표)를 단락 글에서 세어 가 쪽 − 나 쪽 점수의 부호로 가른다.
+//   「A가 아니라 B」 문장은 「아니라」 앞 어휘를 반대쪽으로 센다 (밀침).
+//   단락마다 점수가 0이 아니고 두 쪽에 단락이 하나 이상씩 있는 축만 쓴다. 맞는 축이 없으면 null — 조각은 역할로만 서고 부류는 채점 때 학생 답에서 읽는다.
+// [Claude 초안 2026-10-23 — 오종래 확인 전] 축 어휘 표. 늘리거나 고치는 것은 오종래가 정한다 (wordExceptions와 같은 봉인 목록 원칙)
+import type { 부류판정 } from '../types.ts';
+
+export const 대립축: readonly { 축: string; 가: { 이름: string; 어휘: string[] }; 나: { 이름: string; 어휘: string[] } }[] = [
+  {
+    축: '과거 ↔ 현재',
+    가: { 이름: '과거 중시', 어휘: ['과거', '옛날', '옛', '경전', '죽은', '전통', '역사', '앞선'] },
+    나: { 이름: '현재 중시', 어휘: ['현재', '지금', '오늘', '함께 있는', '여기'] },
+  },
+];
+
+/** 어휘 표의 낱말을 긴 것부터 겹치지 않게 센다 (「옛날」을 「옛」으로 두 번 세지 않게) */
+function 세기(글: string, 어휘: string[]): number {
+  const 식 = new RegExp([...어휘].sort((a, b) => b.length - a.length).map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'), 'g');
+  return (글.match(식) ?? []).length;
+}
+
+/** 단락 하나의 축 점수 — 가 − 나. 「아니라」 앞은 반대쪽으로 */
+function 점수of(텍스트: string, 가: string[], 나: string[]): number {
+  return 텍스트.split(/(?<=[.?!。])\s+/).reduce((합, 문장) => {
+    const at = 문장.indexOf('아니라');
+    const [앞, 뒤] = at < 0 ? ['', 문장] : [문장.slice(0, at), 문장.slice(at)];
+    return 합 + (세기(뒤, 가) - 세기(뒤, 나)) - (세기(앞, 가) - 세기(앞, 나));
+  }, 0);
+}
+
+/**
+ * 부류 판정(참조 단락들) → 두 부류 또는 null
+ * @param 단락들 논제가 참조한 단락 (라벨 · 텍스트)
+ */
+export function 봉인2_부류(단락들: { 라벨: string; 텍스트: string }[]): 부류판정 | null {
+  if (단락들.length < 2) return null;
+  for (const t of 대립축) {
+    const 점수 = Object.fromEntries(단락들.map((p) => [p.라벨, 점수of(p.텍스트, t.가.어휘, t.나.어휘)]));
+    const 가 = 단락들.filter((p) => 점수[p.라벨] > 0).map((p) => p.라벨);
+    const 나 = 단락들.filter((p) => 점수[p.라벨] < 0).map((p) => p.라벨);
+    if (가.length && 나.length && 가.length + 나.length === 단락들.length) {
+      return { 축: t.축, 부류: [{ 이름: t.가.이름, 단락: 가 }, { 이름: t.나.이름, 단락: 나 }], 점수 };
+    }
+  }
+  return null;
+}
