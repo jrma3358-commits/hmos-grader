@@ -62,7 +62,8 @@ const { parse_quadratic, parse_polynomial_conditions, parse_counting_item, resol
 // 8단계 학생 답안 채점 — 엔진 G1 (봉인⑥ 조각 대조 · 봉인④-b 게이트, 계열별, 오종래 2026-10-14)
 const { grade } = await load('src/rubric/g1.ts');
 const { 게이트사슬, 상한비 } = await load('src/rubric/sealed/g1.ts');
-const { 봉인2_부류 } = await load('src/rubric/sealed/group.ts'); // 분류형 논제 — 엔진이 참조 단락을 두 부류로 묶는다 (오종래 2026-10-23)
+const { 봉인2_부류 } = await load('src/rubric/sealed/group.ts');
+const { measure_sections, is_sectioned } = await load('src/rubric/section_check.ts'); // 구간 정합성 측정 (오종래 2026-10-23) // 분류형 논제 — 엔진이 참조 단락을 두 부류로 묶는다 (오종래 2026-10-23)
 const { grade_student_path } = await load('src/rubric/path_grade.ts'); // 학생 경로 채점 (오종래 2026-10-21 B · Hybrid)
 
 const [reqPath, outPath] = process.argv.slice(2);
@@ -141,7 +142,7 @@ function 루브릭작업(논제글: string, 계열: string, 총배점: number, �
   // 서술·논술형 ④ 경로의 제시문 부분 — 정합이 급소 노드와 이은 단락급소 (봉인②, 오종래 2026-10-14)
   let 단락연결of: (번호: string | null) => any[] = () => [];
   // 네비게이션 경로 (오종래 2026-10-23) — 논제가 참조한 단락 전부 (① 근거대기 구간) · 엔진 부류 (분류형 논제)
-  let 참조of: (번호: string | null) => { 단락: string; 단락급소: string }[] = () => [];
+  let 참조of: (번호: string | null) => { 단락: string; 단락급소: string; 글?: string }[] = () => [];
   let 부류of: (번호: string | null) => unknown = () => null;
   let 연결멈춤: unknown = null;
   if (계열 === '인문사회국어') {
@@ -209,7 +210,7 @@ function 루브릭작업(논제글: string, 계열: string, 총배점: number, �
         참조of = (번호) => 참조단락들(번호).map((라벨: string) => {
           const 실체 = (자체급소.get(라벨) ?? '').replace(/^[\s,，]+/, '');
           const 빈말 = /^(하나|둘|셋|넷|다섯|한|두|세|네|것|수|바|데|줄|때|점)(이|가|은|는|을|를|의)?$/.test(실체);
-          return { 단락: 라벨, 단락급소: 실체.length >= 2 && !빈말 ? 실체 : `[${라벨}]` };
+          return { 단락: 라벨, 단락급소: 실체.length >= 2 && !빈말 ? 실체 : `[${라벨}]`, 글: 단락들.filter((p) => p.라벨 === 라벨).map((p) => p.텍스트).join(' ') };
         });
         부류of = (번호) => 봉인2_부류(참조단락들(번호).map((라벨: string) => ({ 라벨, 텍스트: 단락들.filter((p) => p.라벨 === 라벨).map((p) => p.텍스트).join(' ') })));
       } catch (e) {
@@ -366,6 +367,34 @@ try {
       // 교사가 O/X를 고치면 대시보드가 이 사슬·비율로 다시 센다 (엔진 값 그대로)
       게이트: { 사슬: 게이트사슬(계열, r.풀기있음), 상한비 }, // 풀기(루브릭 조각 · 학생 풀기 마디) 없으면 ④X→② (2026-10-16)
     };
+    // 구간 정합성 측정 (오종래 2026-10-23 설계 확정) — 인문 분류형 루브릭은 근거대기 · 세우기 · 논리펼치기 조각과 조건 ①③을 엔진이 자동 판정한다
+    //   (글자 대조 · 판정불가 대신). 답구하기 = 10-2 일방통행 어긋남 등급 (배점 × 등급 ÷ 4), 판정은 답표현하기 조건 ①~④. 봉인④-b 게이트는 걸지 않는다 — 등급이 대신한다
+    if (계열 === '인문사회국어' && is_sectioned(조각들)) {
+      const 봉인 = JSON.parse(readFileSync(fq.sealedPath(), 'utf8'));
+      const 논리 = 봉인.논리펼치기 ?? {};
+      const 답 = check_human_answer(학생답, String(req.논제 ?? ''), 봉인.답표현하기 ?? {});
+      const 찾은 = find_logic_markers(학생답, 논리);
+      const m = measure_sections(학생답, 조각들, {
+        대비: 논리.대비반론 ?? [], 결론: 논리.결론연결 ?? [], 기능표지: Object.values(찾은).some((xs: any) => xs.length),
+        분량: 답.분량?.맞음 ?? null, 완결: !!답.완결?.맞음,
+      });
+      const 둘째 = (x: number) => Math.round(x * 100) / 100;
+      const 답판정 = m.단계[3].판정;
+      const 조각별 = out.단계.채점.조각별.map((x: any) => {
+        if (x.파트 === '답구하기') return { ...x, 결과: 답판정, 득점: 둘째((x.배점 * m.등급) / 4), 판단근거: `일방통행 어긋남 ${m.어긋남}단계 → 등급 ${m.등급} (10-2) · 답표현하기 조건 ${답판정}` };
+        const k = m.조각[x.조각id];
+        return k ? { ...x, 결과: k.결과, 득점: k.결과 === 'O' ? x.배점 : 0, 판단근거: `구간 정합성 — ${k.근거}` } : x;
+      });
+      const 파트별 = Object.fromEntries(파트순서.map((p) => { const xs = 조각별.filter((x: any) => x.파트 === p); const s = 둘째(xs.reduce((a: number, x: any) => a + x.득점, 0)); return [p, { 배점합: 둘째(xs.reduce((a: number, x: any) => a + x.배점, 0)), 파트점수: s, 상한: null }]; }));
+      const X = 조각별.filter((x: any) => x.결과 === 'X');
+      Object.assign(out.단계.채점, {
+        조각별, 파트별, 부분점수: 둘째(Object.values(파트별).reduce((a: number, v: any) => a + v.파트점수, 0)),
+        무너진지점: 파트순서.find((p) => X.some((x: any) => x.파트 === p)) ?? null, 약점: X.map((x: any) => ({ 파트: x.파트, 요소: x.요소 })),
+        판정불가: 조각별.filter((x: any) => x.결과 === '판정불가').map((x: any) => x.조각id),
+        게이트: { 사슬: [], 상한비, 메모: '분류형 — 10-2 일방통행 등급이 게이트를 대신한다' },
+        구간측정: { 조건: m.조건, 단계: m.단계, 어긋남: m.어긋남, 등급: m.등급, 선택: m.선택, 상대: m.상대, 학생묶음: m.학생묶음 },
+      });
+    }
     // 학생 경로 채점 (오종래 2026-10-21 확정 B) — 서버가 Claude로 나눈 학생 단계(단계들)를 보내면 엔진이 단계마다 계산 · 같은 단계 값 · 최종값 정답을 대조한다.
     //   계산식 없는 단계는 위 엔진 조각 판정을 쓴다. 정답 = 이 소문항 몫 (「(1) 360가지 (2) 72가지」 → 번호로)
     //   [오종래 2026-10-21 확정 — Claude는 조각 분리만, O/X 판단은 엔진] 단계들(Claude)은 글 · 파트 · 대응 · 다경로뿐 — O/X는 grade_student_path가 정한다

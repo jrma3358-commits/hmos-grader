@@ -19,6 +19,12 @@ function 세기(글: string, 어휘: string[]): number {
   return (글.match(식) ?? []).length;
 }
 
+/** 글의 축 점수 (부류의 축 이름으로) — 가 쪽 +, 나 쪽 −. 구간 정합성 측정이 학생 문장 극성에 쓴다 (오종래 2026-10-23) */
+export function 축점수(글: string, 축: string): number {
+  const t = 대립축.find((x) => x.축 === 축);
+  return t ? 점수of(글, t.가.어휘, t.나.어휘) : 0;
+}
+
 /** 단락 하나의 축 점수 — 가 − 나. 「아니라」 앞은 반대쪽으로 */
 function 점수of(텍스트: string, 가: string[], 나: string[]): number {
   return 텍스트.split(/(?<=[.?!。])\s+/).reduce((합, 문장) => {
