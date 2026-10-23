@@ -3,7 +3,7 @@
 // 구간마다 통과(O/X)를 정한다. Claude는 쓰지 않는다. 낱말 목록은 봉인(sealed/section_words.ts · group.ts · 표지사전 「논리펼치기」).
 // 답구하기 배점은 처방전_규칙 10-2 일방통행 어긋남 등급 — 네 구간 판정에서 센다.
 import { designatedLabels } from '../fq/v2/passage.ts';
-import { 축점수 } from './sealed/group.ts';
+import { 축같은뜻, 축점수 } from './sealed/group.ts';
 import { 같은뜻, 고르기자리, 방법론, 외재표현, 깎는평가어, 결론더함, 근거자리, 꼬리, 묶음표지, 물리침, 불용어, 비판표지, 비평관점, 선택표지, 양보표지, 역접더함, 요약서술, 판단서술, 해석서술 } from './sealed/section_words.ts';
 import type { 부류판정, 조각 } from './types.ts';
 
@@ -39,20 +39,20 @@ export const is_sectioned = (루브릭: 조각[]) => 루브릭.some((c) => c.역
 
 const 문장들of = (글: string) => 글.replace(/\s*\n\s*/g, ' ').split(/(?<=[.?!。])\s+/).map((s) => s.trim()).filter(Boolean);
 
-/** 낱말 → 어간 (꼬리 떼기) → 같은 뜻 대표 */
-function 어간(w: string): string {
+/** 낱말 → 어간 (꼬리 떼기) → 같은 뜻 대표. 뜻표 = 공통 같은 뜻 + (분류형이면) 그 대립 축의 같은 뜻 (오종래 2026-10-23 ③) */
+function 어간(w: string, 뜻표: readonly string[][] = 같은뜻): string {
   let s = w.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '');
   for (let 바뀜 = true; 바뀜; ) {
     바뀜 = false;
     for (const t of 꼬리) if (s.length > t.length + 1 && s.endsWith(t)) { s = s.slice(0, -t.length); 바뀜 = true; break; }
   }
-  const 묶음 = 같은뜻.find((g) => g.some((x) => x === s || (x.length >= 2 && s.startsWith(x))));
+  const 묶음 = 뜻표.find((g) => g.some((x) => x === s || (x.length >= 2 && s.startsWith(x))));
   return 묶음 ? 묶음[0] : s;
 }
-function 개념들(글: string): Set<string> {
+function 공통개념들(글: string, 뜻표: readonly string[][] = 같은뜻): Set<string> {
   const 원 = 글.replace(/[[(<][가-하][\])>]/g, ' ');
-  const 여러낱말 = 같은뜻.flatMap((g) => g.filter((x) => x.includes(' ') && 원.includes(x)).map(() => g[0]));
-  return new Set([...여러낱말, ...원.split(/[\s,.?!·'"‘’“”「」()]+/).map(어간).filter((w) => w.length >= 2 && !불용어.has(w))]);
+  const 여러낱말 = 뜻표.flatMap((g) => g.filter((x) => x.includes(' ') && 원.includes(x)).map(() => g[0]));
+  return new Set([...여러낱말, ...원.split(/[\s,.?!·'"‘’“”「」()]+/).map((w) => 어간(w, 뜻표)).filter((w) => w.length >= 2 && !불용어.has(w))]);
 }
 const 있나 = (글: string, 표: readonly string[]) => 표.some((m) => 글.includes(m));
 /** 범위 표현 「(라)에서 (사)까지」 「[라]~[사]」 — 참조 범위일 뿐 묶음이 아니다 (오종래 2026-10-23 가) */
@@ -71,6 +71,9 @@ export function measure_sections(학생답: string, 루브릭: 조각[], 표: �
   const 부류: 부류판정 | null = 루브릭.find((c) => c.역할 === '묶음')?.부류 ?? null;
   const 쪽of = (x: string) => (!부류 ? 0 : 부류.부류[0].단락.includes(x) ? 1 : 부류.부류[1].단락.includes(x) ? -1 : 0);
   const 극성 = (s: string) => (부류 ? 축점수(s, 부류.축) : 0);
+  // 같은 뜻 — 공통 + 이 부류 대립 축에 딸린 같은 뜻 (오종래 2026-10-23 ③ — 제시문 내용에 기대는 묶음은 축에 둔다)
+  const 뜻표 = [...같은뜻, ...(부류 ? 축같은뜻(부류.축) : [])];
+  const 개념들 = (글: string) => 공통개념들(글, 뜻표);
   const 단락개념 = new Map(단락조각.map((c) => [c.제시문!.단락, 개념들(c.제시문!.글 ?? '')]));
   // 그 단락에만 있는 개념 — 기호 없이 부른 문장을 알아본다
   const 고유 = new Map(기호들.map((x) => [x, new Set([...단락개념.get(x)!].filter((w) => 기호들.every((y) => y === x || !단락개념.get(y)!.has(w))))]));
@@ -214,6 +217,7 @@ export function measure_sections(학생답: string, 루브릭: 조각[], 표: �
  * 관점 개념어 = 고른 관점 단락에 가장 많이 나오는 비평 관점 묶음 + 그 단락에만 있는 개념
  */
 function measure_application(학생답: string, 루브릭: 조각[], 표: 구간표지): 구간측정결과 {
+  const 개념들 = (글: string) => 공통개념들(글);
   const 후보 = 루브릭.find((c) => c.역할 === '고른관점')?.관점후보 ?? [];
   const 대상 = 루브릭.find((c) => c.역할 === '대상')?.적용대상 ?? { 단락: '', 글: '' };
   const 후보기호 = 후보.map((p) => p.단락);
