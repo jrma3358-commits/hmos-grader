@@ -105,7 +105,11 @@ export type 조각역할 = '묶음' | '선택요약' | '상대비판' | '인정�
   | '사례' | '범주' | '대응';
 
 /** 대응형 사례 하나 — 기호 · 사례 단락에서 그 기호 뒤 표현 · 표현을 풀이한 문장 */
-export interface 대응사례 { 기호: string; 표현: string; 설명: string | null }
+export interface 대응사례 {
+  기호: string; 표현: string; 설명: string | null;
+  /** 정답 짝 — 루브릭에 직접 넣는다 (오종래 2026-10-23 1). 엔진은 정하지 않는다 — 없으면 대응 칸은 교사 판정 */
+  정답?: { 범주: string; 집단: string[] };
+}
 
 /** 대응형 범주 — 논제 「X 중 무엇」의 X · 범주 단락에서 X를 늘어놓은 문장과 그 후보 */
 export interface 대응범주 { 단락: string; 이름: string; 핵심어: string; 문장: string | null; 후보: string[] }
