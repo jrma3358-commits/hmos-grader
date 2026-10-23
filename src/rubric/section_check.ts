@@ -4,7 +4,7 @@
 // 답구하기 배점은 처방전_규칙 10-2 일방통행 어긋남 등급 — 네 구간 판정에서 센다.
 import { designatedLabels } from '../fq/v2/passage.ts';
 import { 축같은뜻, 축점수 } from './sealed/group.ts';
-import { 각각표지, 나열이음, 이어받기지시어, 절경계, 총괄표지 } from './sealed/section_words.ts';
+import { 각각표지, 나열이음, 이어받기지시어, 접속이어받기, 절경계, 총괄표지 } from './sealed/section_words.ts';
 import { 같은뜻, 고르기자리, 방법론, 외재표현, 깎는평가어, 결론더함, 근거자리, 꼬리, 묶음표지, 물리침, 불용어, 비판표지, 비평관점, 선택표지, 양보표지, 역접더함, 요약서술, 판단서술, 해석서술 } from './sealed/section_words.ts';
 import type { 부류판정, 조각 } from './types.ts';
 
@@ -346,7 +346,8 @@ function measure_correspondence(학생답: string, 루브릭: 조각[], 표: 구
   const 구역 = new Map<string, string>();
   const 더함 = (기호: string, 글: string) => 구역.set(기호, `${구역.get(기호) ?? ''} ${글}`);
   const 총괄만 = new Set<string>(), 따로 = new Set<string>();
-  const 문장들 = 학생답.split(/(?<=[.?!。])\s+|\n+/).map((s) => s.trim()).filter(Boolean);
+  // [오종래 2026-10-23 H] 마침표 없이 이어 쓴 문장 — 「~다」 뒤 띄어쓰기도 문장 끝 (따옴표가 붙은 「딱딱거린다'를」은 경계가 아니다)
+  const 문장들 = 학생답.split(/(?<=[.?!。])\s+|(?<=[가-힣]다)\s+|\n+/).map((s) => s.trim()).filter(Boolean);
   let 앞문장끝: string | null = null;
   for (const 원문장 of 문장들) {
     // 범위 「ⓐ~ⓓ」는 지운다 (자리는 그대로 — 공백으로)
@@ -363,10 +364,10 @@ function measure_correspondence(학생답: string, 루브릭: 조각[], 표: 구
       if (앞 && 앞.기호 === z.기호 && /^[\s()（）'"‘’“”]*$/.test(s.slice(앞.end, z.at))) 앞.end = Math.max(앞.end, z.end);
       else if (!앞 || z.at >= 앞.end) 부름.push({ ...z });
     }
-    // A — 사례를 부르지 않은 문장: 이어받기 지시어로 시작하면 앞 문장 마지막 사례에, 아니면 버림
+    // A — 사례를 부르지 않은 문장: 이어받기 지시어로 시작하면 앞 문장 마지막 사례에, 아니면 버림 (H 접속어는 범주가 하나뿐일 때만)
     //   이어받기는 바로 다음 문장만 — 이어받지 않은 문장 뒤에서는 끊는다
     if (!부름.length) {
-      if (앞문장끝 && 이어받기지시어.test(s)) 더함(앞문장끝, s);
+      if (앞문장끝 && (이어받기지시어.test(s) || (접속이어받기.test(s) && 범주들at(s).length === 1))) 더함(앞문장끝, s);
       else 앞문장끝 = null;
       continue;
     }
@@ -382,7 +383,10 @@ function measure_correspondence(학생답: string, 루브릭: 조각[], 표: 구
         const 꼬리 = s.slice(부름[j].end, 꼬리끝);
         const 범주순 = 범주들at(꼬리), 집단순 = 집단들at(꼬리);
         const 순서 = 각각표지.test(꼬리) || (!총괄표지.test(꼬리) && 범주순.length === 묶음.length);
-        if (순서) {
+        // [오종래 2026-10-23 E] 표지 없이 범주가 하나뿐이면 묶음 모두에 같은 범주 (「ⓑ와 ⓒ는 민족」 — 공유)
+        const 공유 =!각각표지.test(꼬리) && !총괄표지.test(꼬리) && 범주순.length === 1 && 묶음.length >= 2;
+        if (공유) 묶음.forEach((z) => { 더함(z.기호, 범주순[0]); 따로.add(z.기호); });
+        else if (순서) {
           // 많으면 끝 맞춤(남은 것은 첫 사례에) · 적으면 앞 맞춤(남은 사례는 없음)
           const 나눔 = (xs: string[]) => {
             const n = 묶음.length;
@@ -409,7 +413,8 @@ function measure_correspondence(학생답: string, 루브릭: 조각[], 표: 구
       // 묶음 자리는 다음 사례를 부른 자리까지 지워져 있어, 사례 없는 절의 앞 사례는 이 절 앞에서 따로 부른 사례다 (문장 머리면 버림)
       const 안 = 부름.filter((z, k) => !묶음안.has(k) && z.at >= 절.at && z.at < 절.at + 절.글.length);
       if (!안.length) { if (앞사례 && 절.글.trim()) 더함(앞사례, 절.글); continue; }
-      if (안.length === 1) { 더함(안[0].기호, 절.글); 따로.add(안[0].기호); 앞사례 = 안[0].기호; continue; }
+      // [오종래 2026-10-23 F] 사례 뒤에 범주 · 그 사례 집단이 있으면 사례부터 뒤만 — 앞 나열(「종교 등이 있는데 … ⓐ 틀딱 - 연령」)을 끌어오지 않는다
+      if (안.length === 1) { const 끝 = 절.at + 절.글.length, 뒤 = s.slice(안[0].end, 끝); 더함(안[0].기호, 범주들at(뒤).length || 집단들at(뒤).length ? s.slice(안[0].at, 끝) : 절.글); 따로.add(안[0].기호); 앞사례 = 안[0].기호; continue; }
       const 머리 = 절.글.slice(0, 안[0].at - 절.at);
       if (앞사례 && 머리.trim()) 더함(앞사례, 머리);
       안.forEach((z, k) => { 더함(z.기호, s.slice(z.at, 안[k + 1]?.at ?? 절.at + 절.글.length)); 따로.add(z.기호); });
